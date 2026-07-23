@@ -1,0 +1,43 @@
+/* SVG 피치 뷰 — 색·폰트만 CSS (기하 속성 cx/cy/r/d는 컴포넌트 인라인 예외). */
+.pv-root {
+  width: 100%;
+  display: block;
+  background: var(--bc-pitch);
+  border-radius: 8px;
+  font-family: var(--bc-font);
+}
+
+.pv-line {
+  fill: none;
+  stroke: var(--bc-pitch-line);
+  stroke-width: 0.4;
+}
+.pv-stripe { fill: rgba(255, 255, 255, 0.03); }
+
+.pv-dot--home { fill: var(--bc-home); }
+.pv-dot--away { fill: var(--bc-away); }
+.pv-dot { stroke: rgba(0, 0, 0, 0.35); stroke-width: 0.3; }
+
+.pv-num {
+  fill: #fff;
+  font-size: 2.4px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+.pv-marker { stroke-width: 0.6; }
+.pv-marker--goal { fill: none; stroke: var(--bc-accent); }
+.pv-marker--x { stroke: var(--bc-danger); fill: none; }
+.pv-marker--foul { fill: var(--bc-accent); stroke: none; }
+
+@keyframes pv-pulse {
+  0% { r: 1.5; opacity: 0.9; }
+  100% { r: 6; opacity: 0; }
+}
+.pv-pulse { animation: pv-pulse 1.1s ease-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pv-pulse { animation: none; }
+}
