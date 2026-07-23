@@ -84,7 +84,7 @@ function simulateMinute(st: MatchState, rng: Rng) {
     (atk.team.statBaseline.shotsPerGame / 90) * (zs[atkIdx].attack / Math.max(30, zs[defIdx].defense)) * fx[atkIdx].chanceRate * fx[defIdx].counterVulnerability * momentumBoost,
     0.02, 0.35,
   )
-  if (rng.chance(chanceP)) resolveChance(st, atkIdx, defIdx, zs, fx, rng)
+  if (rng.chance(chanceP)) resolveChance(st, atkIdx, defIdx, fx, rng)
 
   // 4) 체력 감소
   for (const [idx, side] of [[0, st.home], [1, st.away]] as const) {
@@ -97,7 +97,7 @@ function simulateMinute(st: MatchState, rng: Rng) {
   }
 }
 
-function resolveChance(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, zs: ReturnType<typeof zoneStrength>[], fx: ReturnType<typeof instructionEffects>[], rng: Rng) {
+function resolveChance(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: ReturnType<typeof instructionEffects>[], rng: Rng) {
   const atk = atkIdx === 0 ? st.home : st.away
   const def = defIdx === 0 ? st.home : st.away
   // 슈터 선정: 공격 포지션 가중 (keyPlayer 의존 반영)
