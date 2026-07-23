@@ -40,4 +40,5 @@ export interface MatchState {
   home: SideState; away: SideState
   events: MatchEvent[]; stats: [SideStats, SideStats]
   momentum: number  // -1(away 우세)~+1(home 우세)
+  seed: number      // 분 파생 RNG 시드 (createRng(seed*10007+minute)) — 세그먼트 분할 결정론의 근간
 }

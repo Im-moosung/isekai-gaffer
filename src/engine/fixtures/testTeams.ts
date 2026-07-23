@@ -1,5 +1,8 @@
 // src/engine/fixtures/testTeams.ts
-import type { Team, Player, Position, FieldStats, SideState, TacticState } from '../types'
+import type { Team, Player, Position, FieldStats, SideState } from '../types'
+import { pickBestXI } from '../lineup'
+
+export { pickBestXI }
 
 const LAYOUT: { pos: Position; alt: Position[]; count: number }[] = [
   { pos: 'GK', alt: [], count: 2 },
@@ -46,24 +49,6 @@ export function makeTestTeam(id: string, tierPower: number): Team {
     statBaseline: { possession: 50, passAccuracy: 78 + (tierPower - 70) / 2, shotsPerGame: 12, shotsOnTargetPerGame: 4.5, foulsPerGame: 12, cornersPerGame: 5, xgPerGame: 1.3 },
     squad,
   }
-}
-
-const XI_433: Position[] = ['GK', 'CB', 'CB', 'LB', 'RB', 'DM', 'CM', 'CM', 'LW', 'RW', 'ST']
-
-export function pickBestXI(team: Team): TacticState {
-  const used = new Set<string>()
-  const lineup = XI_433.map(slot => {
-    const candidate = team.squad
-      .filter(p => !used.has(p.id))
-      .sort((a, b) => positionFitnessSort(b, slot) - positionFitnessSort(a, slot))[0]
-    used.add(candidate.id)
-    return { slot, playerId: candidate.id }
-  })
-  return { formation: '4-3-3', lineup, instructions: { lineHeight: 50, pressing: 50, tempo: 50, attackFocus: 'balanced' } }
-}
-// 순환 import 회피용 로컬 정렬 키 (fitness.ts와 동일 로직의 단순화: 주=2, alt=1, 그 외=0)
-function positionFitnessSort(p: Player, slot: Position): number {
-  return p.position === slot ? 2 : p.altPositions.includes(slot) ? 1 : 0
 }
 
 export function makeSideState(team: Team): SideState {
