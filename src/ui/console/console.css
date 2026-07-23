@@ -1,0 +1,125 @@
+/* 감독 콘솔 — 지시 4축·교체 패널. 색·간격은 방송 토큰 사용, 인라인 스타일 금지(데이터 바인딩 폭 예외). */
+.cs-panel {
+  background: var(--bc-panel);
+  border: 1px solid var(--bc-line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: var(--bc-text);
+  font-family: var(--bc-font);
+}
+
+.cs-panel__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.cs-panel__title {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.cs-panel__foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+/* 지시 슬라이더 */
+.cs-axes { display: flex; flex-direction: column; gap: 10px; }
+.cs-axis {
+  display: grid;
+  grid-template-columns: 56px 1fr 34px;
+  align-items: center;
+  gap: 10px;
+}
+.cs-axis__label { font-size: 13px; color: var(--bc-text-dim); }
+.cs-axis__val {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--bc-text);
+}
+.cs-axis__range { width: 100%; accent-color: var(--bc-accent); }
+.cs-axis__select {
+  background: var(--bc-panel-2);
+  color: var(--bc-text);
+  border: 1px solid var(--bc-line);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-family: inherit;
+}
+.cs-axis--focus { grid-template-columns: 56px 1fr; }
+
+/* 버튼·잠금·에러 */
+.cs-btn {
+  background: var(--bc-accent);
+  color: #0b1220;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+}
+.cs-btn:disabled {
+  background: var(--bc-panel-2);
+  color: var(--bc-text-dim);
+  cursor: not-allowed;
+}
+.cs-lock { font-size: 12px; color: var(--bc-text-dim); }
+.cs-error { margin: 8px 0 0; font-size: 12px; color: var(--bc-danger); }
+
+/* 교체 패널 */
+.cs-sub__count {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--bc-text-dim);
+}
+.cs-sub__subtitle {
+  margin: 12px 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bc-text-dim);
+}
+.cs-sub__lineup, .cs-sub__bench {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 6px;
+}
+
+.cs-card {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 2px 8px;
+  background: var(--bc-panel-2);
+  border: 1px solid var(--bc-line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  color: var(--bc-text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cs-card:disabled { cursor: not-allowed; opacity: 0.7; }
+.cs-card--sel { border-color: var(--bc-accent); box-shadow: 0 0 0 1px var(--bc-accent) inset; }
+.cs-card__num {
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--bc-text-dim);
+}
+.cs-card__name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-card__slot { font-size: 11px; color: var(--bc-text-dim); }
+.cs-card__stamina {
+  grid-column: 1 / -1;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--bc-line);
+  overflow: hidden;
+}
+.cs-card__bar { display: block; height: 100%; background: var(--bc-accent); }
+.cs-card__bar--low { background: var(--bc-danger); }
