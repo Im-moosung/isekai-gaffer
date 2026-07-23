@@ -1,0 +1,60 @@
+{
+  "id": "rsa",
+  "name": { "ko": "남아프리카공화국", "en": "South Africa" },
+  "fifaCode": "RSA",
+  "flag": "🇿🇦",
+  "fifaRanking": 60,
+  "tier": 4,
+  "profile": {
+    "preferredFormations": ["4-2-3-1", "4-3-3"],
+    "style": { "possession": 40, "pressing": 55, "lineHeight": 40, "tempo": 60 },
+    "signatureXI": ["p_rsa_01", "p_rsa_20", "p_rsa_19", "p_rsa_14", "p_rsa_06", "p_rsa_04", "p_rsa_13", "p_rsa_07", "p_rsa_10", "p_rsa_12", "p_rsa_09"],
+    "keyPlayers": [
+      { "playerId": "p_rsa_01", "dependency": 0.6 },
+      { "playerId": "p_rsa_04", "dependency": 0.6 },
+      { "playerId": "p_rsa_09", "dependency": 0.5 },
+      { "playerId": "p_rsa_10", "dependency": 0.45 }
+    ],
+    "benchPattern": "balanced",
+    "styleNotes": "낮은 점유율을 감수하고 견고한 블록과 빠른 역습·측면 크로스로 승부하는 실리형. 대회 중 플레이메이커(모포켕)를 더해 공격 과감함을 결합했고, 세트피스·PK 효율로 사상 첫 16강에 올랐다."
+  },
+  "statBaseline": {
+    "possession": 40.0,
+    "passAccuracy": 76.0,
+    "shotsPerGame": 8.0,
+    "shotsOnTargetPerGame": 3.0,
+    "foulsPerGame": 14.0,
+    "cornersPerGame": 3.5,
+    "xgPerGame": null,
+    "source": "🟡 A조 3경기 부분 실측(한국전 점유 32%·상대 대비 슈팅/xG 우위) + 티어 평균 추정(passAccuracy·shots·fouls·corners 추정)"
+  },
+  "squad": [
+    { "id": "p_rsa_01", "number": 1, "name": { "ko": "로웬 윌리엄스", "en": "Ronwen Williams" }, "position": "GK", "altPositions": [], "foot": "R", "birth": 1992, "club": "마멜로디 선다운스", "gkStats": { "saving": 80, "aerial": 76, "buildup": 66 }, "setPiece": 20, "penalty": 20, "stamina": 72, "confidence": "🟢" },
+    { "id": "p_rsa_02", "number": 2, "name": { "ko": "타방 마툴루디", "en": "Thabang Matuludi" }, "position": "CB", "altPositions": ["RB"], "foot": "R", "birth": 1999, "club": "폴로콰네 시티", "stats": { "shooting": 38, "passing": 60, "dribbling": 56, "defending": 68, "physical": 72, "pace": 70 }, "setPiece": 30, "penalty": 25, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_rsa_03", "number": 3, "name": { "ko": "쿨루마니 은다마네", "en": "Khulumani Ndamane" }, "position": "CB", "altPositions": [], "foot": "R", "birth": 2004, "club": "마멜로디 선다운스", "stats": { "shooting": 36, "passing": 62, "dribbling": 56, "defending": 70, "physical": 74, "pace": 72 }, "setPiece": 30, "penalty": 25, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_rsa_04", "number": 4, "name": { "ko": "테보호 모케나", "en": "Teboho Mokoena" }, "position": "CM", "altPositions": ["DM"], "foot": "R", "birth": 1997, "club": "마멜로디 선다운스", "stats": { "shooting": 72, "passing": 74, "dribbling": 70, "defending": 70, "physical": 72, "pace": 68 }, "setPiece": 72, "penalty": 74, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_rsa_05", "number": 5, "name": { "ko": "탈렌테 음바타", "en": "Thalente Mbatha" }, "position": "DM", "altPositions": ["CM"], "foot": "R", "birth": 2000, "club": "올랜도 파이러츠", "stats": { "shooting": 58, "passing": 70, "dribbling": 66, "defending": 70, "physical": 70, "pace": 68 }, "setPiece": 52, "penalty": 45, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_rsa_06", "number": 6, "name": { "ko": "오브리 모디바", "en": "Aubrey Modiba" }, "position": "LB", "altPositions": [], "foot": "L", "birth": 1995, "club": "마멜로디 선다운스", "stats": { "shooting": 52, "passing": 68, "dribbling": 70, "defending": 66, "physical": 66, "pace": 78 }, "setPiece": 55, "penalty": 40, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_rsa_07", "number": 7, "name": { "ko": "오스윈 아폴리스", "en": "Oswin Appollis" }, "position": "RW", "altPositions": ["LW"], "foot": "R", "birth": 2001, "club": "올랜도 파이러츠", "stats": { "shooting": 66, "passing": 66, "dribbling": 76, "defending": 42, "physical": 60, "pace": 80 }, "setPiece": 52, "penalty": 50, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_rsa_08", "number": 8, "name": { "ko": "체팡 모레미", "en": "Tshepang Moremi" }, "position": "LW", "altPositions": ["RW"], "foot": "L", "birth": 2000, "club": "올랜도 파이러츠", "stats": { "shooting": 64, "passing": 68, "dribbling": 76, "defending": 44, "physical": 60, "pace": 80 }, "setPiece": 52, "penalty": 48, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_rsa_09", "number": 9, "name": { "ko": "라일 포스터", "en": "Lyle Foster" }, "position": "ST", "altPositions": [], "foot": "R", "birth": 2000, "club": "번리", "stats": { "shooting": 74, "passing": 62, "dribbling": 72, "defending": 40, "physical": 74, "pace": 80 }, "setPiece": 45, "penalty": 64, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_rsa_10", "number": 10, "name": { "ko": "렐레보힐레 모포켕", "en": "Relebohile Mofokeng" }, "position": "AM", "altPositions": ["LW"], "foot": "R", "birth": 2004, "club": "올랜도 파이러츠", "stats": { "shooting": 66, "passing": 72, "dribbling": 78, "defending": 44, "physical": 58, "pace": 78 }, "setPiece": 58, "penalty": 52, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_rsa_11", "number": 11, "name": { "ko": "템바 즈와네", "en": "Themba Zwane" }, "position": "AM", "altPositions": ["CM"], "foot": "R", "birth": 1989, "club": "마멜로디 선다운스", "stats": { "shooting": 68, "passing": 74, "dribbling": 76, "defending": 48, "physical": 58, "pace": 62 }, "setPiece": 64, "penalty": 58, "stamina": 72, "confidence": "🟢" },
+    { "id": "p_rsa_12", "number": 12, "name": { "ko": "타펠로 마세코", "en": "Thapelo Maseko" }, "position": "ST", "altPositions": ["LW"], "foot": "L", "birth": 2003, "club": "AEL 리마솔", "stats": { "shooting": 70, "passing": 62, "dribbling": 74, "defending": 42, "physical": 66, "pace": 82 }, "setPiece": 45, "penalty": 55, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_rsa_13", "number": 13, "name": { "ko": "스페펠로 시톨레", "en": "Sphephelo Sithole" }, "position": "DM", "altPositions": ["CM"], "foot": "R", "birth": 1999, "club": "톤델라", "stats": { "shooting": 56, "passing": 70, "dribbling": 66, "defending": 70, "physical": 70, "pace": 68 }, "setPiece": 50, "penalty": 42, "stamina": 82, "confidence": "🟡" },
+    { "id": "p_rsa_14", "number": 14, "name": { "ko": "음베케젤리 음보카지", "en": "Mbekezeli Mbokazi" }, "position": "CB", "altPositions": [], "foot": "L", "birth": 2005, "club": "시카고 파이어", "stats": { "shooting": 38, "passing": 62, "dribbling": 58, "defending": 70, "physical": 74, "pace": 74 }, "setPiece": 32, "penalty": 25, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_rsa_15", "number": 15, "name": { "ko": "이크람 레이너스", "en": "Iqraam Rayners" }, "position": "ST", "altPositions": [], "foot": "R", "birth": 1995, "club": "마멜로디 선다운스", "stats": { "shooting": 70, "passing": 62, "dribbling": 68, "defending": 42, "physical": 70, "pace": 74 }, "setPiece": 42, "penalty": 58, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_rsa_16", "number": 16, "name": { "ko": "시포 차이네", "en": "Sipho Chaine" }, "position": "GK", "altPositions": [], "foot": "R", "birth": 1996, "club": "올랜도 파이러츠", "gkStats": { "saving": 74, "aerial": 72, "buildup": 62 }, "setPiece": 20, "penalty": 20, "stamina": 68, "confidence": "🟢" },
+    { "id": "p_rsa_17", "number": 17, "name": { "ko": "에비던스 마크고파", "en": "Evidence Makgopa" }, "position": "ST", "altPositions": [], "foot": "R", "birth": 2000, "club": "올랜도 파이러츠", "stats": { "shooting": 70, "passing": 60, "dribbling": 66, "defending": 40, "physical": 74, "pace": 72 }, "setPiece": 42, "penalty": 56, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_rsa_18", "number": 18, "name": { "ko": "사무켈레 카비니", "en": "Samukele Kabini" }, "position": "LB", "altPositions": [], "foot": "L", "birth": 2004, "club": "몰데", "stats": { "shooting": 46, "passing": 66, "dribbling": 66, "defending": 66, "physical": 64, "pace": 76 }, "setPiece": 45, "penalty": 30, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_rsa_19", "number": 19, "name": { "ko": "은코시나티 시비시", "en": "Nkosinathi Sibisi" }, "position": "CB", "altPositions": [], "foot": "R", "birth": 1995, "club": "올랜도 파이러츠", "stats": { "shooting": 38, "passing": 62, "dribbling": 56, "defending": 72, "physical": 76, "pace": 68 }, "setPiece": 35, "penalty": 25, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_rsa_20", "number": 20, "name": { "ko": "쿨리소 무다우", "en": "Khuliso Mudau" }, "position": "RB", "altPositions": [], "foot": "R", "birth": 1995, "club": "마멜로디 선다운스", "stats": { "shooting": 46, "passing": 66, "dribbling": 68, "defending": 70, "physical": 68, "pace": 78 }, "setPiece": 44, "penalty": 30, "stamina": 84, "confidence": "🟢" },
+    { "id": "p_rsa_21", "number": 21, "name": { "ko": "이메 오콘", "en": "Ime Okon" }, "position": "CB", "altPositions": [], "foot": "R", "birth": 2004, "club": "하노버 96", "stats": { "shooting": 38, "passing": 64, "dribbling": 58, "defending": 72, "physical": 76, "pace": 72 }, "setPiece": 32, "penalty": 25, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_rsa_22", "number": 22, "name": { "ko": "리카르도 고스", "en": "Ricardo Goss" }, "position": "GK", "altPositions": [], "foot": "R", "birth": 1994, "club": "시웰렐레", "gkStats": { "saving": 70, "aerial": 70, "buildup": 60 }, "setPiece": 20, "penalty": 20, "stamina": 66, "confidence": "🟢" },
+    { "id": "p_rsa_23", "number": 23, "name": { "ko": "제이든 애덤스", "en": "Jayden Adams" }, "position": "CM", "altPositions": ["DM"], "foot": null, "birth": 2001, "club": "마멜로디 선다운스", "stats": { "shooting": 58, "passing": 70, "dribbling": 68, "defending": 64, "physical": 66, "pace": 70 }, "setPiece": 52, "penalty": 45, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_rsa_24", "number": 24, "name": { "ko": "올웨투 마카냐", "en": "Olwethu Makhanya" }, "position": "CB", "altPositions": [], "foot": "R", "birth": 2004, "club": "필라델피아 유니언", "stats": { "shooting": 36, "passing": 60, "dribbling": 56, "defending": 68, "physical": 74, "pace": 72 }, "setPiece": 30, "penalty": 25, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_rsa_25", "number": 25, "name": { "ko": "카모겔로 세벨레벨레", "en": "Kamogelo Sebelebele" }, "position": "RW", "altPositions": ["LW"], "foot": "R", "birth": 2002, "club": "올랜도 파이러츠", "stats": { "shooting": 62, "passing": 64, "dribbling": 74, "defending": 42, "physical": 58, "pace": 80 }, "setPiece": 48, "penalty": 45, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_rsa_26", "number": 26, "name": { "ko": "브래들리 크로스", "en": "Bradley Cross" }, "position": "LB", "altPositions": [], "foot": "L", "birth": 2001, "club": "카이저 치프스", "stats": { "shooting": 44, "passing": 66, "dribbling": 66, "defending": 66, "physical": 64, "pace": 76 }, "setPiece": 44, "penalty": 30, "stamina": 80, "confidence": "🟢" }
+  ],
+  "_excluded": []
+}

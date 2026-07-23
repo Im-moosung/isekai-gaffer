@@ -1,0 +1,60 @@
+{
+  "id": "ecu",
+  "name": { "ko": "에콰도르", "en": "Ecuador" },
+  "fifaCode": "ECU",
+  "flag": "🇪🇨",
+  "fifaRanking": 23,
+  "tier": 3,
+  "profile": {
+    "preferredFormations": ["4-2-2-2", "3-1-4-2"],
+    "style": { "possession": 52, "pressing": 55, "lineHeight": 45, "tempo": 58 },
+    "signatureXI": ["p_ecu_01", "p_ecu_17", "p_ecu_03", "p_ecu_06", "p_ecu_07", "p_ecu_23", "p_ecu_05", "p_ecu_10", "p_ecu_19", "p_ecu_13", "p_ecu_11"],
+    "keyPlayers": [
+      { "playerId": "p_ecu_23", "dependency": 0.7 },
+      { "playerId": "p_ecu_03", "dependency": 0.55 },
+      { "playerId": "p_ecu_10", "dependency": 0.5 },
+      { "playerId": "p_ecu_13", "dependency": 0.45 }
+    ],
+    "benchPattern": "balanced",
+    "styleNotes": "더블 피벗 기반의 견고한 중원과 개별 기량 높은 수비 척추(인카피에·파초·M.카이세도)가 강점인 세대교체기 팀. 볼 회수와 조직 수비는 대회급이나 마무리 결정력이 치명적 약점이라 지배하고도 못 이기는 경기가 많았다."
+  },
+  "statBaseline": {
+    "possession": 55.8,
+    "passAccuracy": 82.0,
+    "shotsPerGame": 13.3,
+    "shotsOnTargetPerGame": 5.0,
+    "foulsPerGame": 12.3,
+    "cornersPerGame": 4.5,
+    "xgPerGame": null,
+    "source": "🟢 FBref 대회 누적(4경기 53슈팅/20유효·점유 55.8·파울 49) + passAccuracy·corners 추정"
+  },
+  "squad": [
+    { "id": "p_ecu_01", "number": 1, "name": { "ko": "에르난 갈린데스", "en": "Hernán Galíndez" }, "position": "GK", "altPositions": [], "foot": "R", "birth": 1987, "club": "Huracán", "gkStats": { "saving": 76, "aerial": 74, "buildup": 66 }, "setPiece": 20, "penalty": 20, "stamina": 66, "confidence": "🟢" },
+    { "id": "p_ecu_02", "number": 2, "name": { "ko": "펠릭스 토레스", "en": "Félix Torres" }, "position": "CB", "altPositions": [], "foot": "R", "birth": 1997, "club": "Internacional", "stats": { "shooting": 46, "passing": 66, "dribbling": 58, "defending": 74, "physical": 78, "pace": 72 }, "setPiece": 42, "penalty": 35, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_ecu_03", "number": 3, "name": { "ko": "피에로 인카피에", "en": "Piero Hincapié" }, "position": "CB", "altPositions": ["LB"], "foot": "L", "birth": 2002, "club": "Arsenal", "stats": { "shooting": 44, "passing": 74, "dribbling": 66, "defending": 82, "physical": 80, "pace": 78 }, "setPiece": 40, "penalty": 30, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_ecu_04", "number": 4, "name": { "ko": "호엘 오르도녜스", "en": "Joel Ordóñez" }, "position": "CB", "altPositions": [], "foot": "R", "birth": 2004, "club": "Club Brugge", "stats": { "shooting": 40, "passing": 68, "dribbling": 60, "defending": 74, "physical": 78, "pace": 74 }, "setPiece": 35, "penalty": 30, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_ecu_05", "number": 5, "name": { "ko": "조르디 알시바르", "en": "Jordy Alcívar" }, "position": "DM", "altPositions": ["CM"], "foot": "R", "birth": 1999, "club": "Independiente del Valle", "stats": { "shooting": 58, "passing": 72, "dribbling": 68, "defending": 70, "physical": 70, "pace": 68 }, "setPiece": 52, "penalty": 45, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_ecu_06", "number": 6, "name": { "ko": "윌리안 파초", "en": "Willian Pacho" }, "position": "CB", "altPositions": [], "foot": "L", "birth": 2001, "club": "Paris Saint-Germain", "stats": { "shooting": 42, "passing": 72, "dribbling": 62, "defending": 80, "physical": 80, "pace": 76 }, "setPiece": 38, "penalty": 30, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_ecu_07", "number": 7, "name": { "ko": "페르비스 에스투피냔", "en": "Pervis Estupiñán" }, "position": "LB", "altPositions": [], "foot": "L", "birth": 1998, "club": "AC Milan", "stats": { "shooting": 52, "passing": 72, "dribbling": 74, "defending": 68, "physical": 68, "pace": 80 }, "setPiece": 55, "penalty": 35, "stamina": 84, "confidence": "🟢" },
+    { "id": "p_ecu_08", "number": 8, "name": { "ko": "안소니 발렌시아", "en": "Anthony Valencia" }, "position": "CM", "altPositions": ["AM"], "foot": "L", "birth": 2003, "club": "Antwerp", "stats": { "shooting": 60, "passing": 72, "dribbling": 72, "defending": 58, "physical": 64, "pace": 72 }, "setPiece": 54, "penalty": 45, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_ecu_09", "number": 9, "name": { "ko": "존 예보아", "en": "John Yeboah" }, "position": "LW", "altPositions": ["RW"], "foot": "L", "birth": 2000, "club": "Venezia", "stats": { "shooting": 66, "passing": 66, "dribbling": 76, "defending": 42, "physical": 62, "pace": 80 }, "setPiece": 50, "penalty": 50, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_ecu_10", "number": 10, "name": { "ko": "켄드리 파에스", "en": "Kendry Páez" }, "position": "AM", "altPositions": ["CM"], "foot": "L", "birth": 2007, "club": "River Plate", "stats": { "shooting": 68, "passing": 76, "dribbling": 78, "defending": 46, "physical": 60, "pace": 72 }, "setPiece": 62, "penalty": 58, "stamina": 76, "confidence": "🟢" },
+    { "id": "p_ecu_11", "number": 11, "name": { "ko": "케빈 로드리게스", "en": "Kevin Rodríguez" }, "position": "ST", "altPositions": [], "foot": "R", "birth": 2000, "club": "Union Saint-Gilloise", "stats": { "shooting": 72, "passing": 62, "dribbling": 68, "defending": 42, "physical": 78, "pace": 76 }, "setPiece": 44, "penalty": 58, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_ecu_12", "number": 12, "name": { "ko": "모이세스 라미레스", "en": "Moisés Ramírez" }, "position": "GK", "altPositions": [], "foot": "R", "birth": 2000, "club": "Kifisia", "gkStats": { "saving": 72, "aerial": 70, "buildup": 64 }, "setPiece": 20, "penalty": 20, "stamina": 66, "confidence": "🟢" },
+    { "id": "p_ecu_13", "number": 13, "name": { "ko": "에네르 발렌시아", "en": "Enner Valencia" }, "position": "ST", "altPositions": [], "foot": "R", "birth": 1989, "club": "Pachuca", "stats": { "shooting": 74, "passing": 66, "dribbling": 68, "defending": 44, "physical": 76, "pace": 66 }, "setPiece": 50, "penalty": 72, "stamina": 74, "confidence": "🟢" },
+    { "id": "p_ecu_14", "number": 14, "name": { "ko": "알란 민다", "en": "Alan Minda" }, "position": "LW", "altPositions": ["AM"], "foot": "R", "birth": 2003, "club": "Atlético Mineiro", "stats": { "shooting": 62, "passing": 66, "dribbling": 76, "defending": 42, "physical": 60, "pace": 80 }, "setPiece": 50, "penalty": 48, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_ecu_15", "number": 15, "name": { "ko": "페드로 비테", "en": "Pedro Vite" }, "position": "CM", "altPositions": ["AM"], "foot": "L", "birth": 2002, "club": "Pumas UNAM", "stats": { "shooting": 62, "passing": 72, "dribbling": 72, "defending": 56, "physical": 64, "pace": 70 }, "setPiece": 56, "penalty": 48, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_ecu_16", "number": 16, "name": { "ko": "조르디 카이세도", "en": "Jordy Caicedo" }, "position": "ST", "altPositions": [], "foot": "R", "birth": 1997, "club": "Huracán", "stats": { "shooting": 70, "passing": 58, "dribbling": 64, "defending": 40, "physical": 78, "pace": 70 }, "setPiece": 42, "penalty": 58, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_ecu_17", "number": 17, "name": { "ko": "앙헬로 프레시아도", "en": "Ángelo Preciado" }, "position": "RB", "altPositions": [], "foot": "R", "birth": 1998, "club": "Atlético Mineiro", "stats": { "shooting": 48, "passing": 68, "dribbling": 70, "defending": 70, "physical": 68, "pace": 80 }, "setPiece": 46, "penalty": 30, "stamina": 84, "confidence": "🟢" },
+    { "id": "p_ecu_18", "number": 18, "name": { "ko": "데닐 카스티요", "en": "Denil Castillo" }, "position": "DM", "altPositions": ["CM"], "foot": "R", "birth": 2004, "club": "Midtjylland", "stats": { "shooting": 54, "passing": 70, "dribbling": 66, "defending": 70, "physical": 72, "pace": 70 }, "setPiece": 48, "penalty": 40, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_ecu_19", "number": 19, "name": { "ko": "곤살로 플라타", "en": "Gonzalo Plata" }, "position": "RW", "altPositions": ["LW"], "foot": "L", "birth": 2000, "club": "Flamengo", "stats": { "shooting": 72, "passing": 70, "dribbling": 80, "defending": 44, "physical": 62, "pace": 80 }, "setPiece": 58, "penalty": 55, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_ecu_20", "number": 20, "name": { "ko": "닐손 앙굴로", "en": "Nilson Angulo" }, "position": "LW", "altPositions": ["RW"], "foot": "R", "birth": 2003, "club": "Sunderland", "stats": { "shooting": 66, "passing": 66, "dribbling": 76, "defending": 44, "physical": 62, "pace": 82 }, "setPiece": 50, "penalty": 50, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_ecu_21", "number": 21, "name": { "ko": "알란 프랑코", "en": "Alan Franco" }, "position": "CB", "altPositions": ["DM"], "foot": "R", "birth": 1998, "club": "Atlético Mineiro", "stats": { "shooting": 46, "passing": 68, "dribbling": 62, "defending": 74, "physical": 74, "pace": 72 }, "setPiece": 42, "penalty": 35, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_ecu_22", "number": 22, "name": { "ko": "곤살로 바예", "en": "Gonzalo Valle" }, "position": "GK", "altPositions": [], "foot": "R", "birth": 1996, "club": "LDU Quito", "gkStats": { "saving": 70, "aerial": 68, "buildup": 62 }, "setPiece": 20, "penalty": 20, "stamina": 66, "confidence": "🟢" },
+    { "id": "p_ecu_23", "number": 23, "name": { "ko": "모이세스 카이세도", "en": "Moisés Caicedo" }, "position": "DM", "altPositions": ["CM"], "foot": "R", "birth": 2001, "club": "Chelsea", "stats": { "shooting": 62, "passing": 76, "dribbling": 74, "defending": 84, "physical": 82, "pace": 76 }, "setPiece": 55, "penalty": 45, "stamina": 86, "confidence": "🟢" },
+    { "id": "p_ecu_24", "number": 24, "name": { "ko": "제레미 아레발로", "en": "Jeremy Arévalo" }, "position": "ST", "altPositions": [], "foot": "L", "birth": 2005, "club": "VfB Stuttgart", "stats": { "shooting": 68, "passing": 60, "dribbling": 68, "defending": 40, "physical": 72, "pace": 76 }, "setPiece": 42, "penalty": 55, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_ecu_25", "number": 25, "name": { "ko": "잭슨 포로소", "en": "Jackson Porozo" }, "position": "CB", "altPositions": [], "foot": "R", "birth": 2000, "club": "Tijuana", "stats": { "shooting": 40, "passing": 64, "dribbling": 58, "defending": 72, "physical": 78, "pace": 72 }, "setPiece": 36, "penalty": 30, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_ecu_26", "number": 26, "name": { "ko": "야이마르 메디나", "en": "Yaimar Medina" }, "position": "LB", "altPositions": [], "foot": "L", "birth": 2004, "club": "Genk", "stats": { "shooting": 48, "passing": 66, "dribbling": 70, "defending": 66, "physical": 62, "pace": 80 }, "setPiece": 46, "penalty": 30, "stamina": 82, "confidence": "🟢" }
+  ],
+  "_excluded": []
+}

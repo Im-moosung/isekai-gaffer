@@ -572,7 +572,7 @@ git add src/engine && git commit -m "feat(engine): 포메이션 상성 행렬·�
 **Interfaces:**
 - Consumes: `effectiveStats`, `positionFitness`(Task 4), `SideState`(Task 3)
 - Produces:
-  - `zoneStrength(side: SideState): { attack: number; midfield: number; defense: number; gk: number }` — 선발 11인의 실효 능력치를 존별 가중 평균(0~100 스케일). 퇴장 선수 제외, keyPlayer 의존 가중 반영
+  - `zoneStrength(side: SideState): { attack: number; midfield: number; defense: number; gk: number }` — 선발 11인의 실효 능력치를 존별 가중 평균(0~100 스케일). 퇴장 선수 제외 (keyPlayer 의존 가중은 Task 7 찬스 참여자 선정에서 반영 — 존 전력 미적용)
 
 - [ ] **Step 1: Write the failing test**
 

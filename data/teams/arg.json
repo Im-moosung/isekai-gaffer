@@ -1,0 +1,60 @@
+{
+  "id": "arg",
+  "name": { "ko": "아르헨티나", "en": "Argentina" },
+  "fifaCode": "ARG",
+  "flag": "🇦🇷",
+  "fifaRanking": 1,
+  "tier": 1,
+  "profile": {
+    "preferredFormations": ["4-2-2-2", "4-1-4-1", "4-1-3-2"],
+    "style": { "possession": 57, "pressing": 58, "lineHeight": 52, "tempo": 62 },
+    "signatureXI": ["p_arg_23", "p_arg_26", "p_arg_13", "p_arg_06", "p_arg_03", "p_arg_07", "p_arg_24", "p_arg_10", "p_arg_20", "p_arg_22", "p_arg_09"],
+    "keyPlayers": [
+      { "playerId": "p_arg_10", "dependency": 0.85 },
+      { "playerId": "p_arg_22", "dependency": 0.6 },
+      { "playerId": "p_arg_23", "dependency": 0.5 },
+      { "playerId": "p_arg_24", "dependency": 0.45 }
+    ],
+    "benchPattern": "balanced",
+    "styleNotes": "점유하되 트랜지션과 개인 능력에 크게 의존하는 디펜딩 챔피언. 녹아웃에서 뒤진 경기를 뒤집는 회복력이 두드러졌다. 메시 의존도가 절대적이라 그가 봉쇄되면 공격 생산성이 급락했다."
+  },
+  "statBaseline": {
+    "possession": 57.6,
+    "passAccuracy": 85.0,
+    "shotsPerGame": 12.7,
+    "shotsOnTargetPerGame": 5.5,
+    "foulsPerGame": 14.1,
+    "cornersPerGame": 5.5,
+    "xgPerGame": null,
+    "source": "🟢 FBref 대회 누적(8경기 114슈팅/44유효·점유 57.6·파울 113·PK 1/3) + passAccuracy·corners 추정"
+  },
+  "squad": [
+    { "id": "p_arg_01", "number": 1, "name": { "ko": "후안 무소", "en": "Juan Musso" }, "position": "GK", "altPositions": [], "foot": "R", "birth": 1994, "club": "Atlético Madrid", "gkStats": { "saving": 78, "aerial": 78, "buildup": 70 }, "setPiece": 20, "penalty": 20, "stamina": 68, "confidence": "🟢" },
+    { "id": "p_arg_02", "number": 2, "name": { "ko": "마르코스 세네시", "en": "Marcos Senesi" }, "position": "CB", "altPositions": [], "foot": "L", "birth": 1997, "club": "Bournemouth", "stats": { "shooting": 42, "passing": 72, "dribbling": 62, "defending": 78, "physical": 80, "pace": 74 }, "setPiece": 38, "penalty": 30, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_arg_03", "number": 3, "name": { "ko": "니콜라스 타글리아피코", "en": "Nicolás Tagliafico" }, "position": "LB", "altPositions": [], "foot": "L", "birth": 1992, "club": "Lyon", "stats": { "shooting": 50, "passing": 74, "dribbling": 72, "defending": 74, "physical": 70, "pace": 78 }, "setPiece": 52, "penalty": 35, "stamina": 84, "confidence": "🟢" },
+    { "id": "p_arg_04", "number": 4, "name": { "ko": "곤살로 몬티엘", "en": "Gonzalo Montiel" }, "position": "RB", "altPositions": [], "foot": "R", "birth": 1997, "club": "River Plate", "stats": { "shooting": 50, "passing": 70, "dribbling": 70, "defending": 74, "physical": 70, "pace": 78 }, "setPiece": 48, "penalty": 55, "stamina": 84, "confidence": "🟢" },
+    { "id": "p_arg_05", "number": 5, "name": { "ko": "레안드로 파레데스", "en": "Leandro Paredes" }, "position": "DM", "altPositions": ["CM"], "foot": "R", "birth": 1994, "club": "Boca Juniors", "stats": { "shooting": 66, "passing": 82, "dribbling": 70, "defending": 72, "physical": 72, "pace": 62 }, "setPiece": 72, "penalty": 62, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_arg_06", "number": 6, "name": { "ko": "리산드로 마르티네스", "en": "Lisandro Martínez" }, "position": "CB", "altPositions": [], "foot": "L", "birth": 1998, "club": "Manchester United", "stats": { "shooting": 44, "passing": 76, "dribbling": 66, "defending": 84, "physical": 80, "pace": 74 }, "setPiece": 40, "penalty": 30, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_arg_07", "number": 7, "name": { "ko": "로드리고 데 파울", "en": "Rodrigo De Paul" }, "position": "CM", "altPositions": ["DM"], "foot": "R", "birth": 1994, "club": "Inter Miami CF", "stats": { "shooting": 66, "passing": 78, "dribbling": 76, "defending": 72, "physical": 78, "pace": 72 }, "setPiece": 60, "penalty": 50, "stamina": 86, "confidence": "🟢" },
+    { "id": "p_arg_08", "number": 8, "name": { "ko": "발렌틴 바르코", "en": "Valentín Barco" }, "position": "LB", "altPositions": ["LW"], "foot": "L", "birth": 2004, "club": "Strasbourg", "stats": { "shooting": 56, "passing": 72, "dribbling": 76, "defending": 66, "physical": 64, "pace": 80 }, "setPiece": 55, "penalty": 45, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_arg_09", "number": 9, "name": { "ko": "훌리안 알바레스", "en": "Julián Álvarez" }, "position": "ST", "altPositions": ["AM"], "foot": "R", "birth": 2000, "club": "Atlético Madrid", "stats": { "shooting": 84, "passing": 76, "dribbling": 82, "defending": 48, "physical": 72, "pace": 82 }, "setPiece": 58, "penalty": 78, "stamina": 84, "confidence": "🟢" },
+    { "id": "p_arg_10", "number": 10, "name": { "ko": "리오넬 메시", "en": "Lionel Messi" }, "position": "RW", "altPositions": ["AM", "ST"], "foot": "L", "birth": 1987, "club": "Inter Miami CF", "stats": { "shooting": 88, "passing": 92, "dribbling": 92, "defending": 38, "physical": 58, "pace": 72 }, "setPiece": 88, "penalty": 78, "stamina": 70, "confidence": "🟢" },
+    { "id": "p_arg_11", "number": 11, "name": { "ko": "조바니 로 셀소", "en": "Giovani Lo Celso" }, "position": "AM", "altPositions": ["CM"], "foot": "L", "birth": 1996, "club": "Real Betis", "stats": { "shooting": 70, "passing": 80, "dribbling": 80, "defending": 54, "physical": 66, "pace": 70 }, "setPiece": 64, "penalty": 55, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_arg_12", "number": 12, "name": { "ko": "헤로니모 룰리", "en": "Gerónimo Rulli" }, "position": "GK", "altPositions": [], "foot": "R", "birth": 1992, "club": "Marseille", "gkStats": { "saving": 78, "aerial": 76, "buildup": 70 }, "setPiece": 20, "penalty": 20, "stamina": 68, "confidence": "🟢" },
+    { "id": "p_arg_13", "number": 13, "name": { "ko": "크리스티안 로메로", "en": "Cristian Romero" }, "position": "CB", "altPositions": [], "foot": "R", "birth": 1998, "club": "Tottenham Hotspur", "stats": { "shooting": 46, "passing": 74, "dribbling": 64, "defending": 84, "physical": 84, "pace": 78 }, "setPiece": 42, "penalty": 30, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_arg_14", "number": 14, "name": { "ko": "엑세키엘 팔라시오스", "en": "Exequiel Palacios" }, "position": "CM", "altPositions": ["DM"], "foot": "R", "birth": 1998, "club": "Bayer Leverkusen", "stats": { "shooting": 68, "passing": 78, "dribbling": 74, "defending": 68, "physical": 72, "pace": 72 }, "setPiece": 62, "penalty": 55, "stamina": 84, "confidence": "🟢" },
+    { "id": "p_arg_15", "number": 15, "name": { "ko": "니콜라스 곤살레스", "en": "Nicolás González" }, "position": "LW", "altPositions": ["RW"], "foot": "L", "birth": 1998, "club": "Atlético Madrid", "stats": { "shooting": 74, "passing": 70, "dribbling": 78, "defending": 48, "physical": 76, "pace": 82 }, "setPiece": 55, "penalty": 58, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_arg_16", "number": 16, "name": { "ko": "티아고 알마다", "en": "Thiago Almada" }, "position": "AM", "altPositions": ["LW"], "foot": "R", "birth": 2001, "club": "Atlético Madrid", "stats": { "shooting": 74, "passing": 78, "dribbling": 82, "defending": 46, "physical": 62, "pace": 76 }, "setPiece": 68, "penalty": 55, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_arg_17", "number": 17, "name": { "ko": "줄리아노 시메오네", "en": "Giuliano Simeone" }, "position": "RW", "altPositions": ["LW"], "foot": "R", "birth": 2002, "club": "Atlético Madrid", "stats": { "shooting": 70, "passing": 68, "dribbling": 76, "defending": 54, "physical": 70, "pace": 84 }, "setPiece": 50, "penalty": 50, "stamina": 84, "confidence": "🟢" },
+    { "id": "p_arg_18", "number": 18, "name": { "ko": "니코 파스", "en": "Nico Paz" }, "position": "AM", "altPositions": ["CM"], "foot": "L", "birth": 2004, "club": "Como", "stats": { "shooting": 72, "passing": 78, "dribbling": 80, "defending": 46, "physical": 62, "pace": 74 }, "setPiece": 66, "penalty": 55, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_arg_19", "number": 19, "name": { "ko": "니콜라스 오타멘디", "en": "Nicolás Otamendi" }, "position": "CB", "altPositions": [], "foot": "R", "birth": 1988, "club": "Benfica", "stats": { "shooting": 46, "passing": 72, "dribbling": 58, "defending": 78, "physical": 82, "pace": 66 }, "setPiece": 44, "penalty": 35, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_arg_20", "number": 20, "name": { "ko": "알렉시스 맥 알리스터", "en": "Alexis Mac Allister" }, "position": "CM", "altPositions": ["AM"], "foot": "R", "birth": 1998, "club": "Liverpool", "stats": { "shooting": 74, "passing": 82, "dribbling": 78, "defending": 66, "physical": 74, "pace": 72 }, "setPiece": 66, "penalty": 60, "stamina": 84, "confidence": "🟢" },
+    { "id": "p_arg_21", "number": 21, "name": { "ko": "호세 마누엘 로페스", "en": "José Manuel López" }, "position": "ST", "altPositions": [], "foot": "L", "birth": 2000, "club": "Palmeiras", "stats": { "shooting": 72, "passing": 62, "dribbling": 70, "defending": 40, "physical": 76, "pace": 76 }, "setPiece": 42, "penalty": 58, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_arg_22", "number": 22, "name": { "ko": "라우타로 마르티네스", "en": "Lautaro Martínez" }, "position": "ST", "altPositions": [], "foot": "R", "birth": 1997, "club": "Inter Milan", "stats": { "shooting": 86, "passing": 70, "dribbling": 78, "defending": 44, "physical": 80, "pace": 82 }, "setPiece": 48, "penalty": 72, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_arg_23", "number": 23, "name": { "ko": "에밀리아노 마르티네스", "en": "Emiliano Martínez" }, "position": "GK", "altPositions": [], "foot": "R", "birth": 1992, "club": "Aston Villa", "gkStats": { "saving": 86, "aerial": 82, "buildup": 72 }, "setPiece": 20, "penalty": 20, "stamina": 72, "confidence": "🟢" },
+    { "id": "p_arg_24", "number": 24, "name": { "ko": "엔소 페르난데스", "en": "Enzo Fernández" }, "position": "CM", "altPositions": ["AM"], "foot": "R", "birth": 2001, "club": "Chelsea", "stats": { "shooting": 76, "passing": 84, "dribbling": 78, "defending": 66, "physical": 76, "pace": 72 }, "setPiece": 70, "penalty": 60, "stamina": 86, "confidence": "🟢" },
+    { "id": "p_arg_25", "number": 25, "name": { "ko": "파쿤도 메디나", "en": "Facundo Medina" }, "position": "CB", "altPositions": ["LB"], "foot": "L", "birth": 1999, "club": "Marseille", "stats": { "shooting": 44, "passing": 70, "dribbling": 64, "defending": 76, "physical": 80, "pace": 76 }, "setPiece": 40, "penalty": 30, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_arg_26", "number": 26, "name": { "ko": "나우엘 몰리나", "en": "Nahuel Molina" }, "position": "RB", "altPositions": [], "foot": "R", "birth": 1998, "club": "Atlético Madrid", "stats": { "shooting": 52, "passing": 72, "dribbling": 74, "defending": 74, "physical": 72, "pace": 82 }, "setPiece": 48, "penalty": 35, "stamina": 84, "confidence": "🟢" }
+  ],
+  "_excluded": []
+}
