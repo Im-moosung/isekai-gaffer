@@ -1,0 +1,60 @@
+{
+  "id": "mar",
+  "name": { "ko": "모로코", "en": "Morocco" },
+  "fifaCode": "MAR",
+  "flag": "🇲🇦",
+  "fifaRanking": 7,
+  "tier": 2,
+  "profile": {
+    "preferredFormations": ["4-3-3", "4-2-3-1"],
+    "style": { "possession": 52, "pressing": 62, "lineHeight": 50, "tempo": 60 },
+    "signatureXI": ["p_mar_01", "p_mar_02", "p_mar_14", "p_mar_18", "p_mar_03", "p_mar_04", "p_mar_08", "p_mar_23", "p_mar_07", "p_mar_09", "p_mar_10"],
+    "keyPlayers": [
+      { "playerId": "p_mar_02", "dependency": 0.7 },
+      { "playerId": "p_mar_01", "dependency": 0.6 },
+      { "playerId": "p_mar_08", "dependency": 0.5 },
+      { "playerId": "p_mar_10", "dependency": 0.5 }
+    ],
+    "benchPattern": "balanced",
+    "styleNotes": "볼 소유 능력을 갖췄으나 적은 슈팅으로 득점하는 효율 극대화가 정체성. 하키미·마즈라위 풀백의 오버래핑이 핵심 공격 루트이며, 강팀 상대엔 저블록 후 역습으로 전환한다. 부누의 골키핑이 승부처를 지배했다."
+  },
+  "statBaseline": {
+    "possession": 52.0,
+    "passAccuracy": 82.0,
+    "shotsPerGame": 8.0,
+    "shotsOnTargetPerGame": 3.5,
+    "foulsPerGame": 13.0,
+    "cornersPerGame": 5.0,
+    "xgPerGame": null,
+    "source": "🟡 녹아웃 3경기 부분 실측(네덜란드전 점유61·슈팅11(5)·xG1.4, 캐나다전 슈팅5(4)·xG0.85, 프랑스전 xG0.14) + 티어 평균 추정(passAccuracy·shots·fouls·corners 추정)"
+  },
+  "squad": [
+    { "id": "p_mar_01", "number": 1, "name": { "ko": "야신 부누", "en": "Yassine Bounou" }, "position": "GK", "altPositions": [], "foot": "L", "birth": 1991, "club": "알 힐랄", "gkStats": { "saving": 84, "aerial": 80, "buildup": 74 }, "setPiece": 20, "penalty": 20, "stamina": 72, "confidence": "🟢" },
+    { "id": "p_mar_02", "number": 2, "name": { "ko": "아슈라프 하키미", "en": "Achraf Hakimi" }, "position": "RB", "altPositions": ["RW"], "foot": "R", "birth": 1998, "club": "파리 생제르맹", "stats": { "shooting": 62, "passing": 76, "dribbling": 82, "defending": 76, "physical": 76, "pace": 88 }, "setPiece": 58, "penalty": 55, "stamina": 86, "confidence": "🟢" },
+    { "id": "p_mar_03", "number": 3, "name": { "ko": "누사이르 마즈라위", "en": "Noussair Mazraoui" }, "position": "RB", "altPositions": ["LB"], "foot": "R", "birth": 1997, "club": "맨체스터 유나이티드", "stats": { "shooting": 52, "passing": 74, "dribbling": 76, "defending": 74, "physical": 68, "pace": 80 }, "setPiece": 50, "penalty": 40, "stamina": 84, "confidence": "🟢" },
+    { "id": "p_mar_04", "number": 4, "name": { "ko": "소피안 암라바트", "en": "Sofyan Amrabat" }, "position": "DM", "altPositions": ["CM"], "foot": "R", "birth": 1996, "club": "레알 베티스", "stats": { "shooting": 56, "passing": 74, "dribbling": 70, "defending": 78, "physical": 80, "pace": 70 }, "setPiece": 52, "penalty": 40, "stamina": 86, "confidence": "🟢" },
+    { "id": "p_mar_05", "number": 5, "name": { "ko": "마르완 사다네", "en": "Marwane Saâdane" }, "position": "CB", "altPositions": [], "foot": "R", "birth": 1992, "club": "알 파테", "stats": { "shooting": 40, "passing": 66, "dribbling": 58, "defending": 72, "physical": 76, "pace": 68 }, "setPiece": 36, "penalty": 30, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_mar_06", "number": 6, "name": { "ko": "아이유브 부아디", "en": "Ayyoub Bouaddi" }, "position": "DM", "altPositions": ["CM"], "foot": "R", "birth": 2007, "club": "릴", "stats": { "shooting": 56, "passing": 74, "dribbling": 72, "defending": 72, "physical": 68, "pace": 72 }, "setPiece": 50, "penalty": 40, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_mar_07", "number": 7, "name": { "ko": "셈스딘 탈비", "en": "Chemsdine Talbi" }, "position": "RW", "altPositions": ["LW"], "foot": "R", "birth": 2005, "club": "선덜랜드", "stats": { "shooting": 68, "passing": 68, "dribbling": 80, "defending": 44, "physical": 62, "pace": 84 }, "setPiece": 52, "penalty": 48, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_mar_08", "number": 8, "name": { "ko": "아제딘 우나히", "en": "Azzedine Ounahi" }, "position": "CM", "altPositions": ["AM"], "foot": "R", "birth": 2000, "club": "지로나", "stats": { "shooting": 72, "passing": 76, "dribbling": 80, "defending": 58, "physical": 66, "pace": 74 }, "setPiece": 60, "penalty": 52, "stamina": 84, "confidence": "🟢" },
+    { "id": "p_mar_09", "number": 9, "name": { "ko": "수피안 라히미", "en": "Soufiane Rahimi" }, "position": "ST", "altPositions": ["LW"], "foot": "R", "birth": 1996, "club": "알 아인", "stats": { "shooting": 74, "passing": 66, "dribbling": 76, "defending": 42, "physical": 70, "pace": 78 }, "setPiece": 50, "penalty": 68, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_mar_10", "number": 10, "name": { "ko": "브라힘 디아스", "en": "Brahim Díaz" }, "position": "AM", "altPositions": ["RW"], "foot": "B", "birth": 1999, "club": "레알 마드리드", "stats": { "shooting": 76, "passing": 80, "dribbling": 84, "defending": 46, "physical": 60, "pace": 80 }, "setPiece": 62, "penalty": 58, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_mar_11", "number": 11, "name": { "ko": "이스마엘 사이비", "en": "Ismael Saibari" }, "position": "AM", "altPositions": ["CM"], "foot": "R", "birth": 2001, "club": "PSV 에인트호번", "stats": { "shooting": 72, "passing": 76, "dribbling": 78, "defending": 54, "physical": 70, "pace": 76 }, "setPiece": 56, "penalty": 55, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_mar_12", "number": 12, "name": { "ko": "무니르 모하메디", "en": "Munir Mohamedi" }, "position": "GK", "altPositions": [], "foot": "R", "birth": 1989, "club": "RS 베르칸", "gkStats": { "saving": 72, "aerial": 72, "buildup": 62 }, "setPiece": 20, "penalty": 20, "stamina": 64, "confidence": "🟢" },
+    { "id": "p_mar_13", "number": 13, "name": { "ko": "자카리아 엘 우아흐디", "en": "Zakaria El Ouahdi" }, "position": "RB", "altPositions": [], "foot": "R", "birth": 2001, "club": "헹크", "stats": { "shooting": 48, "passing": 68, "dribbling": 72, "defending": 70, "physical": 66, "pace": 80 }, "setPiece": 46, "penalty": 35, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_mar_14", "number": 14, "name": { "ko": "이사 디오프", "en": "Issa Diop" }, "position": "CB", "altPositions": [], "foot": "R", "birth": 1997, "club": "풀럼", "stats": { "shooting": 44, "passing": 68, "dribbling": 60, "defending": 76, "physical": 82, "pace": 72 }, "setPiece": 40, "penalty": 30, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_mar_15", "number": 15, "name": { "ko": "사미르 엘 무라베트", "en": "Samir El Mourabet" }, "position": "CM", "altPositions": ["DM"], "foot": "L", "birth": 2005, "club": "스트라스부르", "stats": { "shooting": 58, "passing": 72, "dribbling": 72, "defending": 62, "physical": 66, "pace": 72 }, "setPiece": 52, "penalty": 42, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_mar_16", "number": 16, "name": { "ko": "제심 야신", "en": "Gessime Yassine" }, "position": "AM", "altPositions": ["LW"], "foot": "L", "birth": 2005, "club": "스트라스부르", "stats": { "shooting": 66, "passing": 72, "dribbling": 78, "defending": 46, "physical": 60, "pace": 78 }, "setPiece": 54, "penalty": 48, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_mar_17", "number": 17, "name": { "ko": "아민 스바이", "en": "Amine Sbaï" }, "position": "LW", "altPositions": ["RW"], "foot": "R", "birth": 2000, "club": "앙제", "stats": { "shooting": 64, "passing": 66, "dribbling": 76, "defending": 44, "physical": 62, "pace": 80 }, "setPiece": 50, "penalty": 45, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_mar_18", "number": 18, "name": { "ko": "샤디 리아드", "en": "Chadi Riad" }, "position": "CB", "altPositions": [], "foot": "L", "birth": 2003, "club": "크리스탈 팰리스", "stats": { "shooting": 42, "passing": 70, "dribbling": 62, "defending": 74, "physical": 78, "pace": 74 }, "setPiece": 38, "penalty": 30, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_mar_19", "number": 19, "name": { "ko": "유세프 벨람마리", "en": "Youssef Belammari" }, "position": "CB", "altPositions": [], "foot": "L", "birth": 1998, "club": "알 아흘리", "stats": { "shooting": 40, "passing": 66, "dribbling": 58, "defending": 72, "physical": 76, "pace": 70 }, "setPiece": 36, "penalty": 30, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_mar_20", "number": 20, "name": { "ko": "아유브 엘 카비", "en": "Ayoub El Kaabi" }, "position": "ST", "altPositions": [], "foot": "L", "birth": 1993, "club": "올림피아코스", "stats": { "shooting": 78, "passing": 62, "dribbling": 68, "defending": 42, "physical": 78, "pace": 72 }, "setPiece": 48, "penalty": 70, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_mar_21", "number": 21, "name": { "ko": "아유브 아마이무니", "en": "Ayoube Amaimouni" }, "position": "ST", "altPositions": [], "foot": "L", "birth": 2004, "club": "아인트라흐트 프랑크푸르트", "stats": { "shooting": 68, "passing": 60, "dribbling": 68, "defending": 40, "physical": 72, "pace": 78 }, "setPiece": 42, "penalty": 55, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_mar_22", "number": 22, "name": { "ko": "아흐메드 레다 타그나우티", "en": "Ahmed Reda Tagnaouti" }, "position": "GK", "altPositions": [], "foot": "R", "birth": 1996, "club": "AS FAR", "gkStats": { "saving": 74, "aerial": 72, "buildup": 64 }, "setPiece": 20, "penalty": 20, "stamina": 66, "confidence": "🟢" },
+    { "id": "p_mar_23", "number": 23, "name": { "ko": "빌랄 엘 칸누스", "en": "Bilal El Khannouss" }, "position": "AM", "altPositions": ["CM"], "foot": "R", "birth": 2004, "club": "VfB 슈투트가르트", "stats": { "shooting": 70, "passing": 78, "dribbling": 82, "defending": 48, "physical": 62, "pace": 76 }, "setPiece": 60, "penalty": 52, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_mar_24", "number": 24, "name": { "ko": "네일 엘 아이나위", "en": "Neil El Aynaoui" }, "position": "CM", "altPositions": ["DM"], "foot": "R", "birth": 2001, "club": "로마", "stats": { "shooting": 64, "passing": 76, "dribbling": 72, "defending": 66, "physical": 76, "pace": 70 }, "setPiece": 56, "penalty": 45, "stamina": 84, "confidence": "🟢" },
+    { "id": "p_mar_25", "number": 25, "name": { "ko": "레두안 할할", "en": "Redouane Halhal" }, "position": "CB", "altPositions": ["RB"], "foot": "R", "birth": 2003, "club": "메헬렌", "stats": { "shooting": 42, "passing": 66, "dribbling": 62, "defending": 70, "physical": 74, "pace": 74 }, "setPiece": 38, "penalty": 30, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_mar_26", "number": 26, "name": { "ko": "아나스 살라흐에딘", "en": "Anass Salah-Eddine" }, "position": "LB", "altPositions": [], "foot": "L", "birth": 2002, "club": "PSV 에인트호번", "stats": { "shooting": 48, "passing": 70, "dribbling": 74, "defending": 68, "physical": 64, "pace": 80 }, "setPiece": 48, "penalty": 35, "stamina": 82, "confidence": "🟢" }
+  ],
+  "_excluded": []
+}

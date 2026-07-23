@@ -1,0 +1,60 @@
+{
+  "id": "esp",
+  "name": { "ko": "스페인", "en": "Spain" },
+  "fifaCode": "ESP",
+  "flag": "🇪🇸",
+  "fifaRanking": 2,
+  "tier": 1,
+  "profile": {
+    "preferredFormations": ["4-2-3-1", "4-1-4-1"],
+    "style": { "possession": 78, "pressing": 68, "lineHeight": 62, "tempo": 55 },
+    "signatureXI": ["p_esp_23", "p_esp_05", "p_esp_14", "p_esp_22", "p_esp_24", "p_esp_16", "p_esp_20", "p_esp_19", "p_esp_10", "p_esp_17", "p_esp_21"],
+    "keyPlayers": [
+      { "playerId": "p_esp_19", "dependency": 0.7 },
+      { "playerId": "p_esp_20", "dependency": 0.6 },
+      { "playerId": "p_esp_21", "dependency": 0.55 },
+      { "playerId": "p_esp_16", "dependency": 0.5 }
+    ],
+    "benchPattern": "protect-lead",
+    "styleNotes": "극단적 점유·포지셔널 플레이로 경기를 통제하는 우승팀. 강팀전에는 점유를 낮추고 오프-볼 강도와 트랜지션 차단으로 전환하는 유연성을 갖췄다. 8경기 1실점의 수비 안정과 교체 뎁스(페란 토레스·니코 윌리엄스)가 강점."
+  },
+  "statBaseline": {
+    "possession": 64.1,
+    "passAccuracy": 86.0,
+    "shotsPerGame": 16.8,
+    "shotsOnTargetPerGame": 6.5,
+    "foulsPerGame": 12.6,
+    "cornersPerGame": 6.5,
+    "xgPerGame": null,
+    "source": "🟢 FBref 대회 누적(8경기 140슈팅/54유효·점유 64.1·파울 101·PK 1/1) + passAccuracy는 결승 86.4% 기반, corners 추정"
+  },
+  "squad": [
+    { "id": "p_esp_01", "number": 1, "name": { "ko": "다비드 라야", "en": "David Raya" }, "position": "GK", "altPositions": [], "foot": "R", "birth": 1995, "club": "Arsenal", "gkStats": { "saving": 84, "aerial": 80, "buildup": 78 }, "setPiece": 20, "penalty": 20, "stamina": 72, "confidence": "🟢" },
+    { "id": "p_esp_02", "number": 2, "name": { "ko": "마르크 푸빌", "en": "Marc Pubill" }, "position": "RB", "altPositions": [], "foot": "R", "birth": 2003, "club": "Atlético Madrid", "stats": { "shooting": 48, "passing": 72, "dribbling": 72, "defending": 72, "physical": 70, "pace": 80 }, "setPiece": 46, "penalty": 30, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_esp_03", "number": 3, "name": { "ko": "알렉스 그리말도", "en": "Álex Grimaldo" }, "position": "LB", "altPositions": [], "foot": "L", "birth": 1995, "club": "Bayer Leverkusen", "stats": { "shooting": 62, "passing": 80, "dribbling": 78, "defending": 70, "physical": 66, "pace": 78 }, "setPiece": 78, "penalty": 45, "stamina": 84, "confidence": "🟢" },
+    { "id": "p_esp_04", "number": 4, "name": { "ko": "에릭 가르시아", "en": "Eric García" }, "position": "CB", "altPositions": ["RB"], "foot": "R", "birth": 2001, "club": "Barcelona", "stats": { "shooting": 44, "passing": 80, "dribbling": 68, "defending": 76, "physical": 72, "pace": 74 }, "setPiece": 40, "penalty": 30, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_esp_05", "number": 5, "name": { "ko": "마르코스 요렌테", "en": "Marcos Llorente" }, "position": "RB", "altPositions": ["CB"], "foot": "R", "birth": 1995, "club": "Atlético Madrid", "stats": { "shooting": 62, "passing": 74, "dribbling": 74, "defending": 74, "physical": 78, "pace": 84 }, "setPiece": 48, "penalty": 40, "stamina": 86, "confidence": "🟢" },
+    { "id": "p_esp_06", "number": 6, "name": { "ko": "미켈 메리노", "en": "Mikel Merino" }, "position": "CM", "altPositions": ["AM"], "foot": "L", "birth": 1996, "club": "Arsenal", "stats": { "shooting": 74, "passing": 80, "dribbling": 72, "defending": 68, "physical": 80, "pace": 68 }, "setPiece": 62, "penalty": 55, "stamina": 84, "confidence": "🟢" },
+    { "id": "p_esp_07", "number": 7, "name": { "ko": "페란 토레스", "en": "Ferran Torres" }, "position": "ST", "altPositions": ["LW"], "foot": "R", "birth": 2000, "club": "Barcelona", "stats": { "shooting": 82, "passing": 74, "dribbling": 80, "defending": 44, "physical": 70, "pace": 82 }, "setPiece": 52, "penalty": 68, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_esp_08", "number": 8, "name": { "ko": "파비안 루이스", "en": "Fabián Ruiz" }, "position": "CM", "altPositions": ["DM"], "foot": "L", "birth": 1996, "club": "Paris Saint-Germain", "stats": { "shooting": 72, "passing": 82, "dribbling": 78, "defending": 66, "physical": 74, "pace": 68 }, "setPiece": 62, "penalty": 55, "stamina": 84, "confidence": "🟢" },
+    { "id": "p_esp_09", "number": 9, "name": { "ko": "가비", "en": "Gavi" }, "position": "CM", "altPositions": ["AM"], "foot": "R", "birth": 2004, "club": "Barcelona", "stats": { "shooting": 68, "passing": 80, "dribbling": 82, "defending": 66, "physical": 68, "pace": 74 }, "setPiece": 58, "penalty": 50, "stamina": 84, "confidence": "🟢" },
+    { "id": "p_esp_10", "number": 10, "name": { "ko": "다니 올모", "en": "Dani Olmo" }, "position": "AM", "altPositions": ["LW"], "foot": "R", "birth": 1998, "club": "Barcelona", "stats": { "shooting": 78, "passing": 82, "dribbling": 82, "defending": 50, "physical": 66, "pace": 74 }, "setPiece": 64, "penalty": 58, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_esp_11", "number": 11, "name": { "ko": "예레미 피노", "en": "Yéremy Pino" }, "position": "RW", "altPositions": ["LW"], "foot": "R", "birth": 2002, "club": "Crystal Palace", "stats": { "shooting": 72, "passing": 72, "dribbling": 80, "defending": 44, "physical": 62, "pace": 84 }, "setPiece": 52, "penalty": 52, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_esp_12", "number": 12, "name": { "ko": "페드로 포로", "en": "Pedro Porro" }, "position": "RB", "altPositions": [], "foot": "R", "birth": 1999, "club": "Tottenham Hotspur", "stats": { "shooting": 56, "passing": 76, "dribbling": 76, "defending": 70, "physical": 68, "pace": 82 }, "setPiece": 60, "penalty": 40, "stamina": 84, "confidence": "🟢" },
+    { "id": "p_esp_13", "number": 13, "name": { "ko": "조안 가르시아", "en": "Joan García" }, "position": "GK", "altPositions": [], "foot": "R", "birth": 2001, "club": "Barcelona", "gkStats": { "saving": 78, "aerial": 76, "buildup": 74 }, "setPiece": 20, "penalty": 20, "stamina": 68, "confidence": "🟢" },
+    { "id": "p_esp_14", "number": 14, "name": { "ko": "아이메릭 라포르트", "en": "Aymeric Laporte" }, "position": "CB", "altPositions": [], "foot": "L", "birth": 1994, "club": "Athletic Bilbao", "stats": { "shooting": 46, "passing": 82, "dribbling": 68, "defending": 84, "physical": 82, "pace": 74 }, "setPiece": 42, "penalty": 30, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_esp_15", "number": 15, "name": { "ko": "알렉스 바에나", "en": "Álex Baena" }, "position": "AM", "altPositions": ["CM"], "foot": "R", "birth": 2001, "club": "Atlético Madrid", "stats": { "shooting": 74, "passing": 80, "dribbling": 80, "defending": 50, "physical": 66, "pace": 72 }, "setPiece": 74, "penalty": 55, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_esp_16", "number": 16, "name": { "ko": "로드리", "en": "Rodri" }, "position": "DM", "altPositions": ["CM"], "foot": "R", "birth": 1996, "club": "Manchester City", "stats": { "shooting": 74, "passing": 86, "dribbling": 76, "defending": 86, "physical": 82, "pace": 66 }, "setPiece": 64, "penalty": 60, "stamina": 86, "confidence": "🟢" },
+    { "id": "p_esp_17", "number": 17, "name": { "ko": "니코 윌리엄스", "en": "Nico Williams" }, "position": "LW", "altPositions": ["RW"], "foot": "R", "birth": 2002, "club": "Athletic Bilbao", "stats": { "shooting": 74, "passing": 74, "dribbling": 84, "defending": 44, "physical": 66, "pace": 88 }, "setPiece": 54, "penalty": 55, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_esp_18", "number": 18, "name": { "ko": "마르틴 수비멘디", "en": "Martín Zubimendi" }, "position": "DM", "altPositions": ["CM"], "foot": "R", "birth": 1999, "club": "Arsenal", "stats": { "shooting": 64, "passing": 82, "dribbling": 74, "defending": 80, "physical": 76, "pace": 68 }, "setPiece": 55, "penalty": 45, "stamina": 84, "confidence": "🟢" },
+    { "id": "p_esp_19", "number": 19, "name": { "ko": "라민 야말", "en": "Lamine Yamal" }, "position": "RW", "altPositions": ["LW"], "foot": "L", "birth": 2007, "club": "Barcelona", "stats": { "shooting": 84, "passing": 84, "dribbling": 90, "defending": 38, "physical": 58, "pace": 88 }, "setPiece": 78, "penalty": 70, "stamina": 80, "confidence": "🟢" },
+    { "id": "p_esp_20", "number": 20, "name": { "ko": "페드리", "en": "Pedri" }, "position": "CM", "altPositions": ["AM"], "foot": "R", "birth": 2002, "club": "Barcelona", "stats": { "shooting": 74, "passing": 90, "dribbling": 86, "defending": 62, "physical": 66, "pace": 72 }, "setPiece": 66, "penalty": 55, "stamina": 86, "confidence": "🟢" },
+    { "id": "p_esp_21", "number": 21, "name": { "ko": "미켈 오야르사발", "en": "Mikel Oyarzabal" }, "position": "ST", "altPositions": ["LW"], "foot": "L", "birth": 1997, "club": "Real Sociedad", "stats": { "shooting": 82, "passing": 74, "dribbling": 76, "defending": 48, "physical": 72, "pace": 74 }, "setPiece": 62, "penalty": 82, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_esp_22", "number": 22, "name": { "ko": "파우 쿠바르시", "en": "Pau Cubarsí" }, "position": "CB", "altPositions": [], "foot": "R", "birth": 2007, "club": "Barcelona", "stats": { "shooting": 40, "passing": 80, "dribbling": 68, "defending": 80, "physical": 74, "pace": 76 }, "setPiece": 38, "penalty": 30, "stamina": 82, "confidence": "🟢" },
+    { "id": "p_esp_23", "number": 23, "name": { "ko": "우나이 시몬", "en": "Unai Simón" }, "position": "GK", "altPositions": [], "foot": "R", "birth": 1997, "club": "Athletic Bilbao", "gkStats": { "saving": 84, "aerial": 80, "buildup": 76 }, "setPiece": 20, "penalty": 20, "stamina": 72, "confidence": "🟢" },
+    { "id": "p_esp_24", "number": 24, "name": { "ko": "마르크 쿠쿠레야", "en": "Marc Cucurella" }, "position": "LB", "altPositions": [], "foot": "L", "birth": 1998, "club": "Chelsea", "stats": { "shooting": 54, "passing": 76, "dribbling": 76, "defending": 76, "physical": 72, "pace": 78 }, "setPiece": 52, "penalty": 35, "stamina": 86, "confidence": "🟢" },
+    { "id": "p_esp_25", "number": 25, "name": { "ko": "빅토르 무뇨스", "en": "Víctor Muñoz" }, "position": "ST", "altPositions": [], "foot": "R", "birth": 2003, "club": "Osasuna", "stats": { "shooting": 70, "passing": 66, "dribbling": 72, "defending": 42, "physical": 70, "pace": 76 }, "setPiece": 44, "penalty": 58, "stamina": 78, "confidence": "🟢" },
+    { "id": "p_esp_26", "number": 26, "name": { "ko": "보르하 이글레시아스", "en": "Borja Iglesias" }, "position": "ST", "altPositions": [], "foot": "R", "birth": 1993, "club": "Celta Vigo", "stats": { "shooting": 74, "passing": 66, "dribbling": 68, "defending": 40, "physical": 78, "pace": 68 }, "setPiece": 44, "penalty": 65, "stamina": 78, "confidence": "🟢" }
+  ],
+  "_excluded": []
+}
