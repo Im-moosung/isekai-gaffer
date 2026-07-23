@@ -46,6 +46,18 @@ describe('MatchScreen 조립', () => {
     expect(getByRole('button', { name: '후반 시작' })).toBeTruthy()
   })
 
+  it('(e) LIVE 뱃지는 재생 중에만 노출 — 킥오프 전 없음, 재생 진행 중 존재', () => {
+    const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
+    const live = () => container.querySelector('.bc-scorebug__live')
+    // 킥오프 전(pre): displayMinute=engine.minute=0 → 재생 아님 → LIVE 없음
+    expect(live()).toBeNull()
+    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    // playTo(45) 후 재생 시작. 소량만 진행해 displayMinute < 45 유지 → 재생 중
+    step(3)
+    expect(live()).not.toBeNull()
+    expect(live()!.textContent).toContain('LIVE')
+  })
+
   it('(d) 재생 전 스코어 스포일러 방지 — 킥오프 직후 displayMinute=0이면 0:0', () => {
     // seed=6: 데모 픽스처(kor 76 vs esp 88)에서 전반 4분에 esp 골 → engine.score=0:1.
     //   킥오프 즉시 playTo(45)로 엔진은 0:1을 확정하지만, 재생 전(displayMinute=0)

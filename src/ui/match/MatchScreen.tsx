@@ -59,6 +59,9 @@ export function MatchScreen({ home, away, seed }: { home: Team; away: Team; seed
   }, [countdown, decisionOpen])
 
   function handleResume() {
+    // "그대로 간다" 클릭과 카운트다운 만료가 겹치면 resumeFromDecision이 이중 호출되어
+    // 두 번째 호출이 throw(엔진 가드)한다. decision 상태가 아니면 조기 반환.
+    if (useMatchStore.getState().phase !== 'decision') return
     resumeFromDecision()
     playTo(90)
   }
@@ -84,7 +87,7 @@ export function MatchScreen({ home, away, seed }: { home: Team; away: Team; seed
           away={away}
           score={shownScore}
           minute={displayMinute}
-          live={phase === 'playing'}
+          live={replaying}
         />
         <div className="ms-pitch-wrap">
           <PitchView state={engine} lastEvent={lastEvent} />
