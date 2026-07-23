@@ -1,0 +1,16 @@
+/* 방송 중계 다크 테마 — 오리지널 디자인 (스펙 §9.1) */
+:root {
+  --bc-bg: #0b1220;          /* 스튜디오 배경 */
+  --bc-panel: #121c30;       /* 패널 */
+  --bc-panel-2: #1a2742;
+  --bc-line: #2a3a5c;
+  --bc-text: #e8edf6;
+  --bc-text-dim: #8fa0bd;
+  --bc-accent: #c8f542;      /* 라이브 라임 (경기 화면 한정) */
+  --bc-danger: #ff5d5d;
+  --bc-pitch: #1e7a3c;       /* 피치 그린 */
+  --bc-pitch-line: rgba(255,255,255,0.55);
+  --bc-home: #e63946;        /* 홈 도트 */
+  --bc-away: #4895ef;        /* 어웨이 도트 */
+  --bc-font: "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", sans-serif;
+}
