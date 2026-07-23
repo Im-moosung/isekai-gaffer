@@ -9,40 +9,40 @@
 - 🟢 HIGH / 🟡 MEDIUM / 🔴 LOW·미확인. 지어내기 금지.
 - **스쿼드**: 🟢 위키피디아 squads 본문 + 스쿼드 템플릿 + heavy/FIFA 명단 교차.
 - **경기별 점유율·포메이션·스코어**: 🟢 FBref. **대회 누적 스탯**: 🟢 FBref.
-- **주발**: Transfermarkt 미확인 → 생략. **한글**: 로마자 정본, 한글 보조(노르웨이어 발음 근사치).
+- **주발**: Transfermarkt 상세 스쿼드로 확인해 표에 컬럼 추가(**단일 소스 🟡**). 홀란드·외데고르 **왼발**. **한글**: 로마자 정본, 한글 보조(노르웨이어 발음 근사치).
 
 ---
 
 ## ① 공식 스쿼드 (26인 전체) 🟢 HIGH
 
-| # | 이름 (한글) | 로마자 | Pos | 생년월일 | A대표 캡스(골) | 소속 클럽 |
-|---|---|---|---|---|---|---|
-| 1 | 외르얀 뉠란 | Ørjan Nyland | GK | 1990-09-10 | 71 (0) | Sevilla |
-| 2 | 모르텐 토르스뷔 | Morten Thorsby | MF | 1996-05-05 | 31 (0) | Cremonese |
-| 3 | 크리스토페르 아예르 | Kristoffer Ajer | DF | 1998-04-17 | 52 (2) | Brentford |
-| 4 | 레오 외스티고르 | Leo Østigård | DF | 1999-11-28 | 38 (1) | Genoa |
-| 5 | 다비드 묄레르 볼페 | David Møller Wolfe | DF | 2002-04-23 | 22 (1) | Wolverhampton Wanderers |
-| 6 | 파트리크 베르그 | Patrick Berg | MF | 1997-11-24 | 43 (0) | Bodø/Glimt |
-| 7 | 알렉산데르 쇠를로트 | Alexander Sørloth | FW | 1995-12-05 | 72 (26) | Atlético Madrid |
-| 8 | 산데르 베르게 | Sander Berge | MF | 1998-02-14 | 66 (1) | Fulham |
-| 9 | 엘링 홀란 | Erling Haaland | FW | 2000-07-21 | 50 (55) | Manchester City |
-| 10 | 마르틴 외데고르 (C) | Martin Ødegaard | MF | 1998-12-17 | 68 (5) | Arsenal |
-| 11 | 예르겐 스트란 라르센 | Jørgen Strand Larsen | FW | 2000-02-06 | 28 (6) | Crystal Palace |
-| 12 | 산데르 탕비크 | Sander Tangvik | GK | 2002-11-29 | 0 (0) | Hamburger SV |
-| 13 | 에길 셀비크 | Egil Selvik | GK | 1997-07-30 | 7 (0) | Watford |
-| 14 | 프레드리크 아우르스네스 | Fredrik Aursnes | MF | 1995-12-10 | 22 (1) | Benfica |
-| 15 | 프레드리크 안드레 비외르칸 | Fredrik André Bjørkan | DF | 1998-08-21 | 21 (1) | Bodø/Glimt |
-| 16 | 마르쿠스 홀름그렌 페데르센 | Marcus Holmgren Pedersen | DF | 2000-07-16 | 32 (0) | Torino |
-| 17 | 토르비외른 헤겜 | Torbjørn Heggem | DF | 1999-01-12 | 15 (0) | Bologna |
-| 18 | 크리스티안 토르스트베트 | Kristian Thorstvedt | MF | 1999-03-13 | 37 (4) | Sassuolo |
-| 19 | 텔로 오스고르 | Thelo Aasgaard | MF | 2002-05-02 | 8 (5) | Rangers |
-| 20 | 안토니오 누사 | Antonio Nusa | MF | 2005-04-17 | 24 (8) | RB Leipzig |
-| 21 | 안드레아스 셸데루프 | Andreas Schjelderup | MF | 2004-06-01 | 12 (1) | Benfica |
-| 22 | 오스카르 보브 | Oscar Bobb | MF | 2003-07-12 | 20 (2) | Fulham |
-| 23 | 옌스 페테르 하우게 | Jens Petter Hauge | MF | 1999-10-12 | 15 (1) | Bodø/Glimt |
-| 24 | 손드레 랑오스 | Sondre Langås | DF | 2001-02-02 | 3 (0) | Derby County |
-| 25 | 헨리크 팔셰네르 | Henrik Falchener | DF | 2003-05-08 | 1 (0) | Viking |
-| 26 | 율리안 뤼에르손 | Julian Ryerson | DF | 1997-11-17 | 43 (1) | Borussia Dortmund |
+| # | 이름 (한글) | 로마자 | Pos | 생년월일 | A대표 캡스(골) | 소속 클럽 | 주발 |
+|---|---|---|---|---|---|---|---|
+| 1 | 외르얀 뉠란 | Ørjan Nyland | GK | 1990-09-10 | 71 (0) | Sevilla | R 🟡 |
+| 2 | 모르텐 토르스뷔 | Morten Thorsby | MF | 1996-05-05 | 31 (0) | Cremonese | R 🟡 |
+| 3 | 크리스토페르 아예르 | Kristoffer Ajer | DF | 1998-04-17 | 52 (2) | Brentford | R 🟡 |
+| 4 | 레오 외스티고르 | Leo Østigård | DF | 1999-11-28 | 38 (1) | Genoa | R 🟡 |
+| 5 | 다비드 묄레르 볼페 | David Møller Wolfe | DF | 2002-04-23 | 22 (1) | Wolverhampton Wanderers | L 🟡 |
+| 6 | 파트리크 베르그 | Patrick Berg | MF | 1997-11-24 | 43 (0) | Bodø/Glimt | R 🟡 |
+| 7 | 알렉산데르 쇠를로트 | Alexander Sørloth | FW | 1995-12-05 | 72 (26) | Atlético Madrid | L 🟡 |
+| 8 | 산데르 베르게 | Sander Berge | MF | 1998-02-14 | 66 (1) | Fulham | R 🟡 |
+| 9 | 엘링 홀란 | Erling Haaland | FW | 2000-07-21 | 50 (55) | Manchester City | L 🟡 |
+| 10 | 마르틴 외데고르 (C) | Martin Ødegaard | MF | 1998-12-17 | 68 (5) | Arsenal | L 🟡 |
+| 11 | 예르겐 스트란 라르센 | Jørgen Strand Larsen | FW | 2000-02-06 | 28 (6) | Crystal Palace | R 🟡 |
+| 12 | 산데르 탕비크 | Sander Tangvik | GK | 2002-11-29 | 0 (0) | Hamburger SV | R 🟡 |
+| 13 | 에길 셀비크 | Egil Selvik | GK | 1997-07-30 | 7 (0) | Watford | L 🟡 |
+| 14 | 프레드리크 아우르스네스 | Fredrik Aursnes | MF | 1995-12-10 | 22 (1) | Benfica | R 🟡 |
+| 15 | 프레드리크 안드레 비외르칸 | Fredrik André Bjørkan | DF | 1998-08-21 | 21 (1) | Bodø/Glimt | L 🟡 |
+| 16 | 마르쿠스 홀름그렌 페데르센 | Marcus Holmgren Pedersen | DF | 2000-07-16 | 32 (0) | Torino | R 🟡 |
+| 17 | 토르비외른 헤겜 | Torbjørn Heggem | DF | 1999-01-12 | 15 (0) | Bologna | L 🟡 |
+| 18 | 크리스티안 토르스트베트 | Kristian Thorstvedt | MF | 1999-03-13 | 37 (4) | Sassuolo | L 🟡 |
+| 19 | 텔로 오스고르 | Thelo Aasgaard | MF | 2002-05-02 | 8 (5) | Rangers | R 🟡 |
+| 20 | 안토니오 누사 | Antonio Nusa | MF | 2005-04-17 | 24 (8) | RB Leipzig | R 🟡 |
+| 21 | 안드레아스 셸데루프 | Andreas Schjelderup | MF | 2004-06-01 | 12 (1) | Benfica | R 🟡 |
+| 22 | 오스카르 보브 | Oscar Bobb | MF | 2003-07-12 | 20 (2) | Fulham | L 🟡 |
+| 23 | 옌스 페테르 하우게 | Jens Petter Hauge | MF | 1999-10-12 | 15 (1) | Bodø/Glimt | R 🟡 |
+| 24 | 손드레 랑오스 | Sondre Langås | DF | 2001-02-02 | 3 (0) | Derby County | R 🟡 |
+| 25 | 헨리크 팔셰네르 | Henrik Falchener | DF | 2003-05-08 | 1 (0) | Viking | R 🟡 |
+| 26 | 율리안 뤼에르손 | Julian Ryerson | DF | 1997-11-17 | 43 (1) | Borussia Dortmund | R 🟡 |
 
 > 구성: GK 3 · DF 8 · MF 10 · FW 3(홀란드·쇠를로트·스트란 라르센). 홀란드(A대표 50캡스 55골, 골당 1.1개)·외데고르 원투펀치. 국내파(Bodø/Glimt) + 잉글랜드/이탈리아 리거 혼합.
 

@@ -10,40 +10,40 @@
 - **스쿼드**: 🟢 위키피디아 squads 본문 + 스쿼드 템플릿 + 야후/FIFA 명단 교차 확인.
 - **경기별 점유율·포메이션·스코어**: 🟢 FBref 매치로그.
 - **대회 누적 스탯**: 🟢 FBref 집계표.
-- **주발**: Transfermarkt 미확인 → 생략. **한글**: 로마자 정본, 한글 보조.
+- **주발**: Transfermarkt 상세 스쿼드로 확인해 표에 컬럼 추가(**단일 소스 🟡**). 메시 **왼발**. **한글**: 로마자 정본, 한글 보조.
 
 ---
 
 ## ① 공식 스쿼드 (26인 전체) 🟢 HIGH
 
-| # | 이름 (한글) | 로마자 | Pos | 생년월일 | A대표 캡스(골) | 소속 클럽 |
-|---|---|---|---|---|---|---|
-| 1 | 후안 무소 | Juan Musso | GK | 1994-05-06 | 4 (0) | Atlético Madrid |
-| 2 | 마르코스 세네시 | Marcos Senesi | DF | 1997-05-10 | 3 (0) | Bournemouth |
-| 3 | 니콜라스 타글리아피코 | Nicolás Tagliafico | DF | 1992-08-31 | 76 (1) | Lyon |
-| 4 | 곤살로 몬티엘 | Gonzalo Montiel | DF | 1997-01-01 | 39 (2) | River Plate |
-| 5 | 레안드로 파레데스 | Leandro Paredes | MF | 1994-06-29 | 77 (5) | Boca Juniors |
-| 6 | 리산드로 마르티네스 | Lisandro Martínez | DF | 1998-01-18 | 28 (1) | Manchester United |
-| 7 | 로드리고 데 파울 | Rodrigo De Paul | MF | 1994-05-24 | 87 (2) | Inter Miami CF |
-| 8 | 발렌틴 바르코 | Valentín Barco | DF | 2004-07-23 | 4 (2) | Strasbourg |
-| 9 | 훌리안 알바레스 | Julián Álvarez | FW | 2000-01-31 | 51 (14) | Atlético Madrid |
-| 10 | 리오넬 메시 (C) | Lionel Messi | FW | 1987-06-24 | 199 (117) | Inter Miami CF |
-| 11 | 조바니 로 셀소 | Giovani Lo Celso | MF | 1996-04-09 | 67 (4) | Real Betis |
-| 12 | 헤로니모 룰리 | Gerónimo Rulli | GK | 1992-05-20 | 8 (0) | Marseille |
-| 13 | 크리스티안 로메로 | Cristian Romero | DF | 1998-04-27 | 51 (3) | Tottenham Hotspur |
-| 14 | 엑세키엘 팔라시오스 | Exequiel Palacios | MF | 1998-10-05 | 40 (0) | Bayer Leverkusen |
-| 15 | 니콜라스 곤살레스 | Nicolás González | MF | 1998-04-06 | 51 (6) | Atlético Madrid |
-| 16 | 티아고 알마다 | Thiago Almada | FW | 2001-04-26 | 16 (5) | Atlético Madrid |
-| 17 | 줄리아노 시메오네 | Giuliano Simeone | FW | 2002-12-18 | 13 (2) | Atlético Madrid |
-| 18 | 니코 파스 | Nico Paz | MF | 2004-09-08 | 9 (1) | Como |
-| 19 | 니콜라스 오타멘디 | Nicolás Otamendi | DF | 1988-02-12 | 132 (8) | Benfica |
-| 20 | 알렉시스 맥 알리스터 | Alexis Mac Allister | MF | 1998-12-24 | 46 (6) | Liverpool |
-| 21 | 호세 마누엘 로페스 | José Manuel López | FW | 2000-12-06 | 5 (0) | Palmeiras |
-| 22 | 라우타로 마르티네스 | Lautaro Martínez | FW | 1997-08-22 | 77 (37) | Inter Milan |
-| 23 | 에밀리아노 마르티네스 | Emiliano Martínez | GK | 1992-09-02 | 59 (0) | Aston Villa |
-| 24 | 엔소 페르난데스 | Enzo Fernández | MF | 2001-01-17 | 42 (6) | Chelsea |
-| 25 | 파쿤도 메디나 | Facundo Medina | DF | 1999-05-28 | 9 (0) | Marseille |
-| 26 | 나우엘 몰리나 | Nahuel Molina | DF | 1998-04-06 | 58 (1) | Atlético Madrid |
+| # | 이름 (한글) | 로마자 | Pos | 생년월일 | A대표 캡스(골) | 소속 클럽 | 주발 |
+|---|---|---|---|---|---|---|---|
+| 1 | 후안 무소 | Juan Musso | GK | 1994-05-06 | 4 (0) | Atlético Madrid | R 🟡 |
+| 2 | 마르코스 세네시 | Marcos Senesi | DF | 1997-05-10 | 3 (0) | Bournemouth | L 🟡 |
+| 3 | 니콜라스 타글리아피코 | Nicolás Tagliafico | DF | 1992-08-31 | 76 (1) | Lyon | L 🟡 |
+| 4 | 곤살로 몬티엘 | Gonzalo Montiel | DF | 1997-01-01 | 39 (2) | River Plate | R 🟡 |
+| 5 | 레안드로 파레데스 | Leandro Paredes | MF | 1994-06-29 | 77 (5) | Boca Juniors | R 🟡 |
+| 6 | 리산드로 마르티네스 | Lisandro Martínez | DF | 1998-01-18 | 28 (1) | Manchester United | L 🟡 |
+| 7 | 로드리고 데 파울 | Rodrigo De Paul | MF | 1994-05-24 | 87 (2) | Inter Miami CF | R 🟡 |
+| 8 | 발렌틴 바르코 | Valentín Barco | DF | 2004-07-23 | 4 (2) | Strasbourg | L 🟡 |
+| 9 | 훌리안 알바레스 | Julián Álvarez | FW | 2000-01-31 | 51 (14) | Atlético Madrid | R 🟡 |
+| 10 | 리오넬 메시 (C) | Lionel Messi | FW | 1987-06-24 | 199 (117) | Inter Miami CF | L 🟡 |
+| 11 | 조바니 로 셀소 | Giovani Lo Celso | MF | 1996-04-09 | 67 (4) | Real Betis | L 🟡 |
+| 12 | 헤로니모 룰리 | Gerónimo Rulli | GK | 1992-05-20 | 8 (0) | Marseille | R 🟡 |
+| 13 | 크리스티안 로메로 | Cristian Romero | DF | 1998-04-27 | 51 (3) | Tottenham Hotspur | R 🟡 |
+| 14 | 엑세키엘 팔라시오스 | Exequiel Palacios | MF | 1998-10-05 | 40 (0) | Bayer Leverkusen | R 🟡 |
+| 15 | 니콜라스 곤살레스 | Nicolás González | MF | 1998-04-06 | 51 (6) | Atlético Madrid | L 🟡 |
+| 16 | 티아고 알마다 | Thiago Almada | FW | 2001-04-26 | 16 (5) | Atlético Madrid | R 🟡 |
+| 17 | 줄리아노 시메오네 | Giuliano Simeone | FW | 2002-12-18 | 13 (2) | Atlético Madrid | R 🟡 |
+| 18 | 니코 파스 | Nico Paz | MF | 2004-09-08 | 9 (1) | Como | L 🟡 |
+| 19 | 니콜라스 오타멘디 | Nicolás Otamendi | DF | 1988-02-12 | 132 (8) | Benfica | R 🟡 |
+| 20 | 알렉시스 맥 알리스터 | Alexis Mac Allister | MF | 1998-12-24 | 46 (6) | Liverpool | R 🟡 |
+| 21 | 호세 마누엘 로페스 | José Manuel López | FW | 2000-12-06 | 5 (0) | Palmeiras | L 🟡 |
+| 22 | 라우타로 마르티네스 | Lautaro Martínez | FW | 1997-08-22 | 77 (37) | Inter Milan | R 🟡 |
+| 23 | 에밀리아노 마르티네스 | Emiliano Martínez | GK | 1992-09-02 | 59 (0) | Aston Villa | R 🟡 |
+| 24 | 엔소 페르난데스 | Enzo Fernández | MF | 2001-01-17 | 42 (6) | Chelsea | R 🟡 |
+| 25 | 파쿤도 메디나 | Facundo Medina | DF | 1999-05-28 | 9 (0) | Marseille | L 🟡 |
+| 26 | 나우엘 몰리나 | Nahuel Molina | DF | 1998-04-06 | 58 (1) | Atlético Madrid | R 🟡 |
 
 > 구성: GK 3 · DF 8 · MF 7 · FW 8. 메시(38세, 6번째 월드컵, A대표 199캡스·117골)의 사실상 마지막 대회. 스칼로니 체제 골격 유지.
 

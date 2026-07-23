@@ -9,40 +9,40 @@
 - 🟢 HIGH / 🟡 MEDIUM / 🔴 LOW·미확인. 지어내기 금지.
 - **스쿼드**: 🟢 위키피디아 squads 본문 + 스쿼드 템플릿 + ESPN/스카이/잉글랜드축구협회 명단 교차.
 - **경기별 점유율·포메이션·스코어**: 🟢 FBref. **대회 누적 스탯**: 🟢 FBref.
-- **주발**: Transfermarkt 미확인 → 생략. **한글**: 로마자 정본, 한글 보조.
+- **주발**: Transfermarkt 상세 스쿼드로 확인해 표에 컬럼 추가(**단일 소스 🟡**). 사카·마두에케 등 인버티드 윙어 **왼발**. **한글**: 로마자 정본, 한글 보조.
 
 ---
 
 ## ① 공식 스쿼드 (26인 전체) 🟢 HIGH
 
-| # | 이름 (한글) | 로마자 | Pos | 생년월일 | A대표 캡스(골) | 소속 클럽 |
-|---|---|---|---|---|---|---|
-| 1 | 조던 픽포드 | Jordan Pickford | GK | 1994-03-07 | 84 (0) | Everton |
-| 2 | 에즈리 콘사 | Ezri Konsa | DF | 1997-10-23 | 20 (1) | Aston Villa |
-| 3 | 니코 오라일리 | Nico O'Reilly | DF | 2005-03-21 | 5 (0) | Manchester City |
-| 4 | 데클란 라이스 | Declan Rice | MF | 1999-01-14 | 73 (7) | Arsenal |
-| 5 | 존 스톤스 | John Stones | DF | 1994-05-28 | 89 (3) | Manchester City |
-| 6 | 마크 게이 | Marc Guéhi | DF | 2000-07-13 | 29 (1) | Manchester City |
-| 7 | 부카요 사카 | Bukayo Saka | FW | 2001-09-05 | 49 (14) | Arsenal |
-| 8 | 엘리엇 앤더슨 | Elliot Anderson | MF | 2002-11-06 | 9 (0) | Nottingham Forest |
-| 9 | 해리 케인 (C) | Harry Kane | FW | 1993-07-28 | 114 (79) | Bayern Munich |
-| 10 | 주드 벨링엄 | Jude Bellingham | MF | 2003-06-29 | 48 (6) | Real Madrid |
-| 11 | 마커스 래시퍼드 | Marcus Rashford | FW | 1997-10-31 | 72 (18) | Barcelona |
-| 12 | 트레보 찰로바 | Trevoh Chalobah | DF | 1999-07-05 | 1 (0) | Chelsea |
-| 13 | 딘 헨더슨 | Dean Henderson | GK | 1997-03-12 | 5 (0) | Crystal Palace |
-| 14 | 조던 헨더슨 | Jordan Henderson | MF | 1990-06-17 | 90 (3) | Brentford |
-| 15 | 댄 번 | Dan Burn | DF | 1992-05-09 | 8 (0) | Newcastle United |
-| 16 | 코비 마이누 | Kobbie Mainoo | MF | 2005-04-19 | 14 (0) | Manchester United |
-| 17 | 모건 로저스 | Morgan Rogers | MF | 2002-07-26 | 15 (1) | Aston Villa |
-| 18 | 앤서니 고든 | Anthony Gordon | FW | 2001-02-24 | 19 (3) | Newcastle United |
-| 19 | 올리 왓킨스 | Ollie Watkins | FW | 1995-12-30 | 22 (7) | Aston Villa |
-| 20 | 노니 마두에케 | Noni Madueke | FW | 2002-03-10 | 11 (1) | Arsenal |
-| 21 | 에베레치 에제 | Eberechi Eze | MF | 1998-06-29 | 17 (3) | Arsenal |
-| 22 | 이반 토니 | Ivan Toney | FW | 1996-03-16 | 8 (1) | Al-Ahli |
-| 23 | 제임스 트래퍼드 | James Trafford | GK | 2002-10-10 | 2 (0) | Manchester City |
-| 24 | 리스 제임스 | Reece James | DF | 1999-12-08 | 24 (1) | Chelsea |
-| 25 | 제드 스펜스 | Djed Spence | DF | 2000-08-09 | 6 (0) | Tottenham Hotspur |
-| 26 | 자렐 콴사 | Jarell Quansah | DF | 2003-01-29 | 3 (0) | Bayer Leverkusen |
+| # | 이름 (한글) | 로마자 | Pos | 생년월일 | A대표 캡스(골) | 소속 클럽 | 주발 |
+|---|---|---|---|---|---|---|---|
+| 1 | 조던 픽포드 | Jordan Pickford | GK | 1994-03-07 | 84 (0) | Everton | L 🟡 |
+| 2 | 에즈리 콘사 | Ezri Konsa | DF | 1997-10-23 | 20 (1) | Aston Villa | R 🟡 |
+| 3 | 니코 오라일리 | Nico O'Reilly | DF | 2005-03-21 | 5 (0) | Manchester City | L 🟡 |
+| 4 | 데클란 라이스 | Declan Rice | MF | 1999-01-14 | 73 (7) | Arsenal | R 🟡 |
+| 5 | 존 스톤스 | John Stones | DF | 1994-05-28 | 89 (3) | Manchester City | R 🟡 |
+| 6 | 마크 게이 | Marc Guéhi | DF | 2000-07-13 | 29 (1) | Manchester City | R 🟡 |
+| 7 | 부카요 사카 | Bukayo Saka | FW | 2001-09-05 | 49 (14) | Arsenal | L 🟡 |
+| 8 | 엘리엇 앤더슨 | Elliot Anderson | MF | 2002-11-06 | 9 (0) | Nottingham Forest | R 🟡 |
+| 9 | 해리 케인 (C) | Harry Kane | FW | 1993-07-28 | 114 (79) | Bayern Munich | R 🟡 |
+| 10 | 주드 벨링엄 | Jude Bellingham | MF | 2003-06-29 | 48 (6) | Real Madrid | R 🟡 |
+| 11 | 마커스 래시퍼드 | Marcus Rashford | FW | 1997-10-31 | 72 (18) | Barcelona | R 🟡 |
+| 12 | 트레보 찰로바 | Trevoh Chalobah | DF | 1999-07-05 | 1 (0) | Chelsea | R 🟡 |
+| 13 | 딘 헨더슨 | Dean Henderson | GK | 1997-03-12 | 5 (0) | Crystal Palace | R 🟡 |
+| 14 | 조던 헨더슨 | Jordan Henderson | MF | 1990-06-17 | 90 (3) | Brentford | R 🟡 |
+| 15 | 댄 번 | Dan Burn | DF | 1992-05-09 | 8 (0) | Newcastle United | L 🟡 |
+| 16 | 코비 마이누 | Kobbie Mainoo | MF | 2005-04-19 | 14 (0) | Manchester United | R 🟡 |
+| 17 | 모건 로저스 | Morgan Rogers | MF | 2002-07-26 | 15 (1) | Aston Villa | R 🟡 |
+| 18 | 앤서니 고든 | Anthony Gordon | FW | 2001-02-24 | 19 (3) | Newcastle United | R 🟡 |
+| 19 | 올리 왓킨스 | Ollie Watkins | FW | 1995-12-30 | 22 (7) | Aston Villa | R 🟡 |
+| 20 | 노니 마두에케 | Noni Madueke | FW | 2002-03-10 | 11 (1) | Arsenal | L 🟡 |
+| 21 | 에베레치 에제 | Eberechi Eze | MF | 1998-06-29 | 17 (3) | Arsenal | R 🟡 |
+| 22 | 이반 토니 | Ivan Toney | FW | 1996-03-16 | 8 (1) | Al-Ahli | R 🟡 |
+| 23 | 제임스 트래퍼드 | James Trafford | GK | 2002-10-10 | 2 (0) | Manchester City | R 🟡 |
+| 24 | 리스 제임스 | Reece James | DF | 1999-12-08 | 24 (1) | Chelsea | R 🟡 |
+| 25 | 제드 스펜스 | Djed Spence | DF | 2000-08-09 | 6 (0) | Tottenham Hotspur | R 🟡 |
+| 26 | 자렐 콴사 | Jarell Quansah | DF | 2003-01-29 | 3 (0) | Bayer Leverkusen | R 🟡 |
 
 > 구성: GK 3 · DF 8 · MF 7(라이스 앵커, 벨링엄 8번) · FW 8. 케인(주장, A대표 79골) 통산 최다득점자. 유로2024 세대 다수 + 신예 오라일리·마이누.
 

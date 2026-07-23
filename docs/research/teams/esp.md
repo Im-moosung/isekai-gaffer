@@ -10,41 +10,41 @@
 - **스쿼드(번호·이름·포지션·생년·클럽·소속캡스)**: 🟢 위키피디아 "2026 FIFA World Cup squads" 본문 + 위키피디아 스쿼드 템플릿 + FIFA/야후 명단 3중 교차 확인.
 - **경기별 점유율·포메이션·스코어**: 🟢 FBref 매치로그.
 - **대회 누적 스탯(슈팅/파울 등)**: 🟢 FBref 대회 집계표.
-- **주발**: 별도 Transfermarkt 확인 미수행 → 본 시트에서는 생략(요청 시 추가 조사 필요).
+- **주발**: Transfermarkt 상세 스쿼드로 확인해 표에 컬럼 추가(**단일 소스 🟡**). 야말(우측 인버티드) **왼발**.
 - **한글 표기**: 로마자가 정본이며 한글은 발음 보조. (일부 카탈루냐/바스크식 발음은 근사치)
 
 ---
 
 ## ① 공식 스쿼드 (26인 전체) 🟢 HIGH
 
-| # | 이름 (한글) | 로마자 | Pos | 생년월일 | A대표 캡스(골) | 소속 클럽 |
-|---|---|---|---|---|---|---|
-| 1 | 다비드 라야 | David Raya | GK | 1995-09-15 | 13 (0) | Arsenal |
-| 2 | 마르크 푸빌 | Marc Pubill | DF | 2003-06-20 | 2 (0) | Atlético Madrid |
-| 3 | 알렉스 그리말도 | Álex Grimaldo | DF | 1995-09-20 | 14 (0) | Bayer Leverkusen |
-| 4 | 에릭 가르시아 | Eric García | DF | 2001-01-09 | 21 (0) | Barcelona |
-| 5 | 마르코스 요렌테 | Marcos Llorente | DF | 1995-01-30 | 24 (0) | Atlético Madrid |
-| 6 | 미켈 메리노 | Mikel Merino | MF | 1996-06-22 | 43 (10) | Arsenal |
-| 7 | 페란 토레스 | Ferran Torres | FW | 2000-02-29 | 57 (24) | Barcelona |
-| 8 | 파비안 루이스 | Fabián Ruiz | MF | 1996-04-03 | 42 (6) | Paris Saint-Germain |
-| 9 | 가비 | Gavi | MF | 2004-08-05 | 30 (5) | Barcelona |
-| 10 | 다니 올모 | Dani Olmo | FW | 1998-05-07 | 50 (12) | Barcelona |
-| 11 | 예레미 피노 | Yéremy Pino | FW | 2002-10-20 | 23 (4) | Crystal Palace |
-| 12 | 페드로 포로 | Pedro Porro | DF | 1999-09-13 | 18 (0) | Tottenham Hotspur |
-| 13 | 조안 가르시아 | Joan Garcia | GK | 2001-05-04 | 2 (0) | Barcelona |
-| 14 | 아이메릭 라포르트 | Aymeric Laporte | DF | 1994-05-27 | 46 (2) | Athletic Bilbao |
-| 15 | 알렉스 바에나 | Álex Baena | MF | 2001-07-20 | 17 (2) | Atlético Madrid |
-| 16 | 로드리 (C) | Rodri | MF | 1996-06-22 | 62 (4) | Manchester City |
-| 17 | 니코 윌리엄스 | Nico Williams | FW | 2002-07-12 | 30 (6) | Athletic Bilbao |
-| 18 | 마르틴 수비멘디 | Martín Zubimendi | MF | 1999-02-02 | 26 (3) | Arsenal |
-| 19 | 라민 야말 | Lamine Yamal | FW | 2007-07-13 | 25 (6) | Barcelona |
-| 20 | 페드리 | Pedri | MF | 2002-11-25 | 41 (6) | Barcelona |
-| 21 | 미켈 오야르사발 | Mikel Oyarzabal | FW | 1997-04-21 | 53 (25) | Real Sociedad |
-| 22 | 파우 쿠바르시 | Pau Cubarsí | DF | 2007-01-22 | 12 (0) | Barcelona |
-| 23 | 우나이 시몬 | Unai Simón | GK | 1997-06-11 | 58 (0) | Athletic Bilbao |
-| 24 | 마르크 쿠쿠레야 | Marc Cucurella | DF | 1998-07-22 | 24 (1) | Chelsea |
-| 25 | 빅토르 무뇨스 | Víctor Muñoz | FW | 2003-07-13 | 2 (1) | Osasuna |
-| 26 | 보르하 이글레시아스 | Borja Iglesias | FW | 1993-01-17 | 8 (0) | Celta Vigo |
+| # | 이름 (한글) | 로마자 | Pos | 생년월일 | A대표 캡스(골) | 소속 클럽 | 주발 |
+|---|---|---|---|---|---|---|---|
+| 1 | 다비드 라야 | David Raya | GK | 1995-09-15 | 13 (0) | Arsenal | R 🟡 |
+| 2 | 마르크 푸빌 | Marc Pubill | DF | 2003-06-20 | 2 (0) | Atlético Madrid | R 🟡 |
+| 3 | 알렉스 그리말도 | Álex Grimaldo | DF | 1995-09-20 | 14 (0) | Bayer Leverkusen | L 🟡 |
+| 4 | 에릭 가르시아 | Eric García | DF | 2001-01-09 | 21 (0) | Barcelona | R 🟡 |
+| 5 | 마르코스 요렌테 | Marcos Llorente | DF | 1995-01-30 | 24 (0) | Atlético Madrid | R 🟡 |
+| 6 | 미켈 메리노 | Mikel Merino | MF | 1996-06-22 | 43 (10) | Arsenal | L 🟡 |
+| 7 | 페란 토레스 | Ferran Torres | FW | 2000-02-29 | 57 (24) | Barcelona | R 🟡 |
+| 8 | 파비안 루이스 | Fabián Ruiz | MF | 1996-04-03 | 42 (6) | Paris Saint-Germain | L 🟡 |
+| 9 | 가비 | Gavi | MF | 2004-08-05 | 30 (5) | Barcelona | R 🟡 |
+| 10 | 다니 올모 | Dani Olmo | FW | 1998-05-07 | 50 (12) | Barcelona | R 🟡 |
+| 11 | 예레미 피노 | Yéremy Pino | FW | 2002-10-20 | 23 (4) | Crystal Palace | R 🟡 |
+| 12 | 페드로 포로 | Pedro Porro | DF | 1999-09-13 | 18 (0) | Tottenham Hotspur | R 🟡 |
+| 13 | 조안 가르시아 | Joan Garcia | GK | 2001-05-04 | 2 (0) | Barcelona | R 🟡 |
+| 14 | 아이메릭 라포르트 | Aymeric Laporte | DF | 1994-05-27 | 46 (2) | Athletic Bilbao | L 🟡 |
+| 15 | 알렉스 바에나 | Álex Baena | MF | 2001-07-20 | 17 (2) | Atlético Madrid | R 🟡 |
+| 16 | 로드리 (C) | Rodri | MF | 1996-06-22 | 62 (4) | Manchester City | R 🟡 |
+| 17 | 니코 윌리엄스 | Nico Williams | FW | 2002-07-12 | 30 (6) | Athletic Bilbao | R 🟡 |
+| 18 | 마르틴 수비멘디 | Martín Zubimendi | MF | 1999-02-02 | 26 (3) | Arsenal | R 🟡 |
+| 19 | 라민 야말 | Lamine Yamal | FW | 2007-07-13 | 25 (6) | Barcelona | L 🟡 |
+| 20 | 페드리 | Pedri | MF | 2002-11-25 | 41 (6) | Barcelona | R 🟡 |
+| 21 | 미켈 오야르사발 | Mikel Oyarzabal | FW | 1997-04-21 | 53 (25) | Real Sociedad | L 🟡 |
+| 22 | 파우 쿠바르시 | Pau Cubarsí | DF | 2007-01-22 | 12 (0) | Barcelona | R 🟡 |
+| 23 | 우나이 시몬 | Unai Simón | GK | 1997-06-11 | 58 (0) | Athletic Bilbao | R 🟡 |
+| 24 | 마르크 쿠쿠레야 | Marc Cucurella | DF | 1998-07-22 | 24 (1) | Chelsea | L 🟡 |
+| 25 | 빅토르 무뇨스 | Víctor Muñoz | FW | 2003-07-13 | 2 (1) | Osasuna | R 🟡 |
+| 26 | 보르하 이글레시아스 | Borja Iglesias | FW | 1993-01-17 | 8 (0) | Celta Vigo | R 🟡 |
 
 > 구성: GK 3 · DF 8(라포르트·쿠바르시 센터백 축, 그리말도·쿠쿠레야·포로 풀백) · MF 7 · FW 8. **바르셀로나 8명 최다, 레알 마드리드 0명**. 유로2024 우승 주역 16명 유지.
 > 캡틴 로드리는 2024/25 발롱도르 수상자(부상 복귀). 야말(18세)·쿠바르시(19세)가 세대교체 축.

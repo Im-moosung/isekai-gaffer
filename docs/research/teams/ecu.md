@@ -9,40 +9,40 @@
 - 🟢 HIGH / 🟡 MEDIUM / 🔴 LOW·미확인. 지어내기 금지.
 - **스쿼드**: 🟢 위키피디아 squads 본문 + 스쿼드 템플릿 + heavy/FIFA 명단 교차.
 - **경기별 점유율·포메이션·스코어**: 🟢 FBref. **대회 누적 스탯**: 🟢 FBref.
-- **주발**: Transfermarkt 미확인 → 생략. **한글**: 로마자 정본, 한글 보조.
+- **주발**: Transfermarkt 상세 스쿼드로 확인해 표에 컬럼 추가(**단일 소스 🟡**). **한글**: 로마자 정본, 한글 보조.
 
 ---
 
 ## ① 공식 스쿼드 (26인 전체) 🟢 HIGH
 
-| # | 이름 (한글) | 로마자 | Pos | 생년월일 | A대표 캡스(골) | 소속 클럽 |
-|---|---|---|---|---|---|---|
-| 1 | 에르난 갈린데스 | Hernán Galíndez | GK | 1987-03-30 | 35 (0) | Huracán |
-| 2 | 펠릭스 토레스 | Félix Torres | DF | 1997-01-11 | 49 (5) | Internacional |
-| 3 | 피에로 인카피에 | Piero Hincapié | DF | 2002-01-09 | 52 (3) | Arsenal |
-| 4 | 호엘 오르도녜스 | Joel Ordóñez | DF | 2004-04-21 | 17 (0) | Club Brugge |
-| 5 | 조르디 알시바르 | Jordy Alcívar | MF | 1999-08-05 | 11 (1) | Independiente del Valle |
-| 6 | 윌리안 파초 | Willian Pacho | DF | 2001-10-16 | 34 (2) | Paris Saint-Germain |
-| 7 | 페르비스 에스투피냔 | Pervis Estupiñán | DF | 1998-01-21 | 54 (5) | AC Milan |
-| 8 | 안소니 발렌시아 | Anthony Valencia | MF | 2003-07-21 | 3 (1) | Antwerp |
-| 9 | 존 예보아 | John Yeboah | FW | 2000-06-23 | 23 (3) | Venezia |
-| 10 | 켄드리 파에스 | Kendry Páez | MF | 2007-05-04 | 26 (2) | River Plate |
-| 11 | 케빈 로드리게스 | Kevin Rodríguez | FW | 2000-03-04 | 31 (2) | Union Saint-Gilloise |
-| 12 | 모이세스 라미레스 | Moisés Ramírez | GK | 2000-09-09 | 7 (0) | Kifisia |
-| 13 | 에네르 발렌시아 (C) | Enner Valencia | FW | 1989-11-04 | 105 (49) | Pachuca |
-| 14 | 알란 민다 | Alan Minda | MF | 2003-05-14 | 20 (2) | Atlético Mineiro |
-| 15 | 페드로 비테 | Pedro Vite | MF | 2002-03-09 | 17 (1) | Pumas UNAM |
-| 16 | 조르디 카이세도 | Jordy Caicedo | FW | 1997-11-18 | 20 (4) | Huracán |
-| 17 | 앙헬로 프레시아도 | Ángelo Preciado | DF | 1998-02-18 | 55 (0) | Atlético Mineiro |
-| 18 | 데닐 카스티요 | Denil Castillo | MF | 2004-03-24 | 5 (0) | Midtjylland |
-| 19 | 곤살로 플라타 | Gonzalo Plata | FW | 2000-11-01 | 50 (8) | Flamengo |
-| 20 | 닐손 앙굴로 | Nilson Angulo | FW | 2003-06-19 | 14 (2) | Sunderland |
-| 21 | 알란 프랑코 | Alan Franco | DF | 1998-08-21 | 58 (1) | Atlético Mineiro |
-| 22 | 곤살로 바예 | Gonzalo Valle | GK | 1996-02-28 | 4 (0) | LDU Quito |
-| 23 | 모이세스 카이세도 | Moisés Caicedo | MF | 2001-11-02 | 61 (3) | Chelsea |
-| 24 | 제레미 아레발로 | Jeremy Arévalo | FW | 2005-03-19 | 4 (0) | VfB Stuttgart |
-| 25 | 잭슨 포로소 | Jackson Porozo | DF | 2000-08-04 | 10 (1) | Tijuana |
-| 26 | 야이마르 메디나 | Yaimar Medina | DF | 2004-11-05 | 6 (0) | Genk |
+| # | 이름 (한글) | 로마자 | Pos | 생년월일 | A대표 캡스(골) | 소속 클럽 | 주발 |
+|---|---|---|---|---|---|---|---|
+| 1 | 에르난 갈린데스 | Hernán Galíndez | GK | 1987-03-30 | 35 (0) | Huracán | R 🟡 |
+| 2 | 펠릭스 토레스 | Félix Torres | DF | 1997-01-11 | 49 (5) | Internacional | R 🟡 |
+| 3 | 피에로 인카피에 | Piero Hincapié | DF | 2002-01-09 | 52 (3) | Arsenal | L 🟡 |
+| 4 | 호엘 오르도녜스 | Joel Ordóñez | DF | 2004-04-21 | 17 (0) | Club Brugge | R 🟡 |
+| 5 | 조르디 알시바르 | Jordy Alcívar | MF | 1999-08-05 | 11 (1) | Independiente del Valle | R 🟡 |
+| 6 | 윌리안 파초 | Willian Pacho | DF | 2001-10-16 | 34 (2) | Paris Saint-Germain | L 🟡 |
+| 7 | 페르비스 에스투피냔 | Pervis Estupiñán | DF | 1998-01-21 | 54 (5) | AC Milan | L 🟡 |
+| 8 | 안소니 발렌시아 | Anthony Valencia | MF | 2003-07-21 | 3 (1) | Antwerp | L 🟡 |
+| 9 | 존 예보아 | John Yeboah | FW | 2000-06-23 | 23 (3) | Venezia | L 🟡 |
+| 10 | 켄드리 파에스 | Kendry Páez | MF | 2007-05-04 | 26 (2) | River Plate | L 🟡 |
+| 11 | 케빈 로드리게스 | Kevin Rodríguez | FW | 2000-03-04 | 31 (2) | Union Saint-Gilloise | R 🟡 |
+| 12 | 모이세스 라미레스 | Moisés Ramírez | GK | 2000-09-09 | 7 (0) | Kifisia | R 🟡 |
+| 13 | 에네르 발렌시아 (C) | Enner Valencia | FW | 1989-11-04 | 105 (49) | Pachuca | R 🟡 |
+| 14 | 알란 민다 | Alan Minda | MF | 2003-05-14 | 20 (2) | Atlético Mineiro | R 🟡 |
+| 15 | 페드로 비테 | Pedro Vite | MF | 2002-03-09 | 17 (1) | Pumas UNAM | L 🟡 |
+| 16 | 조르디 카이세도 | Jordy Caicedo | FW | 1997-11-18 | 20 (4) | Huracán | R 🟡 |
+| 17 | 앙헬로 프레시아도 | Ángelo Preciado | DF | 1998-02-18 | 55 (0) | Atlético Mineiro | R 🟡 |
+| 18 | 데닐 카스티요 | Denil Castillo | MF | 2004-03-24 | 5 (0) | Midtjylland | R 🟡 |
+| 19 | 곤살로 플라타 | Gonzalo Plata | FW | 2000-11-01 | 50 (8) | Flamengo | L 🟡 |
+| 20 | 닐손 앙굴로 | Nilson Angulo | FW | 2003-06-19 | 14 (2) | Sunderland | R 🟡 |
+| 21 | 알란 프랑코 | Alan Franco | DF | 1998-08-21 | 58 (1) | Atlético Mineiro | R 🟡 |
+| 22 | 곤살로 바예 | Gonzalo Valle | GK | 1996-02-28 | 4 (0) | LDU Quito | R 🟡 |
+| 23 | 모이세스 카이세도 | Moisés Caicedo | MF | 2001-11-02 | 61 (3) | Chelsea | R 🟡 |
+| 24 | 제레미 아레발로 | Jeremy Arévalo | FW | 2005-03-19 | 4 (0) | VfB Stuttgart | L 🟡 |
+| 25 | 잭슨 포로소 | Jackson Porozo | DF | 2000-08-04 | 10 (1) | Tijuana | R 🟡 |
+| 26 | 야이마르 메디나 | Yaimar Medina | DF | 2004-11-05 | 6 (0) | Genk | L 🟡 |
 
 > 구성: GK 3 · DF 8 · MF 8 · FW 7. 최연소 켄드리 파에스(2007년생, 19세) 유망주, 최고참 발렌시아(36세) 캡틴. 모이세스 카이세도(Chelsea)·인카피에(Arsenal)·파초(PSG) 등 빅클럽 수비/미드 자원.
 > ※ 프리롤/셔츠번호상 파에스·M.카이세도가 MF로 등록됐으나 파에스는 공격형, 로드리게스·앙굴로는 윙 성향.
