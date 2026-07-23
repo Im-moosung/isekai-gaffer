@@ -12,6 +12,9 @@ export type MatchCommand =
   | { type: 'formation'; tactics: TacticState }
 
 const MAX_SUBS = 5
+// 전력 차 민감도 — 동급 팀은 비율 1이라 캘리브레이션 계약 무영향, 비대칭 매치업의 승률 분화 담당.
+// 실데이터 검증(esp≥55승) 기준으로 튜닝.
+const STRENGTH_SENSITIVITY = 1.6
 
 export function createMatch(home: Team, away: Team, opts: { seed: number; homeTactics?: TacticState; awayTactics?: TacticState }): MatchState {
   const mkSide = (team: Team, tactics?: TacticState): SideState => {
@@ -87,7 +90,7 @@ function simulateMinute(st: MatchState, rng: Rng) {
   // 3) 찬스 롤 (공격 측): 공격 전력 vs 수비 전력 + 템포 + 모멘텀
   const momentumBoost = atkIdx === 0 ? 1 + st.momentum * 0.15 : 1 - st.momentum * 0.15
   const chanceP = clamp(
-    (atk.team.statBaseline.shotsPerGame / (90 * participation)) * (zs[atkIdx].attack / Math.max(30, zs[defIdx].defense)) * fx[atkIdx].chanceRate * fx[defIdx].counterVulnerability * momentumBoost,
+    (atk.team.statBaseline.shotsPerGame / (90 * participation)) * Math.pow(zs[atkIdx].attack / Math.max(30, zs[defIdx].defense), STRENGTH_SENSITIVITY) * fx[atkIdx].chanceRate * fx[defIdx].counterVulnerability * momentumBoost,
     0.02, 0.45,
   )
   if (rng.chance(chanceP)) resolveChance(st, atkIdx, defIdx, fx, rng)
