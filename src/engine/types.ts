@@ -23,6 +23,7 @@ export interface StatBaseline {
 }
 export interface Team {
   id: string; name: { ko: string; en: string }; fifaCode: string; fifaRanking: number; tier: number
+  flag?: string
   profile: TeamProfile; statBaseline: StatBaseline; squad: Player[]
 }
 export type FormationId = '4-3-3' | '4-2-3-1' | '4-4-2' | '3-5-2' | '4-1-4-1' | '5-4-1'
