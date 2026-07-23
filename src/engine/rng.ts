@@ -23,6 +23,7 @@ export function createRng(seed: number): Rng {
     pick: (arr) => arr[Math.floor(next() * arr.length)],
     weighted: (items) => {
       const total = items.reduce((s2, i) => s2 + i.w, 0)
+      if (total <= 0) throw new Error('weighted: total weight must be > 0')
       let roll = next() * total
       for (const { item, w } of items) { roll -= w; if (roll < 0 && w > 0) return item }
       return items.filter(i => i.w > 0).at(-1)!.item

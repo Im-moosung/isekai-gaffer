@@ -24,4 +24,10 @@ describe('createRng', () => {
     const r = createRng(7)
     for (let i = 0; i < 200; i++) expect(r.weighted([{ item: 'a', w: 0 }, { item: 'b', w: 1 }])).toBe('b')
   })
+  it('weighted는 전 항목 가중치 0/빈 배열이면 에러를 throw', () => {
+    const r = createRng(7)
+    expect(() => r.weighted([{ item: 'a', w: 0 }])).toThrow(/weight/i)
+    expect(() => r.weighted([{ item: 'a', w: 0 }, { item: 'b', w: 0 }])).toThrow(/weight/i)
+    expect(() => r.weighted([])).toThrow(/weight/i)
+  })
 })
