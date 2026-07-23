@@ -69,6 +69,12 @@ export function MatchScreen({ home, away, seed }: { home: Team; away: Team; seed
   const shown = engine.events.filter(e => e.minute <= displayMinute)
   const lines = shown.map(e => commentate(e, home, away))
   const lastEvent = shown[shown.length - 1]
+  // 표시 스코어는 재생된 골 이벤트에서 파생 — engine.score(세그먼트 최종)를 그대로 쓰면
+  // 재생 중 최종 스코어가 미리 노출된다(스포일러). Ticker/PitchView와 동일 필터.
+  const shownScore: [number, number] = [0, 0]
+  for (const e of shown) {
+    if (e.type === 'goal') shownScore[e.teamId === home.id ? 0 : 1] += 1
+  }
 
   return (
     <div className="ms-root">
@@ -76,7 +82,7 @@ export function MatchScreen({ home, away, seed }: { home: Team; away: Team; seed
         <Scorebug
           home={home}
           away={away}
-          score={engine.score}
+          score={shownScore}
           minute={displayMinute}
           live={phase === 'playing'}
         />

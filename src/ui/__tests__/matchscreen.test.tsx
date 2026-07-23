@@ -45,4 +45,16 @@ describe('MatchScreen 조립', () => {
     step(50) // 45분 재생 + 여유
     expect(getByRole('button', { name: '후반 시작' })).toBeTruthy()
   })
+
+  it('(d) 재생 전 스코어 스포일러 방지 — 킥오프 직후 displayMinute=0이면 0:0', () => {
+    // seed=6: 데모 픽스처(kor 76 vs esp 88)에서 전반 4분에 esp 골 → engine.score=0:1.
+    //   킥오프 즉시 playTo(45)로 엔진은 0:1을 확정하지만, 재생 전(displayMinute=0)
+    //   Scorebug 표시 스코어는 반드시 0:0 이어야 한다(Ticker/PitchView와 동일한 필터).
+    const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={6} />)
+    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    // 타이머 미진행 → displayMinute=0
+    const nums = container.querySelectorAll('.bc-scorebug__num')
+    expect(nums[0].textContent).toBe('0')
+    expect(nums[1].textContent).toBe('0')
+  })
 })
