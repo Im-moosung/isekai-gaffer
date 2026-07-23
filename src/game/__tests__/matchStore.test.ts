@@ -47,6 +47,12 @@ describe('matchStore 상태 머신', () => {
     expect(store().engine!.home.tactics.instructions.pressing).toBe(90)
     expect(before).not.toBe(90)
   })
+  it('halftime 상태에서 resumeFromDecision은 throw', () => {
+    store().startMatch(a, b, 42)
+    store().playTo(45)
+    expect(store().phase).toBe('halftime')
+    expect(() => store().resumeFromDecision()).toThrow()
+  })
   it('playing 중 submitCommand는 throw', () => {
     store().startMatch(a, b, 42)
     expect(() => store().submitCommand('home', { type: 'instructions', instructions: { lineHeight: 50, pressing: 90, tempo: 50, attackFocus: 'balanced' } })).toThrow()

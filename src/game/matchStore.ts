@@ -12,7 +12,7 @@ function decisionMinutes(seed: number): number[] {
   return [rng.int(55, 68), rng.int(72, 84)]
 }
 
-interface MatchUIState {
+export interface MatchUIState {
   phase: MatchPhase
   engine: MatchState | null
   displayMinute: number
@@ -52,6 +52,10 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     if (phase !== 'halftime' && phase !== 'decision') throw new Error('개입 불가 시점')
     set({ engine: applyCommand(engine, side, cmd) })
   },
-  resumeFromDecision: () => set(s => ({ phase: s.engine && s.engine.minute >= 45 ? 'playing' : s.phase, pendingDecision: null })),
+  resumeFromDecision: () => {
+    const { phase } = get()
+    if (phase !== 'decision') throw new Error('결정 창이 아님')
+    set(s => ({ phase: s.engine && s.engine.minute >= 45 ? 'playing' : s.phase, pendingDecision: null }))
+  },
   reset: () => set({ ...initial }),
 }))
