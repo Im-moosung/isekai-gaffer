@@ -69,8 +69,14 @@ function simulateMinute(st: MatchState, rng: Rng) {
   st.stats[atkIdx].possession = round1((st.stats[atkIdx].possession * (st.minute - 1) + 100) / st.minute)
   st.stats[defIdx].possession = round1(100 - st.stats[atkIdx].possession)
 
-  // 2) 파울 롤 (수비 측): 베이스라인 캘리브레이션 (팀 실측 파울/90분)
-  const foulP = (def.team.statBaseline.foulsPerGame / 90) * fx[defIdx].foulRate
+  // 참여 빈도 보정: 찬스·파울 롤은 매 분 한 팀만(공격/수비 각 1팀) 굴린다. statBaseline은
+  // 팀당 90분 기준이므로 90으로 나누면 롤이 실제 발생하는 '참여 분'(≈45분)의 절반만 반영돼
+  // 실측의 ~50%로 과소집계된다. 참여 분(=90×참여빈도)으로 정규화해야 베이스라인에 수렴한다.
+  // atkIdx는 defIdx의 여집합이므로 (공격팀의 공격빈도)=(수비팀의 수비빈도)=participation 로 일치한다.
+  const participation = Math.max(0.15, (atkIdx === 0 ? possW0 : possW1) / (possW0 + possW1))
+
+  // 2) 파울 롤 (수비 측): 베이스라인 캘리브레이션 (팀 실측 파울/90분, 참여 분 정규화)
+  const foulP = clamp((def.team.statBaseline.foulsPerGame / (90 * participation)) * fx[defIdx].foulRate, 0, 0.6)
   if (rng.chance(foulP)) {
     st.stats[defIdx].fouls++
     const fouler = randomLineupPlayer(def, rng, ['CB', 'DM', 'LB', 'RB', 'CM'])
@@ -81,8 +87,8 @@ function simulateMinute(st: MatchState, rng: Rng) {
   // 3) 찬스 롤 (공격 측): 공격 전력 vs 수비 전력 + 템포 + 모멘텀
   const momentumBoost = atkIdx === 0 ? 1 + st.momentum * 0.15 : 1 - st.momentum * 0.15
   const chanceP = clamp(
-    (atk.team.statBaseline.shotsPerGame / 90) * (zs[atkIdx].attack / Math.max(30, zs[defIdx].defense)) * fx[atkIdx].chanceRate * fx[defIdx].counterVulnerability * momentumBoost,
-    0.02, 0.35,
+    (atk.team.statBaseline.shotsPerGame / (90 * participation)) * (zs[atkIdx].attack / Math.max(30, zs[defIdx].defense)) * fx[atkIdx].chanceRate * fx[defIdx].counterVulnerability * momentumBoost,
+    0.02, 0.45,
   )
   if (rng.chance(chanceP)) resolveChance(st, atkIdx, defIdx, fx, rng)
 
