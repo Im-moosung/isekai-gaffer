@@ -1,0 +1,190 @@
+/* 방송 컴포넌트 스킨 — 다크 방송 테마 (tokens.css --bc-* 사용). 인라인 스타일 금지. */
+
+/* ── Scorebug: 좌상단 고정 컴팩트 가로 바 ─────────────────── */
+.bc-scorebug {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 20;
+  display: inline-flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--bc-line);
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--bc-panel-2), var(--bc-panel));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  font-family: var(--bc-font);
+  color: var(--bc-text);
+  user-select: none;
+}
+
+.bc-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 7px;
+  background: var(--bc-panel);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.bc-chip__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.bc-chip__dot--home { background: var(--bc-home); }
+.bc-chip__dot--away { background: var(--bc-away); }
+
+.bc-chip__flag {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.bc-chip__code {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bc-scorebug__center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  min-width: 76px;
+}
+
+.bc-scorebug__score {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.bc-scorebug__num {
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bc-scorebug__dash {
+  font-size: 20px;
+  color: var(--bc-text-dim);
+}
+
+.bc-scorebug__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.bc-scorebug__clock {
+  color: var(--bc-accent);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.bc-scorebug__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--bc-danger);
+  letter-spacing: 0.1em;
+}
+
+.bc-scorebug__live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--bc-danger);
+  animation: bc-live-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes bc-live-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255, 93, 93, 0.55); }
+  50% { opacity: 0.45; box-shadow: 0 0 0 5px rgba(255, 93, 93, 0); }
+}
+
+/* ── Ticker: 하단 얇은 바 ──────────────────────────────── */
+.bc-ticker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--bc-line);
+  background: linear-gradient(180deg, rgba(18, 28, 48, 0.85), var(--bc-bg));
+  backdrop-filter: blur(6px);
+  font-family: var(--bc-font);
+  color: var(--bc-text);
+}
+
+.bc-ticker__tag {
+  flex: 0 0 auto;
+  padding: 3px 9px;
+  border-radius: 5px;
+  background: var(--bc-accent);
+  color: var(--bc-bg);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.bc-ticker__stack {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 1.4em;
+  overflow: hidden;
+}
+
+.bc-ticker__line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+}
+
+.bc-ticker__line--current {
+  color: var(--bc-text);
+  animation: bc-ticker-in 0.35s ease-out;
+}
+
+.bc-ticker__line--prev {
+  color: var(--bc-text-dim);
+  opacity: 0;
+  transform: translateY(-100%);
+  animation: bc-ticker-out 0.35s ease-out;
+}
+
+@keyframes bc-ticker-in {
+  from { opacity: 0; transform: translateY(100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes bc-ticker-out {
+  from { opacity: 0.7; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(-100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bc-scorebug__live-dot,
+  .bc-ticker__line--current,
+  .bc-ticker__line--prev {
+    animation: none;
+  }
+}
