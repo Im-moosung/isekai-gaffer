@@ -30,6 +30,7 @@ export function instructionEffects(ins: Instructions) {
     counterVulnerability: lerp(line, 0.75, 1.25) * lerp(press, 0.925, 1.075) * (1 + comboBoost),
     possessionBias: lerp(tempo, 1.08, 0.92) * lerp(press, 0.935, 1.065),
     foulRate: lerp(press, 0.775, 1.225),
+    // pressing 폭 0.74~1.26 (±0.52): 압박 90에서 staminaDrain > 1.2 계약(테스트)을 만족시키기 위한 값 — 재계산 시 경계 주의
     staminaDrain: lerp(press, 0.74, 1.26) * lerp(tempo, 0.915, 1.085),
   }
 }

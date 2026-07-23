@@ -10,7 +10,10 @@ export interface Player {
 }
 export interface TeamStyle { possession: number; pressing: number; lineHeight: number; tempo: number } // 0~100
 export interface TeamProfile {
-  preferredFormations: FormationId[]; style: TeamStyle
+  /** 실제 대회 사용 포메이션 (표시·워룸 노출용 — 자유 문자열).
+   *  엔진의 플레이 가능 포메이션은 FormationId 6종이며, AI가 프로필 포메이션을 쓸 때는
+   *  Phase 2 데이터 로딩에서 가장 가까운 FormationId로 매핑한다 (최종 리뷰 판정). */
+  preferredFormations: string[]; style: TeamStyle
   keyPlayers: { playerId: string; dependency: number }[]
   benchPattern: 'protect-lead' | 'chase-attack' | 'balanced'
 }

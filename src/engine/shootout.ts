@@ -11,6 +11,7 @@ const DIRS = ['left', 'center', 'right'] as const
 export function simulateShootout(opts: {
   seed: number; homeKickers: ShootoutKicker[]; awayKickers: ShootoutKicker[]; homeGk: Player; awayGk: Player
 }): ShootoutResult {
+  // XOR 상수: 매치 세그먼트의 분 파생 RNG(seed*10007+minute) 스트림과 승부차기 스트림 분리용
   const rng = createRng(opts.seed ^ 0x50c1a1)
   const kicks: ShootoutKick[] = []
   let hs = 0, as = 0
