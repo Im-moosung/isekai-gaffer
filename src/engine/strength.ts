@@ -10,6 +10,7 @@ const ZONE_WEIGHT: Record<'defense' | 'midfield' | 'attack', (keyof ReturnType<t
   defense: ['defending', 'physical', 'pace'], midfield: ['passing', 'dribbling', 'defending'], attack: ['shooting', 'dribbling', 'pace'],
 }
 
+// 참고: keyPlayer 의존 가중은 존 전력이 아니라 찬스 참여자 선정(simulate.resolveChance)에서 반영된다 (계획 결정 — Task 6 리뷰 판정).
 export function zoneStrength(side: SideState) {
   const zones = { attack: [] as number[], midfield: [] as number[], defense: [] as number[], gk: [] as number[] }
   for (const { slot, playerId } of side.tactics.lineup) {
