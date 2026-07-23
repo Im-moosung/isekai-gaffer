@@ -45,4 +45,7 @@ export interface MatchState {
   events: MatchEvent[]; stats: [SideStats, SideStats]
   momentum: number  // -1(away 우세)~+1(home 우세)
   seed: number      // 분 파생 RNG 시드 (createRng(seed*10007+minute)) — 세그먼트 분할 결정론의 근간
+  /** 조별 "실제 전반 재현" 모드: 지정 시 전반(≤45)은 시뮬하지 않고 이 스크립트를 일괄 적용한다.
+   *  세그먼트 분할 대응을 위해 상태에 보관(후반 분 파생 RNG는 불변 → 분할 결정론 유지). */
+  firstHalfScript?: { events: MatchEvent[]; score: [number, number] }
 }

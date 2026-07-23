@@ -48,6 +48,61 @@ describe('simulateSegment', () => {
   })
 })
 
+describe('firstHalfScript (조별 실제 전반 재현)', () => {
+  const script = {
+    events: [
+      { minute: 44, type: 'goal', teamId: even1.id, playerId: 'p_ev1_20', xg: 0.3 },
+      { minute: 12, type: 'foul', teamId: even2.id, playerId: 'p_ev2_02' },
+    ] as any,
+    score: [1, 0] as [number, number],
+  }
+
+  it('simulateSegment(45)는 스크립트를 적용한다: score·events·minute 고정, 시뮬 이벤트 미발생', () => {
+    const st = simulateSegment(createMatch(even1, even2, { seed: 7, firstHalfScript: script }), 45)
+    expect(st.minute).toBe(45)
+    expect(st.score).toEqual([1, 0])
+    // 스크립트 이벤트가 분 순서로 포함
+    expect(st.events.some(e => e.type === 'goal' && e.minute === 44)).toBe(true)
+    expect(st.events.some(e => e.type === 'foul' && e.minute === 12)).toBe(true)
+    // 이벤트는 kickoff + 스크립트(분순) + halftime 만 존재 (시뮬 shot/save/miss 등 없음)
+    const types = st.events.map(e => e.type)
+    expect(types).toEqual(['kickoff', 'foul', 'goal', 'halftime'])
+    // stats: baseline 절반 근사 (xG = 골 수 × 0.35)
+    expect(st.stats[0].xg).toBeCloseTo(0.35, 5)
+    expect(st.stats[1].xg).toBe(0)
+    expect(st.stats[0].shots).toBe(Math.round(even1.statBaseline.shotsPerGame * 0.5))
+  })
+
+  it('후반 결정론: 같은 시드·스크립트 → 같은 후반 결과', () => {
+    const run = () => simulateSegment(createMatch(even1, even2, { seed: 42, firstHalfScript: script }), 90)
+    const a = run(), b = run()
+    expect(a.score).toEqual(b.score)
+    expect(a.events).toEqual(b.events)
+    expect(a.stats).toEqual(b.stats)
+  })
+
+  it('45 분할: (30→45)과 (직접 45)이 동일한 전반 결과', () => {
+    const whole = simulateSegment(createMatch(even1, even2, { seed: 7, firstHalfScript: script }), 45)
+    let split = createMatch(even1, even2, { seed: 7, firstHalfScript: script })
+    split = simulateSegment(split, 30)
+    expect(split.minute).toBe(30)
+    expect(split.events.map(e => e.type)).toEqual(['kickoff']) // 30분 시점엔 스크립트 미적용
+    split = simulateSegment(split, 45)
+    expect(split.score).toEqual(whole.score)
+    expect(split.events).toEqual(whole.events)
+    expect(split.stats).toEqual(whole.stats)
+  })
+
+  it('30→90 분할이 직접 90과 동일 (전·후반 통합 결정론)', () => {
+    const whole = simulateSegment(createMatch(even1, even2, { seed: 99, firstHalfScript: script }), 90)
+    let split = createMatch(even1, even2, { seed: 99, firstHalfScript: script })
+    split = simulateSegment(split, 30)
+    split = simulateSegment(split, 90)
+    expect(split.score).toEqual(whole.score)
+    expect(split.events).toEqual(whole.events)
+  })
+})
+
 describe('applyCommand', () => {
   it('교체: out 선수가 라인업에서 빠지고 in 선수가 들어온다', () => {
     let st = simulateSegment(createMatch(even1, even2, { seed: 3 }), 45)
