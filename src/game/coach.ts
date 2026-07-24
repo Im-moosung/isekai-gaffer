@@ -45,10 +45,15 @@ function hash(s: string): number {
   return h >>> 0
 }
 
-/** 지정 팀의 [from, 현재] 구간 유효슛(goal|save) 개수 — 최근 추이 근거. */
-function recentOnTarget(engine: MatchState, teamId: string, from: number): number {
+/** [from, 현재] 구간 "상대의 유효슛" 개수.
+ *  ★ 엔진 이벤트 의미론(simulate.ts): goal/miss는 teamId=공격측, save는 teamId=수비측(막은 GK 팀).
+ *  따라서 상대의 유효슛 = goal(teamId=상대) + save(teamId=우리팀, 우리 GK가 막음)이다. */
+function recentOppOnTarget(engine: MatchState, oppId: string, ourId: string, from: number): number {
   return engine.events.filter(
-    e => e.teamId === teamId && e.minute > from && (e.type === 'goal' || e.type === 'save'),
+    e => e.minute > from && (
+      (e.type === 'goal' && e.teamId === oppId) ||
+      (e.type === 'save' && e.teamId === ourId)
+    ),
   ).length
 }
 
@@ -81,7 +86,7 @@ export function buildCoachAdvice(engine: MatchState, side: 'home' | 'away'): Coa
   const advice: CoachAdvice[] = []
 
   // ── 수비 코치 — 상대 유효슛·코너 추이 근거 → 라인/수비 그룹 하향 ──
-  const recentOppShots = recentOnTarget(engine, oppState.team.id, minute - 15)
+  const recentOppShots = recentOppOnTarget(engine, oppState.team.id, ownState.team.id, minute - 15)
   const heavyPressure = recentOppShots >= 2 || opp.shotsOnTarget >= own.shotsOnTarget + 2
   const curLine = ownState.tactics.instructions.lineHeight
   advice.push({

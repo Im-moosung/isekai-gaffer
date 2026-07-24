@@ -26,11 +26,13 @@ describe('buildCoachAdvice — 멀티 코치 제안', () => {
     m.minute = 60
     m.stats[1] = { ...m.stats[1], shotsOnTarget: 7, corners: 6 }
     m.stats[0] = { ...m.stats[0], shotsOnTarget: 1, corners: 1 }
-    // 최근 15분(46~60) 상대(away=esp) 유효슛 2개.
+    // 최근 15분(46~60) 상대(away=esp)의 유효슛 2개 = goal(teamId=상대) + save(teamId=우리 GK가 막음, kor).
+    // ★ save는 수비측(막은 GK 팀) teamId로 기록되므로 "상대 유효슛" save는 우리팀(kor) teamId다.
     m.events = [
-      { minute: 50, type: 'save', teamId: 'esp' },
-      { minute: 57, type: 'goal', teamId: 'esp' },
-      { minute: 10, type: 'save', teamId: 'esp' }, // 창 밖 → 최근 카운트 제외
+      { minute: 50, type: 'save', teamId: 'kor' }, // 우리 GK가 상대 슛을 막음 → 상대 유효슛
+      { minute: 57, type: 'goal', teamId: 'esp' },  // 상대 득점 → 상대 유효슛
+      { minute: 10, type: 'save', teamId: 'kor' },  // 창 밖 → 최근 카운트 제외
+      { minute: 55, type: 'save', teamId: 'esp' },  // 상대 GK가 우리 슛을 막음 → 상대 위협 아님(카운트 제외)
     ]
     const advice = buildCoachAdvice(m, 'home')
     const def = advice.find(a => a.coach === '수비 코치')!
@@ -41,6 +43,27 @@ describe('buildCoachAdvice — 멀티 코치 제안', () => {
     // 압박이 몰릴 때 라인을 낮추는 방향(현재값보다 낮게).
     expect(def.apply.instructions!.lineHeight!).toBeLessThan(m.home.tactics.instructions.lineHeight)
     expect(def.apply.groupIntensity!.defense).toBe(-1)
+    expect(def.apply.mentality).toBe('defensive')
+    expect(def.proposal).toContain('자제로')
+  })
+
+  it('우리가 압도(우리 goal/miss·상대 GK save 다수, 우리 GK save 0) → 수비 코치 heavyPressure 미발동', () => {
+    const m = base()
+    m.minute = 60
+    m.stats[0] = { ...m.stats[0], shotsOnTarget: 8, corners: 6 }
+    m.stats[1] = { ...m.stats[1], shotsOnTarget: 1, corners: 1 }
+    // 우리 공세: goal(kor)·miss(kor)·상대 GK save(teamId=esp) 다수. 상대 유효슛(goal esp / save kor)=0.
+    m.events = [
+      { minute: 48, type: 'goal', teamId: 'kor' },
+      { minute: 51, type: 'miss', teamId: 'kor' },
+      { minute: 54, type: 'save', teamId: 'esp' }, // 상대 GK가 우리 슛 막음 → 상대 위협 아님
+      { minute: 58, type: 'save', teamId: 'esp' },
+    ]
+    const def = buildCoachAdvice(m, 'home').find(a => a.coach === '수비 코치')!
+    // recentOppShots=0, opp.shotsOnTarget(1) < own(8)+2 → heavyPressure 미발동.
+    expect(def.rationale).toContain('최근 15분 상대 유효슛 0')
+    expect(def.apply.mentality).toBeUndefined()
+    expect(def.proposal).toContain('안정적으로')
   })
 
   it('체력 급락 픽스처 → 피지컬 코치가 하위 3인 실명+수치를 사실 서술하고 압박 하향', () => {
