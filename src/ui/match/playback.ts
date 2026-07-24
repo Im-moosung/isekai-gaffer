@@ -28,6 +28,11 @@ export const NO_EVENT_DWELL_MS = 1800
 /** 클러치(80'+ & 스코어차 ≤1) 무사건 dwell 배수 — 긴장 유지(FM26 Dynamic Highlights 참조). */
 export const CLUTCH_MULTIPLIER = 2
 
+/** 블로우아웃 스코어차 임계 — 이 이상 벌어지면 연출을 가속한다(FM 교훈: 승부 갈린 뒤 늘어짐 방지). */
+export const BLOWOUT_DIFF = 3
+/** 블로우아웃 dwell 배수 — 전체 dwell을 이 비율로 압축(빠른 소화). */
+export const BLOWOUT_MULTIPLIER = 0.6
+
 /**
  * 해당 분에 머무를 재생 시간(ms)을 계산한다.
  * - 그 분의 이벤트 중 최고 가중 dwell을 채택(여러 이벤트가 겹쳐도 가장 큰 연출 기준).
@@ -38,12 +43,15 @@ export const CLUTCH_MULTIPLIER = 2
  * @param eventsAtMinute 그 분에 발생한 이벤트들(engine.events.filter(e => e.minute === minute)).
  * @param speed 재생 속도 배율.
  * @param clutch 80'+ & 스코어차 ≤1 여부(호출부가 판정해 전달).
+ * @param scoreDiff 현재 스코어차(절댓값). BLOWOUT_DIFF 이상이면 전체 dwell을 압축(가속).
+ *   미지정 시 0 → 가속 미적용(총합 가드 캘리브레이션은 이 기본값 기준).
  */
 export function minuteDwellMs(
   _minute: number,
   eventsAtMinute: MatchEvent[],
   speed: PlaybackSpeed,
   clutch: boolean,
+  scoreDiff = 0,
 ): number {
   let base = 0
   for (const e of eventsAtMinute) {
@@ -54,5 +62,7 @@ export function minuteDwellMs(
     // 무사건 분: 빨리감기. 클러치면 긴장 유지를 위해 늦춘다.
     base = clutch ? NO_EVENT_DWELL_MS * CLUTCH_MULTIPLIER : NO_EVENT_DWELL_MS
   }
+  // 블로우아웃 가속: 승부가 갈린(3골차+) 경기는 연출을 압축해 빠르게 넘긴다.
+  if (scoreDiff >= BLOWOUT_DIFF) base *= BLOWOUT_MULTIPLIER
   return Math.round(base / speed)
 }

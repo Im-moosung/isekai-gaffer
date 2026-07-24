@@ -127,6 +127,117 @@
   flex: 0 0 auto;
 }
 
+/* ── 골 드라마 오버레이 (플래시 + 대형 GOAL! 타이포) ──────────────
+   피치 위 순간 이펙트: pointer-events 없음(상호작용 차단 안 함), 애니메이션 후 사라짐.
+   score(홈 득점)=밝은 라임 폭발 / concede(실점)=어두운 침묵 연출로 차별화. */
+.ms-drama {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  pointer-events: none;
+}
+.ms-drama__flash {
+  position: absolute;
+  inset: 0;
+  animation: ms-flash 0.3s ease-out forwards;
+}
+.ms-drama--score .ms-drama__flash {
+  background: radial-gradient(circle at 50% 44%, rgba(200, 245, 66, 0.55), rgba(255, 255, 255, 0.14) 55%, transparent 72%);
+}
+.ms-drama--concede .ms-drama__flash {
+  background: radial-gradient(circle at 50% 44%, rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.28) 55%, transparent 74%);
+}
+@keyframes ms-flash {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+.ms-drama__word {
+  position: relative;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  font-size: clamp(48px, 12vw, 132px);
+  animation: ms-goalword 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+.ms-drama--score .ms-drama__word {
+  color: var(--bc-accent);
+  text-shadow: 0 4px 32px rgba(200, 245, 66, 0.6), 0 2px 5px rgba(0, 0, 0, 0.55);
+}
+.ms-drama--concede .ms-drama__word {
+  color: #cdd6e6;
+  font-size: clamp(30px, 7vw, 70px);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.75);
+}
+@keyframes ms-goalword {
+  0%   { opacity: 0; transform: translateX(-14%) scale(0.82); }
+  18%  { opacity: 1; transform: translateX(0) scale(1.06); }
+  70%  { opacity: 1; transform: translateX(0) scale(1); }
+  100% { opacity: 0; transform: translateX(7%) scale(1); }
+}
+
+/* 득점자 배너 — 하단(티커 위), 이름 + 분. 순간 노출 후 dwell 동안 유지. */
+.ms-scorer {
+  position: absolute;
+  left: 50%;
+  bottom: 58px;
+  transform: translateX(-50%);
+  z-index: 25;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--bc-accent);
+  background: rgba(10, 18, 32, 0.82);
+  box-shadow: 0 8px 30px -6px rgba(0, 0, 0, 0.7);
+  pointer-events: none;
+  animation: ms-scorer-in 0.4s ease-out;
+}
+.ms-scorer__tag {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--bc-accent);
+  color: #06131f;
+  font-size: 12px;
+  font-weight: 800;
+}
+.ms-scorer__tag--concede { background: var(--bc-danger); color: #fff; }
+.ms-scorer__name { font-size: 15px; font-weight: 800; color: var(--bc-text); }
+.ms-scorer__min {
+  font-size: 13px;
+  color: var(--bc-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+@keyframes ms-scorer-in {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* 위험 순간 비네팅 — 가장자리가 붉게 어두워졌다 사라진다(xG 0.25+ 찬스). */
+.ms-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 24;
+  pointer-events: none;
+  box-shadow: inset 0 0 110px 18px rgba(255, 93, 93, 0.5);
+  animation: ms-vignette 0.5s ease-out forwards;
+}
+@keyframes ms-vignette {
+  0%   { opacity: 0; }
+  30%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* 동작 최소화: 순간 이펙트는 생략(플래시·타이포·비네팅), 배너는 정적 노출. */
+  .ms-drama,
+  .ms-vignette { display: none; }
+  .ms-scorer { animation: none; }
+}
+
 /* ── 하단 바 (킥오프 / 풀타임 스탯·액션) — 피치 아래, 덮지 않음 ────── */
 .ms-bottom {
   flex: 0 0 auto;

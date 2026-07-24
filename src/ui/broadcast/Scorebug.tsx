@@ -9,16 +9,18 @@ interface ScorebugProps {
   live: boolean
   /** 무사건 분 빨리감기 연출 — 분 숫자에 빠른 틱 펄스를 준다. */
   fastForward?: boolean
+  /** 득점 순간 스코어 펄스(골 드라마 연동). */
+  pulse?: boolean
 }
 
 /** 방송 스코어버그 — 좌상단 고정 컴팩트 바.
  *  팀 칩 2개(국기 이모지 optional + FIFA 코드) + 가운데 스코어 + 분 표시 + LIVE 도트 펄스. */
-export function Scorebug({ home, away, score, minute, live, fastForward }: ScorebugProps) {
+export function Scorebug({ home, away, score, minute, live, fastForward, pulse }: ScorebugProps) {
   return (
     <div className="bc-scorebug" role="status" aria-label="스코어">
       <TeamChip team={home} side="home" />
       <div className="bc-scorebug__center">
-        <div className="bc-scorebug__score">
+        <div className={`bc-scorebug__score${pulse ? ' bc-scorebug__score--pulse' : ''}`}>
           <span className="bc-scorebug__num">{score[0]}</span>
           <span className="bc-scorebug__dash">:</span>
           <span className="bc-scorebug__num">{score[1]}</span>

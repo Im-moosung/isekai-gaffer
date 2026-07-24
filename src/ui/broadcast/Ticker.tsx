@@ -2,14 +2,16 @@ import './broadcast.css'
 
 interface TickerProps {
   lines: string[]
+  /** 위험 순간 강조(비네팅 연동) — 티커 테두리·글자를 강조 톤으로. */
+  emphasis?: boolean
 }
 
 /** 방송 티커 — 하단 얇은 바. 마지막 해설 1줄 표시, 이전 줄은 페이드. */
-export function Ticker({ lines }: TickerProps) {
+export function Ticker({ lines, emphasis }: TickerProps) {
   const last = lines[lines.length - 1]
   const prev = lines.length > 1 ? lines[lines.length - 2] : undefined
   return (
-    <div className="bc-ticker" role="log" aria-live="polite" aria-label="해설">
+    <div className={`bc-ticker${emphasis ? ' bc-ticker--danger' : ''}`} role="log" aria-live="polite" aria-label="해설">
       <span className="bc-ticker__tag" aria-hidden="true">중계</span>
       <div className="bc-ticker__stack">
         {prev !== undefined && (

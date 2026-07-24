@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import type { Team, SideStats, TacticState, MatchEvent, DecisionEntry } from '../../engine/types'
 import { useMatchStore } from '../../game/matchStore'
 import type { MomentKind } from '../../game/matchSession'
@@ -6,11 +6,15 @@ import { commentate } from '../../game/commentary'
 import { Scorebug } from '../broadcast/Scorebug'
 import { Ticker } from '../broadcast/Ticker'
 import { PitchView } from '../pitch/PitchView'
+import { buildSequence } from '../pitch/choreography'
 import { TacticsBoard } from '../tactics/TacticsBoard'
 import { ShootoutPanel } from './ShootoutPanel'
 import { ShoutBar } from './ShoutBar'
-import { minuteDwellMs, type PlaybackSpeed } from './playback'
+import { minuteDwellMs, EVENT_DWELL_MS, type PlaybackSpeed } from './playback'
 import './match.css'
+
+/** 위험 순간 강조 xG 임계(찬스 큰 세이브·유효 미스). */
+const DANGER_XG = 0.25
 
 // 방송 모드↔작전판 모드 전환 연출 지속(ms). 작전판 이탈 시 역연출을 위해
 // 이 시간만큼 마운트를 유지한다(CSS transition/animation 길이와 일치).
@@ -112,8 +116,10 @@ export function MatchScreen({
       if (cancelled || !eng || st.phase !== 'playing') return
       const m = eng.minute
       const eventsAtMinute = eng.events.filter(e => e.minute === m)
-      const clutch = m >= 80 && Math.abs(eng.score[0] - eng.score[1]) <= 1
-      const dwell = minuteDwellMs(m, eventsAtMinute, speed, clutch)
+      const diff = Math.abs(eng.score[0] - eng.score[1])
+      const clutch = m >= 80 && diff <= 1
+      // 블로우아웃(3골차+) 가속 — 승부 갈린 뒤 늘어짐 방지.
+      const dwell = minuteDwellMs(m, eventsAtMinute, speed, clutch, diff)
       timer = setTimeout(() => {
         if (cancelled) return
         advanceMinute()
@@ -142,6 +148,24 @@ export function MatchScreen({
     const t = setTimeout(() => { setTacticsMounted(false); setTacticsExiting(false) }, MODE_TRANSITION_MS)
     return () => clearTimeout(t)
   }, [tacticsMode, tacticsMounted])
+
+  // ── 현재 분 하이라이트 안무: 그 분의 최고 가중 이벤트를 골라 시퀀스로 번역 ──
+  // engine이 분 단위로 전진하므로 engine 참조가 바뀔 때(=분 전환)만 재계산 → 한 분
+  // 재생 동안 시퀀스 참조가 안정적(ChoreoLayer 타이머가 중간에 리셋되지 않음).
+  const highlight = useMemo(() => {
+    if (!engine) return null
+    const m = engine.minute
+    let drama: MatchEvent | undefined
+    let best = -1
+    for (const e of engine.events) {
+      if (e.minute !== m) continue
+      const w = EVENT_DWELL_MS[e.type] ?? -1
+      if (w > best) { best = w; drama = e }
+    }
+    if (!drama) return null
+    const side: 'home' | 'away' = drama.teamId === engine.home.team.id ? 'home' : 'away'
+    return { seq: buildSequence(drama, engine.home, engine.away), side }
+  }, [engine])
 
   // 토너먼트 무승부 → 승부차기 진입 필요 (캠페인 한정).
   const needsShootout = !!onMatchEnd && !!requireWinner && !!engine && engine.score[0] === engine.score[1]
@@ -174,6 +198,25 @@ export function MatchScreen({
   // 빨리감기 연출: 재생 중 현재 분에 이벤트가 없으면 분 숫자가 빠르게 넘어간다.
   const fastForward = replaying && !engine.events.some(e => e.minute === displayMinute)
 
+  // ── 이번 분 연출 플래그(재생 중에만) ──────────────────────────────
+  const minuteEvents = engine.events.filter(e => e.minute === displayMinute)
+  const diffNow = Math.abs(shownScore[0] - shownScore[1])
+  const clutchNow = displayMinute >= 80 && diffNow <= 1
+  // 시퀀스 재생 총 시간 = 그 분의 실제 dwell(재생 루프와 동일 산식).
+  const seqDwell = minuteDwellMs(displayMinute, minuteEvents, speed, clutchNow, diffNow)
+  const playSequence = replaying && !!highlight
+  // 골 드라마: 이번 분 득점. 상대 골이면 실점 연출로 차별화.
+  const goalEvent = minuteEvents.find(e => e.type === 'goal')
+  const goalDrama = replaying && !!goalEvent
+  const conceded = !!goalEvent && goalEvent.teamId !== home.id
+  const scorerTeam = goalEvent ? (goalEvent.teamId === home.id ? home : away) : undefined
+  const scorerName = goalEvent?.playerId && scorerTeam
+    ? scorerTeam.squad.find(p => p.id === goalEvent.playerId)?.name.ko
+    : undefined
+  // 위험 순간: xG 0.25+ 세이브·미스.
+  const dangerEvent = minuteEvents.find(e => (e.type === 'save' || e.type === 'miss') && (e.xg ?? 0) >= DANGER_XG)
+  const dangerMoment = replaying && !!dangerEvent
+
   // 상단 방송 배너 — broadcast 모드(재생 중) 순간 제안만. 정지·하프타임 안내는 작전판이 담당.
   const bannerText = replaying && momentPrompt
     ? `⚡ ${MOMENT_PHRASE[momentPrompt.kind]} — 감독 타임을 쓰시겠습니까?`
@@ -189,6 +232,7 @@ export function MatchScreen({
           minute={displayMinute}
           live={replaying}
           fastForward={fastForward}
+          pulse={goalDrama}
         />
         {/* 재생 중 감독 타임 버튼 — 스코어버그 옆. pauseByUser로 자유 일시정지. */}
         {replaying && (
@@ -216,10 +260,40 @@ export function MatchScreen({
 
         {/* ── 피치 — 언제나 보인다(가리는 오버레이 없음) ── */}
         <div className="ms-pitch-wrap">
-          <PitchView state={engine} lastEvent={lastEvent} />
+          <PitchView
+            state={engine}
+            lastEvent={lastEvent}
+            sequence={playSequence ? highlight!.seq : undefined}
+            dwellMs={seqDwell}
+            sequenceSide={highlight?.side}
+          />
         </div>
 
-        <Ticker lines={lines} />
+        <Ticker lines={lines} emphasis={dangerMoment} />
+
+        {/* ── 골 드라마: 플래시 + 대형 타이포 + 득점자 배너 + (스코어버그 펄스) ──
+            피치를 가리지 않는 순간 이펙트(pointer-events 없음). key=분으로 골마다 재발동. */}
+        {goalDrama && (
+          <div
+            key={`drama-${displayMinute}`}
+            className={`ms-drama ms-drama--${conceded ? 'concede' : 'score'}`}
+            aria-hidden="true"
+          >
+            <span className="ms-drama__flash" />
+            <span className="ms-drama__word">{conceded ? '실점…' : 'GOAL!'}</span>
+          </div>
+        )}
+        {goalDrama && (
+          <div key={`scorer-${displayMinute}`} className="ms-scorer" role="status">
+            <span className={`ms-scorer__tag${conceded ? ' ms-scorer__tag--concede' : ''}`}>
+              {conceded ? '실점' : '골'}
+            </span>
+            <span className="ms-scorer__name">{scorerName ?? scorerTeam?.name.ko ?? ''}</span>
+            <span className="ms-scorer__min">{displayMinute}&apos;</span>
+          </div>
+        )}
+        {/* ── 위험 순간: 비네팅(가장자리 어두워짐) 0.5s ── */}
+        {dangerMoment && <span key={`vig-${displayMinute}`} className="ms-vignette" aria-hidden="true" />}
 
         {/* ── 터치라인 외침 바(broadcast 하단) — 재생 중에만. 정지 없이 즉시 사기 보정. ── */}
         {replaying && <ShoutBar />}

@@ -18,6 +18,43 @@
 .pv-dot--away { fill: var(--bc-away); }
 .pv-dot { stroke: rgba(0, 0, 0, 0.35); stroke-width: 0.3; }
 
+/* 전술/포메이션 변경 시 도트·번호·이름·배지가 새 slotCoords로 0.8s 이동(broadcast).
+   tactics variant는 tactics.css가 0.5s로 덮는다. 시퀀스 재생 중엔 도트가 움직이지 않아
+   안무(공·무버) 전환과 충돌하지 않는다. */
+.pv-dot,
+.pv-num,
+.pv-name,
+.pv-mood {
+  transition: cx 0.8s ease, cy 0.8s ease, x 0.8s ease, y 0.8s ease;
+}
+
+/* 바디랭귀지 미니 배지(🔥/😰) — 도트 우상단. */
+.pv-mood {
+  font-size: 2.8px;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+/* ── 하이라이트 안무: 공(⚪ 원+그림자) + 무버 도트 ─────────────
+   위치 전환 길이는 컴포넌트가 --pv-dur(ms)로 주입한다. */
+.pv-choreo .pv-ball,
+.pv-choreo .pv-ball__shadow,
+.pv-choreo .pv-mover {
+  transition: cx var(--pv-dur, 0ms) cubic-bezier(0.34, 0.62, 0.4, 1),
+              cy var(--pv-dur, 0ms) cubic-bezier(0.34, 0.62, 0.4, 1);
+}
+.pv-ball {
+  fill: #fff;
+  stroke: rgba(0, 0, 0, 0.4);
+  stroke-width: 0.3;
+  filter: drop-shadow(0 0 1.4px rgba(255, 255, 255, 0.8));
+}
+.pv-ball__shadow { fill: rgba(0, 0, 0, 0.32); }
+.pv-mover { opacity: 0.55; stroke: rgba(255, 255, 255, 0.5); stroke-width: 0.3; }
+.pv-mover--home { fill: var(--bc-home); }
+.pv-mover--away { fill: var(--bc-away); }
+
 .pv-num {
   fill: #fff;
   font-size: 2.4px;
@@ -69,4 +106,13 @@
 @media (prefers-reduced-motion: reduce) {
   .pv-pulse { animation: none; }
   .pv-ring { animation: none; }
+  .pv-dot,
+  .pv-num,
+  .pv-name,
+  .pv-mood,
+  .pv-choreo .pv-ball,
+  .pv-choreo .pv-ball__shadow,
+  .pv-choreo .pv-mover {
+    transition: none;
+  }
 }

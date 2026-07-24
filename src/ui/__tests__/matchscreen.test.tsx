@@ -4,6 +4,7 @@ import { render, fireEvent, cleanup, act } from '@testing-library/react'
 import { useMatchStore } from '../../game/matchStore'
 import { MatchScreen } from '../match/MatchScreen'
 import { makeTestTeam } from '../../engine/fixtures/testTeams'
+import type { MatchEvent } from '../../engine/types'
 
 const home = makeTestTeam('kor', 76)
 const away = makeTestTeam('esp', 88)
@@ -178,6 +179,51 @@ describe('MatchScreen 재생 루프 — 정지·재개·속도', () => {
     const at2x = minutesInBudget(true, budget)
     expect(at1x).toBeGreaterThan(0)
     expect(at2x).toBeGreaterThan(at1x)
+  })
+})
+
+describe('MatchScreen 연출 — 골 드라마·안무·위험 순간', () => {
+  // 재생 중 현재 분에 이벤트를 주입해 연출 렌더를 스모크한다(엔진 이벤트 배열에 push).
+  function inject(events: MatchEvent[]) {
+    const eng = store().engine!
+    act(() => { useMatchStore.setState({ engine: { ...eng, events: [...eng.events, ...events] } }) })
+  }
+
+  it('(m) 홈 득점 분 → GOAL! 타이포 + 득점자 배너 + 안무 공(.pv-ball) + 스코어버그 펄스', () => {
+    const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
+    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    step(3)
+    expect(store().phase).toBe('playing')
+    const eng = store().engine!
+    const scorer = eng.home.tactics.lineup[10].playerId
+    inject([{ minute: eng.minute, type: 'goal', teamId: home.id, playerId: scorer }])
+    expect(container.querySelector('.ms-drama--score')).toBeTruthy()
+    expect(container.querySelector('.ms-drama__word')!.textContent).toContain('GOAL')
+    expect(container.querySelector('.ms-scorer')).toBeTruthy()
+    // 안무 공이 lastEvent 정적 마커를 대체.
+    expect(container.querySelector('.pv-ball')).toBeTruthy()
+    // 스코어버그 펄스 클래스.
+    expect(container.querySelector('.bc-scorebug__score--pulse')).toBeTruthy()
+  })
+
+  it('(n) 상대 득점(실점) → concede 연출로 차별화(어두운 톤·실점 태그)', () => {
+    const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
+    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    step(3)
+    const eng = store().engine!
+    inject([{ minute: eng.minute, type: 'goal', teamId: away.id }])
+    expect(container.querySelector('.ms-drama--concede')).toBeTruthy()
+    expect(container.querySelector('.ms-scorer__tag--concede')).toBeTruthy()
+  })
+
+  it('(o) 위험 순간(xG 0.25+ 세이브) → 비네팅 + 티커 위험 강조', () => {
+    const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
+    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    step(3)
+    const eng = store().engine!
+    inject([{ minute: eng.minute, type: 'save', teamId: home.id, xg: 0.4 }])
+    expect(container.querySelector('.ms-vignette')).toBeTruthy()
+    expect(container.querySelector('.bc-ticker--danger')).toBeTruthy()
   })
 })
 

@@ -5,6 +5,8 @@ import {
   EVENT_DWELL_MS,
   NO_EVENT_DWELL_MS,
   CLUTCH_MULTIPLIER,
+  BLOWOUT_DIFF,
+  BLOWOUT_MULTIPLIER,
 } from '../playback'
 import { createMatch, simulateSegment } from '../../../engine/simulate'
 import { makeTestTeam } from '../../../engine/fixtures/testTeams'
@@ -75,6 +77,35 @@ describe('minuteDwellMs — clutch 배수', () => {
   })
   it('clutch + speed 동시 적용', () => {
     expect(minuteDwellMs(85, [], 2, true)).toBe(Math.round((1800 * 2) / 2))
+  })
+})
+
+describe('minuteDwellMs — 블로우아웃 가속(scoreDiff)', () => {
+  it('scoreDiff 기본(0)은 가속 미적용 — 기존 계약 유지', () => {
+    expect(minuteDwellMs(50, [ev('goal')], 1, false)).toBe(6500)
+    expect(minuteDwellMs(50, [ev('goal')], 1, false, 0)).toBe(6500)
+  })
+  it('scoreDiff가 임계 미만(≤2)이면 가속 없음', () => {
+    expect(minuteDwellMs(50, [ev('goal')], 1, false, 2)).toBe(6500)
+  })
+  it('scoreDiff ≥ BLOWOUT_DIFF(3)이면 이벤트 dwell ×0.6', () => {
+    expect(minuteDwellMs(50, [ev('goal')], 1, false, BLOWOUT_DIFF))
+      .toBe(Math.round(6500 * BLOWOUT_MULTIPLIER))
+    expect(minuteDwellMs(50, [ev('shot')], 1, false, 4))
+      .toBe(Math.round(4300 * BLOWOUT_MULTIPLIER))
+  })
+  it('블로우아웃은 무사건 dwell도 압축', () => {
+    expect(minuteDwellMs(50, [], 1, false, 5))
+      .toBe(Math.round(NO_EVENT_DWELL_MS * BLOWOUT_MULTIPLIER))
+  })
+  it('블로우아웃 + speed 동시 적용', () => {
+    expect(minuteDwellMs(50, [ev('goal')], 2, false, 3))
+      .toBe(Math.round((6500 * BLOWOUT_MULTIPLIER) / 2))
+  })
+  it('블로우아웃이면 같은 이벤트라도 더 짧다', () => {
+    const normal = minuteDwellMs(50, [ev('goal')], 1, false, 1)
+    const blowout = minuteDwellMs(50, [ev('goal')], 1, false, 3)
+    expect(blowout).toBeLessThan(normal)
   })
 })
 
