@@ -6,6 +6,8 @@ import {
   NO_EVENT_DWELL_MS,
   CLUTCH_MULTIPLIER,
 } from '../playback'
+import { createMatch, simulateSegment } from '../../../engine/simulate'
+import { makeTestTeam } from '../../../engine/fixtures/testTeams'
 
 // 테스트용 이벤트(분/타입만 유효하면 됨).
 function ev(type: MatchEventType, minute = 10): MatchEvent {
@@ -118,4 +120,33 @@ describe('minuteDwellMs — 1x 90분 총합 범위(180k~300k)', () => {
   it('EVENT_DWELL_MS 상수가 노출되어 있다(회귀 고정)', () => {
     expect(EVENT_DWELL_MS.goal).toBe(6500)
   })
+})
+
+// ── 실엔진 회귀 가드 ──────────────────────────────────────
+// 합성 분포(25~40 이벤트)만으론 상한 여유가 얇다 — 실엔진은 유의미 이벤트가 ~2배라
+// 상수 변경 시 실경기가 300k를 넘겨도 합성 테스트는 못 잡는다. 실제 full-match를
+// 여러 시드로 시뮬해 실경기 총합이 [180k, 300k]에 있는지 직접 어서션한다(클러치 포함).
+describe('minuteDwellMs — 실엔진 90분 총합 가드(12시드)', () => {
+  const home = makeTestTeam('kor', 76)
+  const away = makeTestTeam('esp', 88)
+
+  // 재생 루프(MatchScreen)와 동일한 방식으로 1x 총합을 계산: 분별 이벤트 + 클러치 판정.
+  function realTotal1x(seed: number): number {
+    const final = simulateSegment(createMatch(home, away, { seed }), 90)
+    let sum = 0
+    for (let m = 1; m <= 90; m++) {
+      const atMinute = final.events.filter(e => e.minute === m)
+      const clutch = m >= 80 && Math.abs(final.score[0] - final.score[1]) <= 1
+      sum += minuteDwellMs(m, atMinute, 1, clutch)
+    }
+    return sum
+  }
+
+  for (let seed = 1000; seed <= 1011; seed++) {
+    it(`seed=${seed} → 실경기 총합이 180,000~300,000ms`, () => {
+      const total = realTotal1x(seed)
+      expect(total).toBeGreaterThanOrEqual(180_000)
+      expect(total).toBeLessThanOrEqual(300_000)
+    })
+  }
 })
