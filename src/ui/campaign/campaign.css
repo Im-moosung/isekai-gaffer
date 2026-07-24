@@ -246,3 +246,102 @@
   cursor: pointer;
 }
 .end-restart:hover { border-color: var(--bc-accent); }
+
+/* ── 점수 브레이크다운 ─────────────────────────────────── */
+.end-score {
+  width: 100%;
+  margin: 24px 0 0;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.end-score th,
+.end-score td {
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--bc-line);
+}
+.end-score th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--bc-text-dim);
+}
+.end-score td {
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.end-score__total th,
+.end-score__total td {
+  border-bottom: none;
+  padding-top: 12px;
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--bc-text);
+}
+.end-score__total td { color: var(--bc-accent); }
+
+/* ── 리더보드 등록 ─────────────────────────────────────── */
+.end-submit {
+  display: flex;
+  gap: 8px;
+  margin: 24px 0 0;
+}
+.end-nick {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid var(--bc-line);
+  border-radius: 8px;
+  background: var(--bc-panel-2);
+  color: var(--bc-text);
+  font-family: inherit;
+  font-size: 14px;
+}
+.end-nick:focus { outline: none; border-color: var(--bc-accent); }
+.end-register {
+  padding: 10px 18px;
+  border: 1px solid var(--bc-accent);
+  border-radius: 8px;
+  background: var(--bc-accent);
+  color: var(--bc-bg);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.end-register:disabled { opacity: 0.6; cursor: default; }
+
+/* ── 리더보드 순위 ─────────────────────────────────────── */
+.end-board { margin: 24px 0 0; text-align: left; }
+.end-board__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.end-board__title { margin: 0; font-size: 15px; font-weight: 800; }
+.end-board__badge {
+  padding: 2px 8px;
+  border: 1px solid var(--bc-line);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--bc-text-dim);
+}
+.end-board__list { list-style: none; margin: 0; padding: 0; }
+.end-board__row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto 56px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--bc-line);
+  font-size: 13px;
+}
+.end-board__row--me {
+  background: var(--bc-panel-2);
+  border-radius: 6px;
+  font-weight: 800;
+}
+.end-board__rank { color: var(--bc-text-dim); font-variant-numeric: tabular-nums; }
+.end-board__nick { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.end-board__reached { font-size: 11px; color: var(--bc-text-dim); }
+.end-board__pts { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }

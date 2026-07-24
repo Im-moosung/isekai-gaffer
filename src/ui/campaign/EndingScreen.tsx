@@ -1,6 +1,25 @@
+import { useMemo, useState } from 'react'
 import { useCampaignStore } from '../../game/campaignStore'
 import type { CampaignStage, MatchRecord } from '../../game/campaignStore'
+import { loadAllTeams } from '../../data/loader'
+import { computeScore, submitScore, topScores } from '../../online/leaderboard'
+import type { LeaderboardMode, LeaderboardRow, ScoreBreakdown } from '../../online/leaderboard'
+import { sanitizeNickname } from '../../online/nickname'
 import './campaign.css'
+
+const STAGE_LABEL: Record<CampaignStage, string> = {
+  group1: '조별 1차전', group2: '조별 2차전', group3: '조별리그',
+  r32: '32강', r16: '16강', qf: '8강', sf: '4강', final: '준우승', ended: '여정의 끝',
+}
+
+/** 점수 브레이크다운 표에 표시할 항목 순서·라벨. */
+const SCORE_ROWS: [keyof Pick<ScoreBreakdown, 'roundPts' | 'matchPts' | 'goalDiffPts' | 'upsetPts' | 'cleanSheetPts'>, string][] = [
+  ['roundPts', '진출 라운드'],
+  ['matchPts', '승점 (승3·무1)'],
+  ['goalDiffPts', '득실차'],
+  ['upsetPts', '업셋 보너스'],
+  ['cleanSheetPts', '무실점'],
+]
 
 /** 라운드별 엔딩 헤드라인 — 사실 서술형. 실존 인물·팀 비하 금지. */
 function headlineFor(reached: CampaignStage, champion: boolean): { title: string; body: string } {
@@ -62,16 +81,47 @@ function tally(records: MatchRecord[]): Tally {
 }
 
 /** 캠페인 엔딩 화면 — campaignStore.ending 기반 헤드라인 + 기록 요약 + [처음부터]. */
+function fmtPts(n: number): string {
+  return n > 0 ? `+${n}` : `${n}`
+}
+
+/** 캠페인 엔딩 화면 — 헤드라인 + 기록 요약 + 점수 브레이크다운 + 리더보드 등록/순위. */
 export function EndingScreen({ onRestart }: { onRestart(): void }) {
   const ending = useCampaignStore(s => s.ending)
   const records = useCampaignStore(s => s.records)
 
-  if (!ending) return null
+  const [nickname, setNickname] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [submitted, setSubmitted] = useState(false)
+  const [myNick, setMyNick] = useState('')
+  const [rows, setRows] = useState<LeaderboardRow[]>([])
+  const [mode, setMode] = useState<LeaderboardMode>('local')
+
+  // computeScore는 순수 함수 — 기록/엔딩 변화 시에만 재계산.
+  const breakdown = useMemo<ScoreBreakdown | null>(
+    () => (ending ? computeScore(records, ending, loadAllTeams()) : null),
+    [records, ending],
+  )
+
+  if (!ending || !breakdown) return null
 
   const { title, body } = headlineFor(ending.reached, ending.champion)
   const t = tally(records)
   const diff = t.gf - t.ga
   const diffLabel = diff > 0 ? `+${diff}` : `${diff}`
+
+  async function handleSubmit() {
+    if (busy || submitted || !breakdown) return
+    setBusy(true)
+    const nick = sanitizeNickname(nickname)
+    setMyNick(nick)
+    await submitScore(nick, breakdown)
+    const res = await topScores(10)
+    setRows(res.rows)
+    setMode(res.mode)
+    setSubmitted(true)
+    setBusy(false)
+  }
 
   return (
     <div className={`end-root${ending.champion ? ' end-root--champion' : ''}`}>
@@ -89,6 +139,70 @@ export function EndingScreen({ onRestart }: { onRestart(): void }) {
             <dd>{t.gf}득점 {t.ga}실점 ({diffLabel})</dd>
           </div>
         </dl>
+
+        <table className="end-score" aria-label="점수 상세">
+          <tbody>
+            {SCORE_ROWS.map(([key, label]) => (
+              <tr key={key}>
+                <th scope="row">{label}</th>
+                <td>{fmtPts(breakdown[key])}</td>
+              </tr>
+            ))}
+            <tr className="end-score__total">
+              <th scope="row">합계</th>
+              <td>{breakdown.total}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        {!submitted ? (
+          <div className="end-submit">
+            <input
+              className="end-nick"
+              type="text"
+              value={nickname}
+              onChange={e => setNickname(e.target.value)}
+              placeholder="닉네임 (2~12자, 미입력 시 익명 감독)"
+              maxLength={12}
+              aria-label="닉네임"
+            />
+            <button
+              type="button"
+              className="end-register"
+              onClick={handleSubmit}
+              disabled={busy}
+            >
+              {busy ? '등록 중…' : '기록 등록'}
+            </button>
+          </div>
+        ) : (
+          <div className="end-board">
+            <div className="end-board__head">
+              <h2 className="end-board__title">리더보드 TOP 10</h2>
+              {mode === 'local' && (
+                <span className="end-board__badge">이 기기 기록</span>
+              )}
+            </div>
+            <ol className="end-board__list">
+              {rows.map((r, i) => {
+                const mine = r.nickname === myNick && r.total === breakdown.total
+                return (
+                  <li
+                    key={`${r.nickname}-${r.total}-${i}`}
+                    className={`end-board__row${mine ? ' end-board__row--me' : ''}`}
+                  >
+                    <span className="end-board__rank">{i + 1}</span>
+                    <span className="end-board__nick">{r.nickname}</span>
+                    <span className="end-board__reached">
+                      {r.champion ? '우승' : STAGE_LABEL[r.reached]}
+                    </span>
+                    <span className="end-board__pts">{r.total}</span>
+                  </li>
+                )
+              })}
+            </ol>
+          </div>
+        )}
 
         <button type="button" className="end-restart" onClick={onRestart}>
           처음부터
