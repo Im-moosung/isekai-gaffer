@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react'
 import type { Team, SideStats, TacticState, MatchEvent, DecisionEntry } from '../../engine/types'
 import { useMatchStore } from '../../game/matchStore'
 import type { MomentKind } from '../../game/matchSession'
@@ -6,7 +6,7 @@ import { commentate } from '../../game/commentary'
 import * as ctts from '../../audio/commentary-tts'
 import { Scorebug } from '../broadcast/Scorebug'
 import { Ticker } from '../broadcast/Ticker'
-import { PixiPitch } from '../pitch/pixi/PixiPitch'
+import { PitchView } from '../pitch/PitchView'
 import { buildSequence } from '../pitch/choreography'
 import { TacticsBoard } from '../tactics/TacticsBoard'
 import { ShootoutPanel } from './ShootoutPanel'
@@ -14,6 +14,12 @@ import { ShoutBar } from './ShoutBar'
 import { minuteDwellMs, EVENT_DWELL_MS, type PlaybackSpeed } from './playback'
 import * as sfx from '../../audio/sfx'
 import './match.css'
+
+// ★ 코드 스플릿: PixiPitch(→ pixi.js 전체)는 메인 번들에서 제외하고 지연 로드한다.
+// 정적 import 시 pixi.js(~수백 kB)가 엔트리 청크에 정적으로 끌려와 500kB 경고를 유발했다.
+// 로딩 순간에는 Suspense 폴백으로 동일 props의 SVG PitchView를 노출한다(피치 상시 노출 원칙 유지 —
+// SVG가 잠깐 보였다가 Pixi로 교체). WebGL 불가 폴백 로직은 PixiPitch 내부에 그대로 있다.
+const PixiPitch = lazy(() => import('../pitch/pixi/PixiPitch').then(m => ({ default: m.PixiPitch })))
 
 /** 위험 순간 강조 xG 임계(찬스 큰 세이브·유효 미스). */
 const DANGER_XG = 0.25
@@ -373,13 +379,25 @@ export function MatchScreen({
         {/* ── 피치 — 언제나 보인다(가리는 오버레이 없음). broadcast는 PixiJS 렌더러
             (WebGL 불가·reduced-motion은 PixiPitch 내부에서 SVG 폴백/연출 생략). ── */}
         <div className="ms-pitch-wrap">
-          <PixiPitch
-            state={engine}
-            lastEvent={lastEvent}
-            sequence={playSequence ? highlight!.seq : undefined}
-            dwellMs={seqDwell}
-            sequenceSide={highlight?.side}
-          />
+          <Suspense
+            fallback={
+              <PitchView
+                state={engine}
+                lastEvent={lastEvent}
+                sequence={playSequence ? highlight!.seq : undefined}
+                dwellMs={seqDwell}
+                sequenceSide={highlight?.side}
+              />
+            }
+          >
+            <PixiPitch
+              state={engine}
+              lastEvent={lastEvent}
+              sequence={playSequence ? highlight!.seq : undefined}
+              dwellMs={seqDwell}
+              sequenceSide={highlight?.side}
+            />
+          </Suspense>
         </div>
 
         <Ticker lines={lines} emphasis={dangerMoment} />
