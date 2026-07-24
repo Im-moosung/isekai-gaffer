@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { Team, SideStats, TacticState, MatchEvent } from '../../engine/types'
+import type { Team, SideStats, TacticState, MatchEvent, DecisionEntry } from '../../engine/types'
 import { useMatchStore } from '../../game/matchStore'
 import { commentate } from '../../game/commentary'
 import { Scorebug } from '../broadcast/Scorebug'
@@ -28,8 +28,9 @@ interface MatchScreenProps {
   referenceScore?: [number, number]
   /** 토너먼트: 무승부 시 승부차기로 승자를 가려야 한다. */
   requireWinner?: boolean
-  /** 캠페인: 경기 종료 시 결과 콜백. 미지정 시 데모 동작([다시 보기]). */
-  onMatchEnd?(score: [number, number], staminaByPlayer: Record<string, number>, shootout?: [number, number]): void
+  /** 캠페인: 경기 종료 시 결과 콜백. 미지정 시 데모 동작([다시 보기]).
+   *  4번째 인자 decisionLog는 이 경기의 감독 개입 기록(기자회견 근거). */
+  onMatchEnd?(score: [number, number], staminaByPlayer: Record<string, number>, shootout: [number, number] | undefined, decisionLog: DecisionEntry[]): void
 }
 
 /** 경기 화면 조립 — 좌 경기 뷰(스코어버그·피치·티커) / 우 감독 콘솔.
@@ -48,6 +49,7 @@ export function MatchScreen({
   const playTo = useMatchStore(s => s.playTo)
   const tickDisplay = useMatchStore(s => s.tickDisplay)
   const resumeFromDecision = useMatchStore(s => s.resumeFromDecision)
+  const logShootoutSetup = useMatchStore(s => s.logShootoutSetup)
   const reset = useMatchStore(s => s.reset)
 
   const [tab, setTab] = useState<'console' | 'sub'>('console')
@@ -102,10 +104,17 @@ export function MatchScreen({
   // 토너먼트 무승부 → 승부차기 진입 필요 (캠페인 한정).
   const needsShootout = !!onMatchEnd && !!requireWinner && !!engine && engine.score[0] === engine.score[1]
 
-  // 경기 결과를 캠페인으로 반환한다(홈 종료 스태미나 포함).
+  // 경기 결과를 캠페인으로 반환한다(홈 종료 스태미나·결정 로그 포함).
   function finishMatch(shootout?: [number, number]) {
     if (!engine || !onMatchEnd) return
-    onMatchEnd([engine.score[0], engine.score[1]], { ...engine.home.staminaByPlayer }, shootout)
+    const decisionLog = useMatchStore.getState().decisionLog
+    onMatchEnd([engine.score[0], engine.score[1]], { ...engine.home.staminaByPlayer }, shootout, decisionLog)
+  }
+
+  // 승부차기 진입 — 키커 순서 확정을 결정 로그에 기록.
+  function openShootout() {
+    logShootoutSetup('PK: 키커 순서 확정')
+    setShootoutOpen(true)
   }
 
   if (!engine) return <div className="ms-root ms-root--empty" />
@@ -203,7 +212,7 @@ export function MatchScreen({
               <button
                 type="button"
                 className="ms-btn ms-btn--primary"
-                onClick={() => setShootoutOpen(true)}
+                onClick={openShootout}
               >
                 승부차기로
               </button>

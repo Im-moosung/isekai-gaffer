@@ -137,8 +137,8 @@ function CampaignMatch({ tactics, onBackToHub }: { tactics: TacticState; onBackT
       staminaOverride={derived.staminaOverride}
       referenceScore={derived.referenceScore}
       requireWinner={derived.requireWinner}
-      onMatchEnd={(score, stamina, shootout) => {
-        recordResult(score, stamina, shootout)
+      onMatchEnd={(score, stamina, shootout, decisions) => {
+        recordResult(score, stamina, shootout, decisions)
         // 스텝을 허브로 되돌린다. recordResult가 stage='ended'로 갱신한 경우엔
         // 부모(CampaignFlow)가 ended를 감지해 허브 대신 엔딩을 렌더한다.
         onBackToHub()

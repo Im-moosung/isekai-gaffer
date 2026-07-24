@@ -3,6 +3,7 @@
 // 순수 상태 로직(엔진 import 없음). TeamId는 데이터 로더에서 가져온다.
 import { create } from 'zustand'
 import type { TeamId } from '../data/loader'
+import type { DecisionEntry } from '../engine/types'
 
 export type CampaignStage =
   | 'group1' | 'group2' | 'group3'
@@ -14,6 +15,7 @@ export interface MatchRecord {
   opponentId: TeamId
   score: [number, number] // [kor, 상대]
   shootout?: [number, number] // [kor, 상대] 승부차기
+  decisions: DecisionEntry[] // 이 경기의 감독 개입 로그(기자회견 근거)
 }
 
 export interface CampaignState {
@@ -31,6 +33,7 @@ export interface CampaignState {
     score: [number, number],
     staminaByPlayer: Record<string, number>,
     shootout?: [number, number],
+    decisions?: DecisionEntry[],
   ): void
   startingStamina(playerId: number | string): number
   reset(): void
@@ -130,13 +133,13 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
     return seed * 31 + records.length
   },
 
-  recordResult: (score, staminaByPlayer, shootout) => {
+  recordResult: (score, staminaByPlayer, shootout, decisions = []) => {
     const state = get()
     const { stage } = state
     if (stage === 'ended') throw new Error('이미 종료된 캠페인')
 
     const opponentId = state.currentOpponent()
-    const record: MatchRecord = { stage, opponentId, score, ...(shootout ? { shootout } : {}) }
+    const record: MatchRecord = { stage, opponentId, score, ...(shootout ? { shootout } : {}), decisions }
     const records = [...state.records, record]
     // 체력 이월: 이번 경기 종료 스태미나를 저장(다음 경기 시작 시 70% 회복)
     const fatigueCarry = { ...state.fatigueCarry, ...staminaByPlayer }

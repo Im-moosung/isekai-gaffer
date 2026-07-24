@@ -30,6 +30,8 @@ export type FormationId = '4-3-3' | '4-2-3-1' | '4-4-2' | '3-5-2' | '4-1-4-1' | 
 export interface Instructions { lineHeight: number; pressing: number; tempo: number; attackFocus: 'left'|'center'|'right'|'balanced' }
 export interface LineupSlot { slot: Position; playerId: string }
 export interface TacticState { formation: FormationId; lineup: LineupSlot[]; instructions: Instructions }
+/** 감독의 개입 1건 기록 — AI 기자회견/헤드라인의 근거가 된다. summary는 한국어 서술. */
+export interface DecisionEntry { minute: number; kind: 'instructions'|'sub'|'teamtalk'|'shootout-setup'; summary: string; detail?: Record<string, unknown> }
 export type MatchEventType = 'kickoff'|'chance'|'shot'|'goal'|'save'|'miss'|'foul'|'yellow'|'red'|'corner'|'sub'|'halftime'|'fulltime'
 export interface MatchEvent { minute: number; type: MatchEventType; teamId: string; playerId?: string; assistId?: string; detail?: string; xg?: number }
 export interface SideStats { possession: number; passAccuracy: number; shots: number; shotsOnTarget: number; fouls: number; corners: number; xg: number }
