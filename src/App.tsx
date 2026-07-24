@@ -70,8 +70,19 @@ function DemoFlow({ onExit }: { onExit(): void }) {
   const teamName = teams.home.name.ko
   const initial = useMemo(() => pickBestXI(teams.home), [teams.home])
 
+  const [tactics, setTactics] = useState<TacticState | null>(null)
   const [result, setResult] = useState<PostMatch | null>(null)
   const [headline, setHeadline] = useState<Headline | null>(null)
+
+  // 캠페인과 동일하게 데모도 라인업 선행 — 킥오프 전 선발/전술을 짠다.
+  if (!tactics) {
+    return (
+      <div className="demo-wrap">
+        <div className="demo-banner" role="note">데모 · 리더보드 미반영</div>
+        <LineupScreen team={teams.home} initial={initial} onConfirm={setTactics} />
+      </div>
+    )
+  }
 
   if (!result) {
     return (
@@ -81,7 +92,7 @@ function DemoFlow({ onExit }: { onExit(): void }) {
           home={teams.home}
           away={teams.away}
           seed={DEMO_SEED}
-          initialTactics={initial}
+          initialTactics={tactics}
           onMatchEnd={(score, _stamina, shootout, decisions) => {
             // 데모에는 캠페인 기록이 없으므로 임시 MatchRecord를 중립값으로 구성한다
             // (stage='r32' 중립·상대 'esp'). 결정 로그는 matchStore가 수집한 실제 개입 기록.

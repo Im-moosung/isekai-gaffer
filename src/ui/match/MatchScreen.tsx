@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import type { Team, SideStats, TacticState, MatchEvent, DecisionEntry } from '../../engine/types'
 import { useMatchStore } from '../../game/matchStore'
+import type { MomentKind } from '../../game/matchSession'
 import { commentate } from '../../game/commentary'
 import { Scorebug } from '../broadcast/Scorebug'
 import { Ticker } from '../broadcast/Ticker'
@@ -15,20 +16,26 @@ import './match.css'
 // 유저는 홈팀 감독. 콘솔/교체는 home 고정.
 const SIDE = 'home' as const
 
-// 정지 배너 제목(moment는 별도 처리).
-const PAUSE_TITLE: Record<'hydration1' | 'hydration2' | 'halftime' | 'user' | 'moment', string> = {
-  hydration1: '🧊 하이드레이션 브레이크',
-  hydration2: '🧊 하이드레이션 브레이크',
-  halftime: '전반 종료',
-  user: '감독 타임',
-  moment: '감독 타임',
+// 동적 순간 유형별 방송 배너 문구(제안 시). matchSession.DecisionMoment.title과 별개로,
+// 배너에서는 감독에게 말 거는 어투로 노출한다(스펙 §17.2 방송 배너).
+const MOMENT_PHRASE: Record<MomentKind, string> = {
+  conceded: '실점 직후입니다',
+  'momentum-lost': '흐름이 상대에게 넘어갑니다',
+  scored: '득점 직후 — 더 몰아칠까요?',
+  clutch: '승부의 시간입니다',
+  fatigue: '주력 선수 체력이 바닥납니다',
 }
+
+// 정지·하프타임 상태별 방송 배너 문구(개입 안내). moment 제안은 별도 처리(액션 버튼 포함).
+const BREAK_BANNER = '🧊 하이드레이션 브레이크 — 전술을 조정하세요'
+const HALFTIME_BANNER = '전반 종료 — 팀토크와 전술 조정 후 후반을 시작하세요'
+const USER_PAUSE_BANNER = '⏸ 감독 타임 — 전술 확정 시 재개'
 
 interface MatchScreenProps {
   home: Team
   away: Team
   seed: number
-  /** 라인업 화면에서 확정한 홈 전술(캠페인). 미지정 시 엔진 기본 XI. */
+  /** 라인업 화면에서 확정한 홈 전술(캠페인·데모). 미지정 시 엔진 기본 XI. */
   initialTactics?: TacticState
   /** 조별 경기: 전반 재현 스크립트(전반은 시뮬 대신 이 결과를 사용). */
   firstHalfScript?: { events: MatchEvent[]; score: [number, number] }
@@ -43,12 +50,17 @@ interface MatchScreenProps {
   onMatchEnd?(score: [number, number], staminaByPlayer: Record<string, number>, shootout: [number, number] | undefined, decisionLog: DecisionEntry[]): void
 }
 
-/** 경기 화면 조립 — 좌 경기 뷰(스코어버그·피치·티커) / 우 감독 콘솔.
+/** 경기 화면 조립 — 좌 경기 뷰(스코어버그·피치·티커) / 우 감독 콘솔(개입 허브).
+ *  ★ 오버레이 폐지(스펙 §17.2): 어떤 상태에서도 피치 SVG는 가려지지 않는다.
+ *  킥오프·브레이크·하프타임·결정 순간·풀타임은 모두 피치 밖 요소로 표현한다 —
+ *  상단 방송 배너(상태 문구+액션) + 우측 콘솔(개입 허브, 정지 시 강조·하단 [전술 확정])
+ *  + 하단 바(킥오프·풀타임 스탯). 피치는 언제나 flex 영역을 채운다.
+ *
  *  재생은 매치데이 2.0 세션(matchStore): advanceMinute()로 1분씩 전진하며
  *  engine.minute가 곧 표시 분이다(엔진이 앞서 달리지 않아 스포일러 없음).
  *  재생 타이밍은 분당 가변 setTimeout 체인(하이라이트 리듬) — 사건 큰 분은 오래
  *  머물고 무사건 분은 빨리 넘긴다(playback.minuteDwellMs, Math.random·Date 금지).
- *  속도 토글 1x/1.5x/2x로 dwell을 나눈다. ※ 레이아웃(오버레이 폐지)은 Task 3.
+ *  속도 토글 1x/1.5x/2x로 dwell을 나눈다.
  *  onMatchEnd 유무로 데모/캠페인 동작을 분기(props 하위호환). */
 export function MatchScreen({
   home, away, seed,
@@ -56,7 +68,6 @@ export function MatchScreen({
 }: MatchScreenProps) {
   const phase = useMatchStore(s => s.phase)
   const engine = useMatchStore(s => s.engine)
-  const pauseReason = useMatchStore(s => s.pauseReason)
   const momentPrompt = useMatchStore(s => s.momentPrompt)
   const startMatch = useMatchStore(s => s.startMatch)
   const kickoff = useMatchStore(s => s.kickoff)
@@ -86,6 +97,9 @@ export function MatchScreen({
   // 재생 중 = playing. 시간 정지(카운트다운 없음)는 phase가 playing이 아닐 때.
   const replaying = phase === 'playing'
   const paused = phase === 'paused-break' || phase === 'paused-user' || phase === 'paused-moment'
+  // 개입 허브 강조(콘솔 발광) + 하단 [전술 확정] 노출 조건.
+  const intervening = paused || phase === 'halftime'
+  const halftime = phase === 'halftime'
 
   // 재생 루프 — 분당 가변 setTimeout 체인(하이라이트 리듬).
   // 현재 분의 이벤트로 dwell을 계산해 그만큼 머문 뒤 advanceMinute()로 1분 전진.
@@ -145,6 +159,13 @@ export function MatchScreen({
   // 빨리감기 연출: 재생 중 현재 분에 이벤트가 없으면 분 숫자가 빠르게 넘어간다.
   const fastForward = replaying && !engine.events.some(e => e.minute === displayMinute)
 
+  // 상단 방송 배너 문구 — 상태별. 재생 중 순간 제안이 있으면 그 배너(액션 포함)가 우선.
+  let bannerText: string | null = null
+  if (replaying && momentPrompt) bannerText = `⚡ ${MOMENT_PHRASE[momentPrompt.kind]} — 감독 타임을 쓰시겠습니까?`
+  else if (phase === 'paused-break') bannerText = BREAK_BANNER
+  else if (halftime) bannerText = HALFTIME_BANNER
+  else if (phase === 'paused-user' || phase === 'paused-moment') bannerText = USER_PAUSE_BANNER
+
   return (
     <div className="ms-root">
       <div className="ms-stage">
@@ -156,112 +177,89 @@ export function MatchScreen({
           live={replaying}
           fastForward={fastForward}
         />
-        <SpeedToggle speed={speed} onChange={setSpeed} />
-        <div className="ms-pitch-wrap">
-          <PitchView state={engine} lastEvent={lastEvent} />
-        </div>
-        <Ticker lines={lines} />
-
-        {phase === 'pre' && (
-          <Overlay title={onMatchEnd ? `${home.name.ko} vs ${away.name.ko}` : '데모 경기'}>
-            <p className="ms-overlay__note">{home.name.ko} vs {away.name.ko}</p>
-            {referenceScore && (
-              <p className="ms-overlay__note">
-                참고 · 실제 역사 {referenceScore[0]}-{referenceScore[1]}
-              </p>
-            )}
-            <button type="button" className="ms-btn ms-btn--primary" onClick={kickoff}>
-              킥오프
-            </button>
-          </Overlay>
-        )}
-
-        {/* 재생 중 감독 타임 버튼 + 동적 순간 제안 배너(시간은 계속 흐름). */}
+        {/* 재생 중 감독 타임 버튼 — 스코어버그 옆. pauseByUser로 자유 일시정지. */}
         {replaying && (
           <div className="ms-live-controls">
-            {momentPrompt ? (
-              <div className="ms-moment" role="status">
-                <span className="ms-moment__text">⚡ {momentPrompt.title}</span>
-                <button type="button" className="ms-btn ms-btn--sm" onClick={acceptMoment}>감독 타임 사용</button>
+            <button type="button" className="ms-btn ms-btn--sm" onClick={pauseByUser}>⏸ 감독 타임</button>
+          </div>
+        )}
+        <SpeedToggle speed={speed} onChange={setSpeed} />
+
+        {/* ── 상단 방송 배너(피치 밖, 스코어버그 아래 얇은 바) ── */}
+        {bannerText && (
+          <div
+            className={`ms-banner${momentPrompt && replaying ? ' ms-banner--moment' : ''}`}
+            role="status"
+          >
+            <span className="ms-banner__text">{bannerText}</span>
+            {replaying && momentPrompt && (
+              <span className="ms-banner__actions">
+                <button type="button" className="ms-btn ms-btn--sm" onClick={acceptMoment}>사용</button>
                 <button type="button" className="ms-btn ms-btn--sm ms-btn--ghost" onClick={dismissMoment}>흘려보낸다</button>
-              </div>
-            ) : (
-              <button type="button" className="ms-btn ms-btn--sm" onClick={pauseByUser}>감독 타임</button>
+              </span>
             )}
           </div>
         )}
 
-        {phase === 'halftime' && (
-          <Overlay title="전반 종료">
-            <TeamTalk side={SIDE} />
-            <p className="ms-overlay__note">콘솔에서 개입하세요</p>
-            <button type="button" className="ms-btn ms-btn--primary" onClick={confirmTactics}>
-              후반 시작
-            </button>
-          </Overlay>
-        )}
+        {/* ── 피치 — 언제나 보인다(가리는 오버레이 없음) ── */}
+        <div className="ms-pitch-wrap">
+          <PitchView state={engine} lastEvent={lastEvent} />
+        </div>
 
-        {paused && (
-          <Overlay title={pauseReason?.kind === 'moment' ? '감독 타임' : PAUSE_TITLE[pauseReason?.kind ?? 'user']}>
-            {pauseReason?.kind === 'moment' && (
-              <p className="ms-overlay__note">{pauseReason.moment.title}</p>
-            )}
-            <p className="ms-overlay__note">콘솔·교체로 지시한 뒤 재개하세요</p>
-            <button type="button" className="ms-btn ms-btn--primary" onClick={confirmTactics}>
-              전술 확정
-            </button>
-          </Overlay>
-        )}
+        <Ticker lines={lines} />
 
-        {phase === 'fulltime' && shootoutOpen && (
-          <Overlay title="승부차기">
-            <ShootoutPanel
-              home={home}
-              away={away}
-              seed={seed}
-              onDone={result => finishMatch(result)}
-            />
-          </Overlay>
-        )}
-
-        {phase === 'fulltime' && !shootoutOpen && (
-          <Overlay title="경기 종료">
-            <div className="ms-final">
-              <span className="ms-final__code">{home.fifaCode}</span>
-              <span className="ms-final__score">{engine.score[0]} : {engine.score[1]}</span>
-              <span className="ms-final__code">{away.fifaCode}</span>
+        {/* ── 하단 바: 킥오프(pre) / 풀타임 스탯·액션 — 피치 위가 아니라 아래에 확장 ── */}
+        {phase === 'pre' && (
+          <div className="ms-bottom">
+            <div className="ms-bottom__info">
+              <span className="ms-bottom__title">{home.name.ko} vs {away.name.ko}</span>
+              {referenceScore && (
+                <span className="ms-bottom__note">참고 · 실제 역사 {referenceScore[0]}-{referenceScore[1]}</span>
+              )}
             </div>
-            <StatsTable home={engine.stats[0]} away={engine.stats[1]} />
-            {!onMatchEnd ? (
-              <button
-                type="button"
-                className="ms-btn ms-btn--primary"
-                onClick={() => { reset(); startMatch(home, away, seed) }}
-              >
-                다시 보기
-              </button>
-            ) : needsShootout ? (
-              <button
-                type="button"
-                className="ms-btn ms-btn--primary"
-                onClick={openShootout}
-              >
-                승부차기로
-              </button>
+            <button type="button" className="ms-btn ms-btn--primary" onClick={kickoff}>킥오프</button>
+          </div>
+        )}
+
+        {phase === 'fulltime' && (
+          <div className="ms-bottom ms-bottom--full">
+            {shootoutOpen ? (
+              <ShootoutPanel home={home} away={away} seed={seed} onDone={result => finishMatch(result)} />
             ) : (
-              <button
-                type="button"
-                className="ms-btn ms-btn--primary"
-                onClick={() => finishMatch()}
-              >
-                결과 확정
-              </button>
+              <>
+                <div className="ms-final">
+                  <span className="ms-final__code">{home.fifaCode}</span>
+                  <span className="ms-final__score">{engine.score[0]} : {engine.score[1]}</span>
+                  <span className="ms-final__code">{away.fifaCode}</span>
+                </div>
+                <StatsTable home={engine.stats[0]} away={engine.stats[1]} />
+                {!onMatchEnd ? (
+                  <button
+                    type="button"
+                    className="ms-btn ms-btn--primary"
+                    onClick={() => { reset(); startMatch(home, away, seed) }}
+                  >
+                    다시 보기
+                  </button>
+                ) : needsShootout ? (
+                  <button type="button" className="ms-btn ms-btn--primary" onClick={openShootout}>승부차기로</button>
+                ) : (
+                  <button type="button" className="ms-btn ms-btn--primary" onClick={() => finishMatch()}>결과 확정</button>
+                )}
+              </>
             )}
-          </Overlay>
+          </div>
         )}
       </div>
 
-      <aside className="ms-side">
+      {/* ── 우: 감독 콘솔 = 개입 허브. 정지·하프타임 시 강조 테두리(발광). ── */}
+      <aside className={`ms-side${intervening ? ' ms-side--hub' : ''}`}>
+        {/* 하프타임: 팀토크를 콘솔 상단 카드로(피치는 계속 보임). */}
+        {halftime && (
+          <div className="ms-side__talk">
+            <TeamTalk side={SIDE} />
+          </div>
+        )}
         <div className="ms-tabs" role="tablist" aria-label="감독 콘솔">
           <button
             type="button"
@@ -285,6 +283,12 @@ export function MatchScreen({
         <div className="ms-side__body">
           {tab === 'console' ? <ConsolePanel side={SIDE} /> : <SubPanel side={SIDE} />}
         </div>
+        {/* 콘솔 하단 고정 재개 버튼 — 모든 정지 공통. 하프타임은 [후반 시작] 라벨. */}
+        {intervening && (
+          <button type="button" className="ms-btn ms-btn--primary ms-side__resume" onClick={confirmTactics}>
+            {halftime ? '후반 시작' : '전술 확정'}
+          </button>
+        )}
       </aside>
     </div>
   )
@@ -292,7 +296,7 @@ export function MatchScreen({
 
 const SPEEDS: PlaybackSpeed[] = [1, 1.5, 2]
 
-/** 재생 속도 토글 — 스코어버그 옆. 선택 상태 하이라이트, 재생 중 변경 즉시 반영. */
+/** 재생 속도 토글 — 스코어버그 맞은편(우상단). 선택 상태 하이라이트, 재생 중 변경 즉시 반영. */
 function SpeedToggle({ speed, onChange }: { speed: PlaybackSpeed; onChange(s: PlaybackSpeed): void }) {
   return (
     <div className="ms-speed" role="group" aria-label="재생 속도">
@@ -307,17 +311,6 @@ function SpeedToggle({ speed, onChange }: { speed: PlaybackSpeed; onChange(s: Pl
           {s}x
         </button>
       ))}
-    </div>
-  )
-}
-
-function Overlay({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="ms-overlay" role="dialog" aria-label={title}>
-      <div className="ms-overlay__card">
-        <h2 className="ms-overlay__title">{title}</h2>
-        {children}
-      </div>
     </div>
   )
 }

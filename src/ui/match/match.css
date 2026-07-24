@@ -14,19 +14,28 @@
   display: block;
 }
 
-/* ── 좌: 경기 뷰 스테이지 (스코어버그·피치·티커·오버레이) ─────────── */
+/* ── 좌: 경기 뷰 스테이지 (스코어버그·배너·피치·티커·하단 바) ───────
+   ★ 오버레이 폐지: 스테이지는 세로 flex. 스코어버그·속도·티커는 얇은 방송
+   furniture로 절대배치(코너/가장자리)하고, 그 여백(상 60 / 하 44)만큼만 패딩으로
+   비운다. 배너·피치·하단 바는 in-flow로 쌓여 피치(flex:1)는 언제나 남는 공간을
+   채운다 — 어떤 상태에서도 피치 SVG가 가려지지 않는다. */
 .ms-stage {
   position: relative;
   flex: 7 1 0;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 74px 16px 44px;
+  box-sizing: border-box;
   border: 1px solid var(--bc-line);
   border-radius: 12px;
   background: radial-gradient(120% 120% at 50% 0%, var(--bc-panel-2), var(--bc-bg));
   overflow: hidden;
 }
 .ms-pitch-wrap {
-  position: absolute;
-  inset: 64px 20px 56px;
+  flex: 1 1 0;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -46,6 +55,27 @@
   flex-direction: column;
   gap: 10px;
   overflow-y: auto;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+/* 개입 허브 강조 — 정지·하프타임 시 테두리 발광(피치는 그대로 보임). */
+.ms-side--hub {
+  border-color: var(--bc-accent);
+  box-shadow: 0 0 0 1px var(--bc-accent), 0 0 24px -4px var(--bc-accent);
+  padding: 10px;
+}
+/* 하프타임 팀토크 — 콘솔 상단 카드. */
+.ms-side__talk {
+  padding: 12px 14px;
+  border: 1px solid var(--bc-line);
+  border-radius: 10px;
+  background: var(--bc-panel);
+}
+/* 콘솔 하단 고정 재개 버튼(모든 정지 공통). */
+.ms-side__resume {
+  flex: 0 0 auto;
+  width: 100%;
 }
 .ms-tabs {
   display: flex;
@@ -72,44 +102,65 @@
   flex: 1;
 }
 
-/* ── 오버레이 (좌측 스테이지 영역만 덮는다) ──────────────────── */
-.ms-overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 40;
+/* ── 상단 방송 배너 (피치 밖, 스코어버그 아래 얇은 바) ──────────────
+   in-flow 요소이므로 피치를 밀어낼 뿐 덮지 않는다. */
+.ms-banner {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
-  background: rgba(11, 18, 32, 0.72);
-  backdrop-filter: blur(4px);
-}
-.ms-overlay__card {
-  width: min(420px, 100%);
-  padding: 24px 28px;
+  gap: 12px;
+  padding: 8px 14px;
   border: 1px solid var(--bc-line);
-  border-radius: 14px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--bc-panel-2), var(--bc-panel));
+  font-size: 13px;
+  font-weight: 700;
+}
+.ms-banner--moment {
+  border-color: var(--bc-accent);
+  box-shadow: 0 0 18px -6px var(--bc-accent);
+}
+.ms-banner__text {
+  color: var(--bc-text);
+}
+.ms-banner__actions {
+  display: inline-flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+/* ── 하단 바 (킥오프 / 풀타임 스탯·액션) — 피치 아래, 덮지 않음 ────── */
+.ms-bottom {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--bc-line);
+  border-radius: 10px;
   background: var(--bc-panel);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+}
+.ms-bottom--full {
+  flex-direction: column;
+  max-height: 52%;
+  overflow-y: auto;
   text-align: center;
 }
-.ms-overlay__title {
-  margin: 0 0 12px;
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: 0.01em;
+.ms-bottom__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
-.ms-overlay__note {
-  margin: 0 0 18px;
-  color: var(--bc-text-dim);
+.ms-bottom__title {
   font-size: 14px;
-}
-.ms-overlay__count {
-  margin: 0 0 10px;
-  font-size: 40px;
   font-weight: 800;
-  color: var(--bc-accent);
-  font-variant-numeric: tabular-nums;
+}
+.ms-bottom__note {
+  font-size: 12px;
+  color: var(--bc-text-dim);
 }
 
 /* ── 버튼 ─────────────────────────────────────────── */
@@ -132,8 +183,6 @@
 .ms-btn--primary:hover {
   filter: brightness(1.05);
 }
-/* 재생 중 감독 타임 / 동적 순간 배너 — 피치를 가리지 않게 상단에 얇게 배치.
-   ※ 방송 배너 정식 레이아웃은 Phase 4A Task 3에서 재구축. */
 .ms-btn--sm {
   padding: 6px 12px;
   font-size: 13px;
@@ -142,29 +191,16 @@
 .ms-btn--ghost {
   background: transparent;
 }
+/* 재생 중 [⏸ 감독 타임] — 스코어버그 옆(상단 furniture 영역, 우상단 속도 토글과 안 겹침). */
 .ms-live-controls {
   position: absolute;
-  top: 8px;
+  top: 18px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 5;
+  z-index: 21;
   display: flex;
   gap: 8px;
   align-items: center;
-}
-.ms-moment {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  padding: 6px 10px;
-  border-radius: 10px;
-  background: var(--bc-panel-2);
-  border: 1px solid var(--bc-accent);
-}
-.ms-moment__text {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--bc-text);
 }
 
 /* ── 재생 속도 토글 — 스코어버그 맞은편(우상단) ────────────── */
@@ -246,9 +282,9 @@
   font-weight: 700;
 }
 
-/* ── 팀 토크 (하프타임 오버레이 내부) ─────────────────────── */
+/* ── 팀 토크 (하프타임 콘솔 상단 카드) ─────────────────────── */
 .tt-root {
-  margin: 4px 0 18px;
+  margin: 0;
 }
 .tt-label {
   margin: 0 0 8px;
@@ -287,9 +323,21 @@
   font-weight: 700;
 }
 
-/* ── 승부차기 패널 ─────────────────────────────────────── */
+/* ── 승부차기 패널 (풀타임 하단 바 내부) ───────────────────── */
 .so-panel {
   text-align: center;
+  width: 100%;
+}
+.so-title {
+  margin: 0 0 12px;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+.so-note {
+  margin: 0 0 18px;
+  color: var(--bc-text-dim);
+  font-size: 14px;
 }
 .so-setup {
   list-style: none;
