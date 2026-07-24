@@ -14,6 +14,15 @@ import './match.css'
 // 유저는 홈팀 감독. 콘솔/교체는 home 고정.
 const SIDE = 'home' as const
 
+// 정지 배너 제목(moment는 별도 처리).
+const PAUSE_TITLE: Record<'hydration1' | 'hydration2' | 'halftime' | 'user' | 'moment', string> = {
+  hydration1: '🧊 하이드레이션 브레이크',
+  hydration2: '🧊 하이드레이션 브레이크',
+  halftime: '전반 종료',
+  user: '감독 타임',
+  moment: '감독 타임',
+}
+
 interface MatchScreenProps {
   home: Team
   away: Team
@@ -34,8 +43,10 @@ interface MatchScreenProps {
 }
 
 /** 경기 화면 조립 — 좌 경기 뷰(스코어버그·피치·티커) / 우 감독 콘솔.
- *  엔진은 순간 계산(playTo), UI는 displayMinute 기준 재생 루프로 이벤트를 누적 노출한다.
+ *  재생은 매치데이 2.0 세션(matchStore): advanceMinute()로 1분씩 전진하며
+ *  engine.minute가 곧 표시 분이다(엔진이 앞서 달리지 않아 스포일러 없음).
  *  재생 타이밍은 setInterval 고정 간격만 사용(Math.random·Date 금지).
+ *  ※ 레이아웃(오버레이 폐지·방송 배너)·가변 dwell은 Phase 4A Task 2·3에서 재작성.
  *  onMatchEnd 유무로 데모/캠페인 동작을 분기(props 하위호환). */
 export function MatchScreen({
   home, away, seed,
@@ -43,17 +54,19 @@ export function MatchScreen({
 }: MatchScreenProps) {
   const phase = useMatchStore(s => s.phase)
   const engine = useMatchStore(s => s.engine)
-  const displayMinute = useMatchStore(s => s.displayMinute)
-  const pendingDecision = useMatchStore(s => s.pendingDecision)
+  const pauseReason = useMatchStore(s => s.pauseReason)
+  const momentPrompt = useMatchStore(s => s.momentPrompt)
   const startMatch = useMatchStore(s => s.startMatch)
-  const playTo = useMatchStore(s => s.playTo)
-  const tickDisplay = useMatchStore(s => s.tickDisplay)
-  const resumeFromDecision = useMatchStore(s => s.resumeFromDecision)
+  const kickoff = useMatchStore(s => s.kickoff)
+  const advanceMinute = useMatchStore(s => s.advanceMinute)
+  const pauseByUser = useMatchStore(s => s.pauseByUser)
+  const confirmTactics = useMatchStore(s => s.confirmTactics)
+  const acceptMoment = useMatchStore(s => s.acceptMoment)
+  const dismissMoment = useMatchStore(s => s.dismissMoment)
   const logShootoutSetup = useMatchStore(s => s.logShootoutSetup)
   const reset = useMatchStore(s => s.reset)
 
   const [tab, setTab] = useState<'console' | 'sub'>('console')
-  const [countdown, setCountdown] = useState<number | null>(null)
   const [shootoutOpen, setShootoutOpen] = useState(false)
 
   // 경기 초기화(마운트/픽스처 변경 시). 엔진은 pre 상태로 준비.
@@ -67,39 +80,17 @@ export function MatchScreen({
     })
   }, [home, away, seed, startMatch, initialTactics, firstHalfScript, staminaOverride])
 
-  // 재생 여부: 표시 분이 엔진 계산 분에 못 미치면 재생 중.
-  const replaying = !!engine && displayMinute < engine.minute
-  const caughtUp = !!engine && displayMinute >= engine.minute
+  // 재생 중 = playing. 시간 정지(카운트다운 없음)는 phase가 playing이 아닐 때.
+  const replaying = phase === 'playing'
+  const paused = phase === 'paused-break' || phase === 'paused-user' || phase === 'paused-moment'
 
-  // 재생 루프 — 200ms 고정 간격 tickDisplay. 도달 시/언마운트/phase 변경 시 정리.
+  // 재생 루프 — 200ms 고정 간격으로 1분 전진. 정지·도달·언마운트 시 정리.
+  // (가변 dwell·속도 토글은 Task 2에서 교체.)
   useEffect(() => {
-    if (!replaying) return
-    const id = setInterval(() => tickDisplay(), 200)
+    if (phase !== 'playing') return
+    const id = setInterval(() => advanceMinute(), 200)
     return () => clearInterval(id)
-  }, [replaying, phase, engine, displayMinute, tickDisplay])
-
-  // decision 오버레이 노출 중 20초 카운트다운(1초 간격). 만료 시 자동 재개.
-  const decisionOpen = phase === 'decision' && caughtUp
-  useEffect(() => {
-    if (!decisionOpen) { setCountdown(null); return }
-    setCountdown(pendingDecision?.timeLimitSec ?? 20)
-    const id = setInterval(() => setCountdown(c => (c == null ? c : Math.max(0, c - 1))), 1000)
-    return () => clearInterval(id)
-  }, [decisionOpen, pendingDecision])
-
-  useEffect(() => {
-    if (decisionOpen && countdown === 0) handleResume()
-    // countdown 만료만 트리거 — 나머지 의존은 안정적.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [countdown, decisionOpen])
-
-  function handleResume() {
-    // "그대로 간다" 클릭과 카운트다운 만료가 겹치면 resumeFromDecision이 이중 호출되어
-    // 두 번째 호출이 throw(엔진 가드)한다. decision 상태가 아니면 조기 반환.
-    if (useMatchStore.getState().phase !== 'decision') return
-    resumeFromDecision()
-    playTo(90)
-  }
+  }, [phase, advanceMinute])
 
   // 토너먼트 무승부 → 승부차기 진입 필요 (캠페인 한정).
   const needsShootout = !!onMatchEnd && !!requireWinner && !!engine && engine.score[0] === engine.score[1]
@@ -119,12 +110,12 @@ export function MatchScreen({
 
   if (!engine) return <div className="ms-root ms-root--empty" />
 
-  // displayMinute까지 도달한 이벤트만 순서대로 노출.
+  const displayMinute = engine.minute
+  // 현재 분까지 도달한 이벤트만 노출. 엔진이 분 단위로 전진하므로 engine.score와
+  // 일치하지만, Ticker/PitchView와 동일 필터로 골 이벤트에서 표시 스코어를 파생한다.
   const shown = engine.events.filter(e => e.minute <= displayMinute)
   const lines = shown.map(e => commentate(e, home, away))
   const lastEvent = shown[shown.length - 1]
-  // 표시 스코어는 재생된 골 이벤트에서 파생 — engine.score(세그먼트 최종)를 그대로 쓰면
-  // 재생 중 최종 스코어가 미리 노출된다(스포일러). Ticker/PitchView와 동일 필터.
   const shownScore: [number, number] = [0, 0]
   for (const e of shown) {
     if (e.type === 'goal') shownScore[e.teamId === home.id ? 0 : 1] += 1
@@ -153,35 +144,50 @@ export function MatchScreen({
                 참고 · 실제 역사 {referenceScore[0]}-{referenceScore[1]}
               </p>
             )}
-            <button type="button" className="ms-btn ms-btn--primary" onClick={() => playTo(45)}>
+            <button type="button" className="ms-btn ms-btn--primary" onClick={kickoff}>
               킥오프
             </button>
           </Overlay>
         )}
 
-        {phase === 'halftime' && caughtUp && (
+        {/* 재생 중 감독 타임 버튼 + 동적 순간 제안 배너(시간은 계속 흐름). */}
+        {replaying && (
+          <div className="ms-live-controls">
+            {momentPrompt ? (
+              <div className="ms-moment" role="status">
+                <span className="ms-moment__text">⚡ {momentPrompt.title}</span>
+                <button type="button" className="ms-btn ms-btn--sm" onClick={acceptMoment}>감독 타임 사용</button>
+                <button type="button" className="ms-btn ms-btn--sm ms-btn--ghost" onClick={dismissMoment}>흘려보낸다</button>
+              </div>
+            ) : (
+              <button type="button" className="ms-btn ms-btn--sm" onClick={pauseByUser}>감독 타임</button>
+            )}
+          </div>
+        )}
+
+        {phase === 'halftime' && (
           <Overlay title="전반 종료">
             <TeamTalk side={SIDE} />
             <p className="ms-overlay__note">콘솔에서 개입하세요</p>
-            <button type="button" className="ms-btn ms-btn--primary" onClick={() => playTo(90)}>
+            <button type="button" className="ms-btn ms-btn--primary" onClick={confirmTactics}>
               후반 시작
             </button>
           </Overlay>
         )}
 
-        {decisionOpen && pendingDecision && (
-          <Overlay title={pendingDecision.title}>
-            <p className="ms-overlay__count" aria-label="남은 시간">
-              {countdown ?? pendingDecision.timeLimitSec}초
-            </p>
-            <p className="ms-overlay__note">콘솔·교체로 지시하거나 그대로 진행하세요</p>
-            <button type="button" className="ms-btn ms-btn--primary" onClick={handleResume}>
-              그대로 간다
+        {paused && (
+          <Overlay title={pauseReason?.kind === 'moment' ? '감독 타임' : PAUSE_TITLE[pauseReason?.kind ?? 'user']}>
+            {pauseReason?.kind === 'moment' && (
+              <p className="ms-overlay__note">{pauseReason.moment.title}</p>
+            )}
+            <p className="ms-overlay__note">콘솔·교체로 지시한 뒤 재개하세요</p>
+            <button type="button" className="ms-btn ms-btn--primary" onClick={confirmTactics}>
+              전술 확정
             </button>
           </Overlay>
         )}
 
-        {phase === 'fulltime' && caughtUp && shootoutOpen && (
+        {phase === 'fulltime' && shootoutOpen && (
           <Overlay title="승부차기">
             <ShootoutPanel
               home={home}
@@ -192,7 +198,7 @@ export function MatchScreen({
           </Overlay>
         )}
 
-        {phase === 'fulltime' && caughtUp && !shootoutOpen && (
+        {phase === 'fulltime' && !shootoutOpen && (
           <Overlay title="경기 종료">
             <div className="ms-final">
               <span className="ms-final__code">{home.fifaCode}</span>

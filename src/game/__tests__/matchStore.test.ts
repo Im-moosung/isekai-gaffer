@@ -7,61 +7,183 @@ const store = () => useMatchStore.getState()
 
 beforeEach(() => store().reset())
 
-describe('matchStore 상태 머신', () => {
-  it('startMatch → pre에서 playing 준비, engine 생성', () => {
+/** 킥오프 후 하프타임까지 재생 — 도중 하이드레이션 브레이크는 confirmTactics로 재개.
+ *  경기가 시작 안 됐으면 기본 매치(a,b,42)로 시작한다. */
+function toHalftime() {
+  if (!store().engine) store().startMatch(a, b, 42)
+  store().kickoff()
+  let guard = 0
+  while (store().phase !== 'halftime' && guard++ < 200) {
+    if (store().phase === 'playing') store().advanceMinute()
+    else store().confirmTactics()
+  }
+}
+
+/** 브레이크·순간 무시하며 풀타임까지 재생. */
+function toFulltime() {
+  if (!store().engine) store().startMatch(a, b, 42)
+  store().kickoff()
+  let guard = 0
+  while (store().phase !== 'fulltime' && guard++ < 500) {
+    if (store().momentPrompt) store().dismissMoment()
+    if (store().phase === 'playing') store().advanceMinute()
+    else store().confirmTactics()
+  }
+}
+
+describe('재생 세션 상태 머신', () => {
+  it('startMatch → pre 준비, engine·schedule 생성', () => {
     store().startMatch(a, b, 42)
     expect(store().engine).not.toBeNull()
     expect(store().phase).toBe('pre')
+    expect(store().schedule).not.toBeNull()
   })
-  it('playTo(45) → halftime, engine.minute=45', () => {
+  it('kickoff → playing', () => {
     store().startMatch(a, b, 42)
-    store().playTo(45)
+    store().kickoff()
+    expect(store().phase).toBe('playing')
+  })
+  it('advanceMinute은 1분씩 전진(엔진 스텝)', () => {
+    store().startMatch(a, b, 42)
+    store().kickoff()
+    store().advanceMinute()
+    expect(store().engine!.minute).toBe(1)
+    store().advanceMinute()
+    expect(store().engine!.minute).toBe(2)
+  })
+  it('정지 중 advanceMinute은 no-op(재개는 confirmTactics로만)', () => {
+    store().startMatch(a, b, 42)
+    // pre에서 advanceMinute은 진행하지 않는다
+    store().advanceMinute()
+    expect(store().engine!.minute).toBe(0)
+  })
+  it('advanceMinute이 30±2 하이드레이션 창에서 자동 paused-break', () => {
+    store().startMatch(a, b, 42)
+    const sched = store().schedule!
+    expect(sched.firstHydration).toBeGreaterThanOrEqual(28)
+    expect(sched.firstHydration).toBeLessThanOrEqual(32)
+    store().kickoff()
+    let guard = 0
+    while (store().phase === 'playing' && store().engine!.minute < sched.firstHydration && guard++ < 60) store().advanceMinute()
+    expect(store().engine!.minute).toBe(sched.firstHydration)
+    expect(store().phase).toBe('paused-break')
+    expect(store().pauseReason).toEqual({ kind: 'hydration1' })
+  })
+  it('두 번째 하이드레이션(75±2)에서도 자동 정지', () => {
+    store().startMatch(a, b, 42)
+    const sched = store().schedule!
+    expect(sched.secondHydration).toBeGreaterThanOrEqual(73)
+    expect(sched.secondHydration).toBeLessThanOrEqual(77)
+    store().kickoff()
+    let guard = 0
+    while (store().engine!.minute < sched.secondHydration && guard++ < 200) {
+      if (store().momentPrompt) store().dismissMoment()
+      if (store().phase === 'playing') store().advanceMinute()
+      else store().confirmTactics()
+    }
+    expect(store().engine!.minute).toBe(sched.secondHydration)
+    expect(store().phase).toBe('paused-break')
+    expect(store().pauseReason).toEqual({ kind: 'hydration2' })
+  })
+  it('45분 도달 시 halftime 자동 정지', () => {
+    toHalftime()
     expect(store().phase).toBe('halftime')
     expect(store().engine!.minute).toBe(45)
+    expect(store().pauseReason).toEqual({ kind: 'halftime' })
   })
-  it('후반 진행 중 결정 트리거에서 decision으로 멈춘다 (결정론)', () => {
+  it('confirmTactics가 정지를 해제하고 boostUntil을 minute+8로 설정', () => {
     store().startMatch(a, b, 42)
-    store().playTo(45)
-    store().playTo(90)
-    const stopped1 = store().engine!.minute
-    expect(store().phase).toBe('decision')
-    expect(store().pendingDecision).not.toBeNull()
-    expect(stopped1).toBeGreaterThan(45); expect(stopped1).toBeLessThan(90)
-    // 같은 시드 재실행 = 같은 정지 분
-    store().reset(); store().startMatch(a, b, 42); store().playTo(45); store().playTo(90)
-    expect(store().engine!.minute).toBe(stopped1)
+    store().kickoff()
+    let guard = 0
+    while (store().phase === 'playing' && guard++ < 60) store().advanceMinute() // 첫 브레이크에서 정지
+    expect(store().phase).toBe('paused-break')
+    const m = store().engine!.minute
+    store().confirmTactics()
+    expect(store().phase).toBe('playing')
+    expect(store().boostUntil).toBe(m + 8)
   })
-  it('resumeFromDecision 후 계속 → 두 번째 결정 → 최종 fulltime', () => {
+  it('정지가 아닐 때 confirmTactics는 throw', () => {
     store().startMatch(a, b, 42)
-    store().playTo(45); store().playTo(90)
-    store().resumeFromDecision(); store().playTo(90)
-    if (store().phase === 'decision') { store().resumeFromDecision(); store().playTo(90) }
+    store().kickoff()
+    expect(() => store().confirmTactics()).toThrow()
+  })
+  it('pauseByUser는 playing에서만 paused-user로', () => {
+    store().startMatch(a, b, 42)
+    store().kickoff()
+    store().pauseByUser()
+    expect(store().phase).toBe('paused-user')
+    expect(store().pauseReason).toEqual({ kind: 'user' })
+  })
+  it('풀타임 도달 → fulltime, minute 90', () => {
+    toFulltime()
     expect(store().phase).toBe('fulltime')
     expect(store().engine!.minute).toBe(90)
   })
   it('halftime에 submitCommand(지시 변경)가 엔진에 반영된다', () => {
-    store().startMatch(a, b, 42)
-    store().playTo(45)
+    toHalftime()
     const before = store().engine!.home.tactics.instructions.pressing
     store().submitCommand('home', { type: 'instructions', instructions: { lineHeight: 50, pressing: 90, tempo: 50, attackFocus: 'balanced' } })
     expect(store().engine!.home.tactics.instructions.pressing).toBe(90)
     expect(before).not.toBe(90)
   })
-  it('halftime 상태에서 resumeFromDecision은 throw', () => {
+  it('paused-user에서도 submitCommand 허용', () => {
     store().startMatch(a, b, 42)
-    store().playTo(45)
-    expect(store().phase).toBe('halftime')
-    expect(() => store().resumeFromDecision()).toThrow()
+    store().kickoff()
+    store().advanceMinute()
+    store().pauseByUser()
+    store().submitCommand('home', { type: 'instructions', instructions: { lineHeight: 50, pressing: 77, tempo: 50, attackFocus: 'balanced' } })
+    expect(store().engine!.home.tactics.instructions.pressing).toBe(77)
   })
   it('playing 중 submitCommand는 throw', () => {
     store().startMatch(a, b, 42)
+    store().kickoff()
     expect(() => store().submitCommand('home', { type: 'instructions', instructions: { lineHeight: 50, pressing: 90, tempo: 50, attackFocus: 'balanced' } })).toThrow()
   })
-  it('tickDisplay는 engine.minute을 넘지 않는다', () => {
+  it('DecisionPrompt·카운트다운 필드가 없다(시간 정지 구조)', () => {
+    const s = store() as unknown as Record<string, unknown>
+    expect('pendingDecision' in s).toBe(false)
+    expect('displayMinute' in s).toBe(false)
+    expect('playTo' in s).toBe(false)
+    expect('tickDisplay' in s).toBe(false)
+  })
+})
+
+describe('동적 순간(momentPrompt)', () => {
+  it('acceptMoment는 제안이 없으면 throw', () => {
     store().startMatch(a, b, 42)
-    store().playTo(45)
-    for (let i = 0; i < 60; i++) store().tickDisplay()
-    expect(store().displayMinute).toBe(45)
+    store().kickoff()
+    expect(() => store().acceptMoment()).toThrow()
+  })
+  it('모든 유형이 이미 발동됐으면 재생 내내 momentPrompt가 뜨지 않는다(유형당 1회)', () => {
+    store().startMatch(a, b, 42)
+    store().kickoff()
+    useMatchStore.setState({ firedMoments: ['conceded', 'scored', 'momentum-lost', 'clutch', 'fatigue'] })
+    let guard = 0
+    while (store().phase !== 'fulltime' && guard++ < 500) {
+      expect(store().momentPrompt).toBeNull()
+      if (store().phase === 'playing') store().advanceMinute()
+      else store().confirmTactics()
+    }
+  })
+  it('발동된 순간 유형에 중복이 없다(경기 전체)', () => {
+    toFulltime()
+    const fired = store().firedMoments
+    expect(new Set(fired).size).toBe(fired.length)
+  })
+  it('acceptMoment → paused-moment, dismissMoment는 재생 유지', () => {
+    // 순간이 실제로 떠오르는 지점까지 재생
+    store().startMatch(a, b, 3)
+    store().kickoff()
+    let guard = 0
+    while (!store().momentPrompt && store().phase !== 'fulltime' && guard++ < 500) {
+      if (store().phase === 'playing') store().advanceMinute()
+      else store().confirmTactics()
+    }
+    if (store().momentPrompt) {
+      store().acceptMoment()
+      expect(store().phase).toBe('paused-moment')
+      expect(store().pauseReason?.kind).toBe('moment')
+    }
   })
 })
 
@@ -76,14 +198,13 @@ describe('startMatch opts 확장', () => {
     const id = a.squad[0].id
     store().startMatch(a, b, 42, { staminaOverride: { [id]: 55, ghost: 12 } })
     expect(store().engine!.home.staminaByPlayer[id]).toBe(55)
-    // 지정 안 된 선수는 100 유지, 존재하지 않는 id는 무시
     expect(store().engine!.home.staminaByPlayer[a.squad[1].id]).toBe(100)
     expect(store().engine!.home.staminaByPlayer['ghost']).toBeUndefined()
   })
   it('firstHalfScript 전달 시 전반은 시뮬 대신 스크립트 스코어를 재현한다', () => {
     const events = [{ minute: 30, type: 'goal' as const, teamId: a.id }]
     store().startMatch(a, b, 42, { firstHalfScript: { events, score: [1, 0] } })
-    store().playTo(45)
+    toHalftime()
     expect(store().engine!.score).toEqual([1, 0])
   })
 })
@@ -104,9 +225,8 @@ describe('applyTeamTalk (결정론 사기 보정)', () => {
     expect(() => store().applyTeamTalk('home', 'rage')).toThrow()
   })
   it('지는 중 격노 → 홈 전원 사기 +8 (0~100 클램프)', () => {
-    // seed=6: 데모 픽스처 매치업에서 전반 실점 재현. 여기선 스크립트로 확정.
     store().startMatch(a, b, 42, { firstHalfScript: { events: [{ minute: 20, type: 'goal', teamId: b.id }], score: [0, 1] } })
-    store().playTo(45)
+    toHalftime()
     expect(store().phase).toBe('halftime')
     const before = { ...store().engine!.home.moraleByPlayer }
     store().applyTeamTalk('home', 'rage')
@@ -115,8 +235,7 @@ describe('applyTeamTalk (결정론 사기 보정)', () => {
     }
   })
   it('팀토크는 경기당 1회만 가능(두 번째 호출 throw)', () => {
-    store().startMatch(a, b, 42)
-    store().playTo(45)
+    toHalftime()
     store().applyTeamTalk('home', 'calm')
     expect(store().talked).toBe(true)
     expect(() => store().applyTeamTalk('home', 'trust')).toThrow()
@@ -129,28 +248,24 @@ describe('decisionLog 수집 (기자회견 근거)', () => {
     expect(store().decisionLog).toEqual([])
   })
   it('지시 변경 → 로그 1건, summary에 바뀐 축만 나열', () => {
-    store().startMatch(a, b, 42)
-    store().playTo(45)
+    toHalftime()
     const cur = store().engine!.home.tactics.instructions
     store().submitCommand('home', { type: 'instructions', instructions: { ...cur, pressing: 90 } })
     const log = store().decisionLog
     expect(log).toHaveLength(1)
     expect(log[0].kind).toBe('instructions')
     expect(log[0].summary).toBe(`45' 지시 변경: 압박 ${cur.pressing}→90`)
-    // 바뀌지 않은 축(템포·라인)은 요약에 없다
     expect(log[0].summary).not.toContain('템포')
     expect(log[0].summary).not.toContain('라인')
   })
   it('무변경 지시 재적용 → 로그에 엔트리를 추가하지 않는다 (깨진 요약 방지)', () => {
-    store().startMatch(a, b, 42)
-    store().playTo(45)
+    toHalftime()
     const cur = store().engine!.home.tactics.instructions
     store().submitCommand('home', { type: 'instructions', instructions: { ...cur } })
     expect(store().decisionLog).toHaveLength(0)
   })
   it('교체 → 로그에 IN/OUT 선수 이름(name.ko) 포함', () => {
-    store().startMatch(a, b, 42)
-    store().playTo(45)
+    toHalftime()
     const lineupIds = store().engine!.home.tactics.lineup.map(l => l.playerId)
     const out = lineupIds[10]
     const inId = a.squad.find(p => !lineupIds.includes(p.id))!.id
@@ -163,8 +278,7 @@ describe('decisionLog 수집 (기자회견 근거)', () => {
     expect(log[0].summary).toBe(`45' 교체: ${inName} IN, ${outName} OUT`)
   })
   it('포메이션 변경 → HT 포메이션 로그', () => {
-    store().startMatch(a, b, 42)
-    store().playTo(45)
+    toHalftime()
     const t = pickBestXI(a)
     t.formation = '3-5-2'
     store().submitCommand('home', { type: 'formation', tactics: t })
@@ -172,8 +286,7 @@ describe('decisionLog 수집 (기자회견 근거)', () => {
     expect(log[0].summary).toBe('HT 포메이션: 4-3-3→3-5-2')
   })
   it('팀토크 → 로그에 HT 팀토크 톤 라벨', () => {
-    store().startMatch(a, b, 42)
-    store().playTo(45)
+    toHalftime()
     store().applyTeamTalk('home', 'encourage')
     const log = store().decisionLog
     expect(log).toHaveLength(1)
@@ -188,8 +301,7 @@ describe('decisionLog 수집 (기자회견 근거)', () => {
     expect(log[0].summary).toBe('PK: 키커 순서 확정')
   })
   it('여러 개입이 순서대로 누적되고, reset 시 초기화된다', () => {
-    store().startMatch(a, b, 42)
-    store().playTo(45)
+    toHalftime()
     const cur = store().engine!.home.tactics.instructions
     store().submitCommand('home', { type: 'instructions', instructions: { ...cur, tempo: 80 } })
     store().applyTeamTalk('home', 'rage')

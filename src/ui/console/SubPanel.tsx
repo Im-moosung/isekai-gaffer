@@ -16,7 +16,7 @@ export function SubPanel({ side }: { side: 'home' | 'away' }) {
   const [inId, setInId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const open = phase === 'halftime' || phase === 'decision'
+  const open = phase === 'halftime' || phase === 'paused-break' || phase === 'paused-user' || phase === 'paused-moment'
   const state: SideState | undefined = engine?.[side]
   if (!state) return <section className="cs-panel" aria-label="교체" />
 

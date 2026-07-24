@@ -9,11 +9,19 @@ const home = makeTestTeam('kor', 76)
 const away = makeTestTeam('esp', 88)
 const store = () => useMatchStore.getState()
 
-// displayMinute 재생 루프는 200ms 간격 setInterval. 각 스텝을 act로 감싸
-// interval 재생성(displayMinute 의존 useEffect)을 안정적으로 진행시킨다.
+// 재생 루프는 200ms 간격 setInterval으로 advanceMinute(1분 전진)을 호출한다.
+// 각 스텝을 act로 감싸 interval 콜백·리렌더를 안정적으로 진행시킨다.
 function step(times: number) {
   for (let i = 0; i < times; i++) {
     act(() => { vi.advanceTimersByTime(200) })
+  }
+}
+
+// 하프타임까지 재생 — 도중 하이드레이션 브레이크(paused-break)에서 confirmTactics로 재개.
+function replayToHalftime() {
+  for (let i = 0; i < 300 && store().phase !== 'halftime'; i++) {
+    if (store().phase === 'playing') act(() => { vi.advanceTimersByTime(200) })
+    else act(() => { store().confirmTactics() })
   }
 }
 
@@ -34,7 +42,7 @@ describe('MatchScreen 조립', () => {
     const { getByRole, container } = view
     expect(clock(container as HTMLElement)).toBe(0)
     fireEvent.click(getByRole('button', { name: '킥오프' }))
-    // playTo(45)는 즉시 실행 → engine.minute=45, displayMinute은 재생으로 증가
+    // advanceMinute이 1분씩 전진 → engine.minute(표시 분) 증가 (첫 브레이크 전까지)
     step(10)
     expect(clock(container as HTMLElement)).toBeGreaterThan(0)
   })
@@ -42,29 +50,28 @@ describe('MatchScreen 조립', () => {
   it('(c) 크래시 없이 halftime 도달 → "후반 시작" 버튼 등장', () => {
     const { getByRole } = render(<MatchScreen home={home} away={away} seed={20260724} />)
     fireEvent.click(getByRole('button', { name: '킥오프' }))
-    step(50) // 45분 재생 + 여유
+    replayToHalftime() // 하이드레이션 브레이크 재개 포함
+    expect(store().phase).toBe('halftime')
     expect(getByRole('button', { name: '후반 시작' })).toBeTruthy()
   })
 
   it('(e) LIVE 뱃지는 재생 중에만 노출 — 킥오프 전 없음, 재생 진행 중 존재', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
     const live = () => container.querySelector('.bc-scorebug__live')
-    // 킥오프 전(pre): displayMinute=engine.minute=0 → 재생 아님 → LIVE 없음
+    // 킥오프 전(pre): 재생 아님 → LIVE 없음
     expect(live()).toBeNull()
     fireEvent.click(getByRole('button', { name: '킥오프' }))
-    // playTo(45) 후 재생 시작. 소량만 진행해 displayMinute < 45 유지 → 재생 중
-    step(3)
+    step(3) // playing, minute < 45 → 재생 중
     expect(live()).not.toBeNull()
     expect(live()!.textContent).toContain('LIVE')
   })
 
-  it('(d) 재생 전 스코어 스포일러 방지 — 킥오프 직후 displayMinute=0이면 0:0', () => {
-    // seed=6: 데모 픽스처(kor 76 vs esp 88)에서 전반 4분에 esp 골 → engine.score=0:1.
-    //   킥오프 즉시 playTo(45)로 엔진은 0:1을 확정하지만, 재생 전(displayMinute=0)
-    //   Scorebug 표시 스코어는 반드시 0:0 이어야 한다(Ticker/PitchView와 동일한 필터).
+  it('(d) 재생 전 스코어 스포일러 방지 — 킥오프 직후 minute=0이면 0:0', () => {
+    // seed=6: 데모 픽스처(kor 76 vs esp 88)에서 전반 초반 골. 엔진이 분 단위로만
+    //   전진하므로 minute=0에선 어떤 골도 아직 발생하지 않아 반드시 0:0.
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={6} />)
     fireEvent.click(getByRole('button', { name: '킥오프' }))
-    // 타이머 미진행 → displayMinute=0
+    // 타이머 미진행 → engine.minute=0
     const nums = container.querySelectorAll('.bc-scorebug__num')
     expect(nums[0].textContent).toBe('0')
     expect(nums[1].textContent).toBe('0')

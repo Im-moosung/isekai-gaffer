@@ -11,10 +11,20 @@ const store = () => useMatchStore.getState()
 beforeEach(() => store().reset())
 afterEach(() => cleanup())
 
+/** 킥오프→하프타임 재생(하이드레이션 브레이크는 재개). */
+function toHalftime() {
+  store().kickoff()
+  let guard = 0
+  while (store().phase !== 'halftime' && guard++ < 200) {
+    if (store().phase === 'playing') store().advanceMinute()
+    else store().confirmTactics()
+  }
+}
+
 describe('TeamTalk 컴포넌트', () => {
   it('4톤 버튼(격노·격려·침착·신뢰)을 렌더한다', () => {
     store().startMatch(a, b, 42)
-    store().playTo(45)
+    toHalftime()
     const { getByRole } = render(<TeamTalk side="home" />)
     for (const label of ['격노', '격려', '침착', '신뢰']) {
       expect(getByRole('button', { name: label })).toBeTruthy()
@@ -24,7 +34,7 @@ describe('TeamTalk 컴포넌트', () => {
   it('선택 시 사기 보정 후 버튼 비활성 + 완료 표시', () => {
     // 비기는 중(0-0) → 침착 +4
     store().startMatch(a, b, 42)
-    store().playTo(45)
+    toHalftime()
     const before = { ...store().engine!.home.moraleByPlayer }
     const { getByRole, container, rerender } = render(<TeamTalk side="home" />)
     fireEvent.click(getByRole('button', { name: '침착' }))

@@ -132,6 +132,40 @@
 .ms-btn--primary:hover {
   filter: brightness(1.05);
 }
+/* 재생 중 감독 타임 / 동적 순간 배너 — 피치를 가리지 않게 상단에 얇게 배치.
+   ※ 방송 배너 정식 레이아웃은 Phase 4A Task 3에서 재구축. */
+.ms-btn--sm {
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+.ms-btn--ghost {
+  background: transparent;
+}
+.ms-live-controls {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.ms-moment {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--bc-panel-2);
+  border: 1px solid var(--bc-accent);
+}
+.ms-moment__text {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--bc-text);
+}
 
 /* ── 최종 스코어 + 스탯 표 ─────────────────────────────── */
 .ms-final {

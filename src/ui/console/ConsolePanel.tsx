@@ -29,9 +29,9 @@ export function ConsolePanel({ side }: { side: 'home' | 'away' }) {
   )
   const [error, setError] = useState<string | null>(null)
 
-  const open = phase === 'halftime' || phase === 'decision'
+  const open = phase === 'halftime' || phase === 'paused-break' || phase === 'paused-user' || phase === 'paused-moment'
 
-  // 개입 창(halftime/decision) 진입 시 현재 엔진 지시값을 draft 초기값으로 동기화.
+  // 개입 창(정지·하프타임) 진입 시 현재 엔진 지시값을 draft 초기값으로 동기화.
   useEffect(() => {
     if (open && current) setDraft(current)
     // current는 진입 시점 값만 초기화 대상 — phase 전환에만 반응한다.

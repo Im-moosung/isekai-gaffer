@@ -13,6 +13,16 @@ const store = () => useMatchStore.getState()
 beforeEach(() => store().reset())
 afterEach(() => cleanup())
 
+/** 킥오프→하프타임 재생(하이드레이션 브레이크는 재개). */
+function toHalftime() {
+  store().kickoff()
+  let guard = 0
+  while (store().phase !== 'halftime' && guard++ < 200) {
+    if (store().phase === 'playing') store().advanceMinute()
+    else store().confirmTactics()
+  }
+}
+
 describe('ConsolePanel (지시 4축)', () => {
   it('(a) playing/pre 시점엔 "지시 적용" 버튼 disabled + 잠금 문구', () => {
     store().startMatch(home, away, 42) // phase='pre'
@@ -24,7 +34,7 @@ describe('ConsolePanel (지시 4축)', () => {
 
   it('(b) halftime에서 압박 슬라이더 변경 → 적용 → 엔진 지시 반영', () => {
     store().startMatch(home, away, 42)
-    store().playTo(45) // phase='halftime'
+    toHalftime()
     const { getByLabelText, getByRole } = render(<ConsolePanel side="home" />)
     const pressing = getByLabelText('압박') as HTMLInputElement
     fireEvent.change(pressing, { target: { value: '80' } })
@@ -38,7 +48,7 @@ describe('ConsolePanel (지시 4축)', () => {
 describe('SubPanel (교체)', () => {
   it('(c) halftime에서 아웃/인 선택 → 교체 → subsUsed 1 증가', () => {
     store().startMatch(home, away, 42)
-    store().playTo(45)
+    toHalftime()
     const before = store().engine!.home.subsUsed
     const { container, getByRole } = render(<SubPanel side="home" />)
 
