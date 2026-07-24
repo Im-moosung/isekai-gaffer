@@ -167,6 +167,38 @@
   color: var(--bc-text);
 }
 
+/* ── 재생 속도 토글 — 스코어버그 맞은편(우상단) ────────────── */
+.ms-speed {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 20;
+  display: inline-flex;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--bc-line);
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--bc-panel-2), var(--bc-panel));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+.ms-speed__btn {
+  min-width: 34px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--bc-text-dim);
+  font-family: var(--bc-font);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.ms-speed__btn--active {
+  background: var(--bc-accent);
+  color: var(--bc-bg);
+}
+
 /* ── 최종 스코어 + 스탯 표 ─────────────────────────────── */
 .ms-final {
   display: flex;

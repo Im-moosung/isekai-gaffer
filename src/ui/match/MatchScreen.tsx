@@ -9,6 +9,7 @@ import { ConsolePanel } from '../console/ConsolePanel'
 import { SubPanel } from '../console/SubPanel'
 import { TeamTalk } from './TeamTalk'
 import { ShootoutPanel } from './ShootoutPanel'
+import { minuteDwellMs, type PlaybackSpeed } from './playback'
 import './match.css'
 
 // 유저는 홈팀 감독. 콘솔/교체는 home 고정.
@@ -45,8 +46,9 @@ interface MatchScreenProps {
 /** 경기 화면 조립 — 좌 경기 뷰(스코어버그·피치·티커) / 우 감독 콘솔.
  *  재생은 매치데이 2.0 세션(matchStore): advanceMinute()로 1분씩 전진하며
  *  engine.minute가 곧 표시 분이다(엔진이 앞서 달리지 않아 스포일러 없음).
- *  재생 타이밍은 setInterval 고정 간격만 사용(Math.random·Date 금지).
- *  ※ 레이아웃(오버레이 폐지·방송 배너)·가변 dwell은 Phase 4A Task 2·3에서 재작성.
+ *  재생 타이밍은 분당 가변 setTimeout 체인(하이라이트 리듬) — 사건 큰 분은 오래
+ *  머물고 무사건 분은 빨리 넘긴다(playback.minuteDwellMs, Math.random·Date 금지).
+ *  속도 토글 1x/1.5x/2x로 dwell을 나눈다. ※ 레이아웃(오버레이 폐지)은 Task 3.
  *  onMatchEnd 유무로 데모/캠페인 동작을 분기(props 하위호환). */
 export function MatchScreen({
   home, away, seed,
@@ -68,6 +70,7 @@ export function MatchScreen({
 
   const [tab, setTab] = useState<'console' | 'sub'>('console')
   const [shootoutOpen, setShootoutOpen] = useState(false)
+  const [speed, setSpeed] = useState<PlaybackSpeed>(1)
 
   // 경기 초기화(마운트/픽스처 변경 시). 엔진은 pre 상태로 준비.
   // initialTactics/firstHalfScript/staminaOverride는 매치별로 안정 참조(App에서 memo).
@@ -84,13 +87,32 @@ export function MatchScreen({
   const replaying = phase === 'playing'
   const paused = phase === 'paused-break' || phase === 'paused-user' || phase === 'paused-moment'
 
-  // 재생 루프 — 200ms 고정 간격으로 1분 전진. 정지·도달·언마운트 시 정리.
-  // (가변 dwell·속도 토글은 Task 2에서 교체.)
+  // 재생 루프 — 분당 가변 setTimeout 체인(하이라이트 리듬).
+  // 현재 분의 이벤트로 dwell을 계산해 그만큼 머문 뒤 advanceMinute()로 1분 전진.
+  // playing이 아니면(정지·하프타임·풀타임) 체인을 걸지 않는다 → 자동 정지.
+  // confirmTactics/kickoff로 phase가 'playing'이 되면 effect가 재실행되어 재개.
+  // speed 변경 시에도 재실행되어 즉시 반영. 언마운트/전환 시 타이머 정리.
   useEffect(() => {
     if (phase !== 'playing') return
-    const id = setInterval(() => advanceMinute(), 200)
-    return () => clearInterval(id)
-  }, [phase, advanceMinute])
+    let timer: ReturnType<typeof setTimeout>
+    let cancelled = false
+    const schedule = () => {
+      const st = useMatchStore.getState()
+      const eng = st.engine
+      if (cancelled || !eng || st.phase !== 'playing') return
+      const m = eng.minute
+      const eventsAtMinute = eng.events.filter(e => e.minute === m)
+      const clutch = m >= 80 && Math.abs(eng.score[0] - eng.score[1]) <= 1
+      const dwell = minuteDwellMs(m, eventsAtMinute, speed, clutch)
+      timer = setTimeout(() => {
+        if (cancelled) return
+        advanceMinute()
+        schedule()
+      }, dwell)
+    }
+    schedule()
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [phase, speed, advanceMinute])
 
   // 토너먼트 무승부 → 승부차기 진입 필요 (캠페인 한정).
   const needsShootout = !!onMatchEnd && !!requireWinner && !!engine && engine.score[0] === engine.score[1]
@@ -120,6 +142,8 @@ export function MatchScreen({
   for (const e of shown) {
     if (e.type === 'goal') shownScore[e.teamId === home.id ? 0 : 1] += 1
   }
+  // 빨리감기 연출: 재생 중 현재 분에 이벤트가 없으면 분 숫자가 빠르게 넘어간다.
+  const fastForward = replaying && !engine.events.some(e => e.minute === displayMinute)
 
   return (
     <div className="ms-root">
@@ -130,7 +154,9 @@ export function MatchScreen({
           score={shownScore}
           minute={displayMinute}
           live={replaying}
+          fastForward={fastForward}
         />
+        <SpeedToggle speed={speed} onChange={setSpeed} />
         <div className="ms-pitch-wrap">
           <PitchView state={engine} lastEvent={lastEvent} />
         </div>
@@ -260,6 +286,27 @@ export function MatchScreen({
           {tab === 'console' ? <ConsolePanel side={SIDE} /> : <SubPanel side={SIDE} />}
         </div>
       </aside>
+    </div>
+  )
+}
+
+const SPEEDS: PlaybackSpeed[] = [1, 1.5, 2]
+
+/** 재생 속도 토글 — 스코어버그 옆. 선택 상태 하이라이트, 재생 중 변경 즉시 반영. */
+function SpeedToggle({ speed, onChange }: { speed: PlaybackSpeed; onChange(s: PlaybackSpeed): void }) {
+  return (
+    <div className="ms-speed" role="group" aria-label="재생 속도">
+      {SPEEDS.map(s => (
+        <button
+          key={s}
+          type="button"
+          aria-pressed={speed === s}
+          className={`ms-speed__btn${speed === s ? ' ms-speed__btn--active' : ''}`}
+          onClick={() => onChange(s)}
+        >
+          {s}x
+        </button>
+      ))}
     </div>
   )
 }

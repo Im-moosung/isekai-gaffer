@@ -112,6 +112,17 @@
   50% { opacity: 0.45; box-shadow: 0 0 0 5px rgba(255, 93, 93, 0); }
 }
 
+/* 무사건 분 빨리감기 — 분 숫자가 빠르게 넘어가는 틱 느낌(scale/opacity 펄스). */
+.bc-scorebug__clock--ff {
+  animation: bc-clock-ff 0.5s ease-out infinite;
+}
+
+@keyframes bc-clock-ff {
+  0% { opacity: 0.55; transform: scale(0.9); }
+  40% { opacity: 1; transform: scale(1.12); }
+  100% { opacity: 0.85; transform: scale(1); }
+}
+
 /* ── Ticker: 하단 얇은 바 ──────────────────────────────── */
 .bc-ticker {
   position: absolute;
@@ -183,6 +194,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .bc-scorebug__live-dot,
+  .bc-scorebug__clock--ff,
   .bc-ticker__line--current,
   .bc-ticker__line--prev {
     animation: none;
