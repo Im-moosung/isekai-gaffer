@@ -3,6 +3,7 @@ import type { Team, SideStats, TacticState, MatchEvent, DecisionEntry } from '..
 import { useMatchStore } from '../../game/matchStore'
 import type { MomentKind } from '../../game/matchSession'
 import { commentate } from '../../game/commentary'
+import * as ctts from '../../audio/commentary-tts'
 import { Scorebug } from '../broadcast/Scorebug'
 import { Ticker } from '../broadcast/Ticker'
 import { PitchView } from '../pitch/PitchView'
@@ -86,9 +87,12 @@ export function MatchScreen({
   const [speed, setSpeed] = useState<PlaybackSpeed>(1)
   // 사운드 — 음소거 상태(sfx 모듈 = localStorage 진실원)와 관중 스웰(골 직후 4초).
   const [muted, setMutedUi] = useState(() => sfx.isMuted())
+  // 한국어 TTS 해설 토글(음소거와 별개, localStorage 기억) — 스코어버그 옆 [🎙].
+  const [ttsOn, setTtsOnUi] = useState(() => ctts.isTtsEnabled())
   const [crowdSwell, setCrowdSwell] = useState(false)
   const swellTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const firedGoalMinuteRef = useRef(-1)
+  const spokenMinuteRef = useRef(-1)
   const prevPhaseRef = useRef<string | null>(null)
 
   // 경기 초기화(마운트/픽스처 변경 시). 엔진은 pre 상태로 준비.
@@ -96,6 +100,7 @@ export function MatchScreen({
   useEffect(() => {
     setShootoutOpen(false)
     firedGoalMinuteRef.current = -1
+    spokenMinuteRef.current = -1
     startMatch(home, away, seed, {
       ...(initialTactics ? { homeTactics: initialTactics } : {}),
       ...(firstHalfScript ? { firstHalfScript } : {}),
@@ -200,6 +205,26 @@ export function MatchScreen({
     swellTimerRef.current = setTimeout(() => setCrowdSwell(false), 4000)
   }, [phase, engine])
 
+  // TTS 해설: 재생 중 현재 분의 대표 이벤트(goal>save>miss>corner>foul) 1개만 발화(과밀 방지).
+  // commentate() 문장을 그대로 읽고, goal·save는 important(rate·pitch 강조 + 발화 중 선점).
+  // 분당 1회(spokenMinuteRef)만 발동 — 미지원·보이스 없음·토글 OFF면 조용한 no-op.
+  useEffect(() => {
+    if (phase !== 'playing' || !engine) return
+    const m = engine.minute
+    if (spokenMinuteRef.current === m) return
+    spokenMinuteRef.current = m
+    const eventsAtMinute = engine.events.filter(e => e.minute === m)
+    const spoken = ctts.pickSpokenEvent(eventsAtMinute)
+    if (!spoken) return
+    const important = spoken.type === 'goal' || spoken.type === 'save'
+    ctts.speak(commentate(spoken, home, away), { important })
+  }, [phase, engine, home, away])
+
+  // 작전판 진입·pause 시 진행 중 발화를 취소한다(작전 지시 중 해설이 새지 않게).
+  useEffect(() => {
+    if (tacticsMode) ctts.stopAll()
+  }, [tacticsMode])
+
   // 관중 함성 강도: 기본 0.3, 클러치(80분+·1골차 이내) 0.5, 골 직후 스웰 0.8. crowdLoop('start')는 게인만 갱신(멱등).
   useEffect(() => {
     if (phase !== 'playing' || !engine) return
@@ -212,11 +237,13 @@ export function MatchScreen({
   useEffect(() => () => {
     if (swellTimerRef.current) clearTimeout(swellTimerRef.current)
     sfx.crowdLoop('stop')
+    ctts.stopAll()
   }, [])
 
-  // 킥오프: 유저 제스처에서 AudioContext init → 휘슬 1회 + 관중 루프 시작.
+  // 킥오프: 유저 제스처에서 AudioContext init → 휘슬 1회 + 관중 루프 시작. TTS 보이스 탐색도 여기서.
   function handleKickoff() {
     sfx.init()
+    ctts.initVoice()
     sfx.whistle('kickoff')
     sfx.crowdLoop('start', 0.3)
     kickoff()
@@ -225,6 +252,11 @@ export function MatchScreen({
   // 음소거 토글(sfx가 localStorage 기억) — UI 아이콘 동기화.
   function toggleMute() {
     setMutedUi(sfx.toggleMuted())
+  }
+
+  // TTS 해설 토글(commentary-tts가 localStorage 기억) — UI 동기화. OFF 시 진행 발화 중단.
+  function toggleTts() {
+    setTtsOnUi(ctts.toggleTts())
   }
 
   // 토너먼트 무승부 → 승부차기 진입 필요 (캠페인 한정).
@@ -303,6 +335,16 @@ export function MatchScreen({
           onClick={toggleMute}
         >
           {muted ? '🔇' : '🔊'}
+        </button>
+        {/* 한국어 TTS 해설 토글 — 음소거 옆. 음소거와 별개(localStorage 'rematch-tts'). */}
+        <button
+          type="button"
+          className="ms-tts"
+          aria-label={ttsOn ? '해설 음성 끄기' : '해설 음성 켜기'}
+          aria-pressed={ttsOn}
+          onClick={toggleTts}
+        >
+          🎙
         </button>
         {/* 재생 중 감독 타임 버튼 — 스코어버그 옆. pauseByUser로 자유 일시정지. */}
         {replaying && (

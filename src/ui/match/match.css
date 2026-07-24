@@ -335,6 +335,31 @@
   opacity: 0.65;
 }
 
+/* ── TTS 해설 토글 — 음소거 바로 오른쪽 ──────────────────────── */
+.ms-tts {
+  position: absolute;
+  top: 62px;
+  left: 58px;
+  z-index: 21;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--bc-line);
+  border-radius: 9px;
+  background: linear-gradient(180deg, var(--bc-panel-2), var(--bc-panel));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+/* OFF일 때 흐리게 표시(음소거 버튼과 반대 방향 — 여기선 aria-pressed=false가 꺼짐). */
+.ms-tts[aria-pressed='false'] {
+  opacity: 0.5;
+}
+
 /* ── 재생 속도 토글 — 스코어버그 맞은편(우상단) ────────────── */
 .ms-speed {
   position: absolute;
