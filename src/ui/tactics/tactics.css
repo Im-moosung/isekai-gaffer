@@ -190,6 +190,106 @@
   filter: brightness(1.08);
 }
 
+/* ── 탭 본문: 4축 콘솔 + 확장 지시 스택 ─────────────────────── */
+.tb-tactics {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── 확장 전술 지시 패널(멘탈리티·그룹·패턴·GK·페이즈) ──────── */
+.tx-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--tb-board-line);
+  border-radius: 10px;
+  background: rgba(127, 212, 255, 0.04);
+  color: var(--bc-text);
+  font-family: var(--bc-font);
+}
+.tx-group { display: flex; flex-direction: column; gap: 8px; }
+.tx-group__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--tb-chalk);
+}
+.tx-btnrow { display: flex; flex-wrap: wrap; gap: 6px; }
+.tx-btn {
+  flex: 1 1 auto;
+  min-width: 56px;
+  padding: 7px 10px;
+  border: 1px solid var(--tb-board-line);
+  border-radius: 7px;
+  background: rgba(127, 212, 255, 0.04);
+  color: var(--bc-text-dim);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tx-btn--sm { min-width: 44px; padding: 5px 8px; font-size: 11px; }
+.tx-btn:hover:not(:disabled) { border-color: var(--tb-chalk); color: var(--bc-text); }
+.tx-btn--active {
+  background: var(--tb-chalk);
+  border-color: var(--tb-chalk);
+  color: #06101f;
+}
+.tx-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.tx-line {
+  display: grid;
+  grid-template-columns: 62px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+.tx-line__label { font-size: 12px; color: var(--bc-text-dim); }
+
+.tx-toggle {
+  padding: 9px 14px;
+  border: 1px solid var(--tb-board-line);
+  border-radius: 8px;
+  background: rgba(127, 212, 255, 0.04);
+  color: var(--bc-text-dim);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.tx-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
+.tx-toggle--on {
+  background: var(--bc-danger);
+  border-color: var(--bc-danger);
+  color: #fff;
+}
+.tx-hint { margin: 0; font-size: 11px; line-height: 1.35; color: var(--bc-text-dim); }
+
+.tx-slot {
+  display: grid;
+  grid-template-columns: 62px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+.tx-slot__label { font-size: 12px; color: var(--bc-text-dim); }
+.tx-slot__base {
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--bc-text);
+}
+.tx-slot__select {
+  background: var(--bc-panel-2);
+  color: var(--bc-text);
+  border: 1px solid var(--tb-board-line);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 12px;
+}
+
 /* ── 다크 전술판 PitchView 오버라이드 + 실시간 도트 이동 ─────
    그린 피치 대신 투명 보드(부모 배경 노출), 라인은 초크 톤. */
 .pv-root--tactics {

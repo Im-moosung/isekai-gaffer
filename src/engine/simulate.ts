@@ -1,7 +1,7 @@
 // src/engine/simulate.ts
 import { createRng, type Rng } from './rng'
 import { zoneStrength } from './strength'
-import { instructionEffects, formationEdge } from './tactics'
+import { instructionEffects, formationEdge, mentalityEffects, attackPatternEffects, groupIntensityStaminaFactor } from './tactics'
 import { effectiveStats } from './fitness'
 import { pickBestXI } from './lineup'
 import type { Instructions, MatchEvent, MatchState, SideState, SideStats, TacticState, Team } from './types'
@@ -10,6 +10,12 @@ export type MatchCommand =
   | { type: 'sub'; out: string; in: string }
   | { type: 'instructions'; instructions: Instructions }
   | { type: 'formation'; tactics: TacticState }
+
+/** simulateSegment 옵션. 미지정이면 기존 동작(회귀 불변). */
+export interface SimulateOpts {
+  /** 개입 직후 부스트: 지정 side의 지시 효과를 until 분까지 ×1.3 증폭(방향 강화). */
+  instructionBoost?: { side: 'home' | 'away'; until: number }
+}
 
 const MAX_SUBS = 5
 // 전력 차 민감도 — 동급 팀은 비율 1이라 캘리브레이션 계약 무영향, 비대칭 매치업의 승률 분화 담당.
@@ -20,7 +26,7 @@ export function createMatch(home: Team, away: Team, opts: { seed: number; homeTa
   const mkSide = (team: Team, tactics?: TacticState): SideState => {
     const staminaByPlayer: Record<string, number> = {}, moraleByPlayer: Record<string, number> = {}
     team.squad.forEach(p => { staminaByPlayer[p.id] = 100; moraleByPlayer[p.id] = 70 })
-    return { team, tactics: tactics ?? defaultTactics(team), staminaByPlayer, moraleByPlayer, subsUsed: 0, sentOff: [] }
+    return { team, tactics: tactics ?? defaultTactics(team), staminaByPlayer, moraleByPlayer, subsUsed: 0, sentOff: [], sustainedPressMinutes: 0 }
   }
   return {
     minute: 0, score: [0, 0], home: mkSide(home, opts.homeTactics), away: mkSide(away, opts.awayTactics),
@@ -45,7 +51,7 @@ function defaultTactics(team: Team): TacticState {
   return t
 }
 
-export function simulateSegment(state: MatchState, toMinute: number): MatchState {
+export function simulateSegment(state: MatchState, toMinute: number, opts: SimulateOpts = {}): MatchState {
   const st: MatchState = structuredClone(state)
 
   // 스크립트("실제 전반 재현") 모드: 전반(≤45)은 시뮬하지 않고 스크립트를 일괄 적용한다.
@@ -61,7 +67,7 @@ export function simulateSegment(state: MatchState, toMinute: number): MatchState
     st.minute++
     // 분 파생 RNG: 세그먼트 분할 지점과 무관하게 같은 분은 같은 난수 → 45+45=90 결정론
     const rng = createRng(st.seed * 10007 + st.minute)
-    simulateMinute(st, rng)
+    simulateMinute(st, rng, opts)
     if (st.minute === 45) st.events.push({ minute: 45, type: 'halftime', teamId: st.home.team.id })
   }
   if (toMinute >= 90 && !st.events.some(e => e.type === 'fulltime'))
@@ -100,9 +106,46 @@ function applyFirstHalfScript(st: MatchState) {
   st.events.push({ minute: 45, type: 'halftime', teamId: st.home.team.id })
 }
 
-function simulateMinute(st: MatchState, rng: Rng) {
+function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
   const zs = [zoneStrength(st.home), zoneStrength(st.away)]
+  const sides = [st.home, st.away] as const
   const fx = [instructionEffects(st.home.tactics.instructions), instructionEffects(st.away.tactics.instructions)]
+
+  // 멘탈리티(5프리셋): instructionEffects 위에 곱. 'balanced'는 전 축 1.0 → 회귀 불변.
+  for (const i of [0, 1] as const) {
+    const m = mentalityEffects(sides[i].tactics.mentality)
+    fx[i].chanceRate *= m.chanceRate
+    fx[i].chanceQuality *= m.chanceQuality
+    fx[i].counterVulnerability *= m.counterVulnerability
+    fx[i].possessionBias *= m.possessionBias
+  }
+
+  // 개입 부스트: 지정 side의 지시 방향을 until 분까지 ×1.3 증폭(1.0 기준 편차 확대). 옵션 없으면 불변.
+  const boost = opts.instructionBoost
+  if (boost && st.minute <= boost.until) {
+    const bi = boost.side === 'home' ? 0 : 1
+    const amp = (v: number) => 1 + (v - 1) * 1.3
+    fx[bi].chanceRate = amp(fx[bi].chanceRate)
+    fx[bi].chanceQuality = amp(fx[bi].chanceQuality)
+    fx[bi].possessionBias = amp(fx[bi].possessionBias)
+  }
+
+  // 지속 압박 페널티: 압박 70+ 유지 분 추적 → 10분마다 체력 소모 +15% 가중.
+  // 팀 평균 체력<55 & 압박 70+면 '지친 압박' — 압박 실효 반감 + 파울 1.5배.
+  const staminaWeight = [1, 1]
+  for (const i of [0, 1] as const) {
+    const press = sides[i].tactics.instructions.pressing
+    if (press >= 70) sides[i].sustainedPressMinutes = (sides[i].sustainedPressMinutes ?? 0) + 1
+    else sides[i].sustainedPressMinutes = 0
+    staminaWeight[i] = 1 + 0.15 * Math.floor((sides[i].sustainedPressMinutes ?? 0) / 10)
+    if (press >= 70 && avgStamina(sides[i]) < 55) {
+      fx[i].foulRate *= 1.5
+      // 압박 실효 반감: 압박이 만든 이득(1.0 초과분)을 절반으로.
+      fx[i].chanceRate = 1 + (fx[i].chanceRate - 1) * 0.5
+      fx[i].possessionBias = 1 + (fx[i].possessionBias - 1) * 0.5
+    }
+  }
+
   const edge = formationEdge(st.home.tactics.formation, st.away.tactics.formation)
 
   // 1) 이 분의 점유 팀: 미드필드 전력 + 프로필 점유 성향 + 지시 편향 + 포메이션 상성
@@ -128,20 +171,26 @@ function simulateMinute(st: MatchState, rng: Rng) {
     st.stats[defIdx].fouls++
     const fouler = randomLineupPlayer(def, rng, ['CB', 'DM', 'LB', 'RB', 'CM'])
     st.events.push({ minute: st.minute, type: 'foul', teamId: def.team.id, playerId: fouler })
-    if (rng.chance(0.12)) st.events.push({ minute: st.minute, type: 'yellow', teamId: def.team.id, playerId: fouler })
+    // 지친 압박은 경고로 이어진다: 기본 0.12, 압박 70+ & 저체력이면 ×1.5.
+    const tired = def.tactics.instructions.pressing >= 70 && avgStamina(def) < 55
+    if (rng.chance(tired ? 0.18 : 0.12)) st.events.push({ minute: st.minute, type: 'yellow', teamId: def.team.id, playerId: fouler })
   }
 
-  // 3) 찬스 롤 (공격 측): 공격 전력 vs 수비 전력 + 템포 + 모멘텀
+  // 3) 찬스 롤 (공격 측): 공격 전력(공격 페이즈) vs 수비 전력(수비 페이즈) + 템포 + 모멘텀 + 공격 패턴
+  //    phaseFormations 미지정·groupIntensity 0이면 phase 존은 neutral과 동일 → 회귀 불변.
+  const atkZone = zoneStrength(atk, 'attack').attack
+  const defZone = zoneStrength(def, 'defense').defense
+  const ap = attackPatternEffects(atk.tactics.attackPattern)
   const momentumBoost = atkIdx === 0 ? 1 + st.momentum * 0.15 : 1 - st.momentum * 0.15
   const chanceP = clamp(
-    (atk.team.statBaseline.shotsPerGame / (90 * participation)) * Math.pow(zs[atkIdx].attack / Math.max(30, zs[defIdx].defense), STRENGTH_SENSITIVITY) * fx[atkIdx].chanceRate * fx[defIdx].counterVulnerability * momentumBoost,
+    (atk.team.statBaseline.shotsPerGame / (90 * participation)) * Math.pow(atkZone / Math.max(30, defZone), STRENGTH_SENSITIVITY) * fx[atkIdx].chanceRate * ap.chanceRate * fx[defIdx].counterVulnerability * momentumBoost,
     0.02, 0.45,
   )
   if (rng.chance(chanceP)) resolveChance(st, atkIdx, defIdx, fx, rng)
 
-  // 4) 체력 감소
+  // 4) 체력 감소: 지속 압박 가중 + 그룹 적극성 가중(기본값 전부 1.0 → 불변).
   for (const [idx, side] of [[0, st.home], [1, st.away]] as const) {
-    const drain = 0.55 * fx[idx].staminaDrain
+    const drain = 0.55 * fx[idx].staminaDrain * staminaWeight[idx] * groupIntensityStaminaFactor(side.tactics.groupIntensity)
     for (const { playerId } of side.tactics.lineup) {
       if (side.sentOff.includes(playerId)) continue
       const p = side.team.squad.find(q => q.id === playerId)!
@@ -150,9 +199,28 @@ function simulateMinute(st: MatchState, rng: Rng) {
   }
 }
 
+/** 주전(라인업, 퇴장 제외) 평균 체력. 지속 압박 저체력 판정용. */
+function avgStamina(side: SideState): number {
+  const vals = side.tactics.lineup
+    .filter(l => !side.sentOff.includes(l.playerId))
+    .map(l => side.staminaByPlayer[l.playerId] ?? 100)
+  return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 100
+}
+
+/** GK 파워플레이가 이 분 유효한가: 활성 & 85'+ & 해당 side가 지는 중. */
+function gkPowerplayActive(st: MatchState, idx: 0 | 1): boolean {
+  if (!st[idx === 0 ? 'home' : 'away'].tactics.gkPowerplay) return false
+  return st.minute >= 85 && st.score[idx] < st.score[(1 - idx) as 0 | 1]
+}
+
 function resolveChance(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: ReturnType<typeof instructionEffects>[], rng: Rng) {
   const atk = atkIdx === 0 ? st.home : st.away
   const def = defIdx === 0 ? st.home : st.away
+  const ap = attackPatternEffects(atk.tactics.attackPattern)
+  // GK 파워플레이 양면: 공격 측 활성 → 세트피스에 GK 가담, 찬스 퀄 +40%.
+  //                    수비 측 활성 → 골문 비움, 공격 측 실점(득점) 확률 3배(역습 빈 골문).
+  const qualityBoost = gkPowerplayActive(st, atkIdx) ? 1.4 : 1.0
+  const goalMult = gkPowerplayActive(st, defIdx) ? 3.0 : 1.0
   // 슈터 선정: 공격 포지션 가중 (keyPlayer 의존 반영)
   const shooters = atk.tactics.lineup
     .filter(l => !atk.sentOff.includes(l.playerId) && l.slot !== 'GK')
@@ -170,25 +238,29 @@ function resolveChance(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: ReturnT
   const gk = def.team.squad.find(p => p.id === gkSlot.playerId)!
   const gkSave = (gk.gkStats?.saving ?? 20) * (0.75 + 0.25 * def.staminaByPlayer[gk.id] / 100)
 
-  // xG: 슈팅 능력·찬스 퀄리티 기반
-  const xg = clamp((es.shooting / 100) * 0.35 * fx[atkIdx].chanceQuality, 0.02, 0.65)
+  // xG: 슈팅 능력·찬스 퀄리티 기반. 공격 패턴(through↑/longshot↓)·GK 파워플레이(공격 측 +40%) 반영.
+  // 기본값(balanced·비활성)이면 ap.chanceQuality=1, qualityBoost=1 → 회귀 불변.
+  const xg = clamp((es.shooting / 100) * 0.35 * fx[atkIdx].chanceQuality * ap.chanceQuality * qualityBoost, 0.02, 0.65)
   st.stats[atkIdx].xg = round2(st.stats[atkIdx].xg + xg)
 
-  const onTargetP = clamp(es.shooting / 140, 0.25, 0.75)
+  // cross는 유효슛 확률 소폭↓(컷인↓·크로스 위주). balanced는 onTargetBias=1 → 불변.
+  const onTargetP = clamp((es.shooting / 140) * ap.onTargetBias, 0.25, 0.75)
   if (!rng.chance(onTargetP)) {
     st.events.push({ minute: st.minute, type: 'miss', teamId: atk.team.id, playerId: shooter.id, xg })
-    if (rng.chance(0.35)) { st.stats[atkIdx].corners++; st.events.push({ minute: st.minute, type: 'corner', teamId: atk.team.id }) }
+    // cross는 코너 획득 확률↑(cornerBias). balanced는 1 → 불변.
+    if (rng.chance(clamp(0.35 * ap.cornerBias, 0, 0.9))) { st.stats[atkIdx].corners++; st.events.push({ minute: st.minute, type: 'corner', teamId: atk.team.id }) }
     return
   }
   st.stats[atkIdx].shotsOnTarget++
-  const goalP = clamp(xg * (1.6 - gkSave / 100), 0.04, 0.55)
+  // GK 파워플레이 수비 측 활성 시 빈 골문 → 득점 확률 ×3(goalMult). 상한도 그에 맞춰 완화.
+  const goalP = clamp(xg * (1.6 - gkSave / 100) * goalMult, 0.04, goalMult > 1 ? 0.95 : 0.55)
   if (rng.chance(goalP)) {
     st.score[atkIdx]++
     st.events.push({ minute: st.minute, type: 'goal', teamId: atk.team.id, playerId: shooter.id, xg })
     st.momentum = clamp(st.momentum + (atkIdx === 0 ? 0.35 : -0.35), -1, 1)
   } else {
     st.events.push({ minute: st.minute, type: 'save', teamId: def.team.id, playerId: gk.id, xg })
-    if (rng.chance(0.45)) { st.stats[atkIdx].corners++; st.events.push({ minute: st.minute, type: 'corner', teamId: atk.team.id }) }
+    if (rng.chance(clamp(0.45 * ap.cornerBias, 0, 0.9))) { st.stats[atkIdx].corners++; st.events.push({ minute: st.minute, type: 'corner', teamId: atk.team.id }) }
   }
 }
 

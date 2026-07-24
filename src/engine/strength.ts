@@ -1,6 +1,7 @@
 // src/engine/strength.ts
 import type { SideState, Position } from './types'
 import { effectiveStats, positionFitness } from './fitness'
+import { groupIntensityZoneFactor, phaseTilt } from './tactics'
 
 const ZONE_OF: Record<Position, 'gk' | 'defense' | 'midfield' | 'attack'> = {
   GK: 'gk', CB: 'defense', LB: 'defense', RB: 'defense',
@@ -11,7 +12,9 @@ const ZONE_WEIGHT: Record<'defense' | 'midfield' | 'attack', (keyof ReturnType<t
 }
 
 // 참고: keyPlayer 의존 가중은 존 전력이 아니라 찬스 참여자 선정(simulate.resolveChance)에서 반영된다 (계획 결정 — Task 6 리뷰 판정).
-export function zoneStrength(side: SideState) {
+// phase 인자: 지정 시 phaseFormations에 따라 존 가중을 이동한다(공격 시/수비 시). 미지정이면 중립.
+// groupIntensity는 phase 무관하게 항상 반영된다. 두 배수 모두 기본값에서 정확히 1.0 → 기존 결과 불변.
+export function zoneStrength(side: SideState, phase?: 'attack' | 'defense') {
   const zones = { attack: [] as number[], midfield: [] as number[], defense: [] as number[], gk: [] as number[] }
   for (const { slot, playerId } of side.tactics.lineup) {
     if (side.sentOff.includes(playerId)) continue
@@ -31,8 +34,15 @@ export function zoneStrength(side: SideState) {
   const avg = (a: number[]) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : 10)
   // 수적 열세 페널티: 존 인원이 기대보다 적으면 평균에 그대로 반영됨(빈 슬롯 미포함) + 전체 10인 이하 시 추가 페널티
   const shortage = side.sentOff.length * 0.06
+  const gi = side.tactics.groupIntensity
+  const pf = side.tactics.phaseFormations
+  // 존별 배수: 그룹 적극성 × 페이즈 틸트. 기본값에서 둘 다 1.0 → (val * 1 * 1) === val (회귀 불변).
+  const mod = (zone: 'attack' | 'midfield' | 'defense') =>
+    groupIntensityZoneFactor(gi, zone) * (phase ? phaseTilt(pf, phase, zone) : 1.0)
   return {
-    attack: avg(zones.attack) * (1 - shortage), midfield: avg(zones.midfield) * (1 - shortage),
-    defense: avg(zones.defense) * (1 - shortage), gk: avg(zones.gk),
+    attack: avg(zones.attack) * (1 - shortage) * mod('attack'),
+    midfield: avg(zones.midfield) * (1 - shortage) * mod('midfield'),
+    defense: avg(zones.defense) * (1 - shortage) * mod('defense'),
+    gk: avg(zones.gk),
   }
 }

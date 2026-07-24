@@ -30,7 +30,31 @@ export interface Team {
 export type FormationId = '4-3-3' | '4-2-3-1' | '4-4-2' | '3-5-2' | '4-1-4-1' | '5-4-1'
 export interface Instructions { lineHeight: number; pressing: number; tempo: number; attackFocus: 'left'|'center'|'right'|'balanced' }
 export interface LineupSlot { slot: Position; playerId: string }
-export interface TacticState { formation: FormationId; lineup: LineupSlot[]; instructions: Instructions }
+
+/** 팀 멘탈리티 5프리셋 — 찬스 생성 vs 수비 안정의 무게중심. 'balanced'가 중립(기존 동작). */
+export type Mentality = 'very-defensive' | 'defensive' | 'balanced' | 'attacking' | 'very-attacking'
+/** 공격 패턴 4종. 'balanced'가 중립(기존 동작). */
+export type AttackPattern = 'balanced' | 'cross' | 'through' | 'longshot'
+/** 라인별 적극성 -1(자제)|0(기본)|1(적극). 모두 0이 중립(기존 동작). */
+export interface GroupIntensity { attack: -1 | 0 | 1; midfield: -1 | 0 | 1; defense: -1 | 0 | 1 }
+/** 페이즈별 포메이션(공격 시/수비 시 존 가중 이동). 미지정이 중립(기존 동작). */
+export interface PhaseFormations { attack?: FormationId; defense?: FormationId }
+
+/** 전술 상태. 확장 필드(mentality/phaseFormations/groupIntensity/attackPattern/gkPowerplay)는
+ *  모두 선택적이며, 미지정(=기본값)이면 엔진 동작이 기존과 완전히 동일하다(시드 회귀 불변). */
+export interface TacticState {
+  formation: FormationId; lineup: LineupSlot[]; instructions: Instructions
+  /** 미지정 시 'balanced'로 취급. */
+  mentality?: Mentality
+  /** 미지정 시 페이즈 가중 없음. */
+  phaseFormations?: PhaseFormations
+  /** 미지정 시 { attack:0, midfield:0, defense:0 }로 취급. */
+  groupIntensity?: GroupIntensity
+  /** 미지정 시 'balanced'로 취급. */
+  attackPattern?: AttackPattern
+  /** 미지정/false면 비활성. 85'+ & 지는 중에만 실효(엔진에서 판정). */
+  gkPowerplay?: boolean
+}
 /** 감독의 개입 1건 기록 — AI 기자회견/헤드라인의 근거가 된다. summary는 한국어 서술. */
 export interface DecisionEntry { minute: number; kind: 'instructions'|'sub'|'teamtalk'|'shootout-setup'; summary: string; detail?: Record<string, unknown> }
 export type MatchEventType = 'kickoff'|'chance'|'shot'|'goal'|'save'|'miss'|'foul'|'yellow'|'red'|'corner'|'sub'|'halftime'|'fulltime'
@@ -41,6 +65,9 @@ export interface SideState {
   staminaByPlayer: Record<string, number>   // 0~100
   moraleByPlayer: Record<string, number>    // 0~100
   subsUsed: number; sentOff: string[]
+  /** 압박 70+ 연속 유지 분(지속 압박 페널티 추적). 압박<70인 분엔 0으로 리셋.
+   *  미지정 시 0으로 취급(기존 상태 호환). */
+  sustainedPressMinutes?: number
 }
 export interface MatchState {
   minute: number; score: [number, number]   // [home, away]

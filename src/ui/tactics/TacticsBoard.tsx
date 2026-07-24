@@ -4,6 +4,7 @@ import { useMatchStore } from '../../game/matchStore'
 import { PitchView } from '../pitch/PitchView'
 import { ConsolePanel } from '../console/ConsolePanel'
 import { SubPanel } from '../console/SubPanel'
+import { TacticsExtras } from './TacticsExtras'
 import { TeamTalk } from '../match/TeamTalk'
 import { autoFill } from '../lineup/swap'
 import './tactics.css'
@@ -130,7 +131,12 @@ export function TacticsBoard() {
             </button>
           </div>
           <div className="tb-side__body">
-            {tab === 'tactics' && <ConsolePanel side={SIDE} />}
+            {tab === 'tactics' && (
+              <div className="tb-tactics">
+                <ConsolePanel side={SIDE} />
+                <TacticsExtras side={SIDE} />
+              </div>
+            )}
             {tab === 'sub' && <SubPanel side={SIDE} />}
             {tab === 'opp' && (
               <div className="tb-opp" aria-label="상대 분석">

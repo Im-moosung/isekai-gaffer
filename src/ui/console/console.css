@@ -52,6 +52,16 @@
 }
 .cs-axis--focus { grid-template-columns: 56px 1fr; }
 
+/* 슬라이더 트레이드오프 비용 표시(⚡ 체력·⚠ 리스크). */
+.cs-axis-wrap { display: flex; flex-direction: column; gap: 2px; }
+.cs-cost {
+  margin: 0 0 0 66px;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--bc-text-dim);
+}
+.cs-cost--hot { color: var(--bc-danger); font-weight: 600; }
+
 /* 버튼·잠금·에러 */
 .cs-btn {
   background: var(--bc-accent);
