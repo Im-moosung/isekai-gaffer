@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { render } from '@testing-library/react'
 import { slotCoords, XI_SLOTS } from '../pitch/formations'
 import { PitchView } from '../pitch/PitchView'
+import { buildSequence } from '../pitch/choreography'
 import { makeTestTeam } from '../../engine/fixtures/testTeams'
 import { createMatch } from '../../engine/simulate'
 import type { FormationId } from '../../engine/types'
@@ -70,5 +71,35 @@ describe('PitchView', () => {
       <PitchView state={state} lastEvent={{ minute: 33, type: 'goal', teamId: home.id }} />
     )
     expect(container.querySelector('.pv-marker')).toBeTruthy()
+  })
+
+  it('sequence 전달 시 공(.pv-ball)+무버(.pv-mover) 렌더, 정적 마커는 대체된다', () => {
+    const home = makeTestTeam('kor', 82)
+    const away = makeTestTeam('esp', 84)
+    const state = createMatch(home, away, { seed: 42 })
+    const seq = buildSequence({ minute: 30, type: 'goal', teamId: home.id }, state.home, state.away)
+    const { container } = render(
+      <PitchView state={state} lastEvent={{ minute: 30, type: 'goal', teamId: home.id }} sequence={seq} dwellMs={4000} sequenceSide="home" />
+    )
+    expect(container.querySelector('.pv-ball')).toBeTruthy()
+    expect(container.querySelectorAll('.pv-mover').length).toBeGreaterThan(0)
+    // 시퀀스 재생 중엔 정적 lastEvent 마커를 그리지 않는다.
+    expect(container.querySelector('.pv-marker')).toBeNull()
+  })
+
+  it('바디랭귀지 배지 — 사기 75+ 도트에 🔥, 35- 도트에 😰', () => {
+    const home = makeTestTeam('kor', 82)
+    const away = makeTestTeam('esp', 84)
+    const state = createMatch(home, away, { seed: 42 })
+    const hi = state.home.tactics.lineup[0].playerId
+    const lo = state.home.tactics.lineup[1].playerId
+    const s2 = {
+      ...state,
+      home: { ...state.home, moraleByPlayer: { ...state.home.moraleByPlayer, [hi]: 90, [lo]: 20 } },
+    }
+    const { container } = render(<PitchView state={s2} />)
+    const moods = [...container.querySelectorAll('.pv-mood')].map(e => e.textContent)
+    expect(moods).toContain('🔥')
+    expect(moods).toContain('😰')
   })
 })

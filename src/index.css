@@ -50,12 +50,13 @@
   }
 }
 
+/* 게임 화면은 뷰포트 가로를 꽉 채운다(랜딩·허브·라인업·경기·작전판 공통).
+   극단 와이드(>1920px)에선 1920px 상한으로 중앙 정렬. Vite 템플릿 잔재
+   (1126px 고정폭·text-align:center·border-inline)는 제거. */
 #root {
-  width: 1126px;
-  max-width: 100%;
+  width: 100%;
+  max-width: 1920px;
   margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
   min-height: 100svh;
   display: flex;
   flex-direction: column;

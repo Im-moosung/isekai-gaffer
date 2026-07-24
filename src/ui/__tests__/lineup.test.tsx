@@ -67,3 +67,23 @@ describe('LineupScreen 스모크', () => {
     expect(container.querySelectorAll('.lu-chip')).toHaveLength(11)
   })
 })
+
+describe('LineupScreen — PlayerCard 팝오버·벤치 컴팩트 카드 (Task 7)', () => {
+  it('벤치 카드에 능력치 미니 레이더(스탯 요약)를 그린다', () => {
+    const { container } = render(<LineupScreen team={team} initial={initial} onConfirm={() => {}} />)
+    const card = container.querySelector('.lu-card') as HTMLElement
+    expect(card.querySelector('.lu-card__radar')).toBeTruthy()
+    expect(card.querySelector('.pc-radar__poly')).toBeTruthy()
+  })
+
+  it('칩 클릭(선택) → 선수 카드 팝오버 표시, 재클릭 해제 시 사라짐', () => {
+    const { container } = render(<LineupScreen team={team} initial={initial} onConfirm={() => {}} />)
+    expect(container.querySelector('.lu-pop')).toBeNull()
+    const chip = container.querySelector('.lu-chip') as HTMLElement
+    fireEvent.click(chip)
+    expect(container.querySelector('.lu-pop .pc')).toBeTruthy()
+    expect(container.querySelector('.lu-pop .pc-radar__poly')).toBeTruthy()
+    fireEvent.click(chip) // 같은 칩 재클릭 → 선택 해제
+    expect(container.querySelector('.lu-pop')).toBeNull()
+  })
+})

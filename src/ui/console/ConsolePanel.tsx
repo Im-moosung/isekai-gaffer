@@ -3,9 +3,10 @@ import { useMatchStore } from '../../game/matchStore'
 import type { Instructions } from '../../engine/types'
 import './console.css'
 
-const AXES: { key: 'lineHeight' | 'pressing' | 'tempo'; label: string }[] = [
-  { key: 'lineHeight', label: '라인' },
-  { key: 'pressing', label: '압박' },
+// cost: 슬라이더 옆 트레이드오프 표시(⚡ 체력·⚠ 리스크). threshold 이상일 때 강조.
+const AXES: { key: 'lineHeight' | 'pressing' | 'tempo'; label: string; cost?: { icon: string; text: string; threshold: number } }[] = [
+  { key: 'lineHeight', label: '라인', cost: { icon: '⚠', text: '뒷공간 노출', threshold: 70 } },
+  { key: 'pressing', label: '압박', cost: { icon: '⚡', text: '체력 소모 +40% · 지치면 파울 증가', threshold: 70 } },
   { key: 'tempo', label: '템포' },
 ]
 
@@ -29,9 +30,9 @@ export function ConsolePanel({ side }: { side: 'home' | 'away' }) {
   )
   const [error, setError] = useState<string | null>(null)
 
-  const open = phase === 'halftime' || phase === 'decision'
+  const open = phase === 'halftime' || phase === 'paused-break' || phase === 'paused-user' || phase === 'paused-moment'
 
-  // 개입 창(halftime/decision) 진입 시 현재 엔진 지시값을 draft 초기값으로 동기화.
+  // 개입 창(정지·하프타임) 진입 시 현재 엔진 지시값을 draft 초기값으로 동기화.
   useEffect(() => {
     if (open && current) setDraft(current)
     // current는 진입 시점 값만 초기화 대상 — phase 전환에만 반응한다.
@@ -51,20 +52,27 @@ export function ConsolePanel({ side }: { side: 'home' | 'away' }) {
     <section className="cs-panel" aria-label="감독 콘솔 — 지시">
       <h3 className="cs-panel__title">전술 지시</h3>
       <div className="cs-axes">
-        {AXES.map(({ key, label }) => (
-          <div key={key} className="cs-axis">
-            <span className="cs-axis__label" aria-hidden="true">{label}</span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              aria-label={label}
-              value={draft[key]}
-              disabled={!open}
-              onChange={e => setDraft(d => ({ ...d, [key]: Number(e.target.value) }))}
-              className="cs-axis__range"
-            />
-            <span className="cs-axis__val">{draft[key]}</span>
+        {AXES.map(({ key, label, cost }) => (
+          <div key={key} className="cs-axis-wrap">
+            <div className="cs-axis">
+              <span className="cs-axis__label" aria-hidden="true">{label}</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                aria-label={label}
+                value={draft[key]}
+                disabled={!open}
+                onChange={e => setDraft(d => ({ ...d, [key]: Number(e.target.value) }))}
+                className="cs-axis__range"
+              />
+              <span className="cs-axis__val">{draft[key]}</span>
+            </div>
+            {cost && (
+              <p className={`cs-cost${draft[key] >= cost.threshold ? ' cs-cost--hot' : ''}`}>
+                <span aria-hidden="true">{cost.icon}</span> {cost.text}
+              </p>
+            )}
           </div>
         ))}
         <div className="cs-axis cs-axis--focus">

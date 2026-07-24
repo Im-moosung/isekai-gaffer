@@ -1,0 +1,437 @@
+/* 작전판(tactics 모드) — 방송 관전과 확연히 다른 시각 정체성.
+   방송=그린 피치·라이브 그래픽 / 작전판=다크 초크보드·전술 다이어그램 톤.
+   색·기하 토큰은 --bc-* 재사용, 인라인 스타일 금지(데이터 바인딩 폭 예외 없음). */
+
+/* 다크 전술판 로컬 토큰 — 짙은 네이비 보드 + 청록 라인. */
+.tb-root {
+  --tb-board-bg: #0a1526;      /* 보드 표면(피치 그린 대신 짙은 네이비) */
+  --tb-board-line: rgba(140, 200, 255, 0.35);
+  --tb-chalk: #7fd4ff;         /* 초크 라인/강조 */
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, #06101f, #0a1526 60%, #050b16);
+  color: var(--bc-text);
+  font-family: var(--bc-font);
+}
+
+/* ── 상단: "작전 타임" 라벨 + 정지 사유 ─────────────────────── */
+.tb-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+.tb-head__label {
+  font-size: 20px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  color: var(--tb-chalk);
+  text-transform: uppercase;
+}
+.tb-head__reason {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--bc-text-dim);
+}
+
+/* ── 하프타임 팀토크 카드(상단) ─────────────────────────────── */
+.tb-talk {
+  flex: 0 0 auto;
+  padding: 12px 14px;
+  border: 1px solid var(--tb-board-line);
+  border-radius: 10px;
+  background: rgba(127, 212, 255, 0.06);
+}
+
+/* ── 본체: 중앙 대형 보드 + 우측 지시 패널 ─────────────────── */
+.tb-main {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  gap: 14px;
+}
+.tb-board {
+  flex: 7 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tb-board__pitch {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--tb-board-line);
+  border-radius: 12px;
+  background: var(--tb-board-bg);
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+/* 보드 옆(위) 선수 카드 팝오버 — 보드 우상단에 겹쳐 표시. */
+.tb-pop {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+  max-width: 260px;
+  padding: 6px;
+  border-radius: 12px;
+  background: rgba(6, 16, 31, 0.92);
+  border: 1px solid var(--tb-chalk);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+}
+.tb-pop__compare {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tb-pop__arrow { color: var(--tb-chalk); font-weight: 900; font-size: 18px; }
+.tb-pop__close {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--tb-board-line);
+  background: var(--bc-panel-2);
+  color: var(--bc-text);
+  font-size: 11px;
+  cursor: pointer;
+  line-height: 1;
+}
+.tb-board__pitch > .pv-root {
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: 105 / 68;
+}
+
+/* ── 포메이션 셀렉터(보드 상단) ─────────────────────────────── */
+.tb-formsel {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tb-formsel__btn {
+  padding: 8px 14px;
+  border: 1px solid var(--tb-board-line);
+  border-radius: 8px;
+  background: rgba(127, 212, 255, 0.04);
+  color: var(--bc-text-dim);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.tb-formsel__btn:hover {
+  border-color: var(--tb-chalk);
+  color: var(--bc-text);
+}
+.tb-formsel__btn--active {
+  background: var(--tb-chalk);
+  border-color: var(--tb-chalk);
+  color: #06101f;
+}
+
+/* ── 우측 지시 패널(탭) ─────────────────────────────────────── */
+.tb-side {
+  flex: 3 1 0;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+.tb-tabs {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+}
+.tb-tab {
+  flex: 1;
+  padding: 10px 0;
+  border: 1px solid var(--tb-board-line);
+  border-radius: 8px;
+  background: rgba(127, 212, 255, 0.04);
+  color: var(--bc-text-dim);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tb-tab--active {
+  background: rgba(127, 212, 255, 0.14);
+  color: var(--bc-text);
+  border-color: var(--tb-chalk);
+}
+.tb-side__body {
+  flex: 1 1 0;
+  min-height: 0;
+}
+/* ── 하단: 정지 사유 + [전술 확정] 대형 버튼 ───────────────── */
+.tb-foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding-top: 4px;
+}
+.tb-foot__reason {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--bc-text-dim);
+}
+.tb-confirm {
+  padding: 16px 40px;
+  border: 1px solid var(--tb-chalk);
+  border-radius: 12px;
+  background: var(--tb-chalk);
+  color: #06101f;
+  font-family: inherit;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+.tb-confirm:hover {
+  filter: brightness(1.08);
+}
+
+/* ── 탭 본문: 4축 콘솔 + 확장 지시 스택 ─────────────────────── */
+.tb-tactics {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── 확장 전술 지시 패널(멘탈리티·그룹·패턴·GK·페이즈) ──────── */
+.tx-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--tb-board-line);
+  border-radius: 10px;
+  background: rgba(127, 212, 255, 0.04);
+  color: var(--bc-text);
+  font-family: var(--bc-font);
+}
+.tx-group { display: flex; flex-direction: column; gap: 8px; }
+.tx-group__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--tb-chalk);
+}
+.tx-btnrow { display: flex; flex-wrap: wrap; gap: 6px; }
+.tx-btn {
+  flex: 1 1 auto;
+  min-width: 56px;
+  padding: 7px 10px;
+  border: 1px solid var(--tb-board-line);
+  border-radius: 7px;
+  background: rgba(127, 212, 255, 0.04);
+  color: var(--bc-text-dim);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tx-btn--sm { min-width: 44px; padding: 5px 8px; font-size: 11px; }
+.tx-btn:hover:not(:disabled) { border-color: var(--tb-chalk); color: var(--bc-text); }
+.tx-btn--active {
+  background: var(--tb-chalk);
+  border-color: var(--tb-chalk);
+  color: #06101f;
+}
+.tx-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.tx-line {
+  display: grid;
+  grid-template-columns: 62px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+.tx-line__label { font-size: 12px; color: var(--bc-text-dim); }
+
+.tx-toggle {
+  padding: 9px 14px;
+  border: 1px solid var(--tb-board-line);
+  border-radius: 8px;
+  background: rgba(127, 212, 255, 0.04);
+  color: var(--bc-text-dim);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.tx-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
+.tx-toggle--on {
+  background: var(--bc-danger);
+  border-color: var(--bc-danger);
+  color: #fff;
+}
+.tx-hint { margin: 0; font-size: 11px; line-height: 1.35; color: var(--bc-text-dim); }
+
+.tx-slot {
+  display: grid;
+  grid-template-columns: 62px 1fr;
+  align-items: center;
+  gap: 8px;
+}
+.tx-slot__label { font-size: 12px; color: var(--bc-text-dim); }
+.tx-slot__base {
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--bc-text);
+}
+.tx-slot__select {
+  background: var(--bc-panel-2);
+  color: var(--bc-text);
+  border: 1px solid var(--tb-board-line);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+/* ── 다크 전술판 PitchView 오버라이드 + 실시간 도트 이동 ─────
+   그린 피치 대신 투명 보드(부모 배경 노출), 라인은 초크 톤. */
+.pv-root--tactics {
+  background: transparent;
+}
+.pv-root--tactics .pv-stripe {
+  fill: rgba(127, 212, 255, 0.03);
+}
+.pv-root--tactics .pv-line {
+  stroke: var(--tb-board-line);
+}
+/* 포메이션 변경 시 도트·번호·이름이 새 slotCoords로 0.5s 이동(변경→시각 피드백 루프). */
+.pv-root--tactics .pv-dot,
+.pv-root--tactics .pv-num,
+.pv-root--tactics .pv-name {
+  transition: cx 0.5s ease, cy 0.5s ease, x 0.5s ease, y 0.5s ease;
+}
+.pv-name {
+  fill: var(--bc-text);
+  font-size: 2.1px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pv-root--tactics .pv-dot,
+  .pv-root--tactics .pv-num,
+  .pv-root--tactics .pv-name {
+    transition: none;
+  }
+}
+
+/* ── 코치 회의 (멀티 코치) — 작전판 최상단 카드 리스트 ─────────────
+   수비/공격/피지컬(+세트피스) 코치가 서로 다른 관점을 제안한다(상충 허용).
+   각 카드 [채택]은 부분 전술을 draft에 병합. 맨 아래 [감독 판단대로 간다]는 접기. */
+.tb-coach {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--tb-board-line);
+  border-radius: 10px;
+  background: rgba(10, 21, 38, 0.6);
+}
+.tb-coach__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: var(--tb-chalk);
+  text-transform: uppercase;
+}
+.tb-coach__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+.tb-coach__card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--tb-board-line);
+  border-left: 3px solid var(--tb-chalk);
+  border-radius: 8px;
+  background: rgba(6, 16, 31, 0.8);
+}
+.tb-coach__role {
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--tb-chalk);
+}
+.tb-coach__rationale {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--bc-text-dim);
+}
+.tb-coach__proposal {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--bc-text);
+  font-weight: 700;
+}
+.tb-coach__adopt {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 4px 14px;
+  border: 1px solid var(--tb-chalk);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tb-chalk);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.tb-coach__adopt:hover {
+  background: var(--tb-chalk);
+  color: #06101f;
+}
+.tb-coach__dismiss {
+  align-self: center;
+  padding: 6px 18px;
+  border: 1px dashed var(--bc-text-dim);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--bc-text-dim);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tb-coach__dismiss:hover {
+  color: var(--bc-text);
+  border-color: var(--bc-text);
+}

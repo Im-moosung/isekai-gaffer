@@ -67,11 +67,11 @@ export function ShootoutPanel({ home, away, seed, onDone }: {
 
   return (
     <div className="so-panel">
-      <h2 className="ms-overlay__title">승부차기</h2>
+      <h2 className="so-title">승부차기</h2>
 
       {!started ? (
         <>
-          <p className="ms-overlay__note">키커 5인의 순서와 방향을 정하세요 (기본: 페널티 상위 5인)</p>
+          <p className="so-note">키커 5인의 순서와 방향을 정하세요 (기본: 페널티 상위 5인)</p>
           <ol className="so-setup" aria-label="키커 순서">
             {kickerIds.map((id, i) => (
               <li key={i} className="so-slot">

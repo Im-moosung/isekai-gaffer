@@ -4,6 +4,7 @@
 import { create } from 'zustand'
 import type { TeamId } from '../data/loader'
 import type { DecisionEntry } from '../engine/types'
+import type { TeamTalkTone } from './matchStore'
 
 export type CampaignStage =
   | 'group1' | 'group2' | 'group3'
@@ -26,6 +27,9 @@ export interface CampaignState {
   path: 'first' | 'second' | null
   fatigueCarry: Record<string, number> // 경기 종료 시 스태미나 이월
   ending: { reached: CampaignStage; champion: boolean } | null
+  /** 지난 경기 하프타임 팀토크 톤(캠페인 저장 — MatchRecord 흐름과 별개 필드).
+   *  같은 톤을 연이어 쓰면 팀토크 효과가 반감된다(반복 감쇠). 미사용/첫 경기는 null. */
+  lastTeamTalkTone: TeamTalkTone | null
   startCampaign(seed: number): void
   currentOpponent(): TeamId
   matchSeed(): number // seed*31 + matchIndex(진행 순 0부터)
@@ -36,6 +40,8 @@ export interface CampaignState {
     decisions?: DecisionEntry[],
   ): void
   startingStamina(playerId: number | string): number
+  /** 팀토크 톤 기록(경기 종료와 무관하게 하프타임에 즉시 저장). 반복 감쇠 판정 근거. */
+  setLastTeamTalkTone(tone: TeamTalkTone): void
   reset(): void
 }
 
@@ -109,6 +115,7 @@ const initial = {
   path: null as 'first' | 'second' | null,
   fatigueCarry: {} as Record<string, number>,
   ending: null as { reached: CampaignStage; champion: boolean } | null,
+  lastTeamTalkTone: null as TeamTalkTone | null,
 }
 
 export const useCampaignStore = create<CampaignState>((set, get) => ({
@@ -143,24 +150,28 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
     const records = [...state.records, record]
     // 체력 이월: 이번 경기 종료 스태미나를 저장(다음 경기 시작 시 70% 회복)
     const fatigueCarry = { ...state.fatigueCarry, ...staminaByPlayer }
+    // 반복 감쇠용: 이번 경기 하프타임 팀토크 톤을 캠페인에 저장(다음 경기에서 같은 톤이면 반감).
+    // 외침도 kind:'teamtalk'이므로 detail.tone(HT 팀토크만 보유)이 있는 항목만 취한다.
+    const talk = [...decisions].reverse().find(d => d.kind === 'teamtalk' && typeof d.detail?.tone === 'string')
+    const lastTeamTalkTone = (talk?.detail?.tone as TeamTalkTone | undefined) ?? state.lastTeamTalkTone
 
     // --- 조별 스테이지: 무승부 허용, 3경기 후 순위 산정 ---
     if (stage === 'group1') {
-      set({ records, fatigueCarry, stage: 'group2' })
+      set({ records, fatigueCarry, lastTeamTalkTone, stage: 'group2' })
       return
     }
     if (stage === 'group2') {
-      set({ records, fatigueCarry, stage: 'group3' })
+      set({ records, fatigueCarry, lastTeamTalkTone, stage: 'group3' })
       return
     }
     if (stage === 'group3') {
       const groupRecords = records.filter(r => r.stage.startsWith('group'))
       const rank = computeKorRank(groupRecords)
       if (rank === 1 || rank === 2) {
-        set({ records, fatigueCarry, groupRank: rank, path: rank === 1 ? 'first' : 'second', stage: 'r32' })
+        set({ records, fatigueCarry, lastTeamTalkTone, groupRank: rank, path: rank === 1 ? 'first' : 'second', stage: 'r32' })
       } else {
         // 3위 이하 → 즉시 탈락 엔딩
-        set({ records, fatigueCarry, groupRank: 3, stage: 'ended', ending: { reached: 'group3', champion: false } })
+        set({ records, fatigueCarry, lastTeamTalkTone, groupRank: 3, stage: 'ended', ending: { reached: 'group3', champion: false } })
       }
       return
     }
@@ -176,14 +187,14 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
     }
 
     if (!won) {
-      set({ records, fatigueCarry, stage: 'ended', ending: { reached: stage, champion: false } })
+      set({ records, fatigueCarry, lastTeamTalkTone, stage: 'ended', ending: { reached: stage, champion: false } })
       return
     }
     if (stage === 'final') {
-      set({ records, fatigueCarry, stage: 'ended', ending: { reached: 'final', champion: true } })
+      set({ records, fatigueCarry, lastTeamTalkTone, stage: 'ended', ending: { reached: 'final', champion: true } })
       return
     }
-    set({ records, fatigueCarry, stage: NEXT_TOURNAMENT[stage as 'r32' | 'r16' | 'qf' | 'sf'] })
+    set({ records, fatigueCarry, lastTeamTalkTone, stage: NEXT_TOURNAMENT[stage as 'r32' | 'r16' | 'qf' | 'sf'] })
   },
 
   // 다음 경기 시작 스태미나: 이월값 + (100-이월값)*0.7 (70% 회복). 미기록/첫 경기는 100.
@@ -192,6 +203,8 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
     if (carry === undefined) return 100
     return Math.min(100, carry + (100 - carry) * 0.7)
   },
+
+  setLastTeamTalkTone: (tone) => set({ lastTeamTalkTone: tone }),
 
   reset: () => set({ ...initial }),
 }))
