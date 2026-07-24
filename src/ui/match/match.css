@@ -290,21 +290,70 @@
   letter-spacing: 0.06em;
   color: var(--bc-text-dim);
 }
+/* 사전 정보 — 팀 사기 게이지 */
+.tt-morale {
+  margin: 0 0 10px;
+}
+.tt-morale__bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bc-panel-2);
+  overflow: hidden;
+  border: 1px solid var(--bc-line);
+}
+.tt-morale__fill {
+  height: 100%;
+  background: linear-gradient(90deg, #d9534f 0%, #f0ad4e 50%, #5cb85c 100%);
+  transition: width 0.4s ease;
+}
+.tt-morale__status {
+  margin: 5px 0 0;
+  font-size: 12px;
+  color: var(--bc-text-dim);
+}
 .tt-btns {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
 }
 .tt-btn {
-  padding: 10px 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 12px;
   border: 1px solid var(--bc-line);
   border-radius: 8px;
   background: var(--bc-panel-2);
   color: var(--bc-text);
   font-family: inherit;
-  font-size: 14px;
-  font-weight: 700;
+  text-align: left;
   cursor: pointer;
+}
+.tt-btn__tone {
+  font-size: 14px;
+  font-weight: 800;
+}
+.tt-btn__line {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--bc-text-dim);
+}
+.tt-btn__badge {
+  position: absolute;
+  top: -8px;
+  right: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--bc-accent);
+  color: #06131f;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+.tt-btn--rec {
+  border-color: var(--bc-accent);
 }
 .tt-btn:hover:not(:disabled) {
   border-color: var(--bc-accent);
@@ -313,6 +362,57 @@
   opacity: 0.4;
   cursor: default;
 }
+
+/* 선택 즉시 효과 배너 */
+.tt-banner {
+  margin: 12px 0 0;
+  padding: 14px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--bc-line);
+  animation: tt-banner-pop 0.35s ease;
+}
+@keyframes tt-banner-pop {
+  from { transform: scale(0.92); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tt-banner { animation: none; }
+  .tt-morale__fill { transition: none; }
+}
+.tt-banner--up   { background: rgba(92, 184, 92, 0.14); border-color: #5cb85c; }
+.tt-banner--down { background: rgba(217, 83, 79, 0.16); border-color: #d9534f; }
+.tt-banner--flat { background: var(--bc-panel-2); }
+.tt-banner__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+}
+.tt-banner__icon { font-size: 24px; }
+.tt-banner__text { font-size: 18px; font-weight: 800; }
+.tt-banner--up .tt-banner__text   { color: #7ddc7d; }
+.tt-banner--down .tt-banner__text { color: #ff8a86; }
+.tt-banner__note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--bc-text-dim);
+}
+.tt-reactions {
+  display: flex;
+  gap: 14px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.tt-reactions__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.tt-reactions__icon { font-size: 20px; }
+.tt-reactions__name { font-size: 11px; color: var(--bc-text-dim); }
 .tt-done {
   margin: 8px 0 0;
   font-size: 12px;

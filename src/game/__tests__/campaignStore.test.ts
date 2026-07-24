@@ -148,6 +148,35 @@ describe('recordResult decisions 보존', () => {
   })
 })
 
+describe('lastTeamTalkTone (반복 감쇠)', () => {
+  const talk = (tone: string) => [{ minute: 45, kind: 'teamtalk' as const, summary: `HT 팀토크: ${tone}`, detail: { tone } }]
+
+  it('recordResult가 decisions의 HT 팀토크 톤을 캠페인에 저장한다', () => {
+    store().startCampaign(1)
+    expect(store().lastTeamTalkTone).toBeNull()
+    store().recordResult([1, 0], {}, undefined, talk('rage'))
+    expect(store().lastTeamTalkTone).toBe('rage')
+  })
+  it('팀토크 없는 경기는 직전 톤을 유지한다', () => {
+    store().startCampaign(1)
+    store().recordResult([1, 0], {}, undefined, talk('calm'))
+    store().recordResult([1, 0], {}) // 팀토크 없음
+    expect(store().lastTeamTalkTone).toBe('calm')
+  })
+  it('외침(kind:teamtalk·tone 없음)은 무시한다', () => {
+    store().startCampaign(1)
+    const shout = [{ minute: 60, kind: 'teamtalk' as const, summary: "60' 외침: 독려", detail: { shout: 'urge' } }]
+    store().recordResult([1, 0], {}, undefined, shout)
+    expect(store().lastTeamTalkTone).toBeNull()
+  })
+  it('reset은 lastTeamTalkTone도 초기화한다', () => {
+    store().startCampaign(1)
+    store().recordResult([1, 0], {}, undefined, talk('trust'))
+    store().reset()
+    expect(store().lastTeamTalkTone).toBeNull()
+  })
+})
+
 describe('reset', () => {
   it('초기 상태로 되돌린다', () => {
     store().startCampaign(1)

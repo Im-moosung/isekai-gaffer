@@ -32,6 +32,88 @@ export const TEAM_TALK_TABLE: Record<ScoreSituation, Record<TeamTalkTone, number
   winning: { rage: -4, encourage: 2, calm: 6, trust: 5 },
 }
 
+/** 상대 기대치(FIFA 랭킹 차 기반). even이 중립(기존 동작·데모). */
+export type Expectation = 'underdog' | 'even' | 'favorite'
+
+/** 언더독/페이버릿 판정 랭킹 차 임계값(브리프 정본: ≥15). */
+export const EXPECTATION_THRESHOLD = 15
+
+/** 팀 관점 FIFA 랭킹 차로 기대치 판정.
+ *  랭킹 숫자는 작을수록 강팀 → (내 랭킹 - 상대 랭킹)이 클수록 우리가 약체(언더독).
+ *  ≥+15면 언더독, ≤-15면 페이버릿, 그 사이는 even. */
+export function teamExpectation(ownRanking: number, oppRanking: number): Expectation {
+  const diff = ownRanking - oppRanking
+  if (diff >= EXPECTATION_THRESHOLD) return 'underdog'
+  if (diff <= -EXPECTATION_THRESHOLD) return 'favorite'
+  return 'even'
+}
+
+/** 기대치별 결정론 보정 가산 테이블 — TEAM_TALK_TABLE에 더해진다(랜덤 없음).
+ *  even은 전부 0(기존 동작 불변). 근거(브리프 정본):
+ *   - 언더독×지는중: 약체가 지는 건 예상 범위 — 격노는 역효과, '침착'이 최대(업셋 유지).
+ *   - 페이버릿×지는중: 이겨야 할 경기에서 뒤진 상황 — '격노'로 각성이 최대.
+ *   - 언더독×비기는중: 강팀 상대 무승부는 호성적 — '격려'로 한 방을 노린다.
+ *   - 페이버릿×비기는중: 강팀이 못 이기는 중 — 더 밀어붙이는 '격노'가 최대.
+ *   - 언더독×이기는중: 강팀 상대 리드는 값지지만 취약 — '침착'하게 지킨다.
+ *   - 페이버릿×이기는중: 예상된 리드 — 흐트러지지 않게 '침착'하게 관리. */
+export const EXPECTATION_ADJUST: Record<Expectation, Record<ScoreSituation, Record<TeamTalkTone, number>>> = {
+  even: {
+    losing:  { rage: 0, encourage: 0, calm: 0, trust: 0 },
+    drawing: { rage: 0, encourage: 0, calm: 0, trust: 0 },
+    winning: { rage: 0, encourage: 0, calm: 0, trust: 0 },
+  },
+  underdog: {
+    // 지는중: calm 2→10로 격노(8→4)를 제치고 최대.
+    losing:  { rage: -4, encourage: 1, calm: 8, trust: 2 },
+    // 비기는중: encourage 5→7로 최대.
+    drawing: { rage: -1, encourage: 2, calm: 1, trust: 1 },
+    // 이기는중: calm 6→8로 최대 유지·강화.
+    winning: { rage: -2, encourage: 0, calm: 2, trust: 1 },
+  },
+  favorite: {
+    // 지는중: rage 8→11로 최대 강화.
+    losing:  { rage: 3, encourage: -1, calm: -2, trust: 0 },
+    // 비기는중: rage 3→7로 encourage(5)를 제치고 최대.
+    drawing: { rage: 4, encourage: 1, calm: -1, trust: -1 },
+    // 이기는중: calm 6→7로 최대 유지.
+    winning: { rage: -1, encourage: 1, calm: 1, trust: 0 },
+  },
+}
+
+/** 상황·기대치에서 최대 사기 보정 톤(코치 추천 — 확률 요소 없는 결정론).
+ *  동점 시 톤 우선순위(rage>encourage>calm>trust — 선언 순) 안정 선택. */
+export function recommendedTone(situation: ScoreSituation, expectation: Expectation = 'even'): TeamTalkTone {
+  const tones: TeamTalkTone[] = ['rage', 'encourage', 'calm', 'trust']
+  let best = tones[0]
+  let bestV = -Infinity
+  for (const tone of tones) {
+    const v = TEAM_TALK_TABLE[situation][tone] + EXPECTATION_ADJUST[expectation][situation][tone]
+    if (v > bestV) { bestV = v; best = tone }
+  }
+  return best
+}
+
+/** 팀토크 선택 후 UI 즉시 효과 표시용 반환. */
+export interface TeamTalkResult {
+  /** 실제 적용된 사기 delta(반복 감쇠 반영 후 정수). */
+  delta: number
+  /** 반복 감쇠가 적용됐는지(지난 경기와 같은 톤). */
+  repeated: boolean
+  /** 선수별 반응 아이콘 2~3명(주장·keyPlayers 우선, 결정론). */
+  reactions: { playerId: string; icon: TeamTalkReactionIcon }[]
+}
+
+export type TeamTalkReactionIcon = '🔥' | '😐' | '😰'
+
+/** delta·선수 인덱스로 결정론 반응 아이콘. 뒤 선수일수록 약간 덜 반응(idx 감산).
+ *  긍정 강할수록 🔥, 미지근하면 😐, 역효과면 😰. */
+function reactionIcon(delta: number, idx: number): TeamTalkReactionIcon {
+  const score = delta - idx
+  if (score >= 5) return '🔥'
+  if (score >= 0) return '😐'
+  return '😰'
+}
+
 /** 개입 직후 지시 효과 부스트 지속(분). advanceMinute이 simulateSegment opts로 엔진에 전달(Task 5). */
 const BOOST_MINUTES = 8
 
@@ -139,7 +221,9 @@ export interface MatchUIState {
   /** 동적 순간 제안 무시(재생 계속). */
   dismissMoment(): void
   submitCommand(side: 'home' | 'away', cmd: MatchCommand): void
-  applyTeamTalk(side: 'home' | 'away', tone: TeamTalkTone): void
+  /** 하프타임 팀토크 — 결정론 사기 보정 후 즉시 효과 결과 반환.
+   *  opts.expectation: 상대 기대치(FIFA 랭킹 차) 보정, opts.repeated: 지난 경기와 같은 톤이면 효과 반감. */
+  applyTeamTalk(side: 'home' | 'away', tone: TeamTalkTone, opts?: { expectation?: Expectation; repeated?: boolean }): TeamTalkResult
   /** 터치라인 외침 — playing 중 즉시(정지 없음). 10분 쿨다운·결정론 사기/체력 보정·로그.
    *  홈(감독) 전용. 쿨다운 중이거나 재생 중이 아니면 throw. */
   shout(type: ShoutType): void
@@ -275,23 +359,38 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
       ...(entry ? { decisionLog: [...decisionLog, entry] } : {}),
     })
   },
-  applyTeamTalk: (side, tone) => {
+  applyTeamTalk: (side, tone, opts) => {
     const { engine, phase, talked } = get()
     if (!engine) throw new Error('경기 미시작')
     if (phase !== 'halftime') throw new Error('팀토크는 하프타임에만 가능')
     if (talked) throw new Error('팀토크는 경기당 1회만 가능')
     const situation = scoreSituation(engine.score, side)
-    const delta = TEAM_TALK_TABLE[situation][tone]
+    const expectation = opts?.expectation ?? 'even'
+    const repeated = opts?.repeated ?? false
+    // 기본 테이블 + 기대치 보정, 반복이면 반감(울림이 덜하다). 정수로 반올림.
+    const base = TEAM_TALK_TABLE[situation][tone] + EXPECTATION_ADJUST[expectation][situation][tone]
+    const delta = repeated ? Math.round(base / 2) : base
     const next = structuredClone(engine)
-    const morale = next[side].moraleByPlayer
+    const sideState = next[side]
+    const morale = sideState.moraleByPlayer
     for (const id of Object.keys(morale)) {
       morale[id] = Math.max(0, Math.min(100, morale[id] + delta))
     }
+    // 선수별 반응 2~3명: keyPlayers(주장 역할) 우선, 부족분은 선발 라인업에서 채운다(결정론).
+    const keyIds = sideState.team.profile.keyPlayers.map(k => k.playerId)
+    const lineupIds = sideState.tactics.lineup.map(l => l.playerId)
+    const picked: string[] = []
+    for (const id of [...keyIds, ...lineupIds]) {
+      if (!picked.includes(id) && id in morale) picked.push(id)
+      if (picked.length >= 3) break
+    }
+    const reactions = picked.map((playerId, idx) => ({ playerId, icon: reactionIcon(delta, idx) }))
     const entry: DecisionEntry = {
       minute: engine.minute, kind: 'teamtalk',
-      summary: `HT 팀토크: ${TONE_LABEL[tone]}`, detail: { tone, situation, delta },
+      summary: `HT 팀토크: ${TONE_LABEL[tone]}`, detail: { tone, situation, expectation, repeated, delta },
     }
     set({ engine: next, talked: true, decisionLog: [...get().decisionLog, entry] })
+    return { delta, repeated, reactions }
   },
   shout: (type) => {
     const { engine, phase, lastShoutMinute, decisionLog } = get()

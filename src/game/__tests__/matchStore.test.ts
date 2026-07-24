@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useMatchStore, TEAM_TALK_TABLE, scoreSituation, SHOUT_TABLE, SHOUT_COOLDOWN } from '../matchStore'
+import {
+  useMatchStore, TEAM_TALK_TABLE, scoreSituation, SHOUT_TABLE, SHOUT_COOLDOWN,
+  teamExpectation, recommendedTone, EXPECTATION_ADJUST,
+} from '../matchStore'
 import { makeTestTeam, pickBestXI } from '../../engine/fixtures/testTeams'
 
 const a = makeTestTeam('a', 78), b = makeTestTeam('b', 78)
@@ -239,6 +242,64 @@ describe('applyTeamTalk (결정론 사기 보정)', () => {
     store().applyTeamTalk('home', 'calm')
     expect(store().talked).toBe(true)
     expect(() => store().applyTeamTalk('home', 'trust')).toThrow()
+  })
+  it('결과 반환: delta·repeated·선수 반응(2~3명, 결정론) 포함', () => {
+    store().startMatch(a, b, 42, { firstHalfScript: { events: [{ minute: 20, type: 'goal', teamId: b.id }], score: [0, 1] } })
+    toHalftime()
+    const res = store().applyTeamTalk('home', 'rage') // 지는 중 격노 +8
+    expect(res.delta).toBe(8)
+    expect(res.repeated).toBe(false)
+    expect(res.reactions.length).toBeGreaterThanOrEqual(2)
+    expect(res.reactions.length).toBeLessThanOrEqual(3)
+    // 강한 긍정(+8) → 앞선 선수들 🔥
+    expect(res.reactions[0].icon).toBe('🔥')
+    // 결정론: 같은 시드·같은 톤이면 동일 반응
+    store().reset()
+    store().startMatch(a, b, 42, { firstHalfScript: { events: [{ minute: 20, type: 'goal', teamId: b.id }], score: [0, 1] } })
+    toHalftime()
+    const res2 = store().applyTeamTalk('home', 'rage')
+    expect(res2.reactions).toEqual(res.reactions)
+  })
+  it('반복 감쇠: repeated면 delta 반감', () => {
+    store().startMatch(a, b, 42, { firstHalfScript: { events: [{ minute: 20, type: 'goal', teamId: b.id }], score: [0, 1] } })
+    toHalftime()
+    const res = store().applyTeamTalk('home', 'rage', { repeated: true }) // 8 → 4
+    expect(res.delta).toBe(4)
+    expect(res.repeated).toBe(true)
+  })
+  it('기대치 보정: 페이버릿×지는중이면 격노가 강화(+11)', () => {
+    store().startMatch(a, b, 42, { firstHalfScript: { events: [{ minute: 20, type: 'goal', teamId: b.id }], score: [0, 1] } })
+    toHalftime()
+    const res = store().applyTeamTalk('home', 'rage', { expectation: 'favorite' }) // 8 + 3
+    expect(res.delta).toBe(11)
+  })
+})
+
+describe('기대치·코치 추천(결정론)', () => {
+  it('teamExpectation: 랭킹 차 ≥15 언더독/페이버릿, 그 사이 even', () => {
+    expect(teamExpectation(25, 5)).toBe('underdog')  // 우리가 20 낮음(약체)
+    expect(teamExpectation(25, 60)).toBe('favorite') // 우리가 35 높음(강팀)
+    expect(teamExpectation(25, 30)).toBe('even')
+    expect(teamExpectation(25, 10)).toBe('underdog') // 정확히 15
+  })
+  it('even 보정은 전부 0(기존 동작 불변)', () => {
+    for (const sit of ['losing', 'drawing', 'winning'] as const) {
+      for (const tone of ['rage', 'encourage', 'calm', 'trust'] as const) {
+        expect(EXPECTATION_ADJUST.even[sit][tone]).toBe(0)
+      }
+    }
+  })
+  it('추천 톤이 기대치에 따라 바뀐다', () => {
+    // 지는 중: even→격노, 언더독→침착, 페이버릿→격노
+    expect(recommendedTone('losing', 'even')).toBe('rage')
+    expect(recommendedTone('losing', 'underdog')).toBe('calm')
+    expect(recommendedTone('losing', 'favorite')).toBe('rage')
+    // 비기는 중: even→격려, 페이버릿→격노
+    expect(recommendedTone('drawing', 'even')).toBe('encourage')
+    expect(recommendedTone('drawing', 'favorite')).toBe('rage')
+    // 이기는 중: 침착 계열 최대
+    expect(recommendedTone('winning', 'even')).toBe('calm')
+    expect(recommendedTone('winning', 'underdog')).toBe('calm')
   })
 })
 
