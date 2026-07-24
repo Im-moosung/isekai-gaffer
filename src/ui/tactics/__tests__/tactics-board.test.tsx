@@ -111,6 +111,45 @@ describe('TacticsBoard — 확장 전술 지시(Task 5)', () => {
   })
 })
 
+describe('TacticsBoard — 코치 회의 (멀티 코치)', () => {
+  it('작전판 상단에 코치 회의 카드들 + [감독 판단대로 간다] 노출', () => {
+    const { container, getByRole } = mountAt('halftime')
+    const coach = container.querySelector('.tb-coach')!
+    expect(coach).toBeTruthy()
+    expect(coach.querySelectorAll('.tb-coach__card').length).toBeGreaterThanOrEqual(2)
+    // 코치 회의가 tb-main(작전판 본체)보다 먼저 온다(상단·진입 시 가장 먼저).
+    const root = container.querySelector('.tb-root')!
+    const kids = Array.from(root.children)
+    const coachIdx = kids.findIndex(k => k.classList.contains('tb-coach'))
+    const mainIdx = kids.findIndex(k => k.classList.contains('tb-main'))
+    expect(coachIdx).toBeGreaterThanOrEqual(0)
+    expect(coachIdx).toBeLessThan(mainIdx)
+    expect(getByRole('button', { name: '감독 판단대로 간다' })).toBeTruthy()
+  })
+
+  it('[채택] → 부분 전술이 draft(엔진 tactics)에 병합된다', () => {
+    const { container } = mountAt('halftime')
+    const before = store().engine!.home.tactics
+    const beforeLine = before.instructions.lineHeight
+    const beforePress = before.instructions.pressing
+    // 수비 코치 카드(첫 카드) 채택 → 라인 하향.
+    const cards = container.querySelectorAll('.tb-coach__card')
+    const defCard = Array.from(cards).find(c => c.querySelector('.tb-coach__role')!.textContent === '수비 코치')!
+    fireEvent.click(defCard.querySelector('.tb-coach__adopt') as HTMLElement)
+    expect(store().engine!.home.tactics.instructions.lineHeight).toBeLessThan(beforeLine)
+    // 압박은 수비 코치 패치 대상이 아니므로 불변.
+    expect(store().engine!.home.tactics.instructions.pressing).toBe(beforePress)
+    expect(store().engine!.home.tactics.groupIntensity!.defense).toBe(-1)
+  })
+
+  it('[감독 판단대로 간다] → 카드 접힘', () => {
+    const { container, getByRole } = mountAt('paused-user')
+    expect(container.querySelector('.tb-coach')).toBeTruthy()
+    fireEvent.click(getByRole('button', { name: '감독 판단대로 간다' }))
+    expect(container.querySelector('.tb-coach')).toBeNull()
+  })
+})
+
 describe('TacticsBoard — 하프타임 팀토크 + 사유', () => {
   it('halftime → 팀토크 카드 + [후반 시작] 라벨 + 사유(전반 종료)', () => {
     const { getByRole, container } = mountAt('halftime')

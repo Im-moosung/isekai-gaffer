@@ -35,6 +35,26 @@ export const TEAM_TALK_TABLE: Record<ScoreSituation, Record<TeamTalkTone, number
 /** 개입 직후 지시 효과 부스트 지속(분). advanceMinute이 simulateSegment opts로 엔진에 전달(Task 5). */
 const BOOST_MINUTES = 8
 
+/** 터치라인 외침 4종 — [독려][더 뛰어][침착][칭찬]. */
+export type ShoutType = 'urge' | 'work' | 'calm' | 'praise'
+/** 외침 쿨다운(분) — 마지막 외침 이후 이 분이 지나야 재외침 가능. */
+export const SHOUT_COOLDOWN = 10
+
+/** 외침 효과 결정론 테이블 — 스코어 상황 × 외침 (사기·체력 delta, 전원 일괄).
+ *  랜덤 없이 상황·유형만으로 정해진다(재현성). 부적합 조합은 역효과:
+ *  이기는데 [더 뛰어]=사기 저하·체력 소모 가중, 지는데 [칭찬]=공허(사기 저하) 등.
+ *  ★ 단순화 계약: 엔진 전달 없이 moraleByPlayer/staminaByPlayer 직접 보정(applyTeamTalk 방식). */
+export const SHOUT_TABLE: Record<ScoreSituation, Record<ShoutType, { morale: number; stamina: number }>> = {
+  losing:  { urge: { morale: 6, stamina: 0 }, work: { morale: 4, stamina: -2 }, calm: { morale: 2, stamina: 0 }, praise: { morale: -3, stamina: 0 } },
+  drawing: { urge: { morale: 4, stamina: 0 }, work: { morale: 3, stamina: -2 }, calm: { morale: 3, stamina: 0 }, praise: { morale: 2, stamina: 0 } },
+  winning: { urge: { morale: 1, stamina: 0 }, work: { morale: -4, stamina: -5 }, calm: { morale: 5, stamina: 0 }, praise: { morale: 4, stamina: 0 } },
+}
+
+/** 외침 한국어 라벨(버튼·로그용). */
+export const SHOUT_LABEL: Record<ShoutType, string> = {
+  urge: '독려', work: '더 뛰어', calm: '침착', praise: '칭찬',
+}
+
 /** 팀 관점(side)에서 현재 스코어 상황을 판정한다. */
 export function scoreSituation(score: [number, number], side: 'home' | 'away'): ScoreSituation {
   const [own, opp] = side === 'home' ? [score[0], score[1]] : [score[1], score[0]]
@@ -100,6 +120,8 @@ export interface MatchUIState {
   boostUntil: number
   /** 하프타임 팀토크 1회 제한 플래그. */
   talked: boolean
+  /** 마지막 터치라인 외침 분(쿨다운 계산·진행 표시용). null이면 아직 외침 없음. */
+  lastShoutMinute: number | null
   /** 감독 개입 로그 — 기자회견 근거. startMatch/reset 시 초기화. */
   decisionLog: DecisionEntry[]
   startMatch(home: Team, away: Team, seed: number, opts?: StartMatchOpts): void
@@ -118,6 +140,9 @@ export interface MatchUIState {
   dismissMoment(): void
   submitCommand(side: 'home' | 'away', cmd: MatchCommand): void
   applyTeamTalk(side: 'home' | 'away', tone: TeamTalkTone): void
+  /** 터치라인 외침 — playing 중 즉시(정지 없음). 10분 쿨다운·결정론 사기/체력 보정·로그.
+   *  홈(감독) 전용. 쿨다운 중이거나 재생 중이 아니면 throw. */
+  shout(type: ShoutType): void
   logShootoutSetup(summary: string): void
   reset(): void
 }
@@ -131,6 +156,7 @@ const initial = {
   firedMoments: [] as DecisionMoment['kind'][],
   boostUntil: 0,
   talked: false,
+  lastShoutMinute: null as number | null,
   decisionLog: [] as DecisionEntry[],
 }
 
@@ -266,6 +292,31 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
       summary: `HT 팀토크: ${TONE_LABEL[tone]}`, detail: { tone, situation, delta },
     }
     set({ engine: next, talked: true, decisionLog: [...get().decisionLog, entry] })
+  },
+  shout: (type) => {
+    const { engine, phase, lastShoutMinute, decisionLog } = get()
+    if (!engine) throw new Error('경기 미시작')
+    if (phase !== 'playing') throw new Error('외침은 재생 중에만 가능')
+    const minute = engine.minute
+    if (lastShoutMinute !== null && minute - lastShoutMinute < SHOUT_COOLDOWN) {
+      throw new Error('외침 쿨다운 중')
+    }
+    const situation = scoreSituation(engine.score, 'home')
+    const { morale, stamina } = SHOUT_TABLE[situation][type]
+    // ★ 단순화: 엔진 전달 없이 홈 사기/체력을 직접 보정(applyTeamTalk 방식). 정지 없음.
+    const next = structuredClone(engine)
+    const m = next.home.moraleByPlayer
+    for (const id of Object.keys(m)) m[id] = Math.max(0, Math.min(100, m[id] + morale))
+    if (stamina !== 0) {
+      const s = next.home.staminaByPlayer
+      for (const id of Object.keys(s)) s[id] = Math.max(0, Math.min(100, s[id] + stamina))
+    }
+    const entry: DecisionEntry = {
+      minute, kind: 'teamtalk',
+      summary: `${minute}' 외침: ${SHOUT_LABEL[type]}`,
+      detail: { shout: type, situation, morale, stamina },
+    }
+    set({ engine: next, lastShoutMinute: minute, decisionLog: [...decisionLog, entry] })
   },
   logShootoutSetup: (summary) => {
     const { engine, decisionLog } = get()

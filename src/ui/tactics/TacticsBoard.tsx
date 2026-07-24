@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import type { FormationId } from '../../engine/types'
+import type { FormationId, GroupIntensity, TacticState } from '../../engine/types'
 import { useMatchStore } from '../../game/matchStore'
+import { buildCoachAdvice, type TacticPatch } from '../../game/coach'
 import { PitchView } from '../pitch/PitchView'
 import { ConsolePanel } from '../console/ConsolePanel'
 import { SubPanel } from '../console/SubPanel'
@@ -73,6 +74,9 @@ export function TacticsBoard() {
         <span className="tb-head__label">작전 타임</span>
         <span className="tb-head__reason">{reasonText(pauseReason, halftime)}</span>
       </div>
+
+      {/* 코치 회의 — 작전판 최상단(진입 시 가장 먼저). 멀티 코치·[감독 판단대로 간다] 포함. */}
+      <CoachMeeting />
 
       {halftime && (
         <div className="tb-talk">
@@ -158,5 +162,54 @@ export function TacticsBoard() {
         </button>
       </footer>
     </div>
+  )
+}
+
+const DEFAULT_GI: GroupIntensity = { attack: 0, midfield: 0, defense: 0 }
+
+/** 코치 회의 카드 리스트 — 수비/공격/피지컬(+세트피스) 코치가 서로 다른 관점을 제안한다.
+ *  각 카드 [채택]은 부분 전술(TacticPatch)을 현재 draft에 병합해 즉시 반영한다(유저가 이후 수정 가능).
+ *  맨 아래 [감독 판단대로 간다]는 전체 카드를 접는다(전부 무시 — 감독의 딜레마 존중). */
+function CoachMeeting() {
+  const engine = useMatchStore(s => s.engine)
+  const submitCommand = useMatchStore(s => s.submitCommand)
+  const [dismissed, setDismissed] = useState(false)
+
+  if (!engine || dismissed) return null
+  const advice = buildCoachAdvice(engine, SIDE)
+  if (advice.length === 0) return null
+
+  // TacticPatch → 현재 tactics에 병합 후 formation 명령으로 제출(엔진은 tactics 통째 교체).
+  const adopt = (p: TacticPatch) => {
+    const t = engine[SIDE].tactics
+    const merged: TacticState = {
+      ...t,
+      ...(p.instructions ? { instructions: { ...t.instructions, ...p.instructions } } : {}),
+      ...(p.mentality ? { mentality: p.mentality } : {}),
+      ...(p.groupIntensity ? { groupIntensity: { ...(t.groupIntensity ?? DEFAULT_GI), ...p.groupIntensity } } : {}),
+      ...(p.attackPattern ? { attackPattern: p.attackPattern } : {}),
+    }
+    submitCommand(SIDE, { type: 'formation', tactics: merged })
+  }
+
+  return (
+    <section className="tb-coach" aria-label="코치 회의">
+      <h3 className="tb-coach__title">코치 회의</h3>
+      <ul className="tb-coach__list">
+        {advice.map((a, i) => (
+          <li key={`${a.coach}-${i}`} className="tb-coach__card">
+            <div className="tb-coach__role">{a.coach}</div>
+            <p className="tb-coach__rationale">{a.rationale}</p>
+            <p className="tb-coach__proposal">{a.proposal}</p>
+            <button type="button" className="tb-coach__adopt" onClick={() => adopt(a.apply)}>
+              채택
+            </button>
+          </li>
+        ))}
+      </ul>
+      <button type="button" className="tb-coach__dismiss" onClick={() => setDismissed(true)}>
+        감독 판단대로 간다
+      </button>
+    </section>
   )
 }

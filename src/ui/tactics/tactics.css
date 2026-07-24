@@ -323,3 +323,94 @@
     transition: none;
   }
 }
+
+/* ── 코치 회의 (멀티 코치) — 작전판 최상단 카드 리스트 ─────────────
+   수비/공격/피지컬(+세트피스) 코치가 서로 다른 관점을 제안한다(상충 허용).
+   각 카드 [채택]은 부분 전술을 draft에 병합. 맨 아래 [감독 판단대로 간다]는 접기. */
+.tb-coach {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--tb-board-line);
+  border-radius: 10px;
+  background: rgba(10, 21, 38, 0.6);
+}
+.tb-coach__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  color: var(--tb-chalk);
+  text-transform: uppercase;
+}
+.tb-coach__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+.tb-coach__card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--tb-board-line);
+  border-left: 3px solid var(--tb-chalk);
+  border-radius: 8px;
+  background: rgba(6, 16, 31, 0.8);
+}
+.tb-coach__role {
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--tb-chalk);
+}
+.tb-coach__rationale {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--bc-text-dim);
+}
+.tb-coach__proposal {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--bc-text);
+  font-weight: 700;
+}
+.tb-coach__adopt {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 4px 14px;
+  border: 1px solid var(--tb-chalk);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--tb-chalk);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.tb-coach__adopt:hover {
+  background: var(--tb-chalk);
+  color: #06101f;
+}
+.tb-coach__dismiss {
+  align-self: center;
+  padding: 6px 18px;
+  border: 1px dashed var(--bc-text-dim);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--bc-text-dim);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tb-coach__dismiss:hover {
+  color: var(--bc-text);
+  border-color: var(--bc-text);
+}

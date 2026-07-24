@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useMatchStore, TEAM_TALK_TABLE, scoreSituation } from '../matchStore'
+import { useMatchStore, TEAM_TALK_TABLE, scoreSituation, SHOUT_TABLE, SHOUT_COOLDOWN } from '../matchStore'
 import { makeTestTeam, pickBestXI } from '../../engine/fixtures/testTeams'
 
 const a = makeTestTeam('a', 78), b = makeTestTeam('b', 78)
@@ -239,6 +239,86 @@ describe('applyTeamTalk (결정론 사기 보정)', () => {
     store().applyTeamTalk('home', 'calm')
     expect(store().talked).toBe(true)
     expect(() => store().applyTeamTalk('home', 'trust')).toThrow()
+  })
+})
+
+describe('터치라인 외침 (shout)', () => {
+  /** kickoff 후 지정 분까지 재생(브레이크·순간 무시). */
+  function playTo(minute: number) {
+    store().startMatch(a, b, 42)
+    store().kickoff()
+    let guard = 0
+    while (store().engine!.minute < minute && guard++ < 300) {
+      if (store().momentPrompt) store().dismissMoment()
+      if (store().phase === 'playing') store().advanceMinute()
+      else store().confirmTactics()
+    }
+  }
+
+  it('상황별 부호: 이기는데 [더 뛰어]=사기 저하·체력 소모 / 지는데 [독려]=사기 상승 / 이기는데 [침착]=사기 상승', () => {
+    expect(SHOUT_TABLE.winning.work.morale).toBeLessThan(0)
+    expect(SHOUT_TABLE.winning.work.stamina).toBeLessThan(0)
+    expect(SHOUT_TABLE.losing.urge.morale).toBeGreaterThan(0)
+    expect(SHOUT_TABLE.losing.praise.morale).toBeLessThan(0) // 지는데 칭찬=공허(역효과)
+    expect(SHOUT_TABLE.winning.calm.morale).toBeGreaterThan(0)
+  })
+
+  it('재생 중이 아니면 throw', () => {
+    store().startMatch(a, b, 42)
+    expect(() => store().shout('urge')).toThrow()
+  })
+
+  it('playing 중 외침은 정지 없이 홈 사기를 즉시 보정하고 lastShoutMinute·로그 기록', () => {
+    playTo(30)
+    expect(store().phase).toBe('playing')
+    const before = { ...store().engine!.home.moraleByPlayer }
+    const situation = scoreSituation(store().engine!.score, 'home')
+    const m = store().engine!.minute
+    store().shout('urge')
+    expect(store().phase).toBe('playing') // 정지 없음
+    expect(store().lastShoutMinute).toBe(m)
+    const delta = SHOUT_TABLE[situation].urge.morale
+    for (const id of Object.keys(before)) {
+      expect(store().engine!.home.moraleByPlayer[id]).toBe(Math.max(0, Math.min(100, before[id] + delta)))
+    }
+    const log = store().decisionLog
+    expect(log[log.length - 1].summary).toBe(`${m}' 외침: 독려`)
+  })
+
+  it('10분 쿨다운: 외침 직후 재외침은 throw, 쿨다운 경과 후 허용', () => {
+    playTo(20)
+    store().shout('calm')
+    const first = store().lastShoutMinute!
+    expect(SHOUT_COOLDOWN).toBe(10)
+    // 쿨다운 내(경과<10) 재외침 throw
+    let guard = 0
+    while (store().engine!.minute - first < SHOUT_COOLDOWN - 1 && guard++ < 30) {
+      if (store().momentPrompt) store().dismissMoment()
+      if (store().phase === 'playing') store().advanceMinute()
+      else store().confirmTactics()
+    }
+    if (store().phase === 'playing') {
+      expect(() => store().shout('urge')).toThrow()
+    }
+    // 쿨다운 경과까지 진행 후 재외침 허용
+    guard = 0
+    while (store().engine!.minute - first < SHOUT_COOLDOWN && guard++ < 30) {
+      if (store().momentPrompt) store().dismissMoment()
+      if (store().phase === 'playing') store().advanceMinute()
+      else store().confirmTactics()
+    }
+    if (store().phase === 'playing') {
+      expect(() => store().shout('urge')).not.toThrow()
+      expect(store().lastShoutMinute).toBe(store().engine!.minute)
+    }
+  })
+
+  it('reset 시 lastShoutMinute 초기화', () => {
+    playTo(15)
+    store().shout('praise')
+    expect(store().lastShoutMinute).not.toBeNull()
+    store().reset()
+    expect(store().lastShoutMinute).toBeNull()
   })
 })
 

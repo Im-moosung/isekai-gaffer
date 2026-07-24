@@ -426,3 +426,64 @@
     height: 60vh;
   }
 }
+
+/* ── 터치라인 외침 바(broadcast 하단) — 재생 중 즉시 사기 보정 ────────
+   4버튼 [독려][더 뛰어][침착][칭찬] + 10분 쿨다운 진행 바. 정지 없음. */
+.sb-root {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 14px;
+  border-top: 1px solid rgba(200, 245, 66, 0.25);
+  background: rgba(6, 14, 10, 0.55);
+}
+.sb-btns {
+  display: flex;
+  gap: 8px;
+}
+.sb-btn {
+  padding: 6px 16px;
+  border: 1px solid var(--bc-accent);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--bc-accent);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.sb-btn:hover:not(:disabled) {
+  background: var(--bc-accent);
+  color: #0a1408;
+}
+.sb-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.sb-cool {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 120px;
+  max-width: 260px;
+  height: 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+.sb-cool__bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--bc-accent);
+  opacity: 0.55;
+  transition: width 0.3s ease;
+}
+.sb-cool__text {
+  position: relative;
+  display: block;
+  text-align: center;
+  line-height: 16px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--bc-text);
+}

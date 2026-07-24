@@ -8,6 +8,7 @@ import { Ticker } from '../broadcast/Ticker'
 import { PitchView } from '../pitch/PitchView'
 import { TacticsBoard } from '../tactics/TacticsBoard'
 import { ShootoutPanel } from './ShootoutPanel'
+import { ShoutBar } from './ShoutBar'
 import { minuteDwellMs, type PlaybackSpeed } from './playback'
 import './match.css'
 
@@ -219,6 +220,9 @@ export function MatchScreen({
         </div>
 
         <Ticker lines={lines} />
+
+        {/* ── 터치라인 외침 바(broadcast 하단) — 재생 중에만. 정지 없이 즉시 사기 보정. ── */}
+        {replaying && <ShoutBar />}
 
         {/* ── 하단 바: 킥오프(pre) / 풀타임 스탯·액션 — 피치 위가 아니라 아래에 확장 ── */}
         {phase === 'pre' && (
