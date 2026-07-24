@@ -26,9 +26,11 @@ interface Props {
   headline: Headline
   record: MatchRecord
   teamName: string
+  /** 다음 단계(허브 복귀·랜딩 복귀)로 진행. 미지정 시 [다음] 버튼 숨김(단독 프리뷰 호환). */
+  onNext?(): void
 }
 
-export function NewspaperCard({ headline, record, teamName }: Props) {
+export function NewspaperCard({ headline, record, teamName, onNext }: Props) {
   const [busy, setBusy] = useState(false)
   const opp = oppName(record.opponentId)
   const [kor, og] = record.score
@@ -80,9 +82,16 @@ export function NewspaperCard({ headline, record, teamName }: Props) {
         </div>
       </article>
 
-      <button type="button" className="np-save" onClick={onSave} disabled={busy}>
-        {busy ? '저장 중…' : '이미지 저장'}
-      </button>
+      <div className="np-actions">
+        <button type="button" className="np-save" onClick={onSave} disabled={busy}>
+          {busy ? '저장 중…' : '이미지 저장'}
+        </button>
+        {onNext && (
+          <button type="button" className="np-next" onClick={onNext}>
+            다음
+          </button>
+        )}
+      </div>
     </div>
   )
 }

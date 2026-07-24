@@ -237,3 +237,22 @@
   cursor: pointer;
 }
 .np-save:disabled { opacity: 0.6; cursor: default; }
+
+.np-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.np-next {
+  padding: 12px 28px;
+  border-radius: 10px;
+  border: 1px solid var(--bc-line, #35405c);
+  background: transparent;
+  color: var(--bc-text, #eef2fb);
+  font-family: var(--bc-font, sans-serif);
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+}
+.np-next:hover { border-color: var(--bc-accent, #c8f542); }

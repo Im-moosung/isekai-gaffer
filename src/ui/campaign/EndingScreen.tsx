@@ -5,6 +5,7 @@ import { loadAllTeams } from '../../data/loader'
 import { computeScore, submitScore, topScores } from '../../online/leaderboard'
 import type { LeaderboardMode, LeaderboardRow, ScoreBreakdown } from '../../online/leaderboard'
 import { sanitizeNickname } from '../../online/nickname'
+import { buildEpilogue } from '../../game/pressconf'
 import './campaign.css'
 
 const STAGE_LABEL: Record<CampaignStage, string> = {
@@ -102,6 +103,11 @@ export function EndingScreen({ onRestart }: { onRestart(): void }) {
     () => (ending ? computeScore(records, ending, loadAllTeams()) : null),
     [records, ending],
   )
+  // 캠페인 여정 에필로그(3~5문장, 사실 서술) — 리더보드 위에 표시.
+  const epilogue = useMemo<string[]>(
+    () => (ending ? buildEpilogue(records, ending) : []),
+    [records, ending],
+  )
 
   if (!ending || !breakdown) return null
 
@@ -154,6 +160,14 @@ export function EndingScreen({ onRestart }: { onRestart(): void }) {
             </tr>
           </tbody>
         </table>
+
+        {epilogue.length > 0 && (
+          <div className="end-epilogue" aria-label="여정 에필로그">
+            {epilogue.map((p, i) => (
+              <p key={i} className="end-epilogue__p">{p}</p>
+            ))}
+          </div>
+        )}
 
         {!submitted ? (
           <div className="end-submit">

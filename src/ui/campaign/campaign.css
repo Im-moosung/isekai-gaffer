@@ -213,6 +213,21 @@
   line-height: 1.7;
   color: var(--bc-text-dim);
 }
+.end-epilogue {
+  margin: 24px 0 0;
+  padding: 18px 20px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--bc-line);
+  text-align: left;
+}
+.end-epilogue__p {
+  margin: 0 0 10px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--bc-text-dim);
+}
+.end-epilogue__p:last-child { margin-bottom: 0; }
 .end-summary {
   display: flex;
   justify-content: center;
