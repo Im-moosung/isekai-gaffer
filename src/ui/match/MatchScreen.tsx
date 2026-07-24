@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react'
+import { useState, useEffect, useMemo, useRef, lazy, Suspense, Component, type ReactNode } from 'react'
 import type { Team, SideStats, TacticState, MatchEvent, DecisionEntry } from '../../engine/types'
 import { useMatchStore } from '../../game/matchStore'
 import type { MomentKind } from '../../game/matchSession'
@@ -20,6 +20,21 @@ import './match.css'
 // 로딩 순간에는 Suspense 폴백으로 동일 props의 SVG PitchView를 노출한다(피치 상시 노출 원칙 유지 —
 // SVG가 잠깐 보였다가 Pixi로 교체). WebGL 불가 폴백 로직은 PixiPitch 내부에 그대로 있다.
 const PixiPitch = lazy(() => import('../pitch/pixi/PixiPitch').then(m => ({ default: m.PixiPitch })))
+
+/** PixiPitch 청크 로드 실패(네트워크 오류·배포 중 404) 시 React.lazy가 렌더 중 에러를
+ *  throw한다. 에러 바운더리가 없으면 이 에러가 위로 전파되어 앱 전체가 백지가 된다
+ *  (PixiPitch 내부 WebGL 폴백은 컴포넌트가 로드된 뒤에만 작동 → 이 경로를 못 막는다).
+ *  경량 클래스 바운더리로 감싸 실패 시 동일 props의 SVG PitchView(fallback)로 대체한다
+ *  — 피치 상시 노출·크래시 금지 원칙 유지. */
+class PitchBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true }
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children
+  }
+}
 
 /** 위험 순간 강조 xG 임계(찬스 큰 세이브·유효 미스). */
 const DANGER_XG = 0.25
@@ -379,7 +394,7 @@ export function MatchScreen({
         {/* ── 피치 — 언제나 보인다(가리는 오버레이 없음). broadcast는 PixiJS 렌더러
             (WebGL 불가·reduced-motion은 PixiPitch 내부에서 SVG 폴백/연출 생략). ── */}
         <div className="ms-pitch-wrap">
-          <Suspense
+          <PitchBoundary
             fallback={
               <PitchView
                 state={engine}
@@ -390,14 +405,26 @@ export function MatchScreen({
               />
             }
           >
-            <PixiPitch
-              state={engine}
-              lastEvent={lastEvent}
-              sequence={playSequence ? highlight!.seq : undefined}
-              dwellMs={seqDwell}
-              sequenceSide={highlight?.side}
-            />
-          </Suspense>
+            <Suspense
+              fallback={
+                <PitchView
+                  state={engine}
+                  lastEvent={lastEvent}
+                  sequence={playSequence ? highlight!.seq : undefined}
+                  dwellMs={seqDwell}
+                  sequenceSide={highlight?.side}
+                />
+              }
+            >
+              <PixiPitch
+                state={engine}
+                lastEvent={lastEvent}
+                sequence={playSequence ? highlight!.seq : undefined}
+                dwellMs={seqDwell}
+                sequenceSide={highlight?.side}
+              />
+            </Suspense>
+          </PitchBoundary>
         </div>
 
         <Ticker lines={lines} emphasis={dangerMoment} />
