@@ -87,11 +87,11 @@ export function OppPanel() {
 
       {selected && (
         <div className="op__card">
+          {/* 상대 카드는 기본 스탯(레이더)+프로필만 — 실시간 체력·사기는 비노출(치트 방지). */}
           <PlayerCard
             player={selected}
             side="away"
             star={keyIds.has(selected.id)}
-            stamina={away.staminaByPlayer[selected.id]}
           />
         </div>
       )}

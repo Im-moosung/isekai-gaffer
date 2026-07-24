@@ -62,6 +62,14 @@ describe('OppPanel', () => {
     expect(container.querySelector('.op__card .pc-radar__poly')).toBeTruthy()
   })
 
+  it('상대 카드는 실시간 체력·사기 게이지를 노출하지 않는다(기본 스탯만)', () => {
+    const { container } = mount()
+    fireEvent.click(container.querySelector('.op__row') as HTMLElement)
+    expect(container.querySelector('.op__card .pc')).toBeTruthy() // 카드는 뜨되
+    expect(container.querySelector('.op__card .pc-gauge')).toBeNull() // 게이지는 없음
+    expect(container.querySelector('.op__card .pc__gauges')).toBeNull()
+  })
+
   it('매치업 힌트 노트가 내 포메이션 vs 상대 포메이션을 보여준다', () => {
     const { getByLabelText } = mount()
     const note = getByLabelText('매치업 힌트')
