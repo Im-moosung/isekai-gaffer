@@ -7,7 +7,7 @@
 // await 한 뒤 결과를 반영해 한 번만 호출한다. aiClient는 이미 3초 하드 타임아웃(AbortController)을
 // 내장하므로 최악의 경우에도 3초 뒤 반드시 템플릿으로 진행한다 — "3s 대기 후 진행" 방식.
 // 대기 동안에는 "발표 준비 중" 상태를 표시해 화면이 멈춘 것처럼 보이지 않게 한다.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { buildQuestions, buildHeadline } from '../../game/pressconf'
 import type { Headline } from '../../game/pressconf'
 import type { MatchRecord } from '../../game/campaignStore'
@@ -34,36 +34,32 @@ export function PressConference({ record, log, teamName, onDone }: Props) {
   const idx = answers.length
   const current = questions[idx]
 
-  function pick(option: string) {
+  // 완료 시퀀스는 "마지막 답변 클릭" 핸들러에서 직접 실행한다.
+  // effect(재실행·cleanup)를 쓰지 않으므로, narrate await 중 부모가 인라인 콜백을
+  // 새 참조로 넘겨도 진행 중 콜백이 무효화되지 않는다(이 클릭 시점의 onDone/record/teamName을
+  // 클로저로 고정). doneRef가 1회 실행을 보장한다.
+  async function pick(option: string) {
     if (finishing || idx >= questions.length) return
-    setAnswers(prev => [...prev, option])
-  }
+    const next = [...answers, option]
+    setAnswers(next)
+    if (next.length < questions.length || doneRef.current) return
 
-  // 3문항 완료 → 헤드라인 확정(템플릿 → AI 제목 대체 시도) → onDone.
-  useEffect(() => {
-    if (answers.length < questions.length || doneRef.current) return
     doneRef.current = true
     setFinishing(true)
-    const template = buildHeadline(record, answers, teamName)
+    const template = buildHeadline(record, next, teamName)
     const context = {
       teamName,
       opponentId: record.opponentId,
       stage: record.stage,
       score: record.score,
       shootout: record.shootout ?? null,
-      answers,
+      answers: next,
     }
-    let cancelled = false
-    // narrate는 내부 3s 타임아웃으로 반드시 종결된다.
-    narrate('headline', context)
-      .then(ai => {
-        if (cancelled) return
-        const title = ai && ai.trim().length > 0 ? ai.trim() : template.title
-        onDone({ ...template, title })
-      })
-      .catch(() => { if (!cancelled) onDone(template) })
-    return () => { cancelled = true }
-  }, [answers, questions.length, record, teamName, onDone])
+    // narrate는 내부 3s 타임아웃으로 반드시 종결된다. 실패·null이면 템플릿 title 유지.
+    const ai = await narrate('headline', context).catch(() => null)
+    const title = ai && ai.trim().length > 0 ? ai.trim() : template.title
+    onDone({ ...template, title })
+  }
 
   return (
     <div className="pc-root">

@@ -63,6 +63,28 @@ describe('PressConference', () => {
     expect(narrateMock).toHaveBeenCalledWith('headline', expect.any(Object))
   })
 
+  it('narrate 지연 중 onDone prop 참조가 바뀌어도 정확히 1회 호출된다', async () => {
+    // narrate를 수동 resolve 가능한 pending promise로 둔다.
+    let resolveNarrate!: (v: string | null) => void
+    narrateMock.mockReturnValue(new Promise(r => { resolveNarrate = r }))
+
+    const first = vi.fn()
+    const second = vi.fn()
+    const { container, rerender } = render(
+      <PressConference record={RECORD} log={RECORD.decisions} teamName="대한민국" onDone={first} />,
+    )
+    for (let i = 0; i < 3; i++) {
+      fireEvent.click(container.querySelectorAll<HTMLButtonElement>('.pc-answer')[0])
+    }
+    // narrate 아직 pending — 부모가 새 인라인 콜백 참조로 rerender(MatchScreen 실제 패턴)
+    rerender(<PressConference record={RECORD} log={RECORD.decisions} teamName="대한민국" onDone={second} />)
+    // 이제 narrate resolve
+    resolveNarrate(null)
+    await waitFor(() => expect(first).toHaveBeenCalledTimes(1))
+    expect(second).not.toHaveBeenCalled()
+    expect(first.mock.calls[0][0]).toBeTruthy()
+  })
+
   it('narrate 가 텍스트를 반환하면 그 텍스트가 title 을 대체한다', async () => {
     narrateMock.mockResolvedValue('AI가 쓴 헤드라인')
     const onDone = vi.fn()
