@@ -141,6 +141,13 @@ describe('decisionLog 수집 (기자회견 근거)', () => {
     expect(log[0].summary).not.toContain('템포')
     expect(log[0].summary).not.toContain('라인')
   })
+  it('무변경 지시 재적용 → 로그에 엔트리를 추가하지 않는다 (깨진 요약 방지)', () => {
+    store().startMatch(a, b, 42)
+    store().playTo(45)
+    const cur = store().engine!.home.tactics.instructions
+    store().submitCommand('home', { type: 'instructions', instructions: { ...cur } })
+    expect(store().decisionLog).toHaveLength(0)
+  })
   it('교체 → 로그에 IN/OUT 선수 이름(name.ko) 포함', () => {
     store().startMatch(a, b, 42)
     store().playTo(45)

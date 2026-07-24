@@ -125,7 +125,10 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     let entry: DecisionEntry | null = null
     if (cmd.type === 'instructions') {
       const changed = instructionDiff(sideState.tactics.instructions, cmd.instructions)
-      entry = { minute, kind: 'instructions', summary: `${minute}' 지시 변경: ${changed.join(', ')}`, detail: { changed } }
+      // 변경 축이 0개면 로그 스킵(엔진 적용은 그대로) — "45' 지시 변경: " 같은 빈 요약 방지.
+      if (changed.length > 0) {
+        entry = { minute, kind: 'instructions', summary: `${minute}' 지시 변경: ${changed.join(', ')}`, detail: { changed } }
+      }
     } else if (cmd.type === 'sub') {
       const nameOf = (id: string) => sideState.team.squad.find(p => p.id === id)?.name.ko ?? id
       entry = { minute, kind: 'sub', summary: `${minute}' 교체: ${nameOf(cmd.in)} IN, ${nameOf(cmd.out)} OUT`, detail: { in: cmd.in, out: cmd.out } }
