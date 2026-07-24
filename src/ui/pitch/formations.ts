@@ -1,22 +1,13 @@
 // src/ui/pitch/formations.ts
-// 포메이션별 XI 슬롯 순서 + 0~100 피치 좌표 테이블.
-// 슬롯 순서는 엔진 lineup(pickBestXI)이 생성하는 lineup 배열 인덱스와 반드시 일치해야 한다.
-// 현재 엔진은 4-3-3만 생성하지만(src/engine/lineup.ts XI_433),
-// Phase 2B 라인업 화면이 나머지 5종도 재사용하도록 여기서 6종을 모두 정의·export 한다.
-import type { FormationId, Position } from '../../engine/types'
+// 포메이션별 0~100 피치 좌표 테이블. XI 슬롯 순서(XI_SLOTS)는 엔진 정본
+// (src/engine/formations.ts)에서 import·재수출한다 — 기존 UI 사용처는 무변경.
+// HOME_COORDS 인덱스는 XI_SLOTS 슬롯 순서와 반드시 일치해야 한다.
+import type { FormationId } from '../../engine/types'
+import { XI_SLOTS } from '../../engine/formations'
+
+export { XI_SLOTS }
 
 export type Coord = { x: number; y: number }
-
-/** 각 포메이션의 XI 슬롯 순서 (홈 기준 = 좌→우 공격, 인덱스 0 = GK).
- *  4-3-3은 엔진 lineup.ts의 XI_433와 동일 순서. */
-export const XI_SLOTS: Record<FormationId, Position[]> = {
-  '4-3-3':   ['GK', 'CB', 'CB', 'LB', 'RB', 'DM', 'CM', 'CM', 'LW', 'RW', 'ST'],
-  '4-2-3-1': ['GK', 'CB', 'CB', 'LB', 'RB', 'DM', 'DM', 'LW', 'AM', 'RW', 'ST'],
-  '4-4-2':   ['GK', 'CB', 'CB', 'LB', 'RB', 'LW', 'CM', 'CM', 'RW', 'ST', 'ST'],
-  '3-5-2':   ['GK', 'CB', 'CB', 'CB', 'LW', 'DM', 'CM', 'CM', 'RW', 'ST', 'ST'],
-  '4-1-4-1': ['GK', 'CB', 'CB', 'LB', 'RB', 'DM', 'LW', 'CM', 'CM', 'RW', 'ST'],
-  '5-4-1':   ['GK', 'CB', 'CB', 'CB', 'LB', 'RB', 'LW', 'CM', 'CM', 'RW', 'ST'],
-}
 
 /** 홈(좌→우 공격) 기준 0~100 좌표. x = 골라인(좌, 낮음) → 상대 골(우, 높음), y = 위(0)→아래(100). */
 const HOME_COORDS: Record<FormationId, Coord[]> = {

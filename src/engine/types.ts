@@ -11,8 +11,9 @@ export interface Player {
 export interface TeamStyle { possession: number; pressing: number; lineHeight: number; tempo: number } // 0~100
 export interface TeamProfile {
   /** 실제 대회 사용 포메이션 (표시·워룸 노출용 — 자유 문자열).
-   *  엔진의 플레이 가능 포메이션은 FormationId 6종이며, AI가 프로필 포메이션을 쓸 때는
-   *  Phase 2 데이터 로딩에서 가장 가까운 FormationId로 매핑한다 (최종 리뷰 판정). */
+   *  엔진의 플레이 가능 포메이션은 FormationId 6종이며, Phase 3에서 AI 측 배선 완료:
+   *  pickBestXI가 preferredFormations[0]을 mapFormation으로 매핑해 상대가 시그니처
+   *  포메이션으로 출전한다(가장 가까운 FormationId로 매핑). */
   preferredFormations: string[]; style: TeamStyle
   keyPlayers: { playerId: string; dependency: number }[]
   benchPattern: 'protect-lead' | 'chase-attack' | 'balanced'
@@ -30,6 +31,8 @@ export type FormationId = '4-3-3' | '4-2-3-1' | '4-4-2' | '3-5-2' | '4-1-4-1' | 
 export interface Instructions { lineHeight: number; pressing: number; tempo: number; attackFocus: 'left'|'center'|'right'|'balanced' }
 export interface LineupSlot { slot: Position; playerId: string }
 export interface TacticState { formation: FormationId; lineup: LineupSlot[]; instructions: Instructions }
+/** 감독의 개입 1건 기록 — AI 기자회견/헤드라인의 근거가 된다. summary는 한국어 서술. */
+export interface DecisionEntry { minute: number; kind: 'instructions'|'sub'|'teamtalk'|'shootout-setup'; summary: string; detail?: Record<string, unknown> }
 export type MatchEventType = 'kickoff'|'chance'|'shot'|'goal'|'save'|'miss'|'foul'|'yellow'|'red'|'corner'|'sub'|'halftime'|'fulltime'
 export interface MatchEvent { minute: number; type: MatchEventType; teamId: string; playerId?: string; assistId?: string; detail?: string; xg?: number }
 export interface SideStats { possession: number; passAccuracy: number; shots: number; shotsOnTarget: number; fouls: number; corners: number; xg: number }

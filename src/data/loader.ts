@@ -4,6 +4,11 @@
 // JSON의 능력치 필드명(shooting/passing/dribbling/defending/physical/pace, saving/aerial/buildup)은
 // 엔진 FieldStats/GkStats와 완전히 일치하므로 별도 매핑이 필요 없다(무변형 로드).
 import type { Team, FormationId } from '../engine/types'
+import { mapFormation } from '../engine/formations'
+
+// mapFormation은 엔진 정본(src/engine/formations.ts)으로 이동했다. 기존 로더 사용처·테스트
+// 호환을 위해 여기서 재수출한다.
+export { mapFormation }
 
 // 정적 import 12개
 import arg from '../../data/teams/arg.json'
@@ -34,23 +39,6 @@ const RAW: Record<TeamId, unknown> = {
 }
 
 // ── 포메이션 매핑 ─────────────────────────────────────────────
-const SUPPORTED: readonly FormationId[] = ['4-3-3', '4-2-3-1', '4-4-2', '3-5-2', '4-1-4-1', '5-4-1']
-
-// 미지원 포메이션 → 가장 가까운 지원 6종
-const FORMATION_MAP: Record<string, FormationId> = {
-  '4-2-2-2': '4-4-2',
-  '3-4-2-1': '3-5-2',
-  '4-1-3-2': '4-4-2',
-  '3-1-4-2': '3-5-2',
-}
-
-/** 실제 대회 포메이션 문자열을 엔진의 FormationId(6종)로 매핑한다. */
-export function mapFormation(pref: string): FormationId {
-  if ((SUPPORTED as readonly string[]).includes(pref)) return pref as FormationId
-  if (pref in FORMATION_MAP) return FORMATION_MAP[pref]
-  return '4-4-2'
-}
-
 /**
  * Team.profile.preferredFormations(원본 유지)에서 파생한 플레이 가능 포메이션 목록.
  * Team 타입을 오염시키지 않기 위해 별도 함수로 제공한다(중복 제거).

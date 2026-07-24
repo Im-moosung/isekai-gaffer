@@ -131,6 +131,23 @@ describe('체력 이월 70% 회복', () => {
   })
 })
 
+describe('recordResult decisions 보존', () => {
+  it('전달한 decisions가 MatchRecord에 저장된다', () => {
+    store().startCampaign(1)
+    const decisions = [
+      { minute: 60, kind: 'instructions' as const, summary: "60' 지시 변경: 압박 55→90" },
+      { minute: 45, kind: 'teamtalk' as const, summary: 'HT 팀토크: 격려' },
+    ]
+    store().recordResult([2, 0], {}, undefined, decisions)
+    expect(store().records[0].decisions).toEqual(decisions)
+  })
+  it('decisions 미전달 시 빈 배열(기본값)', () => {
+    store().startCampaign(1)
+    store().recordResult([1, 0], {})
+    expect(store().records[0].decisions).toEqual([])
+  })
+})
+
 describe('reset', () => {
   it('초기 상태로 되돌린다', () => {
     store().startCampaign(1)

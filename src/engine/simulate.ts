@@ -34,7 +34,9 @@ export function createMatch(home: Team, away: Team, opts: { seed: number; homeTa
 function emptyStats() { return { possession: 50, passAccuracy: 0, shots: 0, shotsOnTarget: 0, fouls: 0, corners: 0, xg: 0 } }
 
 function defaultTactics(team: Team): TacticState {
-  // fixtures의 pickBestXI와 동일 로직 (lineup.ts 공유). 프로필 스타일을 지시로 반영.
+  // pickBestXI가 team.profile.preferredFormations[0]을 FormationId로 매핑해 XI·formation을 정한다
+  // (AI가 자기 시그니처 포메이션으로 출전 → tactics.formation도 그 값이라 formationEdge가 실제 발동).
+  // 프로필 스타일은 지시(instructions)로 반영.
   const t = pickBestXI(team)
   t.instructions = {
     lineHeight: team.profile.style.lineHeight, pressing: team.profile.style.pressing,

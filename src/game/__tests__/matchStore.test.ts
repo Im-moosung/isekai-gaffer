@@ -122,3 +122,80 @@ describe('applyTeamTalk (결정론 사기 보정)', () => {
     expect(() => store().applyTeamTalk('home', 'trust')).toThrow()
   })
 })
+
+describe('decisionLog 수집 (기자회견 근거)', () => {
+  it('startMatch 시 decisionLog는 빈 배열', () => {
+    store().startMatch(a, b, 42)
+    expect(store().decisionLog).toEqual([])
+  })
+  it('지시 변경 → 로그 1건, summary에 바뀐 축만 나열', () => {
+    store().startMatch(a, b, 42)
+    store().playTo(45)
+    const cur = store().engine!.home.tactics.instructions
+    store().submitCommand('home', { type: 'instructions', instructions: { ...cur, pressing: 90 } })
+    const log = store().decisionLog
+    expect(log).toHaveLength(1)
+    expect(log[0].kind).toBe('instructions')
+    expect(log[0].summary).toBe(`45' 지시 변경: 압박 ${cur.pressing}→90`)
+    // 바뀌지 않은 축(템포·라인)은 요약에 없다
+    expect(log[0].summary).not.toContain('템포')
+    expect(log[0].summary).not.toContain('라인')
+  })
+  it('무변경 지시 재적용 → 로그에 엔트리를 추가하지 않는다 (깨진 요약 방지)', () => {
+    store().startMatch(a, b, 42)
+    store().playTo(45)
+    const cur = store().engine!.home.tactics.instructions
+    store().submitCommand('home', { type: 'instructions', instructions: { ...cur } })
+    expect(store().decisionLog).toHaveLength(0)
+  })
+  it('교체 → 로그에 IN/OUT 선수 이름(name.ko) 포함', () => {
+    store().startMatch(a, b, 42)
+    store().playTo(45)
+    const lineupIds = store().engine!.home.tactics.lineup.map(l => l.playerId)
+    const out = lineupIds[10]
+    const inId = a.squad.find(p => !lineupIds.includes(p.id))!.id
+    const outName = a.squad.find(p => p.id === out)!.name.ko
+    const inName = a.squad.find(p => p.id === inId)!.name.ko
+    store().submitCommand('home', { type: 'sub', out, in: inId })
+    const log = store().decisionLog
+    expect(log).toHaveLength(1)
+    expect(log[0].kind).toBe('sub')
+    expect(log[0].summary).toBe(`45' 교체: ${inName} IN, ${outName} OUT`)
+  })
+  it('포메이션 변경 → HT 포메이션 로그', () => {
+    store().startMatch(a, b, 42)
+    store().playTo(45)
+    const t = pickBestXI(a)
+    t.formation = '3-5-2'
+    store().submitCommand('home', { type: 'formation', tactics: t })
+    const log = store().decisionLog
+    expect(log[0].summary).toBe('HT 포메이션: 4-3-3→3-5-2')
+  })
+  it('팀토크 → 로그에 HT 팀토크 톤 라벨', () => {
+    store().startMatch(a, b, 42)
+    store().playTo(45)
+    store().applyTeamTalk('home', 'encourage')
+    const log = store().decisionLog
+    expect(log).toHaveLength(1)
+    expect(log[0].kind).toBe('teamtalk')
+    expect(log[0].summary).toBe('HT 팀토크: 격려')
+  })
+  it('logShootoutSetup → shootout-setup 엔트리', () => {
+    store().startMatch(a, b, 42)
+    store().logShootoutSetup('PK: 키커 순서 확정')
+    const log = store().decisionLog
+    expect(log[0].kind).toBe('shootout-setup')
+    expect(log[0].summary).toBe('PK: 키커 순서 확정')
+  })
+  it('여러 개입이 순서대로 누적되고, reset 시 초기화된다', () => {
+    store().startMatch(a, b, 42)
+    store().playTo(45)
+    const cur = store().engine!.home.tactics.instructions
+    store().submitCommand('home', { type: 'instructions', instructions: { ...cur, tempo: 80 } })
+    store().applyTeamTalk('home', 'rage')
+    expect(store().decisionLog).toHaveLength(2)
+    expect(store().decisionLog.map(d => d.kind)).toEqual(['instructions', 'teamtalk'])
+    store().reset()
+    expect(store().decisionLog).toEqual([])
+  })
+})

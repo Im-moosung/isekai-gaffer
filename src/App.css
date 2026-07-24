@@ -67,3 +67,19 @@
   border-color: var(--bc-accent);
   filter: none;
 }
+
+/* 데모 배너 — 리더보드 미반영 안내(경기·신문 상단 고정). */
+.demo-wrap {
+  min-height: 100vh;
+  background: var(--bc-bg);
+}
+.demo-banner {
+  padding: 8px 16px;
+  text-align: center;
+  font-family: var(--bc-font);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #0b1220;
+  background: var(--bc-accent);
+}
