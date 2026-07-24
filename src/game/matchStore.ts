@@ -233,7 +233,12 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
       entry = { minute, kind: 'sub', summary: `${minute}' 교체: ${nameOf(cmd.in)} IN, ${nameOf(cmd.out)} OUT`, detail: { in: cmd.in, out: cmd.out } }
     } else if (cmd.type === 'formation') {
       const before = sideState.tactics.formation, after = cmd.tactics.formation
-      entry = { minute, kind: 'instructions', summary: `HT 포메이션: ${before}→${after}`, detail: { before, after } }
+      // 포메이션은 하프타임뿐 아니라 브레이크·감독 타임에서도 바꿀 수 있으므로
+      // 시점을 분 표기로 통일한다(halftime만 "HT"). 지시/교체 로그와 동일 규칙.
+      if (before !== after) {
+        const when = phase === 'halftime' ? 'HT' : `${minute}'`
+        entry = { minute, kind: 'instructions', summary: `${when} 포메이션: ${before}→${after}`, detail: { before, after } }
+      }
     }
     set({
       engine: applyCommand(engine, side, cmd),
