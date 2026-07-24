@@ -23,6 +23,7 @@ export interface StatBaseline {
 }
 export interface Team {
   id: string; name: { ko: string; en: string }; fifaCode: string; fifaRanking: number; tier: number
+  flag?: string
   profile: TeamProfile; statBaseline: StatBaseline; squad: Player[]
 }
 export type FormationId = '4-3-3' | '4-2-3-1' | '4-4-2' | '3-5-2' | '4-1-4-1' | '5-4-1'
@@ -44,4 +45,7 @@ export interface MatchState {
   events: MatchEvent[]; stats: [SideStats, SideStats]
   momentum: number  // -1(away 우세)~+1(home 우세)
   seed: number      // 분 파생 RNG 시드 (createRng(seed*10007+minute)) — 세그먼트 분할 결정론의 근간
+  /** 조별 "실제 전반 재현" 모드: 지정 시 전반(≤45)은 시뮬하지 않고 이 스크립트를 일괄 적용한다.
+   *  세그먼트 분할 대응을 위해 상태에 보관(후반 분 파생 RNG는 불변 → 분할 결정론 유지). */
+  firstHalfScript?: { events: MatchEvent[]; score: [number, number] }
 }

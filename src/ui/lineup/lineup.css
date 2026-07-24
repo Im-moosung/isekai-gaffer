@@ -1,0 +1,196 @@
+/* 라인업 편집 화면 — 방송 토큰(--bc-*) 사용.
+   인라인 style은 (1) 피치 칩의 slotCoords 파생 left/top, (2) dnd 드래그 변환에만 한정한다. */
+.lu-root {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  height: 100vh;
+  padding: 16px;
+  box-sizing: border-box;
+  background: var(--bc-bg);
+  color: var(--bc-text);
+  font-family: var(--bc-font);
+}
+
+/* ── 헤더: 제목 + 포메이션 버튼 ─────────────────────────── */
+.lu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.lu-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+.lu-formations {
+  display: flex;
+  gap: 6px;
+}
+.lu-fbtn {
+  padding: 8px 12px;
+  border: 1px solid var(--bc-line);
+  border-radius: 8px;
+  background: var(--bc-panel);
+  color: var(--bc-text-dim);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.lu-fbtn:hover { border-color: var(--bc-accent); }
+.lu-fbtn--active {
+  background: var(--bc-accent);
+  border-color: var(--bc-accent);
+  color: #0b1220;
+}
+
+/* ── 피치 미니뷰 (home 슬롯 배치) ─────────────────────── */
+.lu-pitch {
+  position: relative;
+  flex: 1 1 0;
+  min-height: 260px;
+  aspect-ratio: 105 / 68;
+  max-width: 100%;
+  margin: 0 auto;
+  border: 1px solid var(--bc-line);
+  border-radius: 12px;
+  background:
+    linear-gradient(90deg, rgba(255,255,255,0.04) 0 1px, transparent 1px) 50% 0 / 100% 100%,
+    radial-gradient(120% 140% at 100% 50%, rgba(255,255,255,0.06), transparent 55%),
+    var(--bc-pitch);
+  overflow: hidden;
+}
+/* 하프라인 + 센터서클 */
+.lu-pitch::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--bc-pitch-line);
+  transform: translateX(-50%);
+}
+.lu-pitch::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18%;
+  aspect-ratio: 1;
+  border: 2px solid var(--bc-pitch-line);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* 선수 칩: slotCoords % 위치, 중심 정렬 */
+.lu-chip {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  width: 62px;
+  padding: 5px 4px;
+  border: 2px solid transparent;
+  border-radius: 9px;
+  background: rgba(11, 18, 32, 0.82);
+  color: var(--bc-text);
+  font-family: inherit;
+  cursor: grab;
+  touch-action: none;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+}
+.lu-chip:active { cursor: grabbing; }
+.lu-chip__num { font-size: 15px; font-weight: 800; line-height: 1; }
+.lu-chip__name {
+  font-size: 10px;
+  line-height: 1.1;
+  max-width: 56px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lu-chip__slot {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 0 4px;
+  border-radius: 5px;
+  color: #0b1220;
+}
+/* 적합도 경고 색: ≥0.85 초록 / ≥0.65 노랑 / 미만 빨강 */
+.lu-chip--good { border-color: #37d67a; }
+.lu-chip--good .lu-chip__slot { background: #37d67a; }
+.lu-chip--ok { border-color: #f5c542; }
+.lu-chip--ok .lu-chip__slot { background: #f5c542; }
+.lu-chip--bad { border-color: var(--bc-danger); }
+.lu-chip--bad .lu-chip__slot { background: var(--bc-danger); color: #fff; }
+
+.lu-chip--sel { outline: 3px solid var(--bc-accent); outline-offset: 1px; }
+.lu-chip--over { box-shadow: 0 0 0 3px var(--bc-accent); }
+.lu-chip--drag { opacity: 0.9; }
+
+/* ── 벤치 ─────────────────────────────────────────── */
+.lu-bench {
+  flex: 0 0 auto;
+}
+.lu-bench__title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--bc-text-dim);
+}
+.lu-bench__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.lu-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--bc-line);
+  border-radius: 8px;
+  background: var(--bc-panel);
+  color: var(--bc-text);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: grab;
+  touch-action: none;
+}
+.lu-card:active { cursor: grabbing; }
+.lu-card__num { font-weight: 800; }
+.lu-card__pos {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--bc-panel-2);
+  color: var(--bc-text-dim);
+}
+.lu-card--sel { outline: 2px solid var(--bc-accent); }
+.lu-card--over { box-shadow: 0 0 0 3px var(--bc-accent); }
+.lu-card--drag { opacity: 0.9; }
+
+/* ── 확정 ─────────────────────────────────────────── */
+.lu-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+.lu-confirm {
+  padding: 12px 28px;
+  border: none;
+  border-radius: 10px;
+  background: var(--bc-accent);
+  color: #0b1220;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.lu-confirm:hover { filter: brightness(1.05); }

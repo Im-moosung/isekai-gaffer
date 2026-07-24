@@ -4,7 +4,7 @@ import { zoneStrength } from './strength'
 import { instructionEffects, formationEdge } from './tactics'
 import { effectiveStats } from './fitness'
 import { pickBestXI } from './lineup'
-import type { Instructions, MatchState, SideState, TacticState, Team } from './types'
+import type { Instructions, MatchEvent, MatchState, SideState, SideStats, TacticState, Team } from './types'
 
 export type MatchCommand =
   | { type: 'sub'; out: string; in: string }
@@ -12,8 +12,11 @@ export type MatchCommand =
   | { type: 'formation'; tactics: TacticState }
 
 const MAX_SUBS = 5
+// 전력 차 민감도 — 동급 팀은 비율 1이라 캘리브레이션 계약 무영향, 비대칭 매치업의 승률 분화 담당.
+// 실데이터 검증(esp≥55승) 기준으로 튜닝.
+const STRENGTH_SENSITIVITY = 1.6
 
-export function createMatch(home: Team, away: Team, opts: { seed: number; homeTactics?: TacticState; awayTactics?: TacticState }): MatchState {
+export function createMatch(home: Team, away: Team, opts: { seed: number; homeTactics?: TacticState; awayTactics?: TacticState; firstHalfScript?: { events: MatchEvent[]; score: [number, number] } }): MatchState {
   const mkSide = (team: Team, tactics?: TacticState): SideState => {
     const staminaByPlayer: Record<string, number> = {}, moraleByPlayer: Record<string, number> = {}
     team.squad.forEach(p => { staminaByPlayer[p.id] = 100; moraleByPlayer[p.id] = 70 })
@@ -24,6 +27,7 @@ export function createMatch(home: Team, away: Team, opts: { seed: number; homeTa
     events: [{ minute: 0, type: 'kickoff', teamId: home.id }],
     stats: [emptyStats(), emptyStats()], momentum: 0,
     seed: opts.seed,
+    ...(opts.firstHalfScript ? { firstHalfScript: opts.firstHalfScript } : {}),
   }
 }
 
@@ -41,6 +45,16 @@ function defaultTactics(team: Team): TacticState {
 
 export function simulateSegment(state: MatchState, toMinute: number): MatchState {
   const st: MatchState = structuredClone(state)
+
+  // 스크립트("실제 전반 재현") 모드: 전반(≤45)은 시뮬하지 않고 스크립트를 일괄 적용한다.
+  // 채택한 45 분할 방식: toMinute<45 이면 minute만 전진하고 이벤트는 미적용, 45 도달 시 일괄 적용.
+  //   → 어느 분할 지점(예: 30→45)에서도 전반 결과가 동일해 분할 결정론이 유지된다.
+  // 후반(45→90)은 기존 시뮬 그대로이며 분 파생 RNG(seed*10007+minute)도 불변이다.
+  if (st.firstHalfScript && st.minute < 45) {
+    if (toMinute < 45) { st.minute = toMinute; return st }
+    applyFirstHalfScript(st)
+  }
+
   while (st.minute < toMinute) {
     st.minute++
     // 분 파생 RNG: 세그먼트 분할 지점과 무관하게 같은 분은 같은 난수 → 45+45=90 결정론
@@ -51,6 +65,37 @@ export function simulateSegment(state: MatchState, toMinute: number): MatchState
   if (toMinute >= 90 && !st.events.some(e => e.type === 'fulltime'))
     st.events.push({ minute: 90, type: 'fulltime', teamId: st.home.team.id })
   return st
+}
+
+// 전반 스크립트 일괄 적용: 시뮬 대신 실제 전반 데이터를 재현한다.
+function applyFirstHalfScript(st: MatchState) {
+  const script = st.firstHalfScript!
+  // 이벤트: 분 순서로 정렬해 기존 kickoff 뒤에 배치 (동일 분은 입력 순서 유지 = 안정 정렬)
+  const sorted = script.events.map((e, i) => ({ e, i }))
+    .sort((a, b) => a.e.minute - b.e.minute || a.i - b.i)
+    .map(x => x.e)
+  st.events.push(...sorted)
+  st.score = [script.score[0], script.score[1]]
+  // 스탯: 실제 전반 세부 데이터가 없으므로 statBaseline 기반 '절반 근사'.
+  //  - 슛/유효슛/파울/코너: 각 팀 90분 baseline × 0.5 반올림
+  //  - 점유율: 두 팀 baseline.possession 비율로 정규화 (합 100)
+  //  - 패스 정확도: baseline 그대로
+  //  - xG: 실제 전반 xG가 없어 (골 수 × 0.35)로 근사
+  const half = (v: number) => Math.round(v * 0.5)
+  const bl = [st.home.team.statBaseline, st.away.team.statBaseline]
+  const possTotal = bl[0].possession + bl[1].possession
+  st.stats = ([0, 1] as const).map(i => ({
+    possession: round1(possTotal > 0 ? (bl[i].possession / possTotal) * 100 : 50),
+    passAccuracy: bl[i].passAccuracy,
+    shots: half(bl[i].shotsPerGame),
+    shotsOnTarget: half(bl[i].shotsOnTargetPerGame),
+    fouls: half(bl[i].foulsPerGame),
+    corners: half(bl[i].cornersPerGame),
+    xg: round2(st.score[i] * 0.35),
+  })) as [SideStats, SideStats]
+  st.minute = 45
+  // halftime 이벤트 push (기존 로직 유지)
+  st.events.push({ minute: 45, type: 'halftime', teamId: st.home.team.id })
 }
 
 function simulateMinute(st: MatchState, rng: Rng) {
@@ -87,7 +132,7 @@ function simulateMinute(st: MatchState, rng: Rng) {
   // 3) 찬스 롤 (공격 측): 공격 전력 vs 수비 전력 + 템포 + 모멘텀
   const momentumBoost = atkIdx === 0 ? 1 + st.momentum * 0.15 : 1 - st.momentum * 0.15
   const chanceP = clamp(
-    (atk.team.statBaseline.shotsPerGame / (90 * participation)) * (zs[atkIdx].attack / Math.max(30, zs[defIdx].defense)) * fx[atkIdx].chanceRate * fx[defIdx].counterVulnerability * momentumBoost,
+    (atk.team.statBaseline.shotsPerGame / (90 * participation)) * Math.pow(zs[atkIdx].attack / Math.max(30, zs[defIdx].defense), STRENGTH_SENSITIVITY) * fx[atkIdx].chanceRate * fx[defIdx].counterVulnerability * momentumBoost,
     0.02, 0.45,
   )
   if (rng.chance(chanceP)) resolveChance(st, atkIdx, defIdx, fx, rng)
