@@ -6,7 +6,7 @@ import { commentate } from '../../game/commentary'
 import * as ctts from '../../audio/commentary-tts'
 import { Scorebug } from '../broadcast/Scorebug'
 import { Ticker } from '../broadcast/Ticker'
-import { PitchView } from '../pitch/PitchView'
+import { PixiPitch } from '../pitch/pixi/PixiPitch'
 import { buildSequence } from '../pitch/choreography'
 import { TacticsBoard } from '../tactics/TacticsBoard'
 import { ShootoutPanel } from './ShootoutPanel'
@@ -370,9 +370,10 @@ export function MatchScreen({
           </div>
         )}
 
-        {/* ── 피치 — 언제나 보인다(가리는 오버레이 없음) ── */}
+        {/* ── 피치 — 언제나 보인다(가리는 오버레이 없음). broadcast는 PixiJS 렌더러
+            (WebGL 불가·reduced-motion은 PixiPitch 내부에서 SVG 폴백/연출 생략). ── */}
         <div className="ms-pitch-wrap">
-          <PitchView
+          <PixiPitch
             state={engine}
             lastEvent={lastEvent}
             sequence={playSequence ? highlight!.seq : undefined}
@@ -383,7 +384,9 @@ export function MatchScreen({
 
         <Ticker lines={lines} emphasis={dangerMoment} />
 
-        {/* ── 골 드라마: 플래시 + 대형 타이포 + 득점자 배너 + (스코어버그 펄스) ──
+        {/* ── 골 드라마: 대형 타이포 + 득점자 배너 + (스코어버그 펄스) ──
+            풀스크린 플래시·파티클·카메라 셰이크는 PixiPitch(WebGL)가 담당한다
+            (중복이던 DOM ms-drama__flash 제거 — Task 13 보고). GOAL 타이포는 DOM 유지.
             피치를 가리지 않는 순간 이펙트(pointer-events 없음). key=분으로 골마다 재발동. */}
         {goalDrama && (
           <div
@@ -391,7 +394,6 @@ export function MatchScreen({
             className={`ms-drama ms-drama--${conceded ? 'concede' : 'score'}`}
             aria-hidden="true"
           >
-            <span className="ms-drama__flash" />
             <span className="ms-drama__word">{conceded ? '실점…' : 'GOAL!'}</span>
           </div>
         )}
