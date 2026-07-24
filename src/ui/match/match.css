@@ -180,6 +180,132 @@
   font-weight: 700;
 }
 
+/* ── 팀 토크 (하프타임 오버레이 내부) ─────────────────────── */
+.tt-root {
+  margin: 4px 0 18px;
+}
+.tt-label {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--bc-text-dim);
+}
+.tt-btns {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+.tt-btn {
+  padding: 10px 0;
+  border: 1px solid var(--bc-line);
+  border-radius: 8px;
+  background: var(--bc-panel-2);
+  color: var(--bc-text);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tt-btn:hover:not(:disabled) {
+  border-color: var(--bc-accent);
+}
+.tt-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.tt-done {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--bc-accent);
+  font-weight: 700;
+}
+
+/* ── 승부차기 패널 ─────────────────────────────────────── */
+.so-panel {
+  text-align: center;
+}
+.so-setup {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.so-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.so-slot__no {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--bc-panel-2);
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--bc-text-dim);
+}
+.so-slot__pick {
+  flex: 1;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--bc-line);
+  border-radius: 8px;
+  background: var(--bc-panel-2);
+  color: var(--bc-text);
+  font-family: inherit;
+  font-size: 13px;
+}
+.so-slot__dir {
+  width: 40px;
+  flex: 0 0 auto;
+  padding: 8px 0;
+  border: 1px solid var(--bc-line);
+  border-radius: 8px;
+  background: var(--bc-panel-2);
+  color: var(--bc-accent);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.so-kicks {
+  list-style: none;
+  margin: 0 0 4px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.so-kick {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--bc-line);
+  font-size: 13px;
+}
+.so-kick--home {
+  border-left: 3px solid var(--bc-home);
+}
+.so-kick--away {
+  border-left: 3px solid var(--bc-away);
+}
+.so-kick--goal .so-kick__mark {
+  color: var(--bc-accent);
+  font-weight: 800;
+}
+.so-kick--miss .so-kick__mark {
+  color: var(--bc-danger);
+  font-weight: 800;
+}
+
 @media (max-width: 720px) {
   .ms-root {
     flex-direction: column;

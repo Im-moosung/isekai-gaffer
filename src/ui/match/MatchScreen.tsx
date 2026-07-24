@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import type { Team, SideStats } from '../../engine/types'
+import type { Team, SideStats, TacticState, MatchEvent } from '../../engine/types'
 import { useMatchStore } from '../../game/matchStore'
 import { commentate } from '../../game/commentary'
 import { Scorebug } from '../broadcast/Scorebug'
@@ -7,15 +7,39 @@ import { Ticker } from '../broadcast/Ticker'
 import { PitchView } from '../pitch/PitchView'
 import { ConsolePanel } from '../console/ConsolePanel'
 import { SubPanel } from '../console/SubPanel'
+import { TeamTalk } from './TeamTalk'
+import { ShootoutPanel } from './ShootoutPanel'
 import './match.css'
 
 // 유저는 홈팀 감독. 콘솔/교체는 home 고정.
 const SIDE = 'home' as const
 
+interface MatchScreenProps {
+  home: Team
+  away: Team
+  seed: number
+  /** 라인업 화면에서 확정한 홈 전술(캠페인). 미지정 시 엔진 기본 XI. */
+  initialTactics?: TacticState
+  /** 조별 경기: 전반 재현 스크립트(전반은 시뮬 대신 이 결과를 사용). */
+  firstHalfScript?: { events: MatchEvent[]; score: [number, number] }
+  /** 체력 이월: 홈 선수별 시작 스태미나 덮어쓰기(캠페인). */
+  staminaOverride?: Record<string, number>
+  /** 조별 경기 참고 표시용 실제 스코어 [한국, 상대]. */
+  referenceScore?: [number, number]
+  /** 토너먼트: 무승부 시 승부차기로 승자를 가려야 한다. */
+  requireWinner?: boolean
+  /** 캠페인: 경기 종료 시 결과 콜백. 미지정 시 데모 동작([다시 보기]). */
+  onMatchEnd?(score: [number, number], staminaByPlayer: Record<string, number>, shootout?: [number, number]): void
+}
+
 /** 경기 화면 조립 — 좌 경기 뷰(스코어버그·피치·티커) / 우 감독 콘솔.
  *  엔진은 순간 계산(playTo), UI는 displayMinute 기준 재생 루프로 이벤트를 누적 노출한다.
- *  재생 타이밍은 setInterval 고정 간격만 사용(Math.random·Date 금지). */
-export function MatchScreen({ home, away, seed }: { home: Team; away: Team; seed: number }) {
+ *  재생 타이밍은 setInterval 고정 간격만 사용(Math.random·Date 금지).
+ *  onMatchEnd 유무로 데모/캠페인 동작을 분기(props 하위호환). */
+export function MatchScreen({
+  home, away, seed,
+  initialTactics, firstHalfScript, staminaOverride, referenceScore, requireWinner, onMatchEnd,
+}: MatchScreenProps) {
   const phase = useMatchStore(s => s.phase)
   const engine = useMatchStore(s => s.engine)
   const displayMinute = useMatchStore(s => s.displayMinute)
@@ -28,9 +52,18 @@ export function MatchScreen({ home, away, seed }: { home: Team; away: Team; seed
 
   const [tab, setTab] = useState<'console' | 'sub'>('console')
   const [countdown, setCountdown] = useState<number | null>(null)
+  const [shootoutOpen, setShootoutOpen] = useState(false)
 
   // 경기 초기화(마운트/픽스처 변경 시). 엔진은 pre 상태로 준비.
-  useEffect(() => { startMatch(home, away, seed) }, [home, away, seed, startMatch])
+  // initialTactics/firstHalfScript/staminaOverride는 매치별로 안정 참조(App에서 memo).
+  useEffect(() => {
+    setShootoutOpen(false)
+    startMatch(home, away, seed, {
+      ...(initialTactics ? { homeTactics: initialTactics } : {}),
+      ...(firstHalfScript ? { firstHalfScript } : {}),
+      ...(staminaOverride ? { staminaOverride } : {}),
+    })
+  }, [home, away, seed, startMatch, initialTactics, firstHalfScript, staminaOverride])
 
   // 재생 여부: 표시 분이 엔진 계산 분에 못 미치면 재생 중.
   const replaying = !!engine && displayMinute < engine.minute
@@ -66,6 +99,15 @@ export function MatchScreen({ home, away, seed }: { home: Team; away: Team; seed
     playTo(90)
   }
 
+  // 토너먼트 무승부 → 승부차기 진입 필요 (캠페인 한정).
+  const needsShootout = !!onMatchEnd && !!requireWinner && !!engine && engine.score[0] === engine.score[1]
+
+  // 경기 결과를 캠페인으로 반환한다(홈 종료 스태미나 포함).
+  function finishMatch(shootout?: [number, number]) {
+    if (!engine || !onMatchEnd) return
+    onMatchEnd([engine.score[0], engine.score[1]], { ...engine.home.staminaByPlayer }, shootout)
+  }
+
   if (!engine) return <div className="ms-root ms-root--empty" />
 
   // displayMinute까지 도달한 이벤트만 순서대로 노출.
@@ -95,8 +137,13 @@ export function MatchScreen({ home, away, seed }: { home: Team; away: Team; seed
         <Ticker lines={lines} />
 
         {phase === 'pre' && (
-          <Overlay title="데모 경기">
+          <Overlay title={onMatchEnd ? `${home.name.ko} vs ${away.name.ko}` : '데모 경기'}>
             <p className="ms-overlay__note">{home.name.ko} vs {away.name.ko}</p>
+            {referenceScore && (
+              <p className="ms-overlay__note">
+                참고 · 실제 역사 {referenceScore[0]}-{referenceScore[1]}
+              </p>
+            )}
             <button type="button" className="ms-btn ms-btn--primary" onClick={() => playTo(45)}>
               킥오프
             </button>
@@ -105,6 +152,7 @@ export function MatchScreen({ home, away, seed }: { home: Team; away: Team; seed
 
         {phase === 'halftime' && caughtUp && (
           <Overlay title="전반 종료">
+            <TeamTalk side={SIDE} />
             <p className="ms-overlay__note">콘솔에서 개입하세요</p>
             <button type="button" className="ms-btn ms-btn--primary" onClick={() => playTo(90)}>
               후반 시작
@@ -124,7 +172,18 @@ export function MatchScreen({ home, away, seed }: { home: Team; away: Team; seed
           </Overlay>
         )}
 
-        {phase === 'fulltime' && caughtUp && (
+        {phase === 'fulltime' && caughtUp && shootoutOpen && (
+          <Overlay title="승부차기">
+            <ShootoutPanel
+              home={home}
+              away={away}
+              seed={seed}
+              onDone={result => finishMatch(result)}
+            />
+          </Overlay>
+        )}
+
+        {phase === 'fulltime' && caughtUp && !shootoutOpen && (
           <Overlay title="경기 종료">
             <div className="ms-final">
               <span className="ms-final__code">{home.fifaCode}</span>
@@ -132,13 +191,31 @@ export function MatchScreen({ home, away, seed }: { home: Team; away: Team; seed
               <span className="ms-final__code">{away.fifaCode}</span>
             </div>
             <StatsTable home={engine.stats[0]} away={engine.stats[1]} />
-            <button
-              type="button"
-              className="ms-btn ms-btn--primary"
-              onClick={() => { reset(); startMatch(home, away, seed) }}
-            >
-              다시 보기
-            </button>
+            {!onMatchEnd ? (
+              <button
+                type="button"
+                className="ms-btn ms-btn--primary"
+                onClick={() => { reset(); startMatch(home, away, seed) }}
+              >
+                다시 보기
+              </button>
+            ) : needsShootout ? (
+              <button
+                type="button"
+                className="ms-btn ms-btn--primary"
+                onClick={() => setShootoutOpen(true)}
+              >
+                승부차기로
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="ms-btn ms-btn--primary"
+                onClick={() => finishMatch()}
+              >
+                결과 확정
+              </button>
+            )}
           </Overlay>
         )}
       </div>

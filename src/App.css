@@ -38,6 +38,12 @@
   font-size: 15px;
   color: var(--bc-text-dim);
 }
+.landing__actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
 .landing__cta {
   padding: 14px 32px;
   border: 1px solid var(--bc-accent);
@@ -51,4 +57,13 @@
 }
 .landing__cta:hover {
   filter: brightness(1.05);
+}
+.landing__cta--ghost {
+  background: transparent;
+  border-color: var(--bc-line);
+  color: var(--bc-text);
+}
+.landing__cta--ghost:hover {
+  border-color: var(--bc-accent);
+  filter: none;
 }
