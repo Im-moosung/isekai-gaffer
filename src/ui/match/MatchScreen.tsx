@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, lazy, Suspense, Component, type ReactNode } from 'react'
 import type { Team, SideStats, TacticState, MatchEvent, DecisionEntry } from '../../engine/types'
 import { useMatchStore } from '../../game/matchStore'
 import type { MomentKind } from '../../game/matchSession'
 import { commentate } from '../../game/commentary'
+import * as ctts from '../../audio/commentary-tts'
 import { Scorebug } from '../broadcast/Scorebug'
 import { Ticker } from '../broadcast/Ticker'
 import { PitchView } from '../pitch/PitchView'
@@ -13,6 +14,27 @@ import { ShoutBar } from './ShoutBar'
 import { minuteDwellMs, EVENT_DWELL_MS, type PlaybackSpeed } from './playback'
 import * as sfx from '../../audio/sfx'
 import './match.css'
+
+// ★ 코드 스플릿: PixiPitch(→ pixi.js 전체)는 메인 번들에서 제외하고 지연 로드한다.
+// 정적 import 시 pixi.js(~수백 kB)가 엔트리 청크에 정적으로 끌려와 500kB 경고를 유발했다.
+// 로딩 순간에는 Suspense 폴백으로 동일 props의 SVG PitchView를 노출한다(피치 상시 노출 원칙 유지 —
+// SVG가 잠깐 보였다가 Pixi로 교체). WebGL 불가 폴백 로직은 PixiPitch 내부에 그대로 있다.
+const PixiPitch = lazy(() => import('../pitch/pixi/PixiPitch').then(m => ({ default: m.PixiPitch })))
+
+/** PixiPitch 청크 로드 실패(네트워크 오류·배포 중 404) 시 React.lazy가 렌더 중 에러를
+ *  throw한다. 에러 바운더리가 없으면 이 에러가 위로 전파되어 앱 전체가 백지가 된다
+ *  (PixiPitch 내부 WebGL 폴백은 컴포넌트가 로드된 뒤에만 작동 → 이 경로를 못 막는다).
+ *  경량 클래스 바운더리로 감싸 실패 시 동일 props의 SVG PitchView(fallback)로 대체한다
+ *  — 피치 상시 노출·크래시 금지 원칙 유지. */
+class PitchBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false }
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true }
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children
+  }
+}
 
 /** 위험 순간 강조 xG 임계(찬스 큰 세이브·유효 미스). */
 const DANGER_XG = 0.25
@@ -86,9 +108,12 @@ export function MatchScreen({
   const [speed, setSpeed] = useState<PlaybackSpeed>(1)
   // 사운드 — 음소거 상태(sfx 모듈 = localStorage 진실원)와 관중 스웰(골 직후 4초).
   const [muted, setMutedUi] = useState(() => sfx.isMuted())
+  // 한국어 TTS 해설 토글(음소거와 별개, localStorage 기억) — 스코어버그 옆 [🎙].
+  const [ttsOn, setTtsOnUi] = useState(() => ctts.isTtsEnabled())
   const [crowdSwell, setCrowdSwell] = useState(false)
   const swellTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const firedGoalMinuteRef = useRef(-1)
+  const spokenMinuteRef = useRef(-1)
   const prevPhaseRef = useRef<string | null>(null)
 
   // 경기 초기화(마운트/픽스처 변경 시). 엔진은 pre 상태로 준비.
@@ -96,6 +121,7 @@ export function MatchScreen({
   useEffect(() => {
     setShootoutOpen(false)
     firedGoalMinuteRef.current = -1
+    spokenMinuteRef.current = -1
     startMatch(home, away, seed, {
       ...(initialTactics ? { homeTactics: initialTactics } : {}),
       ...(firstHalfScript ? { firstHalfScript } : {}),
@@ -200,6 +226,26 @@ export function MatchScreen({
     swellTimerRef.current = setTimeout(() => setCrowdSwell(false), 4000)
   }, [phase, engine])
 
+  // TTS 해설: 재생 중 현재 분의 대표 이벤트(goal>save>miss>corner>foul) 1개만 발화(과밀 방지).
+  // commentate() 문장을 그대로 읽고, goal·save는 important(rate·pitch 강조 + 발화 중 선점).
+  // 분당 1회(spokenMinuteRef)만 발동 — 미지원·보이스 없음·토글 OFF면 조용한 no-op.
+  useEffect(() => {
+    if (phase !== 'playing' || !engine) return
+    const m = engine.minute
+    if (spokenMinuteRef.current === m) return
+    spokenMinuteRef.current = m
+    const eventsAtMinute = engine.events.filter(e => e.minute === m)
+    const spoken = ctts.pickSpokenEvent(eventsAtMinute)
+    if (!spoken) return
+    const important = spoken.type === 'goal' || spoken.type === 'save'
+    ctts.speak(commentate(spoken, home, away), { important })
+  }, [phase, engine, home, away])
+
+  // 작전판 진입·pause 시 진행 중 발화를 취소한다(작전 지시 중 해설이 새지 않게).
+  useEffect(() => {
+    if (tacticsMode) ctts.stopAll()
+  }, [tacticsMode])
+
   // 관중 함성 강도: 기본 0.3, 클러치(80분+·1골차 이내) 0.5, 골 직후 스웰 0.8. crowdLoop('start')는 게인만 갱신(멱등).
   useEffect(() => {
     if (phase !== 'playing' || !engine) return
@@ -212,11 +258,13 @@ export function MatchScreen({
   useEffect(() => () => {
     if (swellTimerRef.current) clearTimeout(swellTimerRef.current)
     sfx.crowdLoop('stop')
+    ctts.stopAll()
   }, [])
 
-  // 킥오프: 유저 제스처에서 AudioContext init → 휘슬 1회 + 관중 루프 시작.
+  // 킥오프: 유저 제스처에서 AudioContext init → 휘슬 1회 + 관중 루프 시작. TTS 보이스 탐색도 여기서.
   function handleKickoff() {
     sfx.init()
+    ctts.initVoice()
     sfx.whistle('kickoff')
     sfx.crowdLoop('start', 0.3)
     kickoff()
@@ -225,6 +273,11 @@ export function MatchScreen({
   // 음소거 토글(sfx가 localStorage 기억) — UI 아이콘 동기화.
   function toggleMute() {
     setMutedUi(sfx.toggleMuted())
+  }
+
+  // TTS 해설 토글(commentary-tts가 localStorage 기억) — UI 동기화. OFF 시 진행 발화 중단.
+  function toggleTts() {
+    setTtsOnUi(ctts.toggleTts())
   }
 
   // 토너먼트 무승부 → 승부차기 진입 필요 (캠페인 한정).
@@ -304,6 +357,16 @@ export function MatchScreen({
         >
           {muted ? '🔇' : '🔊'}
         </button>
+        {/* 한국어 TTS 해설 토글 — 음소거 옆. 음소거와 별개(localStorage 'rematch-tts'). */}
+        <button
+          type="button"
+          className="ms-tts"
+          aria-label={ttsOn ? '해설 음성 끄기' : '해설 음성 켜기'}
+          aria-pressed={ttsOn}
+          onClick={toggleTts}
+        >
+          🎙
+        </button>
         {/* 재생 중 감독 타임 버튼 — 스코어버그 옆. pauseByUser로 자유 일시정지. */}
         {replaying && (
           <div className="ms-live-controls">
@@ -328,20 +391,47 @@ export function MatchScreen({
           </div>
         )}
 
-        {/* ── 피치 — 언제나 보인다(가리는 오버레이 없음) ── */}
+        {/* ── 피치 — 언제나 보인다(가리는 오버레이 없음). broadcast는 PixiJS 렌더러
+            (WebGL 불가·reduced-motion은 PixiPitch 내부에서 SVG 폴백/연출 생략). ── */}
         <div className="ms-pitch-wrap">
-          <PitchView
-            state={engine}
-            lastEvent={lastEvent}
-            sequence={playSequence ? highlight!.seq : undefined}
-            dwellMs={seqDwell}
-            sequenceSide={highlight?.side}
-          />
+          <PitchBoundary
+            fallback={
+              <PitchView
+                state={engine}
+                lastEvent={lastEvent}
+                sequence={playSequence ? highlight!.seq : undefined}
+                dwellMs={seqDwell}
+                sequenceSide={highlight?.side}
+              />
+            }
+          >
+            <Suspense
+              fallback={
+                <PitchView
+                  state={engine}
+                  lastEvent={lastEvent}
+                  sequence={playSequence ? highlight!.seq : undefined}
+                  dwellMs={seqDwell}
+                  sequenceSide={highlight?.side}
+                />
+              }
+            >
+              <PixiPitch
+                state={engine}
+                lastEvent={lastEvent}
+                sequence={playSequence ? highlight!.seq : undefined}
+                dwellMs={seqDwell}
+                sequenceSide={highlight?.side}
+              />
+            </Suspense>
+          </PitchBoundary>
         </div>
 
         <Ticker lines={lines} emphasis={dangerMoment} />
 
-        {/* ── 골 드라마: 플래시 + 대형 타이포 + 득점자 배너 + (스코어버그 펄스) ──
+        {/* ── 골 드라마: 대형 타이포 + 득점자 배너 + (스코어버그 펄스) ──
+            풀스크린 플래시·파티클·카메라 셰이크는 PixiPitch(WebGL)가 담당한다
+            (중복이던 DOM ms-drama__flash 제거 — Task 13 보고). GOAL 타이포는 DOM 유지.
             피치를 가리지 않는 순간 이펙트(pointer-events 없음). key=분으로 골마다 재발동. */}
         {goalDrama && (
           <div
@@ -349,7 +439,6 @@ export function MatchScreen({
             className={`ms-drama ms-drama--${conceded ? 'concede' : 'score'}`}
             aria-hidden="true"
           >
-            <span className="ms-drama__flash" />
             <span className="ms-drama__word">{conceded ? '실점…' : 'GOAL!'}</span>
           </div>
         )}
