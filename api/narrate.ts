@@ -10,7 +10,8 @@
 // 이 파일은 vite/앱 빌드 대상(src/)이 아니며, 로직은 최소화하고 프롬프트·세이프가드는
 // 공유 모듈(src/ai/prompts.ts)에 둔다.
 
-import { buildSystemPrompt, buildUserPrompt, type NarrateTask } from '../src/ai/prompts'
+import { buildSystemPrompt, buildUserPrompt } from '../src/ai/prompts'
+import { validateNarrateRequest, firstForwardedIp, rateLimitCheck } from '../src/ai/requestGuard'
 
 // 모델 상수 — 배포 시점에 최신 모델로 교체 가능하도록 분리한다.
 const GEMINI_MODEL = 'gemini-2.5-flash-lite' // 배포 시 gemini-3.5(-flash-lite) 계열로 교체 가능
@@ -19,6 +20,11 @@ const ANTHROPIC_MODEL = 'claude-haiku-4-5'
 const MAX_TOKENS = 400
 /** 업스트림(모델 API) 내부 타임아웃. 클라이언트(3s)보다 짧게. */
 const UPSTREAM_TIMEOUT_MS = 2500
+
+// 레이트리밋 상태: IP별 요청 타임스탬프.
+// 서버리스 인스턴스별 베스트에포트 — 프로덕션은 KV/Upstash 권장
+// (스펙 §7 남용 제어의 1차 구현, 공통 응답 캐시는 Phase 4 배포 시).
+const rateLimitBuckets = new Map<string, number[]>()
 
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -30,18 +36,18 @@ function json(body: unknown, status: number): Response {
 export default async function handler(req: Request): Promise<Response> {
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405)
 
-  let body: { task?: NarrateTask; context?: Record<string, unknown> }
-  try {
-    body = (await req.json()) as typeof body
-  } catch {
-    return json({ error: 'invalid json body' }, 400)
-  }
+  // 레이트리밋(비용 남용 방어) — 본문 파싱 전에 가장 저렴한 방어부터 적용한다.
+  const ip = firstForwardedIp(req.headers.get('x-forwarded-for'))
+  const now = Date.now()
+  const rl = rateLimitCheck(rateLimitBuckets.get(ip) ?? [], now)
+  rateLimitBuckets.set(ip, rl.timestamps) // 정리된 배열을 되써 메모리 누수 방지
+  if (!rl.allowed) return json({ error: 'rate limit exceeded' }, 429)
 
-  const task = body.task
-  const context = body.context ?? {}
-  if (task !== 'pressq' && task !== 'headline' && task !== 'epilogue') {
-    return json({ error: 'invalid task' }, 400)
-  }
+  // 입력 크기·유효성 검증(원문 길이 캡·task 화이트리스트·context object 필수).
+  const rawBody = await req.text()
+  const parsed = validateNarrateRequest(rawBody)
+  if (!parsed.ok) return json({ error: parsed.error }, parsed.status)
+  const { task, context } = parsed
 
   const provider = (process.env.AI_PROVIDER ?? 'gemini').toLowerCase()
   const system = buildSystemPrompt()
@@ -76,10 +82,12 @@ async function callGemini(
   user: string,
   signal: AbortSignal,
 ): Promise<string | null> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(key)}`
+  // 키는 쿼리스트링(?key=) 대신 x-goog-api-key 헤더로 전달한다 —
+  // URL은 로그·프록시·리퍼러에 남기 쉬워 크리덴셜이 노출될 수 있다.
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
     signal,
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: system }] },

@@ -10,6 +10,10 @@ describe('buildSystemPrompt', () => {
     expect(sys).toContain('대체역사')
     expect(sys).toContain('픽션')
   })
+  it('상대 벤치 익명 조항(§7.1(a))을 포함한다', () => {
+    expect(sys).toContain('상대 벤치')
+    expect(sys).toContain('익명 직함')
+  })
 })
 
 describe('buildUserPrompt', () => {
