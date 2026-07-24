@@ -27,6 +27,34 @@
   pointer-events: none;
 }
 
+/* 클릭 가능 도트(작전판 보드 상호작용) */
+.pv-dotg--click { cursor: pointer; }
+.pv-dotg--click:hover .pv-dot { stroke: var(--bc-accent); stroke-width: 0.6; }
+
+/* 선택/아웃 대상 발광 링 */
+.pv-ring {
+  fill: none;
+  stroke: var(--bc-accent);
+  stroke-width: 0.8;
+  opacity: 0.9;
+  animation: pv-ring 1.3s ease-out infinite;
+}
+.pv-dot--hl { stroke: var(--bc-accent); stroke-width: 0.6; }
+@keyframes pv-ring {
+  0% { r: 2.8; opacity: 0.95; }
+  100% { r: 5.2; opacity: 0.15; }
+}
+
+/* 교체 고스트 도트(투입 미리보기 — 반투명 파선) */
+.pv-ghost__dot {
+  fill: color-mix(in srgb, var(--bc-accent) 22%, transparent);
+  stroke: var(--bc-accent);
+  stroke-width: 0.5;
+  stroke-dasharray: 1.2 1;
+  opacity: 0.85;
+}
+.pv-ghost__num { fill: var(--bc-accent); opacity: 0.9; }
+
 .pv-marker { stroke-width: 0.6; }
 .pv-marker--goal { fill: none; stroke: var(--bc-accent); }
 .pv-marker--x { stroke: var(--bc-danger); fill: none; }
@@ -40,4 +68,5 @@
 
 @media (prefers-reduced-motion: reduce) {
   .pv-pulse { animation: none; }
+  .pv-ring { animation: none; }
 }

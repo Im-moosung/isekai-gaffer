@@ -57,7 +57,7 @@ describe('SubPanel (교체)', () => {
     fireEvent.click(outCard)
     fireEvent.click(inCard)
 
-    fireEvent.click(getByRole('button', { name: '교체' }))
+    fireEvent.click(getByRole('button', { name: '교체 확정' }))
     expect(store().engine!.home.subsUsed).toBe(before + 1)
   })
 })

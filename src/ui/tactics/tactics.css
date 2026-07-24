@@ -63,6 +63,7 @@
   gap: 10px;
 }
 .tb-board__pitch {
+  position: relative;
   flex: 1 1 0;
   min-height: 0;
   display: flex;
@@ -73,6 +74,40 @@
   background: var(--tb-board-bg);
   padding: 8px;
   box-sizing: border-box;
+}
+
+/* 보드 옆(위) 선수 카드 팝오버 — 보드 우상단에 겹쳐 표시. */
+.tb-pop {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+  max-width: 260px;
+  padding: 6px;
+  border-radius: 12px;
+  background: rgba(6, 16, 31, 0.92);
+  border: 1px solid var(--tb-chalk);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+}
+.tb-pop__compare {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tb-pop__arrow { color: var(--tb-chalk); font-weight: 900; font-size: 18px; }
+.tb-pop__close {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--tb-board-line);
+  background: var(--bc-panel-2);
+  color: var(--bc-text);
+  font-size: 11px;
+  cursor: pointer;
+  line-height: 1;
 }
 .tb-board__pitch > .pv-root {
   width: 100%;
@@ -146,20 +181,6 @@
   flex: 1 1 0;
   min-height: 0;
 }
-.tb-opp {
-  display: grid;
-  place-items: center;
-  min-height: 120px;
-  padding: 20px;
-  border: 1px dashed var(--tb-board-line);
-  border-radius: 10px;
-}
-.tb-opp__soon {
-  margin: 0;
-  color: var(--bc-text-dim);
-  font-size: 13px;
-}
-
 /* ── 하단: 정지 사유 + [전술 확정] 대형 버튼 ───────────────── */
 .tb-foot {
   flex: 0 0 auto;

@@ -151,9 +151,11 @@
 }
 .lu-card {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 10px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  width: 92px;
+  padding: 8px;
   border: 1px solid var(--bc-line);
   border-radius: 8px;
   background: var(--bc-panel);
@@ -164,6 +166,15 @@
   touch-action: none;
 }
 .lu-card:active { cursor: grabbing; }
+.lu-card__head { display: flex; align-items: center; gap: 5px; }
+.lu-card__radar { width: 100%; max-width: 76px; align-self: center; }
+.lu-card__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .lu-card__num { font-weight: 800; }
 .lu-card__pos {
   font-size: 10px;
@@ -174,6 +185,18 @@
   color: var(--bc-text-dim);
 }
 .lu-card--sel { outline: 2px solid var(--bc-accent); }
+
+/* 선택 선수 카드 팝오버 — 피치 우상단 겹침. */
+.lu-pop {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 10;
+  width: 220px;
+  max-width: 70%;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  border-radius: 12px;
+}
 .lu-card--over { box-shadow: 0 0 0 3px var(--bc-accent); }
 .lu-card--drag { opacity: 0.9; }
 

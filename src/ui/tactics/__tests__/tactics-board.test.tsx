@@ -150,6 +150,70 @@ describe('TacticsBoard — 코치 회의 (멀티 코치)', () => {
   })
 })
 
+describe('TacticsBoard — 보드 하이라이트·팝오버 (Task 7)', () => {
+  it('보드 도트 클릭 → 발광 링 + PlayerCard 팝오버', () => {
+    const { container } = mountAt('paused-user')
+    expect(container.querySelector('.pv-ring')).toBeNull()
+    expect(container.querySelector('.tb-pop')).toBeNull()
+    const dot = container.querySelector('.pv-dotg--click') as HTMLElement
+    fireEvent.click(dot)
+    // 클릭한 선수 도트에 발광 링 + 옆 팝오버 카드.
+    expect(container.querySelector('.pv-ring')).toBeTruthy()
+    const pop = container.querySelector('.tb-pop .pc')
+    expect(pop).toBeTruthy()
+    expect(container.querySelector('.tb-pop .pc-radar__poly')).toBeTruthy()
+  })
+
+  it('팝오버 닫기 버튼 → 카드·링 제거', () => {
+    const { container, getByLabelText } = mountAt('paused-user')
+    fireEvent.click(container.querySelector('.pv-dotg--click') as HTMLElement)
+    fireEvent.click(getByLabelText('카드 닫기'))
+    expect(container.querySelector('.tb-pop')).toBeNull()
+    expect(container.querySelector('.pv-ring')).toBeNull()
+  })
+})
+
+describe('TacticsBoard — 교체 미리보기 → 확정 (Task 7)', () => {
+  function openSub(c: ReturnType<typeof mountAt>) {
+    fireEvent.click(c.getByRole('tab', { name: '교체' }))
+  }
+
+  it('아웃 선택 → 보드 링 강조(고스트 없음)', () => {
+    const c = mountAt('paused-user')
+    openSub(c)
+    const outCard = c.container.querySelector('.cs-sub__lineup .cs-card') as HTMLElement
+    fireEvent.click(outCard)
+    expect(c.container.querySelector('.pv-ring')).toBeTruthy()
+    expect(c.container.querySelector('.pv-ghost')).toBeNull()
+  })
+
+  it('아웃+인 선택 → 고스트 도트 미리보기 + 두 카드 비교', () => {
+    const c = mountAt('paused-user')
+    openSub(c)
+    fireEvent.click(c.container.querySelector('.cs-sub__lineup .cs-card') as HTMLElement)
+    fireEvent.click(c.container.querySelector('.cs-sub__bench .cs-card') as HTMLElement)
+    // 들어갈 슬롯 위치에 고스트 도트.
+    expect(c.container.querySelector('.pv-ghost')).toBeTruthy()
+    // 두 선수 카드 나란히 비교(OUT→IN).
+    const compare = c.container.querySelector('.tb-pop__compare')
+    expect(compare).toBeTruthy()
+    expect(compare!.querySelectorAll('.pc')).toHaveLength(2)
+  })
+
+  it('[교체 확정] → submitCommand(sub) 호출 + subsUsed 증가 + 상태 리셋', () => {
+    const c = mountAt('paused-user')
+    openSub(c)
+    const before = store().engine!.home.subsUsed
+    fireEvent.click(c.container.querySelector('.cs-sub__lineup .cs-card') as HTMLElement)
+    fireEvent.click(c.container.querySelector('.cs-sub__bench .cs-card') as HTMLElement)
+    fireEvent.click(c.getByRole('button', { name: '교체 확정' }))
+    expect(store().engine!.home.subsUsed).toBe(before + 1)
+    // 확정 후 고스트·비교 카드 사라짐(리셋).
+    expect(c.container.querySelector('.pv-ghost')).toBeNull()
+    expect(c.container.querySelector('.tb-pop__compare')).toBeNull()
+  })
+})
+
 describe('TacticsBoard — 하프타임 팀토크 + 사유', () => {
   it('halftime → 팀토크 카드 + [후반 시작] 라벨 + 사유(전반 종료)', () => {
     const { getByRole, container } = mountAt('halftime')

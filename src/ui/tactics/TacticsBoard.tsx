@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import type { FormationId, GroupIntensity, TacticState } from '../../engine/types'
+import type { FormationId, GroupIntensity, Player, TacticState } from '../../engine/types'
 import { useMatchStore } from '../../game/matchStore'
 import { buildCoachAdvice, type TacticPatch } from '../../game/coach'
 import { PitchView } from '../pitch/PitchView'
 import { ConsolePanel } from '../console/ConsolePanel'
 import { SubPanel } from '../console/SubPanel'
+import { OppPanel } from './OppPanel'
+import { PlayerCard } from '../common/PlayerCard'
 import { TacticsExtras } from './TacticsExtras'
 import { TeamTalk } from '../match/TeamTalk'
 import { autoFill } from '../lineup/swap'
@@ -54,11 +56,17 @@ export function TacticsBoard() {
   const confirmTactics = useMatchStore(s => s.confirmTactics)
   const submitCommand = useMatchStore(s => s.submitCommand)
   const [tab, setTab] = useState<TacticsTab>('tactics')
+  // 보드 상호작용 상태: 팝오버 대상(any) + 교체 아웃/인(교체 미리보기 고스트·비교 카드).
+  const [pop, setPop] = useState<string | null>(null)
+  const [subOut, setSubOut] = useState<string | null>(null)
+  const [subIn, setSubIn] = useState<string | null>(null)
 
   if (!engine) return null
   const halftime = phase === 'halftime'
   const home = engine[SIDE]
   const formation = home.tactics.formation
+  const byId = (id: string | null): Player | undefined =>
+    id ? home.team.squad.find(p => p.id === id) : undefined
 
   // 포메이션 변경 — 현재 선발을 우선 유지(preferIds)하며 새 슬롯에 그리디 재배치.
   const changeFormation = (f: FormationId) => {
@@ -67,6 +75,25 @@ export function TacticsBoard() {
     const lineup = autoFill(home.team, f, preferIds)
     submitCommand(SIDE, { type: 'formation', tactics: { ...home.tactics, formation: f, lineup } })
   }
+
+  // 보드 도트/이름 클릭 → 팝오버. 교체 탭이면 아웃 선수로도 선택(고스트 미리보기 리셋).
+  const onDotClick = (playerId: string) => {
+    setPop(playerId)
+    if (tab === 'sub') { setSubOut(playerId); setSubIn(null) }
+  }
+  const resetSub = () => { setSubOut(null); setSubIn(null); setPop(null) }
+
+  // 교체 미리보기 고스트: 아웃 선수의 슬롯 인덱스에 투입 선수 번호를 반투명 표시.
+  const outIdx = subOut ? home.tactics.lineup.findIndex(l => l.playerId === subOut) : -1
+  const inPlayer = byId(subIn)
+  const ghost = tab === 'sub' && subOut && subIn && outIdx >= 0
+    ? { slotIndex: outIdx, number: inPlayer?.number }
+    : null
+  const highlightId = tab === 'sub' ? subOut : pop
+  // 팝오버: 교체 비교(아웃+인) 우선, 없으면 단일 선택 카드.
+  const outPlayer = byId(subOut)
+  const popPlayer = byId(pop)
+  const compare = tab === 'sub' && outPlayer && inPlayer
 
   return (
     <div className="tb-root" role="dialog" aria-label="작전판" aria-modal="true">
@@ -100,7 +127,33 @@ export function TacticsBoard() {
             ))}
           </div>
           <div className="tb-board__pitch">
-            <PitchView state={engine} variant="tactics" nameLabels />
+            <PitchView
+              state={engine}
+              variant="tactics"
+              nameLabels
+              highlightId={highlightId}
+              ghost={ghost}
+              onDotClick={onDotClick}
+            />
+            {(compare || popPlayer) && (
+              <div className="tb-pop" role="group" aria-label="선수 카드">
+                {compare ? (
+                  <div className="tb-pop__compare">
+                    <PlayerCard player={outPlayer!} size="compact" side={SIDE} role="OUT" stamina={home.staminaByPlayer[outPlayer!.id]} />
+                    <span className="tb-pop__arrow" aria-hidden="true">→</span>
+                    <PlayerCard player={inPlayer!} size="compact" side={SIDE} role="IN" stamina={home.staminaByPlayer[inPlayer!.id]} />
+                  </div>
+                ) : (
+                  <PlayerCard
+                    player={popPlayer!}
+                    side={SIDE}
+                    stamina={home.staminaByPlayer[popPlayer!.id]}
+                    morale={home.moraleByPlayer[popPlayer!.id]}
+                  />
+                )}
+                <button type="button" className="tb-pop__close" aria-label="카드 닫기" onClick={() => { setPop(null) }}>✕</button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -141,12 +194,17 @@ export function TacticsBoard() {
                 <TacticsExtras side={SIDE} />
               </div>
             )}
-            {tab === 'sub' && <SubPanel side={SIDE} />}
-            {tab === 'opp' && (
-              <div className="tb-opp" aria-label="상대 분석">
-                <p className="tb-opp__soon">상대 분석 — 곧 제공됩니다</p>
-              </div>
+            {tab === 'sub' && (
+              <SubPanel
+                side={SIDE}
+                outId={subOut}
+                inId={subIn}
+                onSelectOut={id => { setSubOut(id); setSubIn(null); setPop(id) }}
+                onSelectIn={id => { setSubIn(id); setPop(id) }}
+                onConfirmed={resetSub}
+              />
             )}
+            {tab === 'opp' && <OppPanel />}
           </div>
         </aside>
       </div>

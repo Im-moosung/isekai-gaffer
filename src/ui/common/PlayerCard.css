@@ -1,0 +1,142 @@
+/* 재사용 선수 카드 — 색·폰트만 CSS(레이더 SVG 기하 cx/cy/points는 컴포넌트 인라인 예외,
+   게이지 폭 %도 데이터 바인딩 예외). --bc-* 토큰 재사용. */
+.pc {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--bc-line);
+  border-radius: 12px;
+  background: var(--bc-panel);
+  color: var(--bc-text);
+  font-family: var(--bc-font);
+  box-sizing: border-box;
+}
+.pc--compact {
+  gap: 6px;
+  padding: 8px;
+  border-radius: 10px;
+}
+.pc--star {
+  border-color: var(--bc-accent);
+  box-shadow: 0 0 0 1px var(--bc-accent) inset;
+}
+
+.pc__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pc__avatar {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 900;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+.pc--compact .pc__avatar { width: 30px; height: 30px; font-size: 13px; }
+.pc__avatar--home { background: var(--bc-home); }
+.pc__avatar--away { background: var(--bc-away); }
+
+.pc__ident { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pc__nameline { display: flex; align-items: baseline; gap: 6px; }
+.pc__num {
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--bc-text-dim);
+}
+.pc__name {
+  font-size: 15px;
+  font-weight: 800;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pc--compact .pc__name { font-size: 13px; }
+.pc__star { color: var(--bc-accent); font-size: 12px; }
+
+.pc__posline { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pc__pos {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--bc-panel-2);
+  color: var(--bc-text);
+  font-size: 11px;
+  font-weight: 800;
+}
+.pc__role { font-size: 11px; color: var(--bc-text-dim); }
+.pc__foot {
+  display: inline-grid;
+  place-items: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 4px;
+  border: 1px solid var(--bc-line);
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--bc-text-dim);
+}
+
+/* ── 레이더 ─────────────────────────────────────────── */
+.pc-radar {
+  width: 100%;
+  max-width: 220px;
+  align-self: center;
+  display: block;
+}
+.pc--compact .pc-radar { max-width: 120px; }
+.pc-radar__grid {
+  fill: rgba(140, 200, 255, 0.05);
+  stroke: var(--bc-line);
+  stroke-width: 0.6;
+}
+.pc-radar__axis { stroke: var(--bc-line); stroke-width: 0.4; }
+.pc-radar__poly {
+  fill: color-mix(in srgb, var(--bc-accent) 30%, transparent);
+  stroke: var(--bc-accent);
+  stroke-width: 1;
+  stroke-linejoin: round;
+}
+.pc-radar__pt { fill: var(--bc-accent); }
+.pc-radar__label {
+  fill: var(--bc-text-dim);
+  font-size: 6px;
+  font-weight: 700;
+  dominant-baseline: middle;
+}
+
+/* ── 게이지 ─────────────────────────────────────────── */
+.pc__gauges { display: flex; flex-direction: column; gap: 5px; }
+.pc-gauge {
+  display: grid;
+  grid-template-columns: 34px 1fr 26px;
+  align-items: center;
+  gap: 8px;
+}
+.pc-gauge__label { font-size: 11px; color: var(--bc-text-dim); }
+.pc-gauge__track {
+  position: relative;
+  display: block;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--bc-panel-2);
+  overflow: hidden;
+}
+.pc-gauge__bar { display: block; height: 100%; border-radius: 4px; }
+.pc-gauge--stamina .pc-gauge__bar { background: var(--bc-accent); }
+.pc-gauge--morale .pc-gauge__bar { background: var(--bc-away); }
+.pc-gauge__bar--low { background: var(--bc-danger); }
+.pc-gauge__val {
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--bc-text);
+}

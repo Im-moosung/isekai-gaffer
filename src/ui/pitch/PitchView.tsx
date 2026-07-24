@@ -16,6 +16,12 @@ interface PitchViewProps {
   variant?: 'broadcast' | 'tactics'
   /** 홈 도트에 선수 이름 라벨 표시(작전판 — "이 선수가 어디 포지션인지" 가시화). */
   nameLabels?: boolean
+  /** 홈 도트 중 발광 링으로 강조할 선수 id(선택·교체 아웃 대상). */
+  highlightId?: string | null
+  /** 교체 미리보기 고스트 도트 — 홈 슬롯 인덱스에 반투명 도트+번호 표시. */
+  ghost?: { slotIndex: number; number?: number } | null
+  /** 홈 도트 클릭 콜백(작전판 보드 상호작용). */
+  onDotClick?: (playerId: string) => void
 }
 
 /** SVG 105×68 피치 뷰.
@@ -23,7 +29,7 @@ interface PitchViewProps {
  *  엔진 호출 없이 전달받은 state만 그린다(컴포넌트는 엔진 타입 import만).
  *  variant='tactics'면 다크 보드 클래스(pv-root--tactics)를 붙여 작전판 톤으로 렌더하고,
  *  도트 좌표에 transition을 걸어(포메이션 변경 시) 새 위치로 부드럽게 이동한다(tactics.css). */
-export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels = false }: PitchViewProps) {
+export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels = false, highlightId, ghost, onDotClick }: PitchViewProps) {
   return (
     <svg
       className={`pv-root${variant === 'tactics' ? ' pv-root--tactics' : ''}`}
@@ -33,10 +39,24 @@ export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels 
       preserveAspectRatio="xMidYMid meet"
     >
       <PitchMarkings />
-      <SideDots side={state.home} which="home" nameLabels={nameLabels} />
+      <SideDots side={state.home} which="home" nameLabels={nameLabels} highlightId={highlightId} onDotClick={onDotClick} />
       <SideDots side={state.away} which="away" />
+      {ghost && <GhostDot side={state.home} slotIndex={ghost.slotIndex} number={ghost.number} />}
       {lastEvent && <EventMarker event={lastEvent} state={state} />}
     </svg>
+  )
+}
+
+/** 교체 고스트 도트 — 아웃 선수 슬롯 위치에 반투명 도트+투입 선수 번호. */
+function GhostDot({ side, slotIndex, number }: { side: SideState; slotIndex: number; number?: number }) {
+  const c = slotCoords(side.tactics.formation, slotIndex, 'home')
+  const cx = sx(c.x)
+  const cy = sy(c.y)
+  return (
+    <g className="pv-ghost" aria-label="교체 미리보기">
+      <circle className="pv-ghost__dot" cx={cx} cy={cy} r={2.4} />
+      {number != null && <text className="pv-num pv-ghost__num" x={cx} y={cy}>{number}</text>}
+    </g>
   )
 }
 
@@ -67,7 +87,10 @@ function PitchMarkings() {
   )
 }
 
-function SideDots({ side, which, nameLabels = false }: { side: SideState; which: 'home' | 'away'; nameLabels?: boolean }) {
+function SideDots({ side, which, nameLabels = false, highlightId, onDotClick }: {
+  side: SideState; which: 'home' | 'away'; nameLabels?: boolean
+  highlightId?: string | null; onDotClick?: (playerId: string) => void
+}) {
   const { formation, lineup } = side.tactics
   const numberById = new Map(side.team.squad.map(p => [p.id, p.number]))
   const nameById = new Map(side.team.squad.map(p => [p.id, p.name.ko]))
@@ -79,9 +102,18 @@ function SideDots({ side, which, nameLabels = false }: { side: SideState; which:
         const cy = sy(c.y)
         const num = numberById.get(slot.playerId)
         const name = nameById.get(slot.playerId)
+        const highlit = highlightId != null && slot.playerId === highlightId
+        const clickable = which === 'home' && !!onDotClick
         return (
-          <g key={`${which}-${i}`}>
-            <circle className={`pv-dot pv-dot--${which}`} cx={cx} cy={cy} r={2.4} />
+          <g
+            key={`${which}-${i}`}
+            className={`pv-dotg${clickable ? ' pv-dotg--click' : ''}`}
+            onClick={clickable ? () => onDotClick!(slot.playerId) : undefined}
+            role={clickable ? 'button' : undefined}
+            aria-label={clickable && name ? `${name} 선택` : undefined}
+          >
+            {highlit && <circle className="pv-ring" cx={cx} cy={cy} r={3.6} />}
+            <circle className={`pv-dot pv-dot--${which}${highlit ? ' pv-dot--hl' : ''}`} cx={cx} cy={cy} r={2.4} />
             {num != null && (
               <text className="pv-num" x={cx} y={cy}>{num}</text>
             )}

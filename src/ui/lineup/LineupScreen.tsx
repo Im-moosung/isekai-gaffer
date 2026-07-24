@@ -4,6 +4,7 @@ import type { DragEndEvent } from '@dnd-kit/core'
 import type { Team, TacticState, FormationId, LineupSlot, Player, Position } from '../../engine/types'
 import { slotCoords } from '../pitch/formations'
 import { swapPlayers, substitute, autoFill, fitLevel } from './swap'
+import { PlayerCard, PlayerRadar } from '../common/PlayerCard'
 import './lineup.css'
 
 const FORMATIONS: FormationId[] = ['4-3-3', '4-2-3-1', '4-4-2', '3-5-2', '4-1-4-1', '5-4-1']
@@ -29,6 +30,8 @@ export function LineupScreen({ team, initial, onConfirm }: LineupScreenProps) {
   const byId = (id: string): Player | undefined => team.squad.find(p => p.id === id)
   const lineupIds = new Set(lineup.map(l => l.playerId))
   const bench = team.squad.filter(p => !lineupIds.has(p.id))
+  const selectedPlayer = selected ? byId(selected) : undefined
+  const selectedSlot = selected ? lineup.find(l => l.playerId === selected)?.slot : undefined
 
   function changeFormation(f: FormationId) {
     setFormation(f)
@@ -103,6 +106,11 @@ export function LineupScreen({ team, initial, onConfirm }: LineupScreenProps) {
               />
             )
           })}
+          {selectedPlayer && (
+            <div className="lu-pop" role="group" aria-label="선수 카드">
+              <PlayerCard player={selectedPlayer} slot={selectedSlot ?? selectedPlayer.position} />
+            </div>
+          )}
         </div>
 
         <section className="lu-bench" aria-label="벤치">
@@ -178,9 +186,12 @@ function BenchCard({ player, selected, onClick }: { player: Player; selected: bo
       aria-pressed={selected}
       onClick={onClick}
     >
-      <span className="lu-card__num">{player.number}</span>
-      <span className="lu-card__name">{player.name.ko}</span>
-      <span className="lu-card__pos">{player.position}</span>
+      <span className="lu-card__head">
+        <span className="lu-card__num">{player.number}</span>
+        <span className="lu-card__name">{player.name.ko}</span>
+        <span className="lu-card__pos">{player.position}</span>
+      </span>
+      <PlayerRadar player={player} className="lu-card__radar" />
     </button>
   )
 }

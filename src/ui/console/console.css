@@ -87,6 +87,12 @@
   font-variant-numeric: tabular-nums;
   color: var(--bc-text-dim);
 }
+.cs-sub__hint {
+  margin: 6px 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bc-accent);
+}
 .cs-sub__subtitle {
   margin: 12px 0 8px;
   font-size: 12px;
