@@ -115,6 +115,15 @@
 **Files:** Create src/audio/commentary-tts.ts, Modify MatchScreen / Test(로직·no-op)
 **계약:** Web Speech API(speechSynthesis) — ko-KR 보이스 자동 선택(없으면 no-op), 하이라이트 이벤트의 commentate() 문장을 음성 중계(골=rate 1.15·pitch 상향 강조, 일반=1.0), **큐 관리**(진행 중이면 저중요 이벤트 스킵 — 골·세이브 우선), 음소거 토글과 별개 [🎙 해설] 토글(localStorage), pause 시 cancel. 미지원 브라우저 조용한 no-op
 
-### Task 13: 안무 품질 패스
-**Files:** Modify src/ui/pitch/{choreography.ts,PitchView.tsx,pitch.css} / Test(보간·카메라 수학)
-**계약:** ① CSS 스텝 점프 → **rAF 60fps 보간**(스텝 간 quadratic bezier 곡선 패스 — 패스는 낮은 아크, 슛은 직선 가속, easing 타입별) ② **볼 트레일**(최근 위치 잔상 3~4개 페이드) ③ 리시버 무빙(공 도착점으로 마중 이동) ④ **카메라 줌**: 하이라이트 시작 시 SVG viewBox가 액션 존으로 0.4s 줌인(×1.6), 종료 시 풀피치 복귀 — reduced-motion 시 줌 생략 ⑤ 골 네트 리플(골문 라인 진동 0.3s) ⑥ 데드타임 금지 유지. 결정론(rAF 보간은 표시 전용 — 로직 결정론 무관 명시)
+### Task 13: PixiJS 경기 렌더러 (사용자 확정 — 게임 엔진급 방송 화면)
+**Files:** deps pixi.js / Create src/ui/pitch/pixi/{PixiPitch.tsx, stage.ts(순수 수학), fx.ts} / Modify MatchScreen(broadcast 피치 교체), 기존 SVG PitchView는 **작전판 전용 유지 + WebGL 불가 폴백**
+**계약:**
+- **스코프**: broadcast 모드 경기 화면만 PixiJS(WebGL). 작전판(TacticsBoard)·라인업은 SVG 유지(인터랙션 자산 보존)
+- PixiPitch: 피치(그린 그라데이션+라인), 선수 도트(원+등번호 텍스트, 팀 컬러·하이라이트), **공 스프라이트+트레일**(잔상 파티클 페이드), 바디랭귀지 배지(🔥😰)
+- **안무 60fps**: 기존 buildSequence 키프레임을 pixi Ticker로 보간 — 스텝 간 quadratic bezier(패스=낮은 아크, 슛=직선 가속), easing 타입별. stage.ts에 순수 보간 함수(bezierAt·easeFor — TDD 대상)
+- **카메라 워크**: 하이라이트 시작 시 루트 컨테이너가 액션 존으로 줌인(×1.6, 0.4s tween)·종료 시 복귀, 골 순간 미세 셰이크. stage.ts에 cameraTarget(sequence)->{x,y,scale} 순수 수학(TDD)
+- **골 FX**: 파티클 버스트(수십 개 Graphics, 팀 컬러)+풀스크린 플래시 쿼드+스코어버그 연동 유지. 실점=어두운 플래시. 위험 순간 비네팅 쿼드
+- **폴백**: WebGL 컨텍스트 생성 실패 시 기존 SVG PitchView 자동 렌더(try/catch — 크래시 금지). reduced-motion 시 카메라·파티클 생략
+- 리사이즈 대응, 언마운트 시 app.destroy(노드 누수 금지)
+- 기존 GOAL 타이포·득점자 배너·티커(DOM 레이어)는 유지 — Pixi는 피치 내부만
+**TDD:** stage.ts 순수 수학(bezier 좌표·카메라 타깃·easing) / WebGL 불가 폴백 렌더 스모크(jsdom = WebGL 없음 → SVG 폴백이 뜨는지 — 자연스러운 테스트) / 기존 무손상. 시각 품질은 dev 스크린샷+사용자 판정
