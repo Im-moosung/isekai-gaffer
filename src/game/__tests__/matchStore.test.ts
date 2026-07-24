@@ -57,11 +57,11 @@ describe('재생 세션 상태 머신', () => {
     store().advanceMinute()
     expect(store().engine!.minute).toBe(0)
   })
-  it('advanceMinute이 30±2 하이드레이션 창에서 자동 paused-break', () => {
+  it('advanceMinute이 22±2 하이드레이션 창에서 자동 paused-break', () => {
     store().startMatch(a, b, 42)
     const sched = store().schedule!
-    expect(sched.firstHydration).toBeGreaterThanOrEqual(28)
-    expect(sched.firstHydration).toBeLessThanOrEqual(32)
+    expect(sched.firstHydration).toBeGreaterThanOrEqual(20)
+    expect(sched.firstHydration).toBeLessThanOrEqual(24)
     store().kickoff()
     let guard = 0
     while (store().phase === 'playing' && store().engine!.minute < sched.firstHydration && guard++ < 60) store().advanceMinute()
@@ -69,11 +69,11 @@ describe('재생 세션 상태 머신', () => {
     expect(store().phase).toBe('paused-break')
     expect(store().pauseReason).toEqual({ kind: 'hydration1' })
   })
-  it('두 번째 하이드레이션(75±2)에서도 자동 정지', () => {
+  it('두 번째 하이드레이션(67±2)에서도 자동 정지', () => {
     store().startMatch(a, b, 42)
     const sched = store().schedule!
-    expect(sched.secondHydration).toBeGreaterThanOrEqual(73)
-    expect(sched.secondHydration).toBeLessThanOrEqual(77)
+    expect(sched.secondHydration).toBeGreaterThanOrEqual(65)
+    expect(sched.secondHydration).toBeLessThanOrEqual(69)
     store().kickoff()
     let guard = 0
     while (store().engine!.minute < sched.secondHydration && guard++ < 200) {

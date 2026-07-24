@@ -10,13 +10,13 @@ describe('breakSchedule', () => {
     expect(breakSchedule(42)).toEqual(breakSchedule(42))
     expect(breakSchedule(7)).toEqual(breakSchedule(7))
   })
-  it('범위: 첫 브레이크 30±2(28~32), 둘째 75±2(73~77)', () => {
+  it('범위: 첫 브레이크 22±2(20~24), 둘째 67±2(65~69) — 실측 2026 규정', () => {
     for (const seed of [0, 1, 42, 7, 20260724, 999999, 123456]) {
       const s = breakSchedule(seed)
-      expect(s.firstHydration).toBeGreaterThanOrEqual(28)
-      expect(s.firstHydration).toBeLessThanOrEqual(32)
-      expect(s.secondHydration).toBeGreaterThanOrEqual(73)
-      expect(s.secondHydration).toBeLessThanOrEqual(77)
+      expect(s.firstHydration).toBeGreaterThanOrEqual(20)
+      expect(s.firstHydration).toBeLessThanOrEqual(24)
+      expect(s.secondHydration).toBeGreaterThanOrEqual(65)
+      expect(s.secondHydration).toBeLessThanOrEqual(69)
     }
   })
   it('시드에 따라 값이 갈린다(모두 동일하지 않음)', () => {

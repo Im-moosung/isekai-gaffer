@@ -5,19 +5,20 @@
 import { createRng } from '../engine/rng'
 import type { MatchEvent } from '../engine/types'
 
-/** 전·후반 하이드레이션 브레이크 분. 30±2', 75±2' — 시드 결정론. */
+/** 전·후반 하이드레이션 브레이크 분. 22±2', 67±2' — 시드 결정론. */
 export interface HydrationSchedule {
   firstHydration: number
   secondHydration: number
 }
 
 /** 시드에서 두 하이드레이션 브레이크 분을 결정한다.
+ *  실제 2026 규정: 전·후반 각 ~22분·~67분에 3분간, 전 경기 의무 — research/2026-hydration-breaks.md.
  *  엔진 분 파생 RNG(seed*10007+minute)와 겹치지 않도록 별도 상수로 xor. */
 export function breakSchedule(seed: number): HydrationSchedule {
   const rng = createRng((seed ^ 0x42011) >>> 0)
   return {
-    firstHydration: rng.int(28, 32), // 30±2
-    secondHydration: rng.int(73, 77), // 75±2
+    firstHydration: rng.int(20, 24), // 22±2 (전반 ~22')
+    secondHydration: rng.int(65, 69), // 67±2 (후반 ~67')
   }
 }
 
