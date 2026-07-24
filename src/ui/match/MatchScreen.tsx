@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import type { Team, SideStats, TacticState, MatchEvent, DecisionEntry } from '../../engine/types'
 import { useMatchStore } from '../../game/matchStore'
 import type { MomentKind } from '../../game/matchSession'
@@ -11,6 +11,7 @@ import { TacticsBoard } from '../tactics/TacticsBoard'
 import { ShootoutPanel } from './ShootoutPanel'
 import { ShoutBar } from './ShoutBar'
 import { minuteDwellMs, EVENT_DWELL_MS, type PlaybackSpeed } from './playback'
+import * as sfx from '../../audio/sfx'
 import './match.css'
 
 /** 위험 순간 강조 xG 임계(찬스 큰 세이브·유효 미스). */
@@ -83,11 +84,18 @@ export function MatchScreen({
 
   const [shootoutOpen, setShootoutOpen] = useState(false)
   const [speed, setSpeed] = useState<PlaybackSpeed>(1)
+  // 사운드 — 음소거 상태(sfx 모듈 = localStorage 진실원)와 관중 스웰(골 직후 4초).
+  const [muted, setMutedUi] = useState(() => sfx.isMuted())
+  const [crowdSwell, setCrowdSwell] = useState(false)
+  const swellTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const firedGoalMinuteRef = useRef(-1)
+  const prevPhaseRef = useRef<string | null>(null)
 
   // 경기 초기화(마운트/픽스처 변경 시). 엔진은 pre 상태로 준비.
   // initialTactics/firstHalfScript/staminaOverride는 매치별로 안정 참조(App에서 memo).
   useEffect(() => {
     setShootoutOpen(false)
+    firedGoalMinuteRef.current = -1
     startMatch(home, away, seed, {
       ...(initialTactics ? { homeTactics: initialTactics } : {}),
       ...(firstHalfScript ? { firstHalfScript } : {}),
@@ -167,6 +175,58 @@ export function MatchScreen({
     return { seq: buildSequence(drama, engine.home, engine.away), side }
   }, [engine])
 
+  // ── 사운드 배선(매치데이 2.0) — 모두 sfx는 미지원 환경 no-op ──────────
+  // 휘슬: phase 전이 1회. 하프 2회·풀타임 3회(+관중 정지)·브레이크 짧게. 킥오프는 버튼 핸들러(제스처).
+  useEffect(() => {
+    const prev = prevPhaseRef.current
+    prevPhaseRef.current = phase
+    if (prev === phase) return
+    if (phase === 'halftime') sfx.whistle('halftime')
+    else if (phase === 'fulltime') { sfx.whistle('fulltime'); sfx.crowdLoop('stop') }
+    else if (phase === 'paused-break') sfx.whistle('break')
+  }, [phase])
+
+  // 골 사운드: 재생 중 현재 분의 골에 1회 발동(우리=goalBurst / 실점=concedeMurmur) + 관중 스웰 4초.
+  useEffect(() => {
+    if (phase !== 'playing' || !engine) return
+    const m = engine.minute
+    const goal = engine.events.find(e => e.type === 'goal' && e.minute === m)
+    if (!goal || firedGoalMinuteRef.current === m) return
+    firedGoalMinuteRef.current = m
+    if (goal.teamId !== engine.home.team.id) sfx.concedeMurmur()
+    else sfx.goalBurst()
+    setCrowdSwell(true)
+    if (swellTimerRef.current) clearTimeout(swellTimerRef.current)
+    swellTimerRef.current = setTimeout(() => setCrowdSwell(false), 4000)
+  }, [phase, engine])
+
+  // 관중 함성 강도: 기본 0.3, 클러치(80분+·1골차 이내) 0.5, 골 직후 스웰 0.8. crowdLoop('start')는 게인만 갱신(멱등).
+  useEffect(() => {
+    if (phase !== 'playing' || !engine) return
+    const m = engine.minute
+    const clutch = m >= 80 && Math.abs(engine.score[0] - engine.score[1]) <= 1
+    sfx.crowdLoop('start', crowdSwell ? 0.8 : clutch ? 0.5 : 0.3)
+  }, [phase, engine, crowdSwell])
+
+  // 언마운트: 스웰 타이머 정리 + 관중 루프 정지(다음 화면으로 함성이 새지 않게).
+  useEffect(() => () => {
+    if (swellTimerRef.current) clearTimeout(swellTimerRef.current)
+    sfx.crowdLoop('stop')
+  }, [])
+
+  // 킥오프: 유저 제스처에서 AudioContext init → 휘슬 1회 + 관중 루프 시작.
+  function handleKickoff() {
+    sfx.init()
+    sfx.whistle('kickoff')
+    sfx.crowdLoop('start', 0.3)
+    kickoff()
+  }
+
+  // 음소거 토글(sfx가 localStorage 기억) — UI 아이콘 동기화.
+  function toggleMute() {
+    setMutedUi(sfx.toggleMuted())
+  }
+
   // 토너먼트 무승부 → 승부차기 진입 필요 (캠페인 한정).
   const needsShootout = !!onMatchEnd && !!requireWinner && !!engine && engine.score[0] === engine.score[1]
 
@@ -234,6 +294,16 @@ export function MatchScreen({
           fastForward={fastForward}
           pulse={goalDrama}
         />
+        {/* 음소거 토글 — 스코어버그 옆. 항상 노출(localStorage 기억). */}
+        <button
+          type="button"
+          className="ms-mute"
+          aria-label={muted ? '소리 켜기' : '음소거'}
+          aria-pressed={muted}
+          onClick={toggleMute}
+        >
+          {muted ? '🔇' : '🔊'}
+        </button>
         {/* 재생 중 감독 타임 버튼 — 스코어버그 옆. pauseByUser로 자유 일시정지. */}
         {replaying && (
           <div className="ms-live-controls">
@@ -307,7 +377,7 @@ export function MatchScreen({
                 <span className="ms-bottom__note">참고 · 실제 역사 {referenceScore[0]}-{referenceScore[1]}</span>
               )}
             </div>
-            <button type="button" className="ms-btn ms-btn--primary" onClick={kickoff}>킥오프</button>
+            <button type="button" className="ms-btn ms-btn--primary" onClick={handleKickoff}>킥오프</button>
           </div>
         )}
 
