@@ -104,3 +104,17 @@
 통합: 전체 스위트+빌드, 자동 완주 회귀, 컨트롤러 E2E — 그 후 ✋ 사용자 최종 플레이테스트
 
 ## Phase 4B 이관: 상대 인게임 전술 변경 통보·benchPattern 교체 / 마킹·세트피스 지시 / 배포·시연영상 (기존 Phase 4 목록 유지)
+
+## 섹션 D (플레이테스트 피드백 — 품질 패스)
+
+### Task 11: 사운드 리얼리티 — 실제 음원 교체
+**Files:** public/sfx/*(다운로드), Modify src/audio/sfx.ts, docs/assets-licenses.md(신설) / Test(로딩 폴백 로직)
+**계약:** CC0/무귀속 상업허용 실음원 확보(Wikimedia Commons·OpenGameArt·Pixabay 등 — 로그인 불필요 소스): 관중 앰비언스 루프(경기장 웅성), 골 함성 폭발, 실망 탄식, 휘슬(실제). **다운로드 시 라이선스 페이지 확인 후 assets-licenses.md에 파일-라이선스-URL 기록** (스펙 §9.1 원장). sfx.ts: HTMLAudioElement/AudioBuffer 재생으로 교체, 파일 로드 실패 시 기존 합성 폴백(크래시 금지), 음소거·강도 로직 유지. 총 용량 <3MB(로딩 배려)
+
+### Task 12: 한국어 TTS 중계
+**Files:** Create src/audio/commentary-tts.ts, Modify MatchScreen / Test(로직·no-op)
+**계약:** Web Speech API(speechSynthesis) — ko-KR 보이스 자동 선택(없으면 no-op), 하이라이트 이벤트의 commentate() 문장을 음성 중계(골=rate 1.15·pitch 상향 강조, 일반=1.0), **큐 관리**(진행 중이면 저중요 이벤트 스킵 — 골·세이브 우선), 음소거 토글과 별개 [🎙 해설] 토글(localStorage), pause 시 cancel. 미지원 브라우저 조용한 no-op
+
+### Task 13: 안무 품질 패스
+**Files:** Modify src/ui/pitch/{choreography.ts,PitchView.tsx,pitch.css} / Test(보간·카메라 수학)
+**계약:** ① CSS 스텝 점프 → **rAF 60fps 보간**(스텝 간 quadratic bezier 곡선 패스 — 패스는 낮은 아크, 슛은 직선 가속, easing 타입별) ② **볼 트레일**(최근 위치 잔상 3~4개 페이드) ③ 리시버 무빙(공 도착점으로 마중 이동) ④ **카메라 줌**: 하이라이트 시작 시 SVG viewBox가 액션 존으로 0.4s 줌인(×1.6), 종료 시 풀피치 복귀 — reduced-motion 시 줌 생략 ⑤ 골 네트 리플(골문 라인 진동 0.3s) ⑥ 데드타임 금지 유지. 결정론(rAF 보간은 표시 전용 — 로직 결정론 무관 명시)
