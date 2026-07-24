@@ -12,7 +12,7 @@
 - Date/Math.random 금지(UI 타이머는 setInterval 상수만), 기존 243 테스트 무손상(재생 방식 변경으로 기존 matchscreen 테스트는 재작성 허용 — 어서션 의도 유지)
 - 커밋 트레일러 동일
 
-## 섹션: A=T1~3(루프·속도·레이아웃) ✋플레이테스트 / B=T4~6(전술 확장·정보) ✋ / C=T7~8(연출·사운드·검증) ✋
+## 섹션: A=T1~3(루프·속도·레이아웃) ✋완료 / B=T4~8(모드 분리·전술 확장·외침·선수카드·팀토크) ✋ / C=T9~10(연출·사운드·검증) ✋
 
 ### Task 1: matchStore 재생 세션 재설계
 **Files:** Modify src/game/matchStore.ts / Create src/game/matchSession.ts(순수 로직) / Test
@@ -27,7 +27,7 @@
 ### Task 2: 하이라이트 리듬 + 속도 시스템 (UI 재생 루프)
 **Files:** Modify src/ui/match/MatchScreen.tsx / Create src/ui/match/playback.ts(순수) / Test
 **계약:**
-- `playback.ts`: `minuteDwellMs(minute, events, speed): number` — 해당 분에 이벤트 있으면 dwell 크게(연출 시간: goal 4000ms/shot·save·miss 2500/foul·corner 1200), 없으면 300ms. speed 1/1.5/2로 나눔. **클러치 가중**(FM26 Dynamic Highlights 참조): 80'+ 스코어차≤1이면 무사건 dwell도 2배(긴장 유지). **1x 총합이 90분 기준 180~300초가 되게 상수 설계**(검증 테스트: 평균 이벤트 밀도(경기당 이벤트 25~40개 가정)에서 총 dwell 합 180k~300k ms)
+- `playback.ts`: `minuteDwellMs(minute, events, speed): number` — 해당 분에 이벤트 있으면 dwell 크게(연출 시간: goal 4000ms/shot·save·miss 2500/foul·corner 1200), 없으면 300ms. speed 1/1.5/2로 나눔. **클러치 가중**(FM26 Dynamic Highlights 참조): 80'+ 스코어차≤1이면 무사건 dwell도 2배(긴장 유지). **블로우아웃 가속**: 3골차 이상이면 전체 dwell ×0.6 (Task 9에서 소급 적용 가능). **1x 총합이 90분 기준 180~300초가 되게 상수 설계**(검증 테스트: 평균 이벤트 밀도(경기당 이벤트 25~40개 가정)에서 총 dwell 합 180k~300k ms)
 - MatchScreen: setInterval 고정 200ms 대신 **분당 가변 setTimeout 체인** — advanceMinute() 호출 → dwell 계산 → 다음 스텝. 속도 토글 UI(1x/1.5x/2x, 스코어버그 옆). pause 상태면 체인 정지, confirmTactics로 재개
 - 시계 빨리감기 연출: 무사건 분은 분 숫자가 빠르게 넘어가는 시각 효과(CSS)
 **TDD:** minuteDwellMs 수치·1x 총합 범위 / fake timers로 재생→pause→재개
@@ -44,31 +44,48 @@
 
 ### ✋ 섹션 A 플레이테스트 체크포인트 (dev 서버 열어 사용자 확인)
 
-### Task 4: 전술 확장 — 멘탈리티·페이즈 포메이션·부스트 (엔진+콘솔)
-**Files:** Modify src/engine/{types,simulate,strength}.ts, src/ui/console/ConsolePanel.tsx / Test
+### Task 4: 모드 분리 — 방송 관전 ↔ 작전 지시 (아키텍처)
+**Files:** Modify src/ui/match/MatchScreen.tsx·match.css / Create src/ui/tactics/TacticsBoard.tsx·tactics.css / Test
 **계약:**
-- `TacticState`에 `mentality: 'ultra-def'|'def'|'balanced'|'atk'|'all-out'`(instructions 프리셋 매핑 + 찬스 퀄리티/역습 취약 모디파이어), `phaseFormations?: { attack?: FormationId; defense?: FormationId }` — 엔진: 점유 페이즈(atkIdx)면 attack 형태의 존 가중, 수비면 defense (zoneStrength에 phase 인자 추가), UI: 콘솔에 3슬롯(기본/공격/수비) 선택
-- 개입 부스트: matchStore.boostUntil을 simulateSegment 지시 효과에 ×1.3 (엔진 opts로 전달 — createMatch가 아니라 segment 단위 오버라이드 인자 추가: `simulateSegment(state, to, { instructionBoost?: { side, until } })`)
-- 결정론·기존 캘리브레이션 게이트 유지 (mentality 'balanced'+phaseFormations 미지정 = 기존과 동일 동작이 기본값 — 회귀 보장)
-**TDD:** 프리셋 매핑 / phase 존 가중 반영 / 부스트 구간 효과 / 미사용 시 기존 결과 불변(시드 회귀)
+- MatchScreen 2모드: **'broadcast'**(관전 — 피치+스코어버그+티커+외침 버튼만, 콘솔 패널 제거) ↔ **'tactics'**(작전 지시 — 풀스크린 작전판). pause(브레이크/HT/감독타임/순간수락) 시 **전환 연출**(0.6s — 방송 화면이 어두워지며 작전판이 올라옴, "작전 타임" 라벨) → TacticsBoard / [전술 확정] 시 역연출로 방송 복귀. **시뮬 중인지 지시 중인지 절대 헷갈리지 않는 시각 정체성**: 방송=그린 피치·라이브 그래픽 / 작전판=다크 보드·전술 다이어그램 톤(초크/라인 스타일)
+- TacticsBoard 레이아웃: 중앙 대형 보드(편집 가능한 피치 다이어그램 — 도트+이름 라벨) / 우측 지시 패널(탭: 전술·교체·상대) / 하단 [전술 확정] 대형 버튼 + 현재 정지 사유 표시
+- **실시간 보드 반영**: 포메이션·멘탈리티·페이즈 변경 즉시 보드 도트가 새 위치로 0.5s 애니메이션 (변경→시각 피드백 루프)
+- broadcast 모드: 기존 우측 콘솔 완전 제거(외침 바만 — Task 5), 피치 와이드
+**TDD:** pause→tactics 모드 렌더(보드+확정 버튼)·confirm→broadcast 복귀 / 포메이션 변경 시 도트 좌표 변경 / 스모크
 
-### Task 5: 정보 노출 — 선수 카드·상대 열람·매치업 힌트
-**Files:** Modify src/ui/console/SubPanel.tsx, src/ui/lineup/LineupScreen.tsx / Create src/ui/console/OppPanel.tsx, src/ui/common/PlayerCard.tsx / Test 스모크
+### Task 5: 전술 지시 확장 + 트레이드오프 (엔진+작전판)
+**Files:** Modify src/engine/{types,simulate,tactics,strength}.ts, src/ui/tactics/TacticsBoard.tsx / Test
+**계약 (엔진):**
+- `TacticState` 확장: `mentality`(5프리셋 — 기존 계획 유지), `phaseFormations`(공격 시/수비 시 — 기존 계획 유지), **`groupIntensity: { attack: -1|0|1; midfield: -1|0|1; defense: -1|0|1 }`**(라인별 적극성 — 존 전력·체력 소모에 반영), **`attackPattern: 'balanced'|'cross'|'through'|'longshot'`**(크로스=코너·헤더 찬스↑ 컷인↓ / 중앙 침투=through 찬스 퀄↑ 인터셉트 리스크↑ / 중거리=슛 빈도↑ xG↓), **`gkPowerplay: boolean`**(85'+ & 지는 중에만 유효 — 세트피스·코너에서 GK 전진: 해당 찬스 퀄 +40% & 상대 역습 시 빈 골문 실점 확률 3배 — 극적 도박)
+- **지속 압박 페널티 ★**: 압박 70+ 유지 시 분당 체력 소모 누적 가중(10분마다 +15%씩 — "90분 내내 압박 100" 물리적으로 불가), **팀 평균 체력<55면 압박 실효 반감+파울·경고 확률 1.5배**(지친 압박은 파울이 된다). 하이라인 기존 counterVulnerability 유지
+- 개입 부스트 ×1.3 (기존 계획 유지 — simulateSegment opts)
+- 회귀 보장: 신규 필드 전부 기본값(balanced/0/false)이면 기존 결과 불변 (시드 회귀 테스트)
+**계약 (작전판 UI):** 멘탈리티 5버튼 / 4축 슬라이더에 **비용 표시**(압박 옆 ⚡"체력 소모 +40% · 지치면 파울 증가", 라인 옆 ⚠"뒷공간 노출") / 그룹 적극성 3줄 토글 / 공격 패턴 4택 / GK 파워플레이 토글(조건 미충족 시 잠금+사유) / 페이즈 포메이션 3슬롯
+**TDD:** 각 지시의 엔진 효과 방향 / 지속 압박 누적·저체력 반전 / GK 파워플레이 양면 효과 / 기본값 회귀 불변
+
+### Task 6: 터치라인 외침 + 코치 제안 카드 (FM 이식)
+**Files:** Modify src/game/matchStore.ts, src/ui/match/MatchScreen.tsx / Create src/game/coach.ts(순수), src/ui/match/ShoutBar.tsx / Test
 **계약:**
-- `PlayerCard`: 6축 미니 바 + 주발 아이콘(L/R/양발) + 체력·사기 게이지 + 역할 — 교체 패널·라인업(호버/선택 시)·상대 열람 공용
-- `OppPanel`(콘솔 3번째 탭 "상대"): 상대 포메이션·선발 11(PlayerCard)·키 플레이어 강조(keyPlayers)·styleNotes·**매치업 힌트**(formationEdge 부호로 "중원 수적 우위/열세" 한 줄)
-- 상대 전술 변경 통보: 엔진 이벤트에 상대 카운터 시 'opp-tactic' 이벤트 추가는 스코프 밖(Phase 4B) — 현 버전은 상대 포메이션 표시가 정적임을 주석
-- LineupScreen: 선수 칩 클릭 시 PlayerCard 팝오버, 벤치 카드에 스탯 요약
-**TDD:** PlayerCard 렌더(스탯 반영) / OppPanel 키 플레이어 강조·매치업 힌트 부호
+- **외침(Shouts)**: broadcast 모드 하단 4버튼 [독려][더 뛰어][침착][칭찬] — 정지 없이 즉시, **10분 쿨다운**(진행 바 표시), 효과: 사기/템포/침착 소폭 보정(결정론 테이블 — 상황 부적합 시 역효과: 이기는데 [더 뛰어]=피로 가중 등). decisionLog 기록
+- **코치 제안 카드**: 브레이크·HT 진입 시 `coach.ts`가 실측 이벤트 분석(최근 실점 존·상대 슛 분포·체력 하위 3인·점유 열세)으로 **제안 1~2개 생성** — "상대 공격 60%가 우리 왼쪽 — 수비 라인 -10 또는 왼쪽 보강 추천" + **[제안 적용]** 원클릭(해당 지시 자동 세팅, 유저가 확정 전 수정 가능). TacticsBoard 상단 카드로 표시. 결정론·사실 기반(비하 금지)
+**TDD:** 쿨다운·상황별 보정 부호 / coach 제안이 이벤트 분포 반영(왼쪽 실점 몰림 픽스처→왼쪽 언급)·적용 시 지시 변경
 
-### Task 6: 팀토크 의미화
+### Task 7: 선수 카드 2.0 — 육각 레이더·보드 하이라이트·교체 UX
+**Files:** Create src/ui/common/PlayerCard.tsx(육각 레이더 SVG·아바타), Modify src/ui/tactics/TacticsBoard.tsx, src/ui/lineup/LineupScreen.tsx, src/ui/console/OppPanel.tsx(신설 — 상대 탭) / Test
+**계약:**
+- **PlayerCard**: 이니셜 아바타(팀 컬러) + 이름·등번호·포지션·역할 + **육각형 레이더 차트**(SVG — 슈팅/패스/드리블/수비/피지컬/스피드, GK는 3축 변형) + 주발 아이콘 + 체력·사기 게이지. 어디서든 재사용
+- **보드 하이라이트**: 작전판·라인업에서 선수(도트·이름·벤치 카드 어디든) 클릭 → 보드 위 해당 도트 **발광 링 + 카드 팝오버**. 교체 플로우: 출전 선수 선택 → 보드에서 포지션 링 강조 → 벤치 선수 선택 → **들어갈 자리 미리보기(고스트 도트)** → [교체 확정]. "이 선수가 어디 포지션인지 안 보임" 해소
+- **상대 탭**(OppPanel — 작전판 내): 상대 포메이션·선발 11(카드)·키 플레이어 강조·styleNotes·매치업 힌트(formationEdge)
+**TDD:** 레이더 SVG 스탯 반영(포인트 좌표) / 클릭→하이라이트 상태 / 교체 미리보기→확정 흐름 / OppPanel 키 플레이어·힌트
+
+### Task 8: 팀토크 의미화 (+FM 반복 감쇠·기대치)
 **Files:** Modify src/ui/match/TeamTalk.tsx, src/game/matchStore.ts / Test
-**계약:** 사기 평균 게이지+상태 문구 사전 표시 / 톤 버튼에 코치 힌트 툴팁(상황별 추천 — TEAM_TALK_TABLE 기반: 현 스코어 상황에서 최대 보정 톤에 "코치 추천" 뱃지) / 선택 후 반응 피드백: 팀 단위 문구 + **선수별 반응 아이콘 2~3명**(FM 방식 — 주장·키플레이어의 🔥/😰 개별 반응, 결정론) / 역효과 시 경고 문구(보정 음수) — matchStore.applyTeamTalk이 적용 결과(delta) 반환하도록 확장
-**TDD:** 추천 뱃지가 상황별 최대 보정 톤에 / delta 반환·표시
+**계약:** 기존 계획(사기 게이지 사전 표시·코치 추천 뱃지·선수별 반응 아이콘 2~3명·delta 표시) + **FM 확장**: ① 같은 톤 반복 시 효과 반감(캠페인 저장 — campaignStore.lastTeamTalkTone) ② **상대 기대치 반영**: FIFA 랭킹 차로 언더독/favorite 판정 → TEAM_TALK_TABLE 보정(언더독이 0-1로 지는 중엔 "침착" 유효, favorite가 지는 중엔 "격노" 유효 등 — 결정론 테이블 확장)
+**TDD:** 반복 감쇠 / 기대치별 추천 톤 변화 / 기존 케이스 유지
 
 ### ✋ 섹션 B 플레이테스트 체크포인트
 
-### Task 7: 연출 — 하이라이트 시퀀스·골 드라마·전술 반영 애니메이션
+### Task 9: 연출 — 하이라이트 시퀀스·골 드라마 (데드타임 금지: 시퀀스는 액션 직전 시작, 빌드업 3초 이내 — FM 교훈)
 **Files:** Modify src/ui/pitch/PitchView.tsx·pitch.css, src/ui/match/MatchScreen.tsx·match.css / Create src/ui/pitch/choreography.ts(순수: 이벤트→도트·공 이동 키프레임) / Test(choreography 순수 로직)
 **계약:**
 - `choreography.ts`: 이벤트 타입별 2~4스텝 키프레임 생성(빌드업 도트 2~3개 이동→슛 궤적→결과) — 좌표는 slotCoords 기반+이벤트 존, 결정론(minute 해시)
@@ -77,7 +94,7 @@
 - 위험 순간: xG 0.25+ 찬스에서 비네팅+티커 강조
 **TDD:** choreography 키프레임 수·결정론·좌표 범위. 시각은 스모크+플레이테스트
 
-### Task 8: 사운드 + 통합 검증
+### Task 10: 사운드 + 통합 검증
 **Files:** Create src/audio/sfx.ts, public/sfx/*(생성 — **Web Audio API 합성으로 자체 생성**: 함성 노이즈 루프·골 폭발·휘슬. 외부 음원 다운로드 금지(라이선스 리스크 0)) / Modify MatchScreen / Test(로직만)
 **계약:** `sfx.ts`: AudioContext 합성(브라운 노이즈 함성 베이스, 골 시 화이트노이즈 버스트+피치 스윕, 휘슬 사각파) — 음소거 토글(기본 ON, localStorage 기억). 골·킥오프·풀타임·브레이크 휘슬 연결
 통합: 전체 스위트+빌드, 자동 완주 회귀, 컨트롤러 E2E — 그 후 ✋ 사용자 최종 플레이테스트
