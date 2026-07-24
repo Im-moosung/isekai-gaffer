@@ -1,0 +1,248 @@
+/* 캠페인 허브·엔딩 화면 — 방송 토큰(--bc-*) 사용. 인라인 style 금지. */
+
+/* ── 허브 ─────────────────────────────────────────────── */
+.hub-root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  min-height: 100vh;
+  padding: 20px;
+  box-sizing: border-box;
+  background: var(--bc-bg);
+  color: var(--bc-text);
+  font-family: var(--bc-font);
+}
+.hub-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.hub-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+/* 진행 바 */
+.hub-progress {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.hub-step {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 8px;
+  border: 1px solid var(--bc-line);
+  border-radius: 8px;
+  background: var(--bc-panel);
+  min-width: 0;
+}
+.hub-step__label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bc-text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.hub-step__result {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--bc-text);
+}
+.hub-step--current {
+  border-color: var(--bc-accent);
+  background: var(--bc-panel-2);
+}
+.hub-step--current .hub-step__label { color: var(--bc-accent); }
+.hub-step--done .hub-step__label { color: var(--bc-text); }
+.hub-step--w .hub-step__result { color: var(--bc-accent); }
+.hub-step--d .hub-step__result { color: var(--bc-text-dim); }
+.hub-step--l .hub-step__result { color: var(--bc-danger); }
+
+/* 본문: 지난 결과 + 다음 상대 */
+.hub-body {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(280px, 1.4fr);
+  gap: 16px;
+  align-items: start;
+}
+.hub-section__title {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--bc-text-dim);
+}
+.hub-records,
+.hub-next {
+  background: var(--bc-panel);
+  border: 1px solid var(--bc-line);
+  border-radius: 10px;
+  padding: 14px;
+}
+.hub-records__empty {
+  margin: 0;
+  color: var(--bc-text-dim);
+  font-size: 13px;
+}
+.hub-records__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.hub-record {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--bc-panel-2);
+  font-size: 14px;
+}
+.hub-record__opp { font-weight: 600; }
+.hub-record__result { font-weight: 700; }
+.hub-record--w .hub-record__result { color: var(--bc-accent); }
+.hub-record--d .hub-record__result { color: var(--bc-text-dim); }
+.hub-record--l .hub-record__result { color: var(--bc-danger); }
+
+/* 다음 상대 카드 */
+.hub-oppcard__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.hub-oppcard__flag { font-size: 28px; line-height: 1; }
+.hub-oppcard__name { font-size: 18px; font-weight: 800; }
+.hub-oppcard__rank {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bc-text-dim);
+  padding: 3px 8px;
+  border: 1px solid var(--bc-line);
+  border-radius: 999px;
+}
+.hub-oppcard__meta {
+  margin: 12px 0 0;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.hub-oppcard__meta dt {
+  font-size: 12px;
+  color: var(--bc-text-dim);
+}
+.hub-oppcard__meta dd {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+.hub-oppcard__notes {
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--bc-text);
+}
+
+.hub-foot {
+  margin-top: auto;
+  display: flex;
+  justify-content: flex-end;
+}
+.hub-proceed {
+  padding: 12px 28px;
+  border: none;
+  border-radius: 10px;
+  background: var(--bc-accent);
+  color: #0b1220;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.hub-proceed:hover { filter: brightness(1.05); }
+
+/* ── 엔딩 ─────────────────────────────────────────────── */
+.end-root {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 100vh;
+  padding: 24px;
+  box-sizing: border-box;
+  background: var(--bc-bg);
+  color: var(--bc-text);
+  font-family: var(--bc-font);
+}
+.end-card {
+  width: 100%;
+  max-width: 560px;
+  background: var(--bc-panel);
+  border: 1px solid var(--bc-line);
+  border-radius: 14px;
+  padding: 32px;
+  text-align: center;
+}
+.end-root--champion .end-card {
+  border-color: var(--bc-accent);
+}
+.end-headline {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+.end-root--champion .end-headline {
+  color: var(--bc-accent);
+}
+.end-body {
+  margin: 16px 0 0;
+  font-size: 15px;
+  line-height: 1.7;
+  color: var(--bc-text-dim);
+}
+.end-summary {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  margin: 24px 0 0;
+  padding: 18px 0;
+  border-top: 1px solid var(--bc-line);
+  border-bottom: 1px solid var(--bc-line);
+}
+.end-summary__item { margin: 0; }
+.end-summary__item dt {
+  font-size: 12px;
+  color: var(--bc-text-dim);
+  margin-bottom: 4px;
+}
+.end-summary__item dd {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+}
+.end-restart {
+  margin-top: 24px;
+  padding: 12px 32px;
+  border: 1px solid var(--bc-line);
+  border-radius: 10px;
+  background: var(--bc-panel-2);
+  color: var(--bc-text);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.end-restart:hover { border-color: var(--bc-accent); }
