@@ -125,4 +125,15 @@ describe('NewspaperCard', () => {
     )
     expect(getByRole('button', { name: '이미지 저장' })).toBeTruthy()
   })
+
+  it('[다음] 2연타 시 onNext는 1회만 호출된다(중복 기록 방지)', () => {
+    const onNext = vi.fn()
+    const { getByRole } = render(
+      <NewspaperCard headline={HEADLINE} record={RECORD} teamName="대한민국" onNext={onNext} />,
+    )
+    const next = getByRole('button', { name: '다음' })
+    fireEvent.click(next)
+    fireEvent.click(next)
+    expect(onNext).toHaveBeenCalledTimes(1)
+  })
 })

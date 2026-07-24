@@ -32,6 +32,14 @@ interface Props {
 
 export function NewspaperCard({ headline, record, teamName, onNext }: Props) {
   const [busy, setBusy] = useState(false)
+  // [다음] 1회 가드 — 2연타 시 onNext(→recordResult)가 중복 실행되어 스테이지를
+  // 건너뛰거나 'ended' 상태 재호출로 throw 되는 것을 막는다(onSave busy 선례와 일관).
+  const [advancing, setAdvancing] = useState(false)
+  const onNextClick = useCallback(() => {
+    if (advancing) return
+    setAdvancing(true)
+    onNext?.()
+  }, [advancing, onNext])
   const opp = oppName(record.opponentId)
   const [kor, og] = record.score
   const so = record.shootout ? `승부차기 ${record.shootout[0]}-${record.shootout[1]}` : null
@@ -87,7 +95,7 @@ export function NewspaperCard({ headline, record, teamName, onNext }: Props) {
           {busy ? '저장 중…' : '이미지 저장'}
         </button>
         {onNext && (
-          <button type="button" className="np-next" onClick={onNext}>
+          <button type="button" className="np-next" onClick={onNextClick} disabled={advancing}>
             다음
           </button>
         )}
