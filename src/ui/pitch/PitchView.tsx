@@ -12,22 +12,28 @@ const sy = (y: number) => (y / 100) * H
 interface PitchViewProps {
   state: MatchState
   lastEvent?: MatchEvent
+  /** 'broadcast'(기본, 그린 피치) | 'tactics'(다크 전술판 — 색은 tactics.css가 pv-root--tactics로 덮음). */
+  variant?: 'broadcast' | 'tactics'
+  /** 홈 도트에 선수 이름 라벨 표시(작전판 — "이 선수가 어디 포지션인지" 가시화). */
+  nameLabels?: boolean
 }
 
 /** SVG 105×68 피치 뷰.
  *  외곽선·센터서클·페널티박스 + 양팀 lineup 11 도트(등번호) + lastEvent 마커.
- *  엔진 호출 없이 전달받은 state만 그린다(컴포넌트는 엔진 타입 import만). */
-export function PitchView({ state, lastEvent }: PitchViewProps) {
+ *  엔진 호출 없이 전달받은 state만 그린다(컴포넌트는 엔진 타입 import만).
+ *  variant='tactics'면 다크 보드 클래스(pv-root--tactics)를 붙여 작전판 톤으로 렌더하고,
+ *  도트 좌표에 transition을 걸어(포메이션 변경 시) 새 위치로 부드럽게 이동한다(tactics.css). */
+export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels = false }: PitchViewProps) {
   return (
     <svg
-      className="pv-root"
+      className={`pv-root${variant === 'tactics' ? ' pv-root--tactics' : ''}`}
       viewBox={`0 0 ${W} ${H}`}
       role="img"
       aria-label="경기 피치 포메이션"
       preserveAspectRatio="xMidYMid meet"
     >
       <PitchMarkings />
-      <SideDots side={state.home} which="home" />
+      <SideDots side={state.home} which="home" nameLabels={nameLabels} />
       <SideDots side={state.away} which="away" />
       {lastEvent && <EventMarker event={lastEvent} state={state} />}
     </svg>
@@ -61,9 +67,10 @@ function PitchMarkings() {
   )
 }
 
-function SideDots({ side, which }: { side: SideState; which: 'home' | 'away' }) {
+function SideDots({ side, which, nameLabels = false }: { side: SideState; which: 'home' | 'away'; nameLabels?: boolean }) {
   const { formation, lineup } = side.tactics
   const numberById = new Map(side.team.squad.map(p => [p.id, p.number]))
+  const nameById = new Map(side.team.squad.map(p => [p.id, p.name.ko]))
   return (
     <g>
       {lineup.map((slot, i) => {
@@ -71,11 +78,15 @@ function SideDots({ side, which }: { side: SideState; which: 'home' | 'away' }) 
         const cx = sx(c.x)
         const cy = sy(c.y)
         const num = numberById.get(slot.playerId)
+        const name = nameById.get(slot.playerId)
         return (
           <g key={`${which}-${i}`}>
             <circle className={`pv-dot pv-dot--${which}`} cx={cx} cy={cy} r={2.4} />
             {num != null && (
               <text className="pv-num" x={cx} y={cy}>{num}</text>
+            )}
+            {nameLabels && name && (
+              <text className="pv-name" x={cx} y={cy + 4.4}>{name}</text>
             )}
           </g>
         )

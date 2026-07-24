@@ -6,18 +6,18 @@ import { commentate } from '../../game/commentary'
 import { Scorebug } from '../broadcast/Scorebug'
 import { Ticker } from '../broadcast/Ticker'
 import { PitchView } from '../pitch/PitchView'
-import { ConsolePanel } from '../console/ConsolePanel'
-import { SubPanel } from '../console/SubPanel'
-import { TeamTalk } from './TeamTalk'
+import { TacticsBoard } from '../tactics/TacticsBoard'
 import { ShootoutPanel } from './ShootoutPanel'
 import { minuteDwellMs, type PlaybackSpeed } from './playback'
 import './match.css'
 
-// 유저는 홈팀 감독. 콘솔/교체는 home 고정.
-const SIDE = 'home' as const
+// 방송 모드↔작전판 모드 전환 연출 지속(ms). 작전판 이탈 시 역연출을 위해
+// 이 시간만큼 마운트를 유지한다(CSS transition/animation 길이와 일치).
+const MODE_TRANSITION_MS = 600
 
 // 동적 순간 유형별 방송 배너 문구(제안 시). matchSession.DecisionMoment.title과 별개로,
 // 배너에서는 감독에게 말 거는 어투로 노출한다(스펙 §17.2 방송 배너).
+// broadcast 모드(재생 중)에서만 노출 — 정지·하프타임 안내는 작전판이 담당한다.
 const MOMENT_PHRASE: Record<MomentKind, string> = {
   conceded: '실점 직후입니다',
   'momentum-lost': '흐름이 상대에게 넘어갑니다',
@@ -25,11 +25,6 @@ const MOMENT_PHRASE: Record<MomentKind, string> = {
   clutch: '승부의 시간입니다',
   fatigue: '주력 선수 체력이 바닥납니다',
 }
-
-// 정지·하프타임 상태별 방송 배너 문구(개입 안내). moment 제안은 별도 처리(액션 버튼 포함).
-const BREAK_BANNER = '🧊 하이드레이션 브레이크 — 전술을 조정하세요'
-const HALFTIME_BANNER = '전반 종료 — 팀토크와 전술 조정 후 후반을 시작하세요'
-const USER_PAUSE_BANNER = '⏸ 감독 타임 — 전술 확정 시 재개'
 
 interface MatchScreenProps {
   home: Team
@@ -50,11 +45,14 @@ interface MatchScreenProps {
   onMatchEnd?(score: [number, number], staminaByPlayer: Record<string, number>, shootout: [number, number] | undefined, decisionLog: DecisionEntry[]): void
 }
 
-/** 경기 화면 조립 — 좌 경기 뷰(스코어버그·피치·티커) / 우 감독 콘솔(개입 허브).
- *  ★ 오버레이 폐지(스펙 §17.2): 어떤 상태에서도 피치 SVG는 가려지지 않는다.
- *  킥오프·브레이크·하프타임·결정 순간·풀타임은 모두 피치 밖 요소로 표현한다 —
- *  상단 방송 배너(상태 문구+액션) + 우측 콘솔(개입 허브, 정지 시 강조·하단 [전술 확정])
- *  + 하단 바(킥오프·풀타임 스탯). 피치는 언제나 flex 영역을 채운다.
+/** 경기 화면 조립 — ★ 2모드 분리(스펙 §17 Task 4): "시뮬 관전 중인지 작전 지시
+ *  중인지" 절대 헷갈리지 않도록 시각 정체성을 분리한다.
+ *  - **broadcast**(playing/pre/fulltime): 그린 피치 와이드 관전. 스코어버그·티커·
+ *    속도 토글·[⏸ 감독 타임]·재생 중 순간 배너만. 콘솔 없음.
+ *  - **tactics**(정지·하프타임): 다크 전술판(TacticsBoard) — 포메이션 셀렉터·
+ *    지시/교체/상대 탭·[전술 확정]. 방송 위로 슬라이드 업(0.6s 전환 연출, 방송은 디밍).
+ *  전환은 CSS transition/animation(reduced-motion 대응). 복귀는 역연출 후 언마운트.
+ *  ★ 오버레이 폐지 원칙은 broadcast 내에서 유지 — 피치 SVG는 관전 중 언제나 보인다.
  *
  *  재생은 매치데이 2.0 세션(matchStore): advanceMinute()로 1분씩 전진하며
  *  engine.minute가 곧 표시 분이다(엔진이 앞서 달리지 않아 스포일러 없음).
@@ -73,13 +71,11 @@ export function MatchScreen({
   const kickoff = useMatchStore(s => s.kickoff)
   const advanceMinute = useMatchStore(s => s.advanceMinute)
   const pauseByUser = useMatchStore(s => s.pauseByUser)
-  const confirmTactics = useMatchStore(s => s.confirmTactics)
   const acceptMoment = useMatchStore(s => s.acceptMoment)
   const dismissMoment = useMatchStore(s => s.dismissMoment)
   const logShootoutSetup = useMatchStore(s => s.logShootoutSetup)
   const reset = useMatchStore(s => s.reset)
 
-  const [tab, setTab] = useState<'console' | 'sub'>('console')
   const [shootoutOpen, setShootoutOpen] = useState(false)
   const [speed, setSpeed] = useState<PlaybackSpeed>(1)
 
@@ -97,9 +93,8 @@ export function MatchScreen({
   // 재생 중 = playing. 시간 정지(카운트다운 없음)는 phase가 playing이 아닐 때.
   const replaying = phase === 'playing'
   const paused = phase === 'paused-break' || phase === 'paused-user' || phase === 'paused-moment'
-  // 개입 허브 강조(콘솔 발광) + 하단 [전술 확정] 노출 조건.
-  const intervening = paused || phase === 'halftime'
-  const halftime = phase === 'halftime'
+  // ★ 모드 분리: 정지·하프타임이면 작전판(tactics), 그 외(재생·킥오프 전·종료)는 방송(broadcast).
+  const tacticsMode = paused || phase === 'halftime'
 
   // 재생 루프 — 분당 가변 setTimeout 체인(하이라이트 리듬).
   // 현재 분의 이벤트로 dwell을 계산해 그만큼 머문 뒤 advanceMinute()로 1분 전진.
@@ -127,6 +122,25 @@ export function MatchScreen({
     schedule()
     return () => { cancelled = true; clearTimeout(timer) }
   }, [phase, speed, advanceMinute])
+
+  // ── 모드 전환 연출: 작전판 마운트/이탈 ──────────────────────────────
+  // tacticsMode 진입 시 즉시 마운트(entrance 애니메이션은 CSS가 담당),
+  // 이탈 시 --exiting 클래스로 역연출을 재생한 뒤 MODE_TRANSITION_MS 후 언마운트한다.
+  // broadcast 순수 상태(작전판 미마운트)에선 콘솔이 DOM에 없다 → 관전에 콘솔 부재.
+  const [tacticsMounted, setTacticsMounted] = useState(false)
+  const [tacticsExiting, setTacticsExiting] = useState(false)
+  useEffect(() => {
+    if (tacticsMode) {
+      setTacticsExiting(false)
+      setTacticsMounted(true)
+      return
+    }
+    if (!tacticsMounted) return
+    // 이탈 — 역연출 후 언마운트.
+    setTacticsExiting(true)
+    const t = setTimeout(() => { setTacticsMounted(false); setTacticsExiting(false) }, MODE_TRANSITION_MS)
+    return () => clearTimeout(t)
+  }, [tacticsMode, tacticsMounted])
 
   // 토너먼트 무승부 → 승부차기 진입 필요 (캠페인 한정).
   const needsShootout = !!onMatchEnd && !!requireWinner && !!engine && engine.score[0] === engine.score[1]
@@ -159,16 +173,14 @@ export function MatchScreen({
   // 빨리감기 연출: 재생 중 현재 분에 이벤트가 없으면 분 숫자가 빠르게 넘어간다.
   const fastForward = replaying && !engine.events.some(e => e.minute === displayMinute)
 
-  // 상단 방송 배너 문구 — 상태별. 재생 중 순간 제안이 있으면 그 배너(액션 포함)가 우선.
-  let bannerText: string | null = null
-  if (replaying && momentPrompt) bannerText = `⚡ ${MOMENT_PHRASE[momentPrompt.kind]} — 감독 타임을 쓰시겠습니까?`
-  else if (phase === 'paused-break') bannerText = BREAK_BANNER
-  else if (halftime) bannerText = HALFTIME_BANNER
-  else if (phase === 'paused-user' || phase === 'paused-moment') bannerText = USER_PAUSE_BANNER
+  // 상단 방송 배너 — broadcast 모드(재생 중) 순간 제안만. 정지·하프타임 안내는 작전판이 담당.
+  const bannerText = replaying && momentPrompt
+    ? `⚡ ${MOMENT_PHRASE[momentPrompt.kind]} — 감독 타임을 쓰시겠습니까?`
+    : null
 
   return (
-    <div className="ms-root">
-      <div className="ms-stage">
+    <div className={`ms-root ms-root--broadcast${tacticsMounted && !tacticsExiting ? ' ms-root--tactics' : ''}`}>
+      <div className={`ms-stage${tacticsMounted && !tacticsExiting ? ' ms-stage--dim' : ''}`}>
         <Scorebug
           home={home}
           away={away}
@@ -252,44 +264,13 @@ export function MatchScreen({
         )}
       </div>
 
-      {/* ── 우: 감독 콘솔 = 개입 허브. 정지·하프타임 시 강조 테두리(발광). ── */}
-      <aside className={`ms-side${intervening ? ' ms-side--hub' : ''}`}>
-        {/* 하프타임: 팀토크를 콘솔 상단 카드로(피치는 계속 보임). */}
-        {halftime && (
-          <div className="ms-side__talk">
-            <TeamTalk side={SIDE} />
-          </div>
-        )}
-        <div className="ms-tabs" role="tablist" aria-label="감독 콘솔">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'console'}
-            className={`ms-tab${tab === 'console' ? ' ms-tab--active' : ''}`}
-            onClick={() => setTab('console')}
-          >
-            지시
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === 'sub'}
-            className={`ms-tab${tab === 'sub' ? ' ms-tab--active' : ''}`}
-            onClick={() => setTab('sub')}
-          >
-            교체
-          </button>
+      {/* ── 작전판 오버레이(tactics 모드) — 방송 위로 슬라이드 업. 이탈 시 역연출. ──
+          broadcast 순수 상태에선 마운트되지 않아 콘솔이 DOM에 존재하지 않는다. */}
+      {tacticsMounted && (
+        <div className={`ms-tactics-layer${tacticsExiting ? ' ms-tactics-layer--exiting' : ''}`}>
+          <TacticsBoard />
         </div>
-        <div className="ms-side__body">
-          {tab === 'console' ? <ConsolePanel side={SIDE} /> : <SubPanel side={SIDE} />}
-        </div>
-        {/* 콘솔 하단 고정 재개 버튼 — 모든 정지 공통. 하프타임은 [후반 시작] 라벨. */}
-        {intervening && (
-          <button type="button" className="ms-btn ms-btn--primary ms-side__resume" onClick={confirmTactics}>
-            {halftime ? '후반 시작' : '전술 확정'}
-          </button>
-        )}
-      </aside>
+      )}
     </div>
   )
 }

@@ -49,19 +49,20 @@ describe('MatchScreen 조립 — 오버레이 폐지(피치 상시 노출)', () 
     expect(clock(container as HTMLElement)).toBeGreaterThan(0)
   })
 
-  it('(c) 크래시 없이 halftime 도달 → 방송 배너 + 콘솔 [후반 시작] + 피치 상시', () => {
+  it('(c) 크래시 없이 halftime 도달 → 작전판(tactics) 모드: 팀토크 카드 + [후반 시작] + 사유', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
     fireEvent.click(getByRole('button', { name: '킥오프' }))
     replayTo('halftime')
     expect(store().phase).toBe('halftime')
-    // 피치는 하프타임에도 가려지지 않는다.
-    expect(svg(container as HTMLElement)).toBeTruthy()
-    // 상단 방송 배너 문구.
-    expect(container.querySelector('.ms-banner')!.textContent).toContain('전반 종료')
-    // 콘솔 하단 재개 버튼은 [후반 시작] 라벨.
+    // 하프타임 = 작전판 진입(다크 보드).
+    expect(container.querySelector('.tb-root')).toBeTruthy()
+    expect(container.querySelector('.pv-root--tactics')).toBeTruthy()
+    // 하프타임 팀토크 카드가 작전판 상단에 존재.
+    expect(container.querySelector('.tt-root')).toBeTruthy()
+    // 하단 재개 버튼은 [후반 시작] 라벨.
     expect(getByRole('button', { name: '후반 시작' })).toBeTruthy()
-    // 개입 허브 강조(콘솔 발광).
-    expect(container.querySelector('.ms-side--hub')).toBeTruthy()
+    // 정지 사유 표시.
+    expect(container.querySelector('.tb-foot__reason')!.textContent).toContain('전반 종료')
   })
 
   it('(e) LIVE 뱃지는 재생 중에만 노출 — 킥오프 전 없음, 재생 중 존재', () => {
@@ -84,18 +85,18 @@ describe('MatchScreen 조립 — 오버레이 폐지(피치 상시 노출)', () 
 })
 
 describe('MatchScreen 개입 허브 — 브레이크·순간 제안·풀타임', () => {
-  it('(h) paused-break: 피치 SVG 유지 + 콘솔 활성(허브) + 배너 문구', () => {
+  it('(h) paused-break → 작전판: 다크 보드 pitch + [전술 확정] + 사유(하이드레이션)', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
     fireEvent.click(getByRole('button', { name: '킥오프' }))
     replayTo('paused-break')
     expect(store().phase).toBe('paused-break')
-    // 피치 상시 노출.
-    expect(svg(container as HTMLElement)).toBeTruthy()
-    // 콘솔 개입 허브 활성(강조 테두리) + 하단 [전술 확정].
-    expect(container.querySelector('.ms-side--hub')).toBeTruthy()
+    // 작전판 다크 보드.
+    expect(container.querySelector('.tb-root')).toBeTruthy()
+    expect(container.querySelector('.pv-root--tactics')).toBeTruthy()
+    // 하단 [전술 확정] 대형 버튼.
     expect(getByRole('button', { name: '전술 확정' })).toBeTruthy()
-    // 방송 배너 문구.
-    expect(container.querySelector('.ms-banner')!.textContent).toContain('하이드레이션 브레이크')
+    // 정지 사유 문구.
+    expect(container.querySelector('.tb-foot__reason')!.textContent).toContain('하이드레이션 브레이크')
   })
 
   it('(i) momentPrompt 배너: [사용]→paused-moment, [흘려보낸다]→playing 유지', () => {
@@ -150,10 +151,10 @@ describe('MatchScreen 재생 루프 — 정지·재개·속도', () => {
     act(() => { vi.advanceTimersByTime(60_000) })
     expect(store().engine!.minute).toBe(before)
 
-    // 전술 확정 → 재개. 한 스텝 진행하면 분이 다시 늘어난다.
+    // 전술 확정 → 재개. 시간이 흐르면 분이 다시 늘어난다(전환 연출 타이머와 무관하게).
     fireEvent.click(getByRole('button', { name: '전술 확정' }))
     expect(store().phase).toBe('playing')
-    step(1)
+    act(() => { vi.advanceTimersByTime(5000) })
     expect(store().engine!.minute).toBeGreaterThan(before)
   })
 
@@ -177,5 +178,35 @@ describe('MatchScreen 재생 루프 — 정지·재개·속도', () => {
     const at2x = minutesInBudget(true, budget)
     expect(at1x).toBeGreaterThan(0)
     expect(at2x).toBeGreaterThan(at1x)
+  })
+})
+
+describe('MatchScreen 모드 분리 — 방송 관전 ↔ 작전 지시', () => {
+  it('(k) broadcast(pre·재생)엔 콘솔·작전판이 DOM에 없다', () => {
+    const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
+    // pre = 방송 모드.
+    expect(container.querySelector('.tb-root')).toBeNull()
+    expect(container.querySelector('.cs-panel')).toBeNull()
+    // 재생 중에도 작전판·콘솔 부재.
+    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    step(3)
+    expect(store().phase).toBe('playing')
+    expect(container.querySelector('.tb-root')).toBeNull()
+    expect(container.querySelector('.cs-panel')).toBeNull()
+  })
+
+  it('(l) pause → 작전판(콘솔 포함) 렌더 / confirm → 방송 복귀(작전판 언마운트)', () => {
+    const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
+    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    replayTo('paused-break')
+    // 작전판 진입 — 보드 + 콘솔이 작전판 안으로 이관됨.
+    expect(container.querySelector('.tb-root')).toBeTruthy()
+    expect(container.querySelector('.cs-panel')).toBeTruthy()
+
+    // 전술 확정 → 방송 복귀. 역연출 시간 경과 후 작전판 언마운트.
+    fireEvent.click(getByRole('button', { name: '전술 확정' }))
+    expect(store().phase).toBe('playing')
+    act(() => { vi.advanceTimersByTime(700) })
+    expect(container.querySelector('.tb-root')).toBeNull()
   })
 })

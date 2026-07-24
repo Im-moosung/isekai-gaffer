@@ -47,59 +47,53 @@
   max-height: 100%;
 }
 
-/* ── 우: 감독 콘솔 사이드바 ─────────────────────────────── */
-.ms-side {
-  flex: 3 1 0;
-  min-width: 260px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  overflow-y: auto;
-  border: 1px solid transparent;
+/* ── 모드 전환: 방송 디밍 + 작전판 슬라이드 업 ────────────────
+   ★ Task 4: 방송(broadcast)과 작전판(tactics)을 확연히 다른 화면으로 분리한다.
+   tacticsMode 진입 시 스테이지가 어두워지고(dim) 작전판 레이어가 아래에서 올라온다.
+   이탈(--exiting) 시 역방향으로 내려가며 사라진다. reduced-motion 시 즉시 전환. */
+.ms-stage {
+  transition: filter 0.6s ease, opacity 0.6s ease;
+}
+.ms-stage--dim {
+  filter: brightness(0.4) saturate(0.7);
+  opacity: 0.6;
+}
+/* 작전판 오버레이 — 방송 위 전면. entrance 애니메이션(슬라이드 업 + 페이드). */
+.ms-tactics-layer {
+  position: absolute;
+  inset: 12px;
+  z-index: 40;
   border-radius: 12px;
-  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+  overflow: hidden;
+  box-shadow: 0 -12px 48px -8px rgba(0, 0, 0, 0.7);
+  animation: ms-tactics-in 0.6s ease both;
 }
-/* 개입 허브 강조 — 정지·하프타임 시 테두리 발광(피치는 그대로 보임). */
-.ms-side--hub {
-  border-color: var(--bc-accent);
-  box-shadow: 0 0 0 1px var(--bc-accent), 0 0 24px -4px var(--bc-accent);
-  padding: 10px;
+/* 이탈 — 역연출(아래로 내려가며 페이드 아웃). */
+.ms-tactics-layer--exiting {
+  animation: ms-tactics-out 0.6s ease both;
+  pointer-events: none;
 }
-/* 하프타임 팀토크 — 콘솔 상단 카드. */
-.ms-side__talk {
-  padding: 12px 14px;
-  border: 1px solid var(--bc-line);
-  border-radius: 10px;
-  background: var(--bc-panel);
+@keyframes ms-tactics-in {
+  from { transform: translateY(6%); opacity: 0; }
+  to   { transform: translateY(0);  opacity: 1; }
 }
-/* 콘솔 하단 고정 재개 버튼(모든 정지 공통). */
-.ms-side__resume {
-  flex: 0 0 auto;
-  width: 100%;
+@keyframes ms-tactics-out {
+  from { transform: translateY(0);  opacity: 1; }
+  to   { transform: translateY(6%); opacity: 0; }
 }
-.ms-tabs {
-  display: flex;
-  gap: 6px;
+/* ms-root는 작전판 오버레이의 위치 기준(absolute inset). */
+.ms-root--broadcast {
+  position: relative;
 }
-.ms-tab {
-  flex: 1;
-  padding: 10px 0;
-  border: 1px solid var(--bc-line);
-  border-radius: 8px;
-  background: var(--bc-panel);
-  color: var(--bc-text-dim);
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.ms-tab--active {
-  background: var(--bc-panel-2);
-  color: var(--bc-text);
-  border-color: var(--bc-accent);
-}
-.ms-side__body {
-  flex: 1;
+
+@media (prefers-reduced-motion: reduce) {
+  .ms-stage {
+    transition: none;
+  }
+  .ms-tactics-layer,
+  .ms-tactics-layer--exiting {
+    animation-duration: 0.01s;
+  }
 }
 
 /* ── 상단 방송 배너 (피치 밖, 스코어버그 아래 얇은 바) ──────────────
