@@ -33,14 +33,24 @@ describe('ConsolePanel (지시 4축)', () => {
     expect(getByText('다음 개입 창까지 잠김')).toBeTruthy()
   })
 
-  it("(a2) 킥오프 전('pre')은 전술 센터 개입 창이므로 활성", () => {
+  it("(a2) 킥오프 전('pre')은 슬라이더 조작이 버튼 없이 즉시 반영된다", () => {
     store().startMatch(home, away, 42) // phase='pre'
-    const { getByRole, getByLabelText } = render(<ConsolePanel side="home" />)
-    const btn = getByRole('button', { name: '지시 적용' }) as HTMLButtonElement
-    expect(btn.disabled).toBe(false)
+    const { queryByRole, getByLabelText } = render(<ConsolePanel side="home" />)
+    // 즉시 반영이므로 [지시 적용] 버튼 자체가 없다(있으면 "아직 적용 안 됨"이라는 거짓 신호).
+    expect(queryByRole('button', { name: '지시 적용' })).toBeNull()
     fireEvent.change(getByLabelText('템포') as HTMLInputElement, { target: { value: '70' } })
-    fireEvent.click(btn)
     expect(store().engine!.home.tactics.instructions.tempo).toBe(70)
+    fireEvent.change(getByLabelText('공격방향') as HTMLSelectElement, { target: { value: 'left' } })
+    expect(store().engine!.home.tactics.instructions.attackFocus).toBe('left')
+  })
+
+  it("(a3) 킥오프 전 슬라이더 드래그는 결정 로그를 남기지 않는다(기자회견 노이즈 방지)", () => {
+    store().startMatch(home, away, 42)
+    const { getByLabelText } = render(<ConsolePanel side="home" />)
+    const line = getByLabelText('라인') as HTMLInputElement
+    for (const v of ['51', '52', '53', '54']) fireEvent.change(line, { target: { value: v } })
+    expect(store().engine!.home.tactics.instructions.lineHeight).toBe(54)
+    expect(store().decisionLog).toHaveLength(0)
   })
 
   it('(b) halftime에서 압박 슬라이더 변경 → 적용 → 엔진 지시 반영', () => {

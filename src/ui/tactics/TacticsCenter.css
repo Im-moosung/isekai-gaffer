@@ -12,11 +12,13 @@
   --tb-chalk: #7fd4ff;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  /* 1440×900에서 ② 팀 전술 탭 전체가 스크롤 없이 들어가도록 여백을 깎았다.
+     헤더·본체·검토 요약 3단이 각각 고정 높이를 갖는 화면이라 gap 4px가 곧 판정선이다. */
+  gap: 8px;
   width: 100%;
   min-width: 0;
   min-height: 0;
-  padding: 12px;
+  padding: 10px 12px;
   box-sizing: border-box;
   border: 1px solid var(--tc-line);
   border-radius: 14px;
@@ -24,6 +26,15 @@
   color: var(--bc-text);
   font-family: var(--bc-font);
 }
+
+/* ★ 킥오프 전 스테이지 높이 배분 — 이 시점 화면의 주인공은 전술 설계이므로
+   피치는 "스타디움 분위기"를 유지하는 얇은 띠로만 남기고 남은 높이를 워룸에 준다
+   (24vh → 15vh, 1440×900에서 약 +80px). 완전히 없애지 않는 이유는 방송 정체성이고,
+   토글로 접지 않는 이유는 (1) 피치가 WebGL 캔버스라 display:none 리사이즈가 위험하고
+   (2) "볼 게 너무 많다"가 문제인 화면에 컨트롤을 하나 더 얹는 셈이기 때문이다.
+   규칙이 match.css가 아니라 여기 있는 것은 이 높이 배분이 전술 센터의 레이아웃
+   문제이기 때문이며, 파일 로드 순서에 좌우되지 않도록 특이도를 한 단계 올려 둔다. */
+.ms-stage.ms-stage--pre .ms-pitch-wrap { max-height: 15vh; }
 
 /* ── 헤더: 대진 + 킥오프 ─────────────────────────────────── */
 /* 헤더·검토 요약은 스크롤 컨테이너(.ms-precenter) 안에서 상/하단에 고정한다 —
@@ -86,21 +97,27 @@
 }
 .tc-recbtn:hover { background: rgba(127, 212, 255, 0.22); }
 
-/* ── 코치진 권고 — 추천 적용의 근거. 닫기 전까지 남는다. ─────── */
+/* ── 코치진 권고 — 추천 적용의 근거. 닫기 전까지 남는다.
+   상대 리포트 열 안에서 최대 절반까지만 차지하고, 넘치면 자기 스크롤을 갖는다. ── */
 .tc-reasons {
+  /* 새로 뜬 정보가 우선 — 리포트(뒤에서 계속 읽는 것)가 대신 줄어든다. */
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 55%;
   border: 1px solid rgba(127, 212, 255, 0.4);
   border-radius: 10px;
   background: rgba(18, 40, 64, 0.85);
-  padding: 10px 14px;
+  padding: 8px 10px;
 }
 .tc-reasons__head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 8px;
 }
-.tc-reasons__head strong { color: var(--tb-chalk); font-size: 0.9rem; }
-.tc-reasons__note { font-size: 0.78rem; color: var(--bc-text-dim); }
+.tc-reasons__head strong { color: var(--tb-chalk); font-size: 0.85rem; }
+.tc-reasons__note { font-size: 0.72rem; color: var(--bc-text-dim); }
 .tc-reasons__x {
   margin-left: auto;
   border: none;
@@ -113,13 +130,13 @@
 .tc-reasons__x:hover { color: var(--bc-text); }
 .tc-reasons__list {
   margin: 6px 0 0;
-  padding-left: 18px;
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 2px 16px;
-  font-size: 0.82rem;
-  line-height: 1.45;
+  padding-left: 16px;
+  min-height: 0;
+  overflow-y: auto;
+  font-size: 0.78rem;
+  line-height: 1.4;
 }
+.tc-reasons__list li { margin-bottom: 3px; }
 
 /* ── 본체: 좌측 상대 리포트 고정 + 우측 설계 탭 ───────────── */
 .tc-body {
@@ -128,14 +145,26 @@
   gap: 14px;
   min-height: 0;
 }
+/* 상대 리포트는 어차피 내부 스크롤(선발 11 + 프로필)이다. 48vh를 차지하면 그만큼
+   본체 행 높이가 밀려 ② 팀 전술 탭이 화면 밖으로 나간다 — 읽을거리보다 조작할 것을
+   먼저 보이게 하는 편이 낫다. */
 .tc-war {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   min-width: 0;
-  max-height: 48vh;
-  overflow-y: auto;
+  max-height: 38vh;
+  overflow: hidden;
   padding: 12px;
   border: 1px solid var(--tc-line);
   border-radius: 10px;
   background: rgba(10, 21, 38, 0.6);
+}
+/* 권고가 떠도 열 높이는 그대로 — 리포트 쪽이 줄고 자기 스크롤을 갖는다. */
+.tc-war__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 .tc-main {
   display: flex;
@@ -165,11 +194,13 @@
   font-weight: 800;
   box-shadow: inset 0 -2px 0 currentColor;
 }
+/* 탭 본문은 자체 스크롤을 갖지 않는다. 스크롤 컨테이너를 겹치면 "슬라이더를 보려면
+   안쪽을 스크롤하고 킥오프 버튼을 보려면 바깥을 스크롤"하는 이중 스크롤이 된다.
+   넘칠 때의 스크롤은 바깥 하나(.ms-precenter)에 맡긴다. */
 .tc-tabbody {
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
-  max-height: 48vh;
-  overflow-y: auto;
   padding-top: 10px;
 }
 .tc-team {
@@ -177,6 +208,31 @@
   flex-direction: column;
   gap: 14px;
   min-width: 0;
+}
+
+/* ★ ② 팀 전술 탭 2열 — "라인을 내리면서 수비적 멘탈리티로 간다"는 하나의 결정인데
+   슬라이더(ConsolePanel)와 멘탈리티·그룹·패턴(TacticsExtras)이 세로로 쌓이면
+   1440px에서 스크롤해야 둘 다 볼 수 있다. 한 화면에 담아 동시에 판단하게 한다.
+   TacticsExtras 내부도 2열로 접어 세로 길이를 절반으로 줄인다(작전판 쪽은 .tc-team
+   스코프 밖이라 영향 없음 — 오버레이는 세로가 길어도 되는 화면이다). */
+@media (min-width: 1200px) {
+  .tc-team {
+    display: grid;
+    grid-template-columns: minmax(320px, 0.85fr) minmax(0, 1.15fr);
+    align-items: start;
+  }
+  /* 그리드 대신 멀티컬럼: 그룹 높이가 제각각(65~133px)이라 2×N 그리드는 행 높이가
+     가장 큰 그룹에 맞춰져 빈 공간이 생긴다. 멀티컬럼은 두 열의 높이를 스스로 맞춘다. */
+  .tc-team .tx-panel {
+    display: block;
+    columns: 2;
+    column-gap: 16px;
+  }
+  .tc-team .tx-group {
+    break-inside: avoid;
+    margin-bottom: 12px;
+  }
+  .tc-team .tx-group:last-child { margin-bottom: 0; }
 }
 
 /* ── 하단 검토 요약 ──────────────────────────────────────── */
@@ -208,7 +264,7 @@
   margin: 2px 0 0;
   padding: 0;
   list-style: none;
-  max-height: 62px;
+  max-height: 44px;
   overflow-y: auto;
 }
 .tc-risk {

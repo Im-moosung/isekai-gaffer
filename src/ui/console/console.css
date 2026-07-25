@@ -79,6 +79,8 @@
   cursor: not-allowed;
 }
 .cs-lock { font-size: 12px; color: var(--bc-text-dim); }
+/* 킥오프 전 즉시 반영 안내 — [지시 적용] 버튼 자리를 대신한다. */
+.cs-live { font-size: 12px; color: var(--bc-text-dim); }
 .cs-error { margin: 8px 0 0; font-size: 12px; color: var(--bc-danger); }
 
 /* 교체 패널 */

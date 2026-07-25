@@ -84,22 +84,27 @@ export function TacticsCenter({ onKickoff, referenceScore }: {
         </div>
       </header>
 
-      {reasons.length > 0 && (
-        <div className="tc-reasons" role="status">
-          <div className="tc-reasons__head">
-            <strong>코치진 권고</strong>
-            <span className="tc-reasons__note">감독 판단으로 수정하십시오</span>
-            <button type="button" className="tc-reasons__x" onClick={() => setReasons([])} aria-label="권고 닫기">✕</button>
-          </div>
-          <ul className="tc-reasons__list">
-            {reasons.map((r, i) => <li key={`${r.field}-${i}`}>{r.text}</li>)}
-          </ul>
-        </div>
-      )}
-
       <div className="tc-body">
+        {/* 권고는 스카우팅 리포트의 결론이므로 상대 리포트와 같은 열에 둔다.
+            본문 위(세로 흐름)에 놓으면 권고를 여는 순간 아래 컨트롤이 화면 밖으로
+            밀린다 — "기능을 켜면 다른 부분이 쪼그라드는" 그 증상 그대로다.
+            이 열은 높이가 38vh로 고정돼 있어 권고가 떠도 레이아웃이 움직이지 않는다. */}
         <aside className="tc-war" aria-label="상대 리포트">
-          <OppPanel />
+          {reasons.length > 0 && (
+            <div className="tc-reasons" role="status">
+              <div className="tc-reasons__head">
+                <strong>코치진 권고</strong>
+                <button type="button" className="tc-reasons__x" onClick={() => setReasons([])} aria-label="권고 닫기">✕</button>
+              </div>
+              <span className="tc-reasons__note">감독 판단으로 수정하십시오</span>
+              <ul className="tc-reasons__list">
+                {reasons.map((r, i) => <li key={`${r.field}-${i}`}>{r.text}</li>)}
+              </ul>
+            </div>
+          )}
+          <div className="tc-war__body">
+            <OppPanel />
+          </div>
         </aside>
 
         <section className="tc-main">

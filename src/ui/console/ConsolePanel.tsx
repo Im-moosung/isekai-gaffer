@@ -18,7 +18,8 @@ const FOCUS: { value: Instructions['attackFocus']; label: string }[] = [
 ]
 
 /** 감독 콘솔 — 지시 4축(라인/압박/템포 슬라이더 + 공격방향).
- *  로컬 draft로 편집하다 "지시 적용" → submitCommand. phase가 halftime/decision일 때만 활성. */
+ *  경기 중(정지·하프타임)엔 로컬 draft로 편집하다 "지시 적용" → submitCommand.
+ *  킥오프 전('pre')엔 즉시 반영 — 아래 `immediate` 주석 참조. */
 export function ConsolePanel({ side }: { side: 'home' | 'away' }) {
   const phase = useMatchStore(s => s.phase)
   const engine = useMatchStore(s => s.engine)
@@ -33,12 +34,38 @@ export function ConsolePanel({ side }: { side: 'home' | 'away' }) {
   // 킥오프 전(전술 센터)도 개입 창이다 — store의 판정을 그대로 따른다.
   const open = canIntervene(phase)
 
+  /** 킥오프 전에는 시계가 멈춰 있다. "묶어서 결정"할 이유가 없고, 같은 화면의
+   *  TacticsExtras·[추천 적용]은 이미 즉시 반영이라 두 모델이 섞이면 하단 검토 요약의
+   *  "즉시 갱신" 약속이 4축에서만 깨진다. 그래서 'pre'에서는 로컬 draft를 쓰지 않고
+   *  엔진 값을 직접 그린다 — 추천 적용 같은 외부 변경도 슬라이더에 곧바로 나타난다.
+   *  경기 중에는 기존 2단계(draft → [지시 적용])를 그대로 유지한다: 정지된 시계 동안
+   *  여러 축을 검토해 한 번에 내리는 것이 감독의 실제 결정 단위이기 때문이다. */
+  const immediate = phase === 'pre'
+  const shown = immediate ? (current ?? draft) : draft
+
   // 개입 창(정지·하프타임) 진입 시 현재 엔진 지시값을 draft 초기값으로 동기화.
   useEffect(() => {
     if (open && current) setDraft(current)
     // current는 진입 시점 값만 초기화 대상 — phase 전환에만 반응한다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase])
+
+  const edit = (patch: Partial<Instructions>) => {
+    const next = { ...shown, ...patch }
+    if (!immediate) { setDraft(next); return }
+    setDraft(next)
+    const t = engine?.[side].tactics
+    if (!t) return
+    setError(null)
+    try {
+      // 슬라이더 드래그는 1스텝마다 change를 쏜다. instructions 명령은 스텝마다
+      // 결정 로그를 남겨 기자회견 근거를 노이즈로 덮으므로, 로그를 만들지 않는
+      // formation 명령으로 엔진만 갱신한다(applyCommand의 전술 교체 효과는 동일).
+      submitCommand(side, { type: 'formation', tactics: { ...t, instructions: next } })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    }
+  }
 
   const apply = () => {
     setError(null)
@@ -62,15 +89,15 @@ export function ConsolePanel({ side }: { side: 'home' | 'away' }) {
                 min={0}
                 max={100}
                 aria-label={label}
-                value={draft[key]}
+                value={shown[key]}
                 disabled={!open}
-                onChange={e => setDraft(d => ({ ...d, [key]: Number(e.target.value) }))}
+                onChange={e => edit({ [key]: Number(e.target.value) })}
                 className="cs-axis__range"
               />
-              <span className="cs-axis__val">{draft[key]}</span>
+              <span className="cs-axis__val">{shown[key]}</span>
             </div>
             {cost && (
-              <p className={`cs-cost${draft[key] >= cost.threshold ? ' cs-cost--hot' : ''}`}>
+              <p className={`cs-cost${shown[key] >= cost.threshold ? ' cs-cost--hot' : ''}`}>
                 <span aria-hidden="true">{cost.icon}</span> {cost.text}
               </p>
             )}
@@ -80,9 +107,9 @@ export function ConsolePanel({ side }: { side: 'home' | 'away' }) {
           <span className="cs-axis__label" aria-hidden="true">공격방향</span>
           <select
             aria-label="공격방향"
-            value={draft.attackFocus}
+            value={shown.attackFocus}
             disabled={!open}
-            onChange={e => setDraft(d => ({ ...d, attackFocus: e.target.value as Instructions['attackFocus'] }))}
+            onChange={e => edit({ attackFocus: e.target.value as Instructions['attackFocus'] })}
             className="cs-axis__select"
           >
             {FOCUS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
@@ -91,7 +118,10 @@ export function ConsolePanel({ side }: { side: 'home' | 'away' }) {
       </div>
 
       <div className="cs-panel__foot">
-        <button type="button" className="cs-btn" onClick={apply} disabled={!open}>지시 적용</button>
+        {/* 즉시 반영 모드에선 버튼이 "아직 적용 안 됐다"는 거짓 신호가 되므로 감춘다. */}
+        {immediate
+          ? <span className="cs-live">조작 즉시 반영 — 하단 검토 요약에서 확인하십시오</span>
+          : <button type="button" className="cs-btn" onClick={apply} disabled={!open}>지시 적용</button>}
         {!open && <span className="cs-lock">다음 개입 창까지 잠김</span>}
       </div>
       {error && <p className="cs-error" role="alert">{error}</p>}

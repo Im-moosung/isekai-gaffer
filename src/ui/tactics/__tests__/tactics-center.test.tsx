@@ -6,6 +6,7 @@ import { render, fireEvent, cleanup, act } from '@testing-library/react'
 import { useMatchStore } from '../../../game/matchStore'
 import { TacticsCenter } from '../TacticsCenter'
 import { makeTestTeam } from '../../../engine/fixtures/testTeams'
+import { loadTeam } from '../../../data/loader'
 
 const home = makeTestTeam('kor', 76)
 const away = makeTestTeam('esp', 88)
@@ -56,11 +57,11 @@ describe('TacticsCenter — 킥오프 전 워룸', () => {
     expect(container.querySelector('.tc-summary')!.textContent).toContain('크로스')
   })
 
-  it('② 팀 전술 탭: 4축 슬라이더 [지시 적용]이 엔진에 반영되고 요약에 나타난다', () => {
-    const { getByRole, getByLabelText, container } = mountPre()
+  it('② 팀 전술 탭: 4축 슬라이더가 버튼 없이 즉시 요약에 반영된다', () => {
+    const { getByRole, getByLabelText, queryByRole, container } = mountPre()
     fireEvent.click(getByRole('tab', { name: '② 팀 전술' }))
+    expect(queryByRole('button', { name: '지시 적용' })).toBeNull()
     fireEvent.change(getByLabelText('압박') as HTMLInputElement, { target: { value: '85' } })
-    fireEvent.click(getByRole('button', { name: '지시 적용' }))
     expect(store().engine!.home.tactics.instructions.pressing).toBe(85)
     expect(container.querySelector('.tc-summary')!.textContent).toContain('압박 85')
   })
@@ -78,7 +79,6 @@ describe('TacticsCenter — 킥오프 전 워룸', () => {
     fireEvent.click(getByRole('tab', { name: '② 팀 전술' }))
     fireEvent.click(getByRole('button', { name: '매우 수비적' }))
     fireEvent.change(getByRole('slider', { name: '라인' }) as HTMLInputElement, { target: { value: '20' } })
-    fireEvent.click(getByRole('button', { name: '지시 적용' }))
 
     store().kickoff()
     store().advanceMinute()
@@ -99,6 +99,17 @@ describe('TacticsCenter — 킥오프 전 워룸', () => {
     // 근거는 닫기 전까지 남는다.
     fireEvent.click(getByRole('button', { name: '권고 닫기' }))
     expect(container.querySelector('.tc-reasons')).toBeNull()
+  })
+
+  it('[추천 적용]이 4축 슬라이더 위치까지 실제로 옮긴다', () => {
+    // 실팀(스페인 점유 78·라인 62·압박 68)이라야 지시 축 권고가 실제로 움직인다.
+    store().reset()
+    store().startMatch(loadTeam('kor'), loadTeam('esp'), 20260724)
+    const { getByRole } = render(<TacticsCenter onKickoff={() => {}} />)
+    fireEvent.click(getByRole('button', { name: /추천 적용/ }))
+    fireEvent.click(getByRole('tab', { name: '② 팀 전술' }))
+    expect((getByRole('slider', { name: '라인' }) as HTMLInputElement).value).toBe('30')
+    expect(store().engine!.home.tactics.instructions.lineHeight).toBe(30)
   })
 
   it('랭킹 격차가 큰 강팀 상대에는 수비적 멘탈리티를 추천한다', () => {

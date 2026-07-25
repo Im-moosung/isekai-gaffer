@@ -39,10 +39,14 @@
   flex: 0 0 auto;
 }
 .lu-root--embed .lu-head { grid-column: 1 / -1; }
-.lu-root--embed .lu-pitch { max-height: 46vh; }
+/* 33vh 캡의 근거: 전술 센터는 헤더·본체·검토 요약 3단이 한 화면에 들어가야 하고
+   (1440×900 기준 본체에 허용된 높이가 약 390px), 이 탭의 높이는 피치가 아니라
+   벤치(카드 15장)가 정한다. 벤치는 어차피 내부 스크롤이므로 캡을 낮춰도 잃는 것이 없고,
+   피치는 같은 캡 안에서 오히려 46vh 때보다 넓어진다(높이 제약 → aspect-ratio로 폭 결정). */
+.lu-root--embed .lu-pitch { max-height: 33vh; }
 .lu-root--embed .lu-bench {
   min-width: 0;
-  max-height: 46vh;
+  max-height: 33vh;
   overflow-y: auto;
 }
 
