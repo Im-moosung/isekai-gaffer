@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { FormationId, GroupIntensity, Player, TacticState } from '../../engine/types'
+import type { FormationId, GroupIntensity, Mentality, Player, TacticState } from '../../engine/types'
 import { useMatchStore } from '../../game/matchStore'
 import { buildCoachAdvice, type TacticPatch } from '../../game/coach'
 import { PitchView } from '../pitch/PitchView'
@@ -19,6 +19,15 @@ const SIDE = 'home' as const
 const FORMATIONS: FormationId[] = ['4-3-3', '4-2-3-1', '4-4-2', '3-5-2', '4-1-4-1', '5-4-1']
 
 type TacticsTab = 'tactics' | 'sub' | 'opp'
+
+/** 플랜 대비 목록에 쓰는 지시 축·멘탈리티 한국어 라벨. */
+const PLAN_AXIS_LABEL: Record<'lineHeight' | 'pressing' | 'tempo', string> = {
+  lineHeight: '라인', pressing: '압박', tempo: '템포',
+}
+const PLAN_MENTALITY_KO: Record<Mentality, string> = {
+  'very-defensive': '매우 수비적', 'defensive': '수비적', 'balanced': '균형',
+  'attacking': '공격적', 'very-attacking': '매우 공격적',
+}
 
 /** 정지 사유 → 작전판 하단 표시 문구. moment는 유형별 짧은 문구를 쓴다. */
 function reasonText(
@@ -53,6 +62,7 @@ export function TacticsBoard() {
   const phase = useMatchStore(s => s.phase)
   const engine = useMatchStore(s => s.engine)
   const pauseReason = useMatchStore(s => s.pauseReason)
+  const matchPlan = useMatchStore(s => s.matchPlan)
   const confirmTactics = useMatchStore(s => s.confirmTactics)
   const submitCommand = useMatchStore(s => s.submitCommand)
   const [tab, setTab] = useState<TacticsTab>('tactics')
@@ -101,6 +111,11 @@ export function TacticsBoard() {
         <span className="tb-head__label">작전 타임</span>
         <span className="tb-head__reason">{reasonText(pauseReason, halftime)}</span>
       </div>
+
+      {/* 플랜 대비 — 킥오프 때 세운 계획과 지금의 차이를 축별로 보여준다.
+          작전판에서 지시를 만질 때 "무엇을 계획했었는지"가 눈앞에 없으면
+          이탈이 누적되는 줄도 모르고 매번 갈아엎게 된다. */}
+      {matchPlan && <PlanDiff plan={matchPlan} current={home.tactics} />}
 
       {/* 코치 회의 — 작전판 최상단(진입 시 가장 먼저). 멀티 코치·[감독 판단대로 간다] 포함. */}
       <CoachMeeting />
@@ -220,6 +235,29 @@ export function TacticsBoard() {
         </button>
       </footer>
     </div>
+  )
+}
+
+/** 킥오프 플랜 대비 현재 전술의 차이 목록. 차이가 없으면 "계획대로 가는 중"을 명시한다
+ *  — 아무것도 안 보여주면 유지 중인지 기능이 죽은 건지 구분되지 않는다. */
+function PlanDiff({ plan, current }: { plan: TacticState; current: TacticState }) {
+  const rows: string[] = []
+  if (plan.formation !== current.formation) {
+    rows.push(`계획: 포메이션 ${plan.formation} → 현재 ${current.formation}`)
+  }
+  const pm = plan.mentality ?? 'balanced', cm = current.mentality ?? 'balanced'
+  if (pm !== cm) rows.push(`계획: 멘탈리티 ${PLAN_MENTALITY_KO[pm]} → 현재 ${PLAN_MENTALITY_KO[cm]}`)
+  for (const k of ['lineHeight', 'pressing', 'tempo'] as const) {
+    if (plan.instructions[k] !== current.instructions[k]) {
+      rows.push(`계획: ${PLAN_AXIS_LABEL[k]} ${plan.instructions[k]} → 현재 ${current.instructions[k]}`)
+    }
+  }
+  return (
+    <section className="tb-plan" aria-label="플랜 대비">
+      {rows.length === 0
+        ? <span className="tb-plan__row tb-plan__row--ok">킥오프 플랜대로 가는 중 — 팀 이해도 +3%</span>
+        : rows.map(r => <span key={r} className="tb-plan__row">{r}</span>)}
+    </section>
   )
 }
 

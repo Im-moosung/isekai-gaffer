@@ -229,3 +229,31 @@ describe('TacticsBoard — 하프타임 팀토크 + 사유', () => {
     expect(container.querySelector('.tb-foot__reason')!.textContent).toContain('감독 타임')
   })
 })
+
+describe('TacticsBoard — 플랜 대비(킥오프 계획 vs 현재)', () => {
+  it('킥오프 직후엔 차이가 없어 "계획대로 가는 중"을 표시한다', () => {
+    const { container } = mountAt('paused-user')
+    const plan = container.querySelector('.tb-plan')!
+    expect(plan).toBeTruthy()
+    expect(plan.textContent).toContain('플랜대로 가는 중')
+  })
+
+  it('지시를 바꾸면 "계획: 압박 N → 현재 M" 행이 나타난다', () => {
+    const { container } = mountAt('paused-user')
+    const before = store().engine!.home.tactics.instructions
+    act(() => {
+      store().submitCommand('home', {
+        type: 'instructions', instructions: { ...before, pressing: 75 },
+      })
+    })
+    const text = container.querySelector('.tb-plan')!.textContent!
+    expect(text).toContain(`계획: 압박 ${before.pressing} → 현재 75`)
+    expect(text).not.toContain('플랜대로 가는 중')
+  })
+
+  it('포메이션을 바꾸면 구조 변경 행이 나타난다', () => {
+    const { getByRole, container } = mountAt('paused-user')
+    fireEvent.click(getByRole('button', { name: '5-4-1' }))
+    expect(container.querySelector('.tb-plan')!.textContent).toContain('계획: 포메이션 4-3-3 → 현재 5-4-1')
+  })
+})

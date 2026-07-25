@@ -256,3 +256,41 @@ describe('MatchScreen 모드 분리 — 방송 관전 ↔ 작전 지시', () => 
     expect(container.querySelector('.tb-root')).toBeNull()
   })
 })
+
+describe('MatchScreen — 플랜 배지(PlanBadge)', () => {
+  const badge = (c: HTMLElement) => c.querySelector('.plan-badge')
+
+  it('킥오프 전엔 배지가 없고, 킥오프 후 "플랜 유지"로 나타난다', () => {
+    const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
+    expect(badge(container as HTMLElement)).toBeNull()
+    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    step(3)
+    const b = badge(container as HTMLElement)!
+    expect(b).toBeTruthy()
+    expect(b.textContent).toContain('플랜 유지')
+    expect(b.textContent).toContain('팀 이해도 +3%')
+    expect(b.className).toContain('plan-badge--ok')
+  })
+
+  it('구조(포메이션)를 바꾸면 "플랜 이탈 N축"으로 전환된다', () => {
+    const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
+    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    replayTo('paused-break')
+    fireEvent.click(getByRole('button', { name: '5-4-1' }))
+    const b = badge(container as HTMLElement)!
+    expect(b.textContent).toContain('플랜 이탈')
+    expect(b.textContent).toContain('1축')
+    expect(b.className).not.toContain('plan-badge--ok')
+  })
+
+  it('지시 미세 조정만으로는 배지가 "플랜 유지"를 유지한다(구조 기준)', () => {
+    const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
+    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    replayTo('paused-break')
+    const before = store().engine!.home.tactics.instructions
+    act(() => {
+      store().submitCommand('home', { type: 'instructions', instructions: { ...before, pressing: 95 } })
+    })
+    expect(badge(container as HTMLElement)!.textContent).toContain('플랜 유지')
+  })
+})

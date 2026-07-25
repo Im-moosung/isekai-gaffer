@@ -149,13 +149,60 @@ function resultQuestions(r: MatchRecord): string[] {
   return qs
 }
 
+/** 킥오프 플랜 이탈 축 수 기준 — 이 이상이면 "계획을 버렸다"로 본다.
+ *  구조(포메이션·멘탈리티) + 지시 2축 이상을 갈아엎어야 도달하는 값이다. */
+const PIVOT_DEVIATION = 4
+
+/** 플랜 추궁 3분기. 답변은 공용 풀 대신 전용 문안을 쓴다 — "계획을 지켰다/버렸다"는
+ *  구체적 추궁에 "커피를 몇 잔 마셨는지…" 같은 일반 답변이 붙으면 문답이 어긋난다.
+ *  튜플 순서는 공용 계약과 동일하게 [공격적, 겸손, 유머] 고정. */
+type PlanBranch = 'kept' | 'pivot-win' | 'pivot-loss'
+const PLAN_ANSWERS: Record<PlanBranch, [string, string, string]> = {
+  kept: [
+    '흔들 이유가 없었습니다. 준비한 대로 눌렀을 뿐입니다.',
+    '선수들이 계획을 끝까지 믿고 뛰어준 덕분입니다.',
+    '벤치에서 할 일이 없어 90분 내내 서 있기만 했습니다.',
+  ],
+  'pivot-win': [
+    '틀린 게 아니라 상대가 우리 계획을 읽었을 뿐입니다. 그래서 다시 바꿨습니다.',
+    '계획을 고집하지 않은 건 제 판단이었고, 실행은 선수들이 해냈습니다.',
+    '전반 계획은 라커룸에 두고 나왔습니다. 나중에 찾으러 가야겠네요.',
+  ],
+  'pivot-loss': [
+    '바꾸지 않았다면 더 나빴을 겁니다. 결정은 후회하지 않습니다.',
+    '판을 흔든 건 접니다. 결과의 책임도 제게 있습니다.',
+    '오늘은 제가 화이트보드를 너무 많이 지웠던 것 같습니다.',
+  ],
+}
+
+/** 플랜 이탈 정도 × 결과로 갈리는 추궁 질문. 성립하지 않으면 null.
+ *  질문 문안은 중립 추궁("~습니까?") 톤을 유지한다 — 비하·단정 금지 계약. */
+function planQuestion(planDeviation: number, won: boolean): { text: string; branch: PlanBranch } | null {
+  if (planDeviation === 0 && won) {
+    return { branch: 'kept', text: '경기 내내 킥오프 때의 계획을 한 번도 흔들지 않으셨습니다. 무엇을 준비하셨습니까?' }
+  }
+  if (planDeviation >= PIVOT_DEVIATION && won) {
+    return { branch: 'pivot-win', text: `전반과 완전히 다른 팀이었습니다. ${planDeviation}개 축을 바꾸셨는데, 원래 계획이 틀렸던 겁니까?` }
+  }
+  if (planDeviation >= PIVOT_DEVIATION && !won) {
+    return { branch: 'pivot-loss', text: `${planDeviation}개 축을 도중에 바꾸셨습니다. 계획을 버린 것이 결과로 이어졌다고 보십니까?` }
+  }
+  return null
+}
+
 /**
  * 기자 질문 3문항 생성.
- * 1) 결정 로그 기반 질문 우선(teamtalk→sub→instructions→shootout-setup 순, summary 활용)
- * 2) 부족분은 결과 기반 질문으로 채움
- * 3) 결정론: 같은 (record, log) → 같은 질문
+ * 1) 플랜 이탈 추궁이 성립하면 최우선(감독의 사전 설계를 경기 후에 회수하는 축이다.
+ *    로그 질문이 항상 3개를 채우므로, 뒤에 붙이면 영영 노출되지 않는다)
+ * 2) 결정 로그 기반 질문(teamtalk→sub→instructions→shootout-setup 순, summary 활용)
+ * 3) 부족분은 결과 기반 질문으로 채움
+ * 4) 결정론: 같은 (record, log, planDeviation) → 같은 질문
+ *
+ * planDeviation 미지정은 "플랜 정보 없음"이며 추궁 질문을 만들지 않는다.
+ * 0을 기본값으로 두면 플랜을 세운 적 없는 호출부(데모·테스트)까지 "계획대로 됐습니다"를
+ * 듣게 되므로, 있음/없음을 값으로 구분한다.
  */
-export function buildQuestions(record: MatchRecord, log: DecisionEntry[]): PressQuestion[] {
+export function buildQuestions(record: MatchRecord, log: DecisionEntry[], planDeviation?: number): PressQuestion[] {
   const seed = recordSeed(record)
   // 로그 우선순위 정렬(안정): kind 우선순위 → 원래 등장 순서.
   const KIND_ORDER: Record<DecisionEntry['kind'], number> = {
@@ -165,28 +212,44 @@ export function buildQuestions(record: MatchRecord, log: DecisionEntry[]): Press
     .map((e, idx) => ({ e, idx }))
     .sort((a, b) => KIND_ORDER[a.e.kind] - KIND_ORDER[b.e.kind] || a.idx - b.idx)
 
-  const texts: string[] = []
+  // options가 지정된 항목(플랜 추궁)은 전용 문안을 쓰고, 나머지는 공용 톤 풀에서 뽑는다.
+  const items: { text: string; options?: [string, string, string] }[] = []
   const seen = new Set<string>()
-  const push = (t: string) => { if (!seen.has(t)) { seen.add(t); texts.push(t) } }
+  const push = (text: string, options?: [string, string, string]) => {
+    if (seen.has(text)) return
+    seen.add(text)
+    items.push(options ? { text, options } : { text })
+  }
 
+  if (planDeviation !== undefined) {
+    const out = outcomeOf(record)
+    const pq = planQuestion(planDeviation, out !== 'draw' && out !== 'loss')
+    if (pq) push(pq.text, PLAN_ANSWERS[pq.branch])
+  }
   for (const { e } of ordered) push(logQuestionText(e))
   for (const t of resultQuestions(record)) push(t)
 
-  return texts.slice(0, 3).map((text, i) => ({
+  return items.slice(0, 3).map((q, i) => ({
     id: `pq${i + 1}`,
-    text,
-    options: optionsFor(seed + i * 2654435761),
+    text: q.text,
+    options: q.options ?? optionsFor(seed + i * 2654435761),
   }))
 }
 
 // ═══════════════════════════════════════════════════════════
 // buildHeadline
 // ═══════════════════════════════════════════════════════════
-/** 답변 텍스트의 톤을 역분류(0=공격적/1=겸손/2=유머). 풀 밖이면 해시 폴백. */
+/** 답변 텍스트의 톤을 역분류(0=공격적/1=겸손/2=유머). 풀 밖이면 해시 폴백.
+ *  플랜 추궁의 전용 답변도 같은 [공격적, 겸손, 유머] 순서로 놓여 있으므로 인덱스로 분류한다
+ *  — 등록하지 않으면 해시 폴백으로 떨어져 헤드라인 톤이 답변과 어긋난다. */
 function answerTone(text: string): 0 | 1 | 2 {
   if (AGGRESSIVE.includes(text)) return 0
   if (HUMBLE.includes(text)) return 1
   if (HUMOR.includes(text)) return 2
+  for (const trio of Object.values(PLAN_ANSWERS)) {
+    const i = trio.indexOf(text)
+    if (i >= 0) return i as 0 | 1 | 2
+  }
   return (hash(text) % 3) as 0 | 1 | 2
 }
 

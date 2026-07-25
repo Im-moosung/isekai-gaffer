@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { render, fireEvent, cleanup, waitFor } from '@testing-library/react'
+import { render, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import type { MatchRecord } from '../../game/campaignStore'
 import type { Headline } from '../../game/pressconf'
 
@@ -10,6 +10,8 @@ vi.mock('../../ai/aiClient', () => ({ narrate: (...a: unknown[]) => narrateMock(
 
 import { PressConference } from '../press/PressConference'
 import { NewspaperCard } from '../press/NewspaperCard'
+import { useMatchStore } from '../../game/matchStore'
+import { makeTestTeam } from '../../engine/fixtures/testTeams'
 
 const RECORD: MatchRecord = {
   stage: 'r16',
@@ -135,5 +137,30 @@ describe('NewspaperCard', () => {
     fireEvent.click(next)
     fireEvent.click(next)
     expect(onNext).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('PressConference — 플랜 이탈 연결', () => {
+  it('matchPlan이 없으면(플랜 미수립) 추궁 질문이 없다', () => {
+    useMatchStore.getState().reset()
+    const { container } = render(
+      <PressConference record={RECORD} log={RECORD.decisions} teamName="대한민국" onDone={vi.fn()} />,
+    )
+    expect(container.querySelector('.pc-question')!.textContent).not.toContain('계획')
+  })
+
+  it('store의 planDeviation이 첫 질문을 이탈 추궁으로 바꾼다', () => {
+    useMatchStore.getState().reset()
+    useMatchStore.getState().startMatch(makeTestTeam('kor', 76), makeTestTeam('esp', 88), 20260724)
+    act(() => { useMatchStore.getState().kickoff() })
+    act(() => { useMatchStore.setState({ planDeviation: 5 }) })
+    // RECORD는 2-1 승리 → 'pivot-win' 분기.
+    const { container } = render(
+      <PressConference record={RECORD} log={RECORD.decisions} teamName="대한민국" onDone={vi.fn()} />,
+    )
+    const q = container.querySelector('.pc-question')!.textContent!
+    expect(q).toContain('5개 축')
+    expect(q).toContain('원래 계획이 틀렸던')
+    expect(container.querySelectorAll('.pc-answer')).toHaveLength(3)
   })
 })

@@ -13,6 +13,7 @@ import type { Headline } from '../../game/pressconf'
 import type { MatchRecord } from '../../game/campaignStore'
 import type { DecisionEntry } from '../../engine/types'
 import { narrate } from '../../ai/aiClient'
+import { useMatchStore } from '../../game/matchStore'
 import './press.css'
 
 interface Props {
@@ -25,7 +26,15 @@ interface Props {
 const TONE_LABEL = ['공격적', '겸손', '유머'] as const
 
 export function PressConference({ record, log, teamName, onDone }: Props) {
-  const questions = useMemo(() => buildQuestions(record, log), [record, log])
+  // 킥오프 플랜 이탈 축 수 — matchStore는 경기 종료 후에도 리셋되지 않으므로 여기서 직접 읽는다.
+  // App→MatchScreen→onMatchEnd 콜백에 인자를 하나 더 얹는 것보다 결합이 얕고,
+  // 플랜을 세운 적 없는 렌더(단독 테스트·데모)는 matchPlan이 null이라 undefined가 되어
+  // 추궁 질문이 생기지 않는다.
+  const planDeviation = useMatchStore(s => (s.matchPlan ? s.planDeviation : undefined))
+  const questions = useMemo(
+    () => buildQuestions(record, log, planDeviation),
+    [record, log, planDeviation],
+  )
   // 확정된 문답 스택(위로 쌓임) + 현재 인덱스.
   const [answers, setAnswers] = useState<string[]>([])
   const [finishing, setFinishing] = useState(false)

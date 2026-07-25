@@ -174,3 +174,43 @@ describe('개입 부스트는 지시값과 무관하게 항상 유리하다', ()
     expect(bw).toBeGreaterThanOrEqual(pw)
   }, 150_000)
 })
+
+// ── 플랜 유지 보너스 / 구조 변경 적응 지연 (Task 7) ────────────────
+// 킥오프 전 설계에 게임 이론적 의미를 주는 두 축이다. 유지에 보상, 구조 변경에 비용.
+describe('planIntact / adaptLag', () => {
+  it('opts 미지정이면 기존 결과와 비트 단위로 동일(회귀 불변)', () => {
+    for (const seed of [11, 222, 3333]) {
+      const a = simulateSegment(createMatch(even1, even2, { seed }), 90)
+      const b = simulateSegment(createMatch(even1, even2, { seed }), 90, {})
+      expect(b.score).toEqual(a.score)
+      expect(b.stats).toEqual(a.stats)
+    }
+  })
+
+  it('planIntact는 지정한 쪽의 xG를 올린다(찬스 퀄리티 ×1.03)', () => {
+    let plain = 0, intact = 0
+    for (let s = 0; s < 200; s++) {
+      plain += simulateSegment(createMatch(even1, even2, { seed: 7000 + s }), 90).stats[0].xg
+      intact += simulateSegment(createMatch(even1, even2, { seed: 7000 + s }), 90, { planIntact: 'home' }).stats[0].xg
+    }
+    expect(intact).toBeGreaterThan(plain)
+  })
+
+  it('adaptLag는 만료 분까지만 걸린다 — 만료 후 분에는 영향이 없다', () => {
+    // 45분까지 이미 만료된 지연(until=3)은 46~90분 세그먼트 결과를 바꾸지 않아야 한다.
+    const base = simulateSegment(createMatch(even1, even2, { seed: 4242 }), 45)
+    const a = simulateSegment(base, 90)
+    const b = simulateSegment(base, 90, { adaptLag: { side: 'home', until: 3 } })
+    expect(b.score).toEqual(a.score)
+    expect(b.stats).toEqual(a.stats)
+  })
+
+  it('adaptLag는 지정한 쪽의 슛 수를 줄인다(찬스 빈도 ×0.94)', () => {
+    let plain = 0, lagged = 0
+    for (let s = 0; s < 200; s++) {
+      plain += simulateSegment(createMatch(even1, even2, { seed: 8000 + s }), 90).stats[0].shots
+      lagged += simulateSegment(createMatch(even1, even2, { seed: 8000 + s }), 90, { adaptLag: { side: 'home', until: 90 } }).stats[0].shots
+    }
+    expect(lagged).toBeLessThan(plain)
+  })
+})

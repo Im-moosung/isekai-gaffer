@@ -1,0 +1,29 @@
+/* 플랜 상태 배지 — 스코어버그 아래 우측(속도 토글 아래줄).
+   match.css를 건드리지 않고 독립 파일로 두어, 배지가 쓰이는 화면이 늘어도
+   방송 화면 스타일과 충돌하지 않게 한다. */
+.plan-badge {
+  position: absolute;
+  top: 62px;
+  right: 16px;
+  z-index: 21;
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--bc-line);
+  border-radius: 9px;
+  background: linear-gradient(180deg, var(--bc-panel-2), var(--bc-panel));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  color: var(--bc-danger);
+  font-family: var(--bc-font);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  white-space: nowrap;
+}
+/* 유지 중일 때만 강조색 — 이탈 상태(기본)는 경고색(danger)으로 남는다. */
+.plan-badge--ok {
+  color: var(--bc-accent);
+  border-color: color-mix(in srgb, var(--bc-accent) 45%, var(--bc-line));
+}

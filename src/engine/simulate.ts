@@ -15,6 +15,10 @@ export type MatchCommand =
 export interface SimulateOpts {
   /** 개입 직후 부스트: 지정 side에 until 분까지 고정 보너스(찬스 퀄 +8%·실점 위험 −6%). */
   instructionBoost?: { side: 'home' | 'away'; until: number }
+  /** 킥오프 플랜의 구조(포메이션·멘탈리티)를 유지 중인 side. 찬스 퀄리티 ×1.03. */
+  planIntact?: 'home' | 'away'
+  /** 구조 변경 직후 적응 지연이 걸린 side와 만료 분. 찬스 빈도 ×0.94, 역습 취약성 ×1.06. */
+  adaptLag?: { side: 'home' | 'away'; until: number }
 }
 
 const MAX_SUBS = 5
@@ -173,6 +177,22 @@ function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
     const bi = boost.side === 'home' ? 0 : 1
     fx[bi].chanceQuality *= 1.08
     fx[bi].counterVulnerability *= 0.94
+  }
+
+  // 팀 이해도: 킥오프 플랜의 구조(포메이션·멘탈리티)를 유지하면 소폭 보너스.
+  // 하프타임에 전부 갈아엎는 것이 항상 최적이면 킥오프 전 설계가 무의미해지므로, 유지에 값을 붙인다.
+  // UI(PlanBadge)가 "플랜 유지 ✅ 팀 이해도 +3%"로 유저에게 약속하는 수치가 이 값이다.
+  if (opts.planIntact) {
+    const pi = opts.planIntact === 'home' ? 0 : 1
+    fx[pi].chanceQuality *= 1.03
+  }
+  // 적응 지연: 구조 변경 직후 몇 분간 선수들이 새 배치에 적응하는 비용.
+  // 지시 4축 미세 조정에는 걸리지 않는다 — 그건 감독의 정상 업무이고, 오히려 개입 부스트의 대상이다.
+  // 부스트(찬스 퀄·역습 취약성)와 축이 겹치지 않게 찬스 '빈도'를 깎아 상충을 피한다.
+  if (opts.adaptLag && st.minute <= opts.adaptLag.until) {
+    const ai = opts.adaptLag.side === 'home' ? 0 : 1
+    fx[ai].chanceRate *= 0.94
+    fx[ai].counterVulnerability *= 1.06
   }
 
   // 지속 압박 페널티: 압박 70+ 유지 분 추적 → 10분마다 체력 소모 가중.

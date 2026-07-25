@@ -1,6 +1,6 @@
 // src/game/matchStore.ts
 import { create } from 'zustand'
-import { createMatch, simulateSegment, applyCommand, type MatchCommand } from '../engine/simulate'
+import { createMatch, simulateSegment, applyCommand, type MatchCommand, type SimulateOpts } from '../engine/simulate'
 import type { DecisionEntry, Instructions, MatchEvent, MatchState, TacticState, Team } from '../engine/types'
 import { breakSchedule, detectMoment, type DecisionMoment, type HydrationSchedule } from './matchSession'
 import { decideAwayActions } from './oppAi'
@@ -199,6 +199,36 @@ function homeStaminaFloor(engine: MatchState): number {
 /** 상대 감독의 변경 1건 통보(발동 분 + 배너 문구). */
 export interface OppNotice { minute: number; text: string }
 
+/** 구조 변경(포메이션·멘탈리티) 직후 적응 지연 지속(분). advanceMinute이 엔진에 전달. */
+const ADAPT_MINUTES = 3
+
+/** 지시 축을 "이탈"로 셀 최소 변화량. 이보다 작은 조정은 감독의 정상 업무로 본다. */
+const AXIS_DEVIATION_THRESHOLD = 10
+
+/** 킥오프 플랜 대비 변경된 축 수. 지시 4축은 10 이상 차이날 때만 센다
+ *  — 미세 조정은 감독의 정상 업무이고, 구조 변경(포메이션·멘탈리티)이 진짜 "계획 이탈"이다.
+ *  선택 필드(mentality·attackPattern)는 미지정을 'balanced'로 정규화해 비교한다
+ *  — 그러지 않으면 UI가 명시값을 써 넣기만 해도 이탈로 집계된다. */
+export function computeDeviation(plan: TacticState, cur: TacticState): number {
+  let n = 0
+  if (plan.formation !== cur.formation) n++
+  if ((plan.mentality ?? 'balanced') !== (cur.mentality ?? 'balanced')) n++
+  if ((plan.attackPattern ?? 'balanced') !== (cur.attackPattern ?? 'balanced')) n++
+  for (const k of ['lineHeight', 'pressing', 'tempo'] as const) {
+    if (Math.abs(plan.instructions[k] - cur.instructions[k]) >= AXIS_DEVIATION_THRESHOLD) n++
+  }
+  if (plan.instructions.attackFocus !== cur.instructions.attackFocus) n++
+  return n
+}
+
+/** 플랜의 '구조'(포메이션·멘탈리티)가 그대로인가 — 팀 이해도 보너스·배지 판정의 단일 진실원.
+ *  store·PlanBadge가 각자 판정하면 UI가 "유지"라고 말하는데 엔진은 보너스를 안 주는 괴리가 생긴다. */
+export function isPlanStructIntact(plan: TacticState | null, cur: TacticState | undefined): boolean {
+  if (!plan || !cur) return false
+  return plan.formation === cur.formation
+    && (plan.mentality ?? 'balanced') === (cur.mentality ?? 'balanced')
+}
+
 export interface MatchUIState {
   phase: MatchPhase
   engine: MatchState | null
@@ -222,6 +252,13 @@ export interface MatchUIState {
   oppFired: string[]
   /** 상대 변경 통보 이력 — 방송 배너·작전판 상대 탭 타임라인. */
   oppNotices: OppNotice[]
+  /** 킥오프 시점에 고정된 홈 전술 스냅샷. null이면 아직 킥오프 전(플랜 없음). */
+  matchPlan: TacticState | null
+  /** 킥오프 플랜 대비 변경된 축 수 — 누적 최대치. 되돌려도 줄지 않는다:
+   *  "한 번 계획을 버렸다"는 사실이 남아야 기자회견 추궁이 성립한다. */
+  planDeviation: number
+  /** 적응 지연 만료 분(구조 변경 직후). 0이면 지연 없음. */
+  adaptUntil: number
   startMatch(home: Team, away: Team, seed: number, opts?: StartMatchOpts): void
   /** 킥오프 — 'pre'에서 재생 시작('playing'). */
   kickoff(): void
@@ -260,6 +297,9 @@ const initial = {
   decisionLog: [] as DecisionEntry[],
   oppFired: [] as string[],
   oppNotices: [] as OppNotice[],
+  matchPlan: null as TacticState | null,
+  planDeviation: 0,
+  adaptUntil: 0,
 }
 
 export const useMatchStore = create<MatchUIState>((set, get) => ({
@@ -282,18 +322,25 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     const { engine, phase } = get()
     if (!engine) throw new Error('경기 미시작')
     if (phase !== 'pre') return
-    set({ phase: 'playing' })
+    // 킥오프 시점의 전술을 플랜으로 고정한다 — 이후의 모든 변경은 planDeviation으로 계측되고,
+    // 경기 후 기자회견이 그 수치를 근거로 감독을 추궁한다.
+    set({ phase: 'playing', matchPlan: structuredClone(engine.home.tactics), planDeviation: 0, adaptUntil: 0 })
   },
   advanceMinute: () => {
-    const { engine, phase, schedule, firedMoments, momentPrompt, boostUntil, oppFired, oppNotices } = get()
+    const { engine, phase, schedule, firedMoments, momentPrompt, boostUntil, oppFired, oppNotices, matchPlan, adaptUntil } = get()
     if (!engine) throw new Error('경기 미시작')
     if (phase !== 'playing') return // 정지 중엔 재개(confirmTactics)로만 진행
     const prevScore: [number, number] = [engine.score[0], engine.score[1]]
     // 개입 부스트 전달: confirmTactics가 세팅한 boostUntil이 이 분을 덮으면 홈(유저)에 고정 보너스.
-    // boostUntil=0(초기·미개입)이면 opts 없이 호출 → 기존 동작 불변.
+    // 여기에 플랜 유지 보너스(팀 이해도)와 구조 변경 적응 지연을 함께 조립한다.
+    // 셋 다 비활성이면 opts 없이 호출 → 기존 동작 불변.
     const nextMinute = engine.minute + 1
-    const opts = boostUntil >= nextMinute ? { instructionBoost: { side: 'home' as const, until: boostUntil } } : undefined
-    let next = simulateSegment(engine, nextMinute, opts)
+    const opts: SimulateOpts = {
+      ...(boostUntil >= nextMinute ? { instructionBoost: { side: 'home' as const, until: boostUntil } } : {}),
+      ...(isPlanStructIntact(matchPlan, engine.home.tactics) ? { planIntact: 'home' as const } : {}),
+      ...(adaptUntil >= nextMinute ? { adaptLag: { side: 'home' as const, until: adaptUntil } } : {}),
+    }
+    let next = simulateSegment(engine, nextMinute, Object.keys(opts).length ? opts : undefined)
     const minute = next.minute
 
     // 상대 감독 — 창(46/60/70/80)에서 교체·전술 스위칭. 완전 결정론이라 시드 회귀에 안전하다.
@@ -369,7 +416,7 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
   },
   dismissMoment: () => set({ momentPrompt: null }),
   submitCommand: (side, cmd) => {
-    const { engine, phase, decisionLog } = get()
+    const { engine, phase, decisionLog, matchPlan, planDeviation } = get()
     if (!engine) throw new Error('경기 미시작')
     if (!INTERVENTION_PHASES.includes(phase)) throw new Error('개입 불가 시점')
     const minute = engine.minute
@@ -393,8 +440,22 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
         entry = { minute, kind: 'instructions', summary: `${when} 포메이션: ${before}→${after}`, detail: { before, after } }
       }
     }
+    const nextEngine = applyCommand(engine, side, cmd)
+    // 플랜 이탈은 홈(감독)에게만, 그리고 킥오프 이후에만 센다.
+    // 'pre'의 변경은 아직 플랜을 '짜는' 중이므로 이탈이 아니다(matchPlan이 null이라 자연히 제외된다).
+    const before = engine.home.tactics, after = nextEngine.home.tactics
+    const dev = side === 'home' && matchPlan
+      ? Math.max(planDeviation, computeDeviation(matchPlan, after))
+      : planDeviation
+    // 적응 지연은 구조 변경(포메이션·멘탈리티)에만 건다 — 지시 미세 조정은 개입 부스트의 영역이라
+    // 둘을 같은 변경에 겹쳐 걸면 부스트와 지연이 서로를 상쇄해 어느 쪽도 체감되지 않는다.
+    const structChanged = side === 'home' && !!matchPlan
+      && (before.formation !== after.formation
+        || (before.mentality ?? 'balanced') !== (after.mentality ?? 'balanced'))
     set({
-      engine: applyCommand(engine, side, cmd),
+      engine: nextEngine,
+      planDeviation: dev,
+      ...(structChanged ? { adaptUntil: engine.minute + ADAPT_MINUTES } : {}),
       ...(entry ? { decisionLog: [...decisionLog, entry] } : {}),
     })
   },

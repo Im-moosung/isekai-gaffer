@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
   useMatchStore, TEAM_TALK_TABLE, scoreSituation, SHOUT_TABLE, SHOUT_COOLDOWN,
-  teamExpectation, recommendedTone, EXPECTATION_ADJUST,
+  teamExpectation, recommendedTone, EXPECTATION_ADJUST, computeDeviation,
 } from '../matchStore'
 import { makeTestTeam, pickBestXI } from '../../engine/fixtures/testTeams'
 import { loadTeam } from '../../data/loader'
+import type { TacticState } from '../../engine/types'
 
 const a = makeTestTeam('a', 78), b = makeTestTeam('b', 78)
 const store = () => useMatchStore.getState()
@@ -493,5 +494,138 @@ describe('pickBestXI는 프로필 스타일로 지시를 시딩한다', () => {
     expect(t.instructions.pressing).toBe(kor.profile.style.pressing)
     expect(t.instructions.lineHeight).toBe(kor.profile.style.lineHeight)
     expect(t.instructions.tempo).toBe(kor.profile.style.tempo)
+  })
+})
+
+describe('computeDeviation', () => {
+  it('멘탈리티·포메이션·4축 각각을 1로 센다', () => {
+    const base = pickBestXI(loadTeam('kor'))
+    const changed: TacticState = {
+      ...base, mentality: 'attacking',
+      instructions: { ...base.instructions, pressing: base.instructions.pressing + 30 },
+    }
+    expect(computeDeviation(base, changed)).toBe(2)
+  })
+
+  it('지시 축은 10 이상 차이날 때만 이탈로 센다(미세 조정 면제)', () => {
+    const base = pickBestXI(loadTeam('kor'))
+    const tweaked: TacticState = {
+      ...base, instructions: { ...base.instructions, tempo: base.instructions.tempo + 5 },
+    }
+    expect(computeDeviation(base, tweaked)).toBe(0)
+    const shifted: TacticState = {
+      ...base, instructions: { ...base.instructions, tempo: base.instructions.tempo + 10 },
+    }
+    expect(computeDeviation(base, shifted)).toBe(1)
+  })
+
+  it('포메이션·attackFocus·attackPattern도 각각 1축이다', () => {
+    const base = pickBestXI(loadTeam('kor'))
+    expect(computeDeviation(base, { ...base, formation: '5-4-1' })).toBe(1)
+    expect(computeDeviation(base, {
+      ...base, instructions: { ...base.instructions, attackFocus: 'left' },
+    })).toBe(1)
+    expect(computeDeviation(base, { ...base, attackPattern: 'cross' })).toBe(1)
+  })
+
+  it('선택 필드 미지정은 balanced로 정규화해 비교한다(명시만 해도 이탈로 세지 않는다)', () => {
+    const base = pickBestXI(loadTeam('kor'))
+    expect(computeDeviation(base, { ...base, mentality: 'balanced', attackPattern: 'balanced' })).toBe(0)
+  })
+
+  it('구조 변경 + 지시 3축을 모두 갈아엎으면 이탈이 기자회견 임계(4)를 넘는다', () => {
+    const base = pickBestXI(loadTeam('kor'))
+    const wrecked: TacticState = {
+      ...base, formation: '5-4-1', mentality: 'very-defensive',
+      instructions: { lineHeight: 10, pressing: 90, tempo: 10, attackFocus: 'left' },
+    }
+    expect(computeDeviation(base, wrecked)).toBeGreaterThanOrEqual(4)
+  })
+})
+
+describe('플랜 스냅샷과 이탈 계산', () => {
+  it('kickoff이 현재 전술을 matchPlan으로 고정한다', () => {
+    store().startMatch(loadTeam('kor'), loadTeam('cze'), 111)
+    const eng = store().engine!
+    store().submitCommand('home', {
+      type: 'instructions', instructions: { ...eng.home.tactics.instructions, pressing: 40 },
+    })
+    // 킥오프 전 변경은 '플랜을 짜는 중'이므로 이탈이 아니다.
+    expect(store().planDeviation).toBe(0)
+    store().kickoff()
+    expect(store().matchPlan!.instructions.pressing).toBe(40)
+    expect(store().planDeviation).toBe(0)
+  })
+
+  it('킥오프 후 축을 바꾸면 planDeviation이 증가한다', () => {
+    store().startMatch(loadTeam('kor'), loadTeam('cze'), 111)
+    store().kickoff()
+    store().advanceMinute()
+    store().pauseByUser()
+    const eng = store().engine!
+    store().submitCommand('home', {
+      type: 'instructions', instructions: { ...eng.home.tactics.instructions, pressing: 90, lineHeight: 20 },
+    })
+    expect(store().planDeviation).toBe(2)
+  })
+
+  it('planDeviation은 누적 최대치라 되돌려도 줄지 않는다', () => {
+    store().startMatch(loadTeam('kor'), loadTeam('cze'), 111)
+    const orig = store().engine!.home.tactics.instructions
+    store().kickoff()
+    store().advanceMinute()
+    store().pauseByUser()
+    store().submitCommand('home', { type: 'instructions', instructions: { ...orig, pressing: 90 } })
+    expect(store().planDeviation).toBe(1)
+    store().submitCommand('home', { type: 'instructions', instructions: { ...orig } })
+    expect(store().planDeviation).toBe(1)
+  })
+
+  it('상대(away)의 전술 변경은 홈 planDeviation에 잡히지 않는다', () => {
+    store().startMatch(loadTeam('kor'), loadTeam('cze'), 111)
+    store().kickoff()
+    store().advanceMinute()
+    store().pauseByUser()
+    const away = store().engine!.away.tactics
+    store().submitCommand('away', {
+      type: 'formation', tactics: { ...away, formation: '5-4-1', mentality: 'very-defensive' },
+    })
+    expect(store().planDeviation).toBe(0)
+    expect(store().adaptUntil).toBe(0)
+  })
+
+  it('구조 변경(포메이션)만 적응 지연을 건다 — 지시 미세 조정은 걸지 않는다', () => {
+    store().startMatch(loadTeam('kor'), loadTeam('cze'), 111)
+    store().kickoff()
+    store().advanceMinute()
+    store().pauseByUser()
+    const eng = store().engine!
+    store().submitCommand('home', {
+      type: 'instructions', instructions: { ...eng.home.tactics.instructions, pressing: 90 },
+    })
+    expect(store().adaptUntil).toBe(0)
+    const t = store().engine!.home.tactics
+    store().submitCommand('home', { type: 'formation', tactics: { ...t, formation: '5-4-1' } })
+    expect(store().adaptUntil).toBe(store().engine!.minute + 3)
+  })
+
+  it('멘탈리티 변경도 적응 지연을 건다', () => {
+    store().startMatch(loadTeam('kor'), loadTeam('cze'), 111)
+    store().kickoff()
+    store().advanceMinute()
+    store().pauseByUser()
+    const t = store().engine!.home.tactics
+    store().submitCommand('home', { type: 'formation', tactics: { ...t, mentality: 'very-attacking' } })
+    expect(store().adaptUntil).toBeGreaterThan(0)
+  })
+
+  it('reset·startMatch가 플랜 상태를 초기화한다', () => {
+    store().startMatch(loadTeam('kor'), loadTeam('cze'), 111)
+    store().kickoff()
+    expect(store().matchPlan).not.toBeNull()
+    store().startMatch(loadTeam('kor'), loadTeam('cze'), 222)
+    expect(store().matchPlan).toBeNull()
+    expect(store().planDeviation).toBe(0)
+    expect(store().adaptUntil).toBe(0)
   })
 })

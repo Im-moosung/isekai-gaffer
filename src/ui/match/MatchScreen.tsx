@@ -10,6 +10,7 @@ import { PitchView } from '../pitch/PitchView'
 import { buildSequence } from '../pitch/choreography'
 import { TacticsBoard } from '../tactics/TacticsBoard'
 import { TacticsCenter } from '../tactics/TacticsCenter'
+import { PlanBadge } from '../tactics/PlanBadge'
 import { ShootoutPanel } from './ShootoutPanel'
 import { ShoutBar } from './ShoutBar'
 import { minuteDwellMs, EVENT_DWELL_MS, type PlaybackSpeed } from './playback'
@@ -420,6 +421,10 @@ export function MatchScreen({
           fastForward={fastForward}
           pulse={goalDrama}
         />
+        {/* 플랜 상태 배지 — 스코어버그 옆(우측). 킥오프 후에만 나타난다.
+            "계획을 지키면 팀 이해도 +3%, 버리면 몇 축을 버렸는지"를 상시 노출해
+            하프타임에 전부 갈아엎는 선택에 눈에 보이는 값을 붙인다. */}
+        <PlanBadge />
         {/* 음소거 토글 — 스코어버그 옆. 항상 노출(localStorage 기억). */}
         <button
           type="button"

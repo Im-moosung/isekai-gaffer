@@ -67,6 +67,67 @@ describe('buildQuestions', () => {
     expect(ri.some(q => q.text.includes("60' 지시 변경: 압박 55→90"))).toBe(true)
   })
 
+  it('planDeviation 미지정이면 플랜 추궁 질문이 생기지 않는다(기존 호출부 불변)', () => {
+    const r = rec('group1', 'cze', [2, 1])
+    expect(buildQuestions(r, [])).toEqual(buildQuestions(r, [], undefined))
+    expect(buildQuestions(r, []).some(q => q.text.includes('계획'))).toBe(false)
+  })
+
+  it('이탈 0 + 승리 → 계획 유지 추궁이 1번 질문으로 나온다', () => {
+    const qs = buildQuestions(rec('group1', 'cze', [2, 1]), [], 0)
+    expect(qs[0].text).toContain('한 번도 흔들지 않으셨습니다')
+    expect(qs).toHaveLength(3)
+  })
+
+  it('이탈 4 이상 + 승리 → 계획이 틀렸던 것인지 추궁하고 축 수를 언급한다', () => {
+    const qs = buildQuestions(rec('r16', 'eng', [3, 1]), [], 5)
+    expect(qs[0].text).toContain('5개 축')
+    expect(qs[0].text).toContain('원래 계획이 틀렸던')
+  })
+
+  it('이탈 4 이상 + 승리 아님(무·패) → 패인 추궁으로 갈린다', () => {
+    for (const r of [rec('group2', 'mex', [1, 1]), rec('r16', 'eng', [0, 2])]) {
+      const qs = buildQuestions(r, [], 4)
+      expect(qs[0].text).toContain('계획을 버린 것이')
+    }
+  })
+
+  it('이탈이 있지만 임계 미만이면 추궁 질문이 없다(미세 조정 면제)', () => {
+    const qs = buildQuestions(rec('group1', 'cze', [2, 1]), [], 2)
+    expect(qs.some(q => q.text.includes('계획'))).toBe(false)
+  })
+
+  it('이탈 0이어도 패하면 유지 추궁을 하지 않는다', () => {
+    const qs = buildQuestions(rec('r16', 'eng', [0, 2]), [], 0)
+    expect(qs.some(q => q.text.includes('흔들지 않으셨습니다'))).toBe(false)
+  })
+
+  it('플랜 추궁도 실제 한국어 답변 3개를 가진다(자리표시자 금지)', () => {
+    for (const dev of [0, 4, 6]) {
+      for (const r of [rec('group1', 'cze', [2, 1]), rec('r16', 'eng', [0, 2])]) {
+        const q = buildQuestions(r, [], dev)[0]
+        expect(q.options).toHaveLength(3)
+        for (const o of q.options) {
+          expect(o.length).toBeGreaterThan(8)
+          expect(o.endsWith('.') || o.endsWith('다.')).toBe(true)
+        }
+        expect(new Set(q.options).size).toBe(3)
+      }
+    }
+  })
+
+  it('결정론: 같은 planDeviation → 같은 질문', () => {
+    const r = rec('qf', 'nor', [3, 1], { decisions: teamTalkLog })
+    expect(buildQuestions(r, r.decisions, 5)).toEqual(buildQuestions(r, r.decisions, 5))
+  })
+
+  it('플랜 추궁이 들어가도 로그 질문이 1개는 남는다(3문항 예산)', () => {
+    const log = [...teamTalkLog, ...subLog, ...instrLog]
+    const qs = buildQuestions(rec('r16', 'eng', [4, 0], { decisions: log }), log, 5)
+    expect(qs).toHaveLength(3)
+    expect(qs.some(q => q.text.includes('HT 팀토크: 격노'))).toBe(true)
+  })
+
   it('질문 문안에 금지어가 없다 (세이프가드 스모크)', () => {
     const cases: MatchRecord[] = [
       rec('group1', 'cze', [2, 1]),
@@ -76,8 +137,8 @@ describe('buildQuestions', () => {
       rec('r16', 'eng', [4, 0], { decisions: [...teamTalkLog, ...subLog, ...instrLog] }),
     ]
     const texts: string[] = []
-    for (const r of cases) for (const q of buildQuestions(r, r.decisions)) {
-      texts.push(q.text, ...q.options)
+    for (const r of cases) for (const dev of [undefined, 0, 2, 4, 7]) {
+      for (const q of buildQuestions(r, r.decisions, dev)) texts.push(q.text, ...q.options)
     }
     assertClean(texts)
   })
