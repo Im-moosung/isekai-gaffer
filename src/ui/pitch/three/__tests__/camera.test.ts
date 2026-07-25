@@ -1,0 +1,459 @@
+// camera.ts는 three를 전혀 import하지 않는 순수 수학 모듈이다(코드 스플릿 보장).
+// 따라서 이 테스트도 three 없이 돈다 — applyCamera만 구조적 스텁 카메라로 검증한다.
+import { describe, it, expect } from 'vitest'
+import {
+  BROADCAST_FOLLOW,
+  BROADCAST_FOV,
+  BROADCAST_MAX_PAN,
+  BROADCAST_Y,
+  BROADCAST_Z,
+  CAM_MAX_X,
+  CAM_MAX_Z,
+  CAM_MIN_Y,
+  CELEBRATE_RADIUS,
+  HIGHLIGHT_DIST,
+  HIGHLIGHT_FOV,
+  HIGHLIGHT_Y,
+  SHAKE_MAX,
+  TRANSITION_S,
+  applyCamera,
+  cameraFor,
+  clampShot,
+  createCameraRig,
+  easeInOutCubic,
+  lerpShot,
+  shake,
+  type CameraLike,
+  type CameraMode,
+  type CameraShot,
+} from '../camera'
+import { PITCH_W } from '../types'
+
+const MODES: CameraMode[] = ['broadcast', 'highlight', 'goal-cam', 'celebrate']
+
+/** applyCamera 검증용 구조적 카메라 스텁(호출 순서까지 기록). */
+function stubCamera(fov = 40): CameraLike & {
+  log: string[]
+  pos: { x: number; y: number; z: number }
+  target: { x: number; y: number; z: number }
+  projUpdates: number
+} {
+  const pos = { x: 0, y: 0, z: 0 }
+  const target = { x: 0, y: 0, z: 0 }
+  const log: string[] = []
+  return {
+    log,
+    pos,
+    target,
+    projUpdates: 0,
+    fov,
+    position: {
+      set(x: number, y: number, z: number) {
+        pos.x = x
+        pos.y = y
+        pos.z = z
+        log.push('position')
+      },
+    },
+    lookAt(x: number, y: number, z: number) {
+      target.x = x
+      target.y = y
+      target.z = z
+      log.push('lookAt')
+    },
+    updateProjectionMatrix() {
+      this.projUpdates++
+      log.push('proj')
+    },
+  }
+}
+
+const horiz = (s: CameraShot, f: { x: number; z: number }) =>
+  Math.hypot(s.pos.x - f.x, s.pos.z - f.z)
+
+/** 부동소수 누적(0.1+0.1+0.1)이 끼는 비교용 — 값은 여전히 전 필드를 대조한다. */
+function expectShotClose(got: CameraShot, want: CameraShot): void {
+  for (const key of ['pos', 'lookAt'] as const) {
+    for (const axis of ['x', 'y', 'z'] as const) {
+      expect(got[key][axis]).toBeCloseTo(want[key][axis], 9)
+    }
+  }
+  expect(got.fov).toBeCloseTo(want.fov, 9)
+}
+
+describe('cameraFor — broadcast', () => {
+  it('사이드라인 상단에 서고 FOV는 방송 화각', () => {
+    const s = cameraFor('broadcast', { x: 0, z: 0 }, 0, 7)
+    expect(s.pos.z).toBe(BROADCAST_Z)
+    expect(s.pos.z).toBeLessThan(-40) // 터치라인 바깥
+    expect(s.pos.y).toBeGreaterThan(BROADCAST_Y - 1)
+    expect(s.pos.y).toBeLessThan(BROADCAST_Y + 1)
+    expect(s.fov).toBe(BROADCAST_FOV)
+    expect(BROADCAST_FOV).toBe(34)
+  })
+
+  it('focus.x를 게인만큼 부분 추종하고(스무딩) lookAt은 완전 추종한다', () => {
+    const f = { x: 40, z: 6 }
+    const s = cameraFor('broadcast', f, 0, 3)
+    // 카메라는 focus.x * BROADCAST_FOLLOW 근처(호흡 드리프트 ±0.5 이내)
+    expect(s.pos.x).toBeGreaterThan(f.x * BROADCAST_FOLLOW - 0.5)
+    expect(s.pos.x).toBeLessThan(f.x * BROADCAST_FOLLOW + 0.5)
+    // 완전 추종(=1.0)도 정지(=0)도 아니다
+    expect(s.pos.x).toBeLessThan(f.x - 5)
+    expect(s.pos.x).toBeGreaterThan(5)
+    expect(s.lookAt.x).toBe(f.x)
+  })
+
+  it('팬은 단조 증가하되 한계에서 포화한다', () => {
+    const at = (x: number) => cameraFor('broadcast', { x, z: 0 }, 0, 5).pos.x
+    expect(at(10)).toBeLessThan(at(20))
+    expect(at(20)).toBeLessThan(at(30))
+    expect(at(-30)).toBeLessThan(at(-10))
+    // 볼이 코너 밖으로 튀어도 카메라는 팬 한계를 넘지 않는다
+    expect(at(5000)).toBeLessThanOrEqual(BROADCAST_MAX_PAN + 0.5)
+    expect(at(-5000)).toBeGreaterThanOrEqual(-BROADCAST_MAX_PAN - 0.5)
+    expect(at(5000)).toBeGreaterThan(BROADCAST_MAX_PAN - 0.5)
+  })
+})
+
+describe('cameraFor — highlight', () => {
+  it('액션 존으로 하강·근접한다(y≈14, 거리 35, FOV 30)', () => {
+    const f = { x: 12, z: -4 }
+    const s = cameraFor('highlight', f, 0, 11)
+    expect(s.pos.y).toBeCloseTo(HIGHLIGHT_Y, 6)
+    expect(HIGHLIGHT_Y).toBe(14)
+    expect(horiz(s, f)).toBeCloseTo(HIGHLIGHT_DIST, 6)
+    expect(HIGHLIGHT_DIST).toBe(35)
+    expect(s.fov).toBe(HIGHLIGHT_FOV)
+    expect(HIGHLIGHT_FOV).toBe(30)
+    // broadcast보다 확실히 낮고 가깝다
+    const b = cameraFor('broadcast', f, 0, 11)
+    expect(s.pos.y).toBeLessThan(b.pos.y - 10)
+    expect(horiz(s, f)).toBeLessThan(horiz(b, f))
+    expect(s.lookAt.x).toBeCloseTo(f.x, 6)
+    expect(s.lookAt.z).toBeCloseTo(f.z, 6)
+  })
+
+  it('거리는 focus·시간과 무관하게 유지된다(각도만 흔들린다)', () => {
+    for (const t of [0, 0.7, 4.3, 30]) {
+      for (const f of [{ x: -30, z: 20 }, { x: 44, z: -18 }, { x: 0, z: 0 }]) {
+        expect(horiz(cameraFor('highlight', f, t, 2), f)).toBeCloseTo(HIGHLIGHT_DIST, 6)
+      }
+    }
+  })
+})
+
+describe('cameraFor — goal-cam', () => {
+  it('focus에 가까운 골대 뒤 낮은 앵글에서 액션을 본다', () => {
+    const east = cameraFor('goal-cam', { x: 40, z: 4 }, 0, 9)
+    expect(east.pos.x).toBeGreaterThan(PITCH_W / 2) // 골라인 밖
+    expect(east.pos.y).toBeGreaterThan(CAM_MIN_Y - 0.001)
+    expect(east.pos.y).toBeLessThan(9) // 낮은 앵글
+    expect(east.lookAt.x).toBeLessThan(east.pos.x) // 피치 안쪽(서쪽)을 본다
+
+    const west = cameraFor('goal-cam', { x: -40, z: -4 }, 0, 9)
+    expect(west.pos.x).toBeLessThan(-PITCH_W / 2)
+    expect(west.lookAt.x).toBeGreaterThan(west.pos.x)
+    expect(west.pos.x).toBeCloseTo(-east.pos.x, 6)
+  })
+
+  it('골 뒤 카메라는 골대 폭 근처에 머문다(코너로 도망가지 않음)', () => {
+    for (const z of [-34, -10, 0, 12, 34]) {
+      const s = cameraFor('goal-cam', { x: 48, z }, 1.3, 4)
+      expect(Math.abs(s.pos.z)).toBeLessThan(14)
+    }
+  })
+})
+
+describe('cameraFor — celebrate', () => {
+  it('focus 주위를 일정 반경으로 오빗한다', () => {
+    const f = { x: 30, z: -8 }
+    for (const t of [0, 0.5, 1.7, 6]) {
+      expect(horiz(cameraFor('celebrate', f, t, 6), f)).toBeCloseTo(CELEBRATE_RADIUS, 6)
+    }
+    expect(cameraFor('celebrate', f, 0, 6).lookAt.x).toBeCloseTo(f.x, 6)
+  })
+
+  it('각속도가 결정론적이며 실제로 회전한다', () => {
+    const f = { x: 0, z: 0 }
+    const ang = (t: number) => {
+      const s = cameraFor('celebrate', f, t, 6)
+      return Math.atan2(s.pos.z - f.z, s.pos.x - f.x)
+    }
+    const a0 = ang(0)
+    const a1 = ang(1)
+    let d = a1 - a0
+    while (d > Math.PI) d -= Math.PI * 2
+    while (d < -Math.PI) d += Math.PI * 2
+    // 1초에 완만히(0.2~1.2rad) 돈다 — 정지도, 빙글빙글도 아니다
+    expect(Math.abs(d)).toBeGreaterThan(0.2)
+    expect(Math.abs(d)).toBeLessThan(1.2)
+    // 시드가 각속도를 바꾼다(결정론적 변주)
+    const other = cameraFor('celebrate', f, 1, 6)
+    expect(cameraFor('celebrate', f, 1, 6)).toEqual(other)
+  })
+})
+
+describe('cameraFor — 공통 불변식', () => {
+  it('어떤 모드·focus·시간에도 피치 아래·뒤로 빠지지 않는다', () => {
+    for (const mode of MODES) {
+      for (const x of [-5000, -60, -30, 0, 30, 60, 5000]) {
+        for (const z of [-500, -40, 0, 40, 500]) {
+          for (const t of [0, 0.37, 3.1, 12.9, 600]) {
+            const s = cameraFor(mode, { x, z }, t, 13)
+            expect(Number.isFinite(s.pos.x)).toBe(true)
+            expect(Number.isFinite(s.pos.y)).toBe(true)
+            expect(Number.isFinite(s.pos.z)).toBe(true)
+            expect(s.pos.y).toBeGreaterThan(3)
+            expect(Math.abs(s.pos.z)).toBeLessThan(80)
+            expect(Math.abs(s.pos.z)).toBeLessThanOrEqual(CAM_MAX_Z)
+            expect(Math.abs(s.pos.x)).toBeLessThanOrEqual(CAM_MAX_X)
+            expect(s.fov).toBeGreaterThan(10)
+            expect(s.fov).toBeLessThan(80)
+          }
+        }
+      }
+    }
+  })
+
+  it('완전 결정론(Math.random·Date 미사용)', () => {
+    for (const mode of MODES) {
+      const f = { x: 17, z: -9 }
+      expect(cameraFor(mode, f, 2.5, 42)).toEqual(cameraFor(mode, f, 2.5, 42))
+    }
+  })
+
+  it('시드가 다르면 미세 변주가 달라진다', () => {
+    for (const mode of MODES) {
+      const f = { x: 5, z: 5 }
+      expect(cameraFor(mode, f, 0.9, 1)).not.toEqual(cameraFor(mode, f, 0.9, 2))
+    }
+  })
+})
+
+describe('shake', () => {
+  it('amp 0 이하이면 정확히 0(reduced-motion)', () => {
+    expect(shake(1.23, 0, 5)).toEqual({ x: 0, y: 0, z: 0 })
+    expect(shake(9.9, -3, 5)).toEqual({ x: 0, y: 0, z: 0 })
+  })
+
+  it('진폭을 절대 넘지 않는다', () => {
+    const amp = 0.35
+    for (let i = 0; i < 400; i++) {
+      const s = shake(i * 0.017, amp, 3)
+      expect(Math.abs(s.x)).toBeLessThanOrEqual(amp)
+      expect(Math.abs(s.y)).toBeLessThanOrEqual(amp)
+      expect(Math.abs(s.z)).toBeLessThanOrEqual(amp)
+    }
+  })
+
+  it('amp에 선형 비례한다(상수 흔들림이 아니다)', () => {
+    for (const t of [0.13, 1.7, 5.5]) {
+      const a = shake(t, 0.2, 8)
+      const b = shake(t, 0.4, 8)
+      expect(b.x).toBeCloseTo(a.x * 2, 10)
+      expect(b.y).toBeCloseTo(a.y * 2, 10)
+      expect(b.z).toBeCloseTo(a.z * 2, 10)
+      expect(Math.abs(a.x) + Math.abs(a.y) + Math.abs(a.z)).toBeGreaterThan(0)
+    }
+  })
+
+  it('실제로 진동한다(부호가 바뀌고 진폭 근처까지 도달)', () => {
+    const amp = 0.4
+    let maxAbs = 0
+    let pos = 0
+    let neg = 0
+    for (let i = 0; i < 500; i++) {
+      const s = shake(i * 0.013, amp, 21)
+      maxAbs = Math.max(maxAbs, Math.abs(s.x), Math.abs(s.y))
+      if (s.x > 0) pos++
+      if (s.x < 0) neg++
+    }
+    expect(maxAbs).toBeGreaterThan(amp * 0.5)
+    expect(pos).toBeGreaterThan(50)
+    expect(neg).toBeGreaterThan(50)
+  })
+
+  it('과도한 amp는 상한에서 포화하고, 결정론적이며 시드에 반응한다', () => {
+    const big = shake(0.4, 1000, 2)
+    expect(Math.abs(big.x)).toBeLessThanOrEqual(SHAKE_MAX)
+    expect(Math.abs(big.y)).toBeLessThanOrEqual(SHAKE_MAX)
+    expect(shake(0.4, 0.3, 2)).toEqual(shake(0.4, 0.3, 2))
+    expect(shake(0.4, 0.3, 2)).not.toEqual(shake(0.4, 0.3, 3))
+  })
+})
+
+describe('clampShot', () => {
+  it('피치 아래·관중석 뒤·비정상 FOV를 안전값으로 끌어온다', () => {
+    const s = clampShot({
+      pos: { x: 900, y: -12, z: -400 },
+      lookAt: { x: 1, y: 2, z: 3 },
+      fov: 200,
+    })
+    expect(s.pos.y).toBe(CAM_MIN_Y)
+    expect(s.pos.y).toBeGreaterThan(3)
+    expect(s.pos.z).toBe(-CAM_MAX_Z)
+    expect(Math.abs(s.pos.z)).toBeLessThan(80)
+    expect(s.pos.x).toBe(CAM_MAX_X)
+    expect(s.fov).toBeLessThan(80)
+    expect(s.lookAt).toEqual({ x: 1, y: 2, z: 3 })
+  })
+
+  it('정상 범위 샷은 건드리지 않는다', () => {
+    const ok: CameraShot = { pos: { x: 10, y: 20, z: -55 }, lookAt: { x: 0, y: 1, z: 0 }, fov: 34 }
+    expect(clampShot(ok)).toEqual(ok)
+  })
+})
+
+describe('easeInOutCubic · lerpShot', () => {
+  it('0·0.5·1 고정점과 단조 증가', () => {
+    expect(easeInOutCubic(0)).toBe(0)
+    expect(easeInOutCubic(1)).toBe(1)
+    expect(easeInOutCubic(0.5)).toBeCloseTo(0.5, 10)
+    expect(easeInOutCubic(-1)).toBe(0)
+    expect(easeInOutCubic(2)).toBe(1)
+    // 선형이 아니라 실제로 가감속한다
+    expect(easeInOutCubic(0.25)).toBeLessThan(0.25)
+    expect(easeInOutCubic(0.75)).toBeGreaterThan(0.75)
+    let prev = -1
+    for (let i = 0; i <= 20; i++) {
+      const v = easeInOutCubic(i / 20)
+      expect(v).toBeGreaterThan(prev)
+      prev = v
+    }
+  })
+
+  it('lerpShot은 양 끝과 중간을 정확히 보간한다', () => {
+    const a: CameraShot = { pos: { x: 0, y: 10, z: -50 }, lookAt: { x: 0, y: 0, z: 0 }, fov: 30 }
+    const b: CameraShot = { pos: { x: 10, y: 20, z: -30 }, lookAt: { x: 4, y: 2, z: 6 }, fov: 40 }
+    expect(lerpShot(a, b, 0)).toEqual(a)
+    expect(lerpShot(a, b, 1)).toEqual(b)
+    const m = lerpShot(a, b, 0.5)
+    expect(m.pos).toEqual({ x: 5, y: 15, z: -40 })
+    expect(m.lookAt).toEqual({ x: 2, y: 1, z: 3 })
+    expect(m.fov).toBe(35)
+  })
+})
+
+describe('applyCamera', () => {
+  it('위치→lookAt 순서로 갱신하고 FOV 변경 시에만 투영행렬을 다시 만든다', () => {
+    const cam = stubCamera(40)
+    const shot: CameraShot = { pos: { x: 1, y: 2, z: 3 }, lookAt: { x: 4, y: 5, z: 6 }, fov: 34 }
+    applyCamera(cam, shot)
+    expect(cam.pos).toEqual({ x: 1, y: 2, z: 3 })
+    expect(cam.target).toEqual({ x: 4, y: 5, z: 6 })
+    expect(cam.fov).toBe(34)
+    expect(cam.projUpdates).toBe(1)
+    // lookAt은 position 이후여야 방향이 맞는다
+    expect(cam.log.indexOf('position')).toBeLessThan(cam.log.indexOf('lookAt'))
+
+    // 같은 FOV면 투영행렬 재계산 없음(매 프레임 낭비 금지)
+    applyCamera(cam, { ...shot, pos: { x: 9, y: 9, z: 9 } })
+    expect(cam.projUpdates).toBe(1)
+    expect(cam.pos.x).toBe(9)
+    applyCamera(cam, { ...shot, fov: 30 })
+    expect(cam.projUpdates).toBe(2)
+  })
+})
+
+describe('createCameraRig', () => {
+  const focus = { x: 20, z: -6 }
+
+  it('초기 샷은 기본 모드의 cameraFor와 같다', () => {
+    const rig = createCameraRig({ seed: 4 })
+    expect(rig.mode).toBe('broadcast')
+    const s = rig.update({ focus, t: 0, dt: 0 })
+    expect(s).toEqual(cameraFor('broadcast', focus, 0, 4))
+    expect(rig.shot).toEqual(s)
+  })
+
+  it('모드 전환을 easeInOutCubic으로 0.6초 보간한다', () => {
+    expect(TRANSITION_S).toBe(0.6)
+    const rig = createCameraRig({ seed: 4 })
+    const from = rig.update({ focus, t: 0, dt: 0 })
+    rig.setMode('highlight')
+    expect(rig.mode).toBe('highlight')
+
+    const to = cameraFor('highlight', focus, 0, 4)
+    // dt는 0.1로 클램프되므로 0.6초 전환은 6프레임이 필요하다.
+    let mid: CameraShot = from
+    for (let i = 0; i < 3; i++) mid = rig.update({ focus, t: 0, dt: 0.1 })
+    expect(rig.transitionU).toBeCloseTo(0.5, 10)
+    expectShotClose(mid, lerpShot(from, to, easeInOutCubic(0.5)))
+    expect(mid.fov).toBeGreaterThan(Math.min(from.fov, to.fov))
+    expect(mid.fov).toBeLessThan(Math.max(from.fov, to.fov))
+
+    let end: CameraShot = mid
+    for (let i = 0; i < 3; i++) end = rig.update({ focus, t: 0, dt: 0.1 })
+    expect(end).toEqual(to)
+    expect(rig.transitionU).toBe(1)
+  })
+
+  it('같은 모드로의 setMode는 무시되고, instant는 즉시 전환한다', () => {
+    const rig = createCameraRig({ seed: 4 })
+    rig.update({ focus, t: 0, dt: 0 })
+    rig.setMode('broadcast')
+    expect(rig.transitionU).toBe(1)
+    expect(rig.update({ focus, t: 0, dt: 0.05 })).toEqual(cameraFor('broadcast', focus, 0, 4))
+
+    rig.setMode('goal-cam', { instant: true })
+    expect(rig.update({ focus, t: 0, dt: 0.05 })).toEqual(cameraFor('goal-cam', focus, 0, 4))
+  })
+
+  it('impulse가 셰이크를 넣고 시간이 지나면 감쇠한다', () => {
+    const rig = createCameraRig({ seed: 4 })
+    rig.update({ focus, t: 0, dt: 0 })
+    const clean = cameraFor('broadcast', focus, 0.05, 4)
+    rig.impulse(0.5)
+    const shaken = rig.update({ focus, t: 0.05, dt: 0.05 })
+    const off = Math.hypot(
+      shaken.pos.x - clean.pos.x,
+      shaken.pos.y - clean.pos.y,
+      shaken.pos.z - clean.pos.z,
+    )
+    expect(off).toBeGreaterThan(1e-4)
+    expect(Math.abs(shaken.pos.x - clean.pos.x)).toBeLessThanOrEqual(0.5)
+    const first = rig.shakeAmp
+    for (let i = 0; i < 40; i++) rig.update({ focus, t: 1 + i * 0.05, dt: 0.05 })
+    expect(rig.shakeAmp).toBeLessThan(first * 0.2)
+    // 충분히 지나면 완전히 멎는다
+    for (let i = 0; i < 200; i++) rig.update({ focus, t: 5 + i * 0.05, dt: 0.05 })
+    expect(rig.shakeAmp).toBe(0)
+  })
+
+  it('reduced-motion이면 impulse가 화면을 흔들지 않는다', () => {
+    const rig = createCameraRig({ seed: 4, reducedMotion: true })
+    rig.update({ focus, t: 0, dt: 0 })
+    rig.impulse(1.2)
+    expect(rig.update({ focus, t: 0.05, dt: 0.05 })).toEqual(cameraFor('broadcast', focus, 0.05, 4))
+    expect(rig.shakeAmp).toBe(0)
+
+    // 런타임 토글도 즉시 반영된다
+    const live = createCameraRig({ seed: 4 })
+    live.update({ focus, t: 0, dt: 0 })
+    live.impulse(0.6)
+    live.setReducedMotion(true)
+    expect(live.update({ focus, t: 0.05, dt: 0.05 })).toEqual(cameraFor('broadcast', focus, 0.05, 4))
+  })
+
+  it('카메라를 넘기면 그 자리에서 적용하고, 셰이크 후에도 불변식을 지킨다', () => {
+    const cam = stubCamera(40)
+    const rig = createCameraRig({ seed: 4, mode: 'goal-cam' })
+    rig.impulse(3)
+    const s = rig.update({ focus: { x: 50, z: 30 }, t: 0.2, dt: 0.2, camera: cam })
+    expect(cam.pos).toEqual({ x: s.pos.x, y: s.pos.y, z: s.pos.z })
+    expect(cam.fov).toBe(s.fov)
+    expect(s.pos.y).toBeGreaterThan(3)
+    expect(Math.abs(s.pos.z)).toBeLessThan(80)
+  })
+
+  it('거대한 dt에도 전환이 끝나고 값이 유한하다(탭 복귀)', () => {
+    const rig = createCameraRig({ seed: 4 })
+    rig.update({ focus, t: 0, dt: 0 })
+    rig.setMode('celebrate')
+    // dt는 내부에서 클램프되므로 한 프레임에 전환이 끝나지는 않지만 폭주하지 않는다
+    for (let i = 0; i < 20; i++) rig.update({ focus, t: 10, dt: 999 })
+    const s = rig.update({ focus, t: 10, dt: 999 })
+    expect(s).toEqual(cameraFor('celebrate', focus, 10, 4))
+  })
+})
