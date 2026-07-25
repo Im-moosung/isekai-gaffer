@@ -103,26 +103,37 @@ describe('TacticsCenter — 킥오프 전 워룸', () => {
 
   it('[추천 적용]이 4축 슬라이더 위치까지 실제로 옮긴다', () => {
     // 실팀(스페인 점유 78·라인 62·압박 68)이라야 지시 축 권고가 실제로 움직인다.
-    // 라인 25 = 스페인의 후방 전개 지표 78(GK 빌드업 78·점유 78)에서 파생된 값이다
-    // — 기준 72를 넘으면 압박이 벗겨지므로 추천이 라인·압박을 함께 내린다.
+    // 라인 20 = 스페인의 후방 전개 지표 78(GK 빌드업 78·점유 78)에서 파생된 값이다
+    // — 기준 72를 넘으면 압박이 벗겨지므로 추천이 라인·압박을 함께 하한(20)까지 내린다.
     store().reset()
     store().startMatch(loadTeam('kor'), loadTeam('esp'), 20260724)
     const { getByRole } = render(<TacticsCenter onKickoff={() => {}} />)
     fireEvent.click(getByRole('button', { name: /추천 적용/ }))
     fireEvent.click(getByRole('tab', { name: '② 팀 전술' }))
-    expect((getByRole('slider', { name: '라인' }) as HTMLInputElement).value).toBe('25')
-    expect(store().engine!.home.tactics.instructions.lineHeight).toBe(25)
+    expect((getByRole('slider', { name: '라인' }) as HTMLInputElement).value).toBe('20')
+    expect(store().engine!.home.tactics.instructions.lineHeight).toBe(20)
     // 압박도 함께 내려간다 — 기존엔 우리 프로필(62) 그대로라 상대 무관이었다.
-    expect(store().engine!.home.tactics.instructions.pressing).toBe(25)
+    expect(store().engine!.home.tactics.instructions.pressing).toBe(20)
   })
 
-  it('랭킹 격차가 큰 강팀 상대에는 수비적 멘탈리티를 추천한다', () => {
+  // 태세는 FIFA 랭킹이 아니라 상대의 후방 전개 지표(trapFactor)가 정한다 — 랭킹으로 정하면
+  // 축(라인·압박)과 어긋나 "수비적으로 가되 라인은 74까지"라는 모순이 나고, 실측에서도
+  // 승률이 떨어졌다(scouting.ts 주석의 기각된 가설 참고).
+  it('후방 전개가 강한 상대(스페인)에는 수비적 멘탈리티를 추천한다', () => {
     store().reset()
-    store().startMatch(home, makeTestTeam('fra', 95), 20260724)
+    store().startMatch(loadTeam('kor'), loadTeam('esp'), 20260724)
     const { getByRole, container } = render(<TacticsCenter onKickoff={() => {}} />)
     fireEvent.click(getByRole('button', { name: /추천 적용/ }))
     expect(store().engine!.home.tactics.mentality).toBe('defensive')
     expect(container.querySelector('.tc-summary')!.textContent).toContain('수비')
+  })
+
+  it('후방 전개가 약한 상대(남아공)에는 공격적 멘탈리티를 추천한다', () => {
+    store().reset()
+    store().startMatch(loadTeam('kor'), loadTeam('rsa'), 20260724)
+    const { getByRole } = render(<TacticsCenter onKickoff={() => {}} />)
+    fireEvent.click(getByRole('button', { name: /추천 적용/ }))
+    expect(store().engine!.home.tactics.mentality).toBe('very-attacking')
   })
 
   it('리스크 카드가 하이라인+하이프레스를 경고한다', () => {

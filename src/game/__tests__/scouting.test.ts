@@ -3,11 +3,13 @@
 // (1) 상대 성향에 대한 방향성 (2) 결정론 (3) 근거 문구 존재를 고정한다.
 import { describe, it, expect } from 'vitest'
 import { recommendPlan, planRisks } from '../scouting'
-import { loadTeam, type TeamId } from '../../data/loader'
+import { loadTeam, TEAM_IDS, type TeamId } from '../../data/loader'
 import { pickBestXI } from '../../engine/lineup'
 // balance는 계측 전용 모듈이다(UI·게임 로직에서 import 금지). 추천이 엔진 밸런스와
 // 실제로 일치하는지는 시뮬레이션으로만 증명할 수 있으므로 테스트에서만 쓴다.
 import { runAbBatch } from '../../engine/balance'
+import { flankStrength, weakestFlank } from '../../engine/simulate'
+import { attackFocusEffects } from '../../engine/tactics'
 
 describe('recommendPlan', () => {
   it('점유 강팀(스페인) 상대로는 라인을 내리고 수비적 멘탈리티를 권한다', () => {
@@ -66,13 +68,72 @@ describe('recommendPlan', () => {
       .map(o => recommendPlan(kor, loadTeam(o)).patch.instructions!.lineHeight)
     expect(new Set(lines).size).toBe(4)
   })
+
+  // ── 문면 일관성 ────────────────────────────────────────────────
+  // 태세(멘탈리티)와 축(라인)이 서로 다른 규칙에서 나오면 "수비적으로 가되 라인은 74까지
+  // 올리십시오" 같은 모순이 나온다. 지금은 둘 다 trapFactor 하나에서 파생되므로 모순이
+  // 구조적으로 불가능하지만, 나중에 누가 규칙을 하나 더 얹어도 여기서 걸리도록 고정한다.
+  it('멘탈리티와 라인이 모순되지 않는다 — 수비적이면 라인 ≤60, 공격적이면 라인 ≥40', () => {
+    const kor = loadTeam('kor')
+    for (const opp of TEAM_IDS) {
+      if (opp === 'kor') continue
+      const r = recommendPlan(kor, loadTeam(opp))
+      const line = r.patch.instructions!.lineHeight
+      const m = r.patch.mentality
+      if (m === 'defensive' || m === 'very-defensive') {
+        expect(line, `${opp}: ${m}인데 라인 ${line}`).toBeLessThanOrEqual(60)
+      }
+      if (m === 'attacking' || m === 'very-attacking') {
+        expect(line, `${opp}: ${m}인데 라인 ${line}`).toBeGreaterThanOrEqual(40)
+      }
+    }
+  })
+
+  it('근거 문구가 추천값과 일치한다 — 라인·압박 숫자와 태세 이름이 문구에 그대로 있다', () => {
+    const kor = loadTeam('kor')
+    const MENTALITY_KO: Record<string, string> = {
+      'very-defensive': '매우 수비적', 'defensive': '수비적', 'balanced': '균형',
+      'attacking': '공격적', 'very-attacking': '매우 공격적',
+    }
+    for (const opp of TEAM_IDS) {
+      if (opp === 'kor') continue
+      const r = recommendPlan(kor, loadTeam(opp))
+      const ins = r.patch.instructions!
+      const posture = r.reasons.find(x => x.field === 'lineHeight')!
+      expect(posture.text).toContain(`라인 ${ins.lineHeight}`)
+      expect(posture.text).toContain(`압박 ${ins.pressing}`)
+      expect(posture.text).toContain(MENTALITY_KO[r.patch.mentality!])
+    }
+  })
+
+  it('공격 방향은 상대의 가장 약한 지역을 고른다 (엔진 flankStrength argmin)', () => {
+    const kor = loadTeam('kor')
+    for (const opp of TEAM_IDS) {
+      if (opp === 'kor') continue
+      const r = recommendPlan(kor, loadTeam(opp))
+      const focus = r.patch.instructions!.attackFocus
+      const t = loadTeam(opp)
+      const f = flankStrength(pickBestXI(t).lineup, t.squad,
+        Object.fromEntries(t.squad.map(p => [p.id, 100])))
+      expect(focus).toBe(weakestFlank(f))
+      // argmin이므로 attackFocusEffects의 보상이 음수가 될 수 없다.
+      expect(attackFocusEffects(focus, f).chanceQuality).toBeGreaterThanOrEqual(1)
+    }
+  })
 })
 
 // 추천이 "그럴듯한 조언"에 그치지 않고 실제로 승률을 올리는지 시뮬레이션으로 고정한다.
 // 코치가 손해 보는 조언을 하면(Δ<0) 전술 센터의 존재 이유가 사라지므로 회귀로 막는다.
 // n=400은 결정론(고정 시드)이라 값이 흔들리지 않는다. 이 값이 바뀌면 엔진 밸런스가 바뀐 것이다.
+//
+// **11개 상대 전부**를 건다. 이전엔 조별 3팀 + 스페인만 걸려 있어서, 정작 캠페인의 본 게임인
+// 토너먼트 구간(잉글랜드·아르헨티나·모로코·프랑스)이 사실상 무효(+1.0~+3.3pp)인 채로
+// 회귀를 통과했다. 그 구멍을 막는 게 이 블록의 존재 이유다.
 describe('recommendPlan — 기본 지시(50/50/50) 대비 승률 개선 실측', () => {
   const N = 400
+  const OPPS = TEAM_IDS.filter(t => t !== 'kor')
+  // 캠페인 32강~결승에서 만나는 상대. 여기가 본 게임이라 더 높은 기준을 요구한다.
+  const KNOCKOUT: TeamId[] = ['eng', 'arg', 'mar', 'fra', 'esp']
   const measured: Record<string, number> = {}
   const delta = (opp: TeamId) => {
     if (measured[opp] === undefined) {
@@ -81,14 +142,18 @@ describe('recommendPlan — 기본 지시(50/50/50) 대비 승률 개선 실측'
     return measured[opp]
   }
 
-  it.each(['esp', 'mex', 'rsa', 'cze'] as TeamId[])('vs %s — Δ ≥ +3pp', opp => {
+  it.each(OPPS)('vs %s — Δ ≥ +3pp', opp => {
     expect(delta(opp)).toBeGreaterThanOrEqual(3)
-  })
+  }, 120_000)
+
+  it('토너먼트 상대 5팀 평균 Δ ≥ +6pp — 캠페인 본 구간에서 레버가 실제로 크다', () => {
+    const avg = KNOCKOUT.reduce((s, o) => s + delta(o), 0) / KNOCKOUT.length
+    expect(avg).toBeGreaterThanOrEqual(6)
+  }, 120_000)
 
   it('최소 한 상대에선 Δ ≥ +8pp — 레버가 실제로 크다', () => {
-    const best = Math.max(...(['esp', 'mex', 'rsa', 'cze'] as TeamId[]).map(delta))
-    expect(best).toBeGreaterThanOrEqual(8)
-  })
+    expect(Math.max(...OPPS.map(delta))).toBeGreaterThanOrEqual(8)
+  }, 120_000)
 })
 
 describe('planRisks', () => {

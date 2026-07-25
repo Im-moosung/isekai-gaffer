@@ -4,7 +4,7 @@ import { zoneStrength } from './strength'
 import { instructionEffects, formationEdge, mentalityEffects, attackPatternEffects, groupIntensityStaminaFactor, attackFocusEffects, type MatchupContext } from './tactics'
 import { effectiveStats } from './fitness'
 import { pickBestXI } from './lineup'
-import type { Instructions, MatchEvent, MatchState, SideState, SideStats, TacticState, Team } from './types'
+import type { Instructions, MatchEvent, MatchState, Player, Position, SideState, SideStats, TacticState, Team } from './types'
 
 export type MatchCommand =
   | { type: 'sub'; out: string; in: string }
@@ -132,19 +132,34 @@ function matchupContext(opp: SideState): MatchupContext {
 }
 
 /** 측면별 상대 수비 강도 — attackFocus 판정 입력.
- *  left: 우리가 왼쪽을 공략 → 상대의 오른쪽 수비(RB/RW)를 만난다. 좌우가 뒤집히는 점에 주의. */
-function flankStrength(def: SideState): { left: number; right: number; center: number } {
+ *  left: 우리가 왼쪽을 공략 → 상대의 오른쪽 수비(RB/RW)를 만난다. 좌우가 뒤집히는 점에 주의.
+ *
+ *  SideState가 아니라 조각으로 받는 이유: 추천 계층(game/scouting)이 킥오프 **전에**
+ *  같은 판별자로 attackFocus를 고를 수 있어야 하는데, 그 시점엔 SideState가 없다.
+ *  수식을 복제하는 대신 여기서 내보내 한 벌만 유지한다. */
+export function flankStrength(
+  lineup: readonly { slot: Position; playerId: string }[],
+  squad: readonly Player[],
+  staminaByPlayer: Readonly<Record<string, number>>,
+  sentOff: readonly string[] = [],
+): { left: number; right: number; center: number } {
   const pick = (slots: string[]) => {
-    const vals = def.tactics.lineup
-      .filter(l => !def.sentOff.includes(l.playerId) && slots.includes(l.slot))
+    const vals = lineup
+      .filter(l => !sentOff.includes(l.playerId) && slots.includes(l.slot))
       .map(l => {
-        const p = def.team.squad.find(q => q.id === l.playerId)!
-        const es = effectiveStats(p, l.slot, def.staminaByPlayer[l.playerId])
+        const p = squad.find(q => q.id === l.playerId)!
+        const es = effectiveStats(p, l.slot, staminaByPlayer[l.playerId])
         return (es.defending + es.physical + es.pace) / 3
       })
     return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 55
   }
   return { left: pick(['RB', 'RW']), right: pick(['LB', 'LW']), center: pick(['CB', 'DM']) }
+}
+
+/** 가장 약한 측면(=공략 대상). attackFocusEffects의 edge는 (평균 − 대상)에 비례하므로
+ *  argmin을 고르면 보상이 음수가 될 수 없다. 동점이면 left → right → center 순(결정론). */
+export function weakestFlank(f: { left: number; right: number; center: number }): 'left' | 'right' | 'center' {
+  return (['left', 'right', 'center'] as const).reduce((a, b) => (f[a] <= f[b] ? a : b))
 }
 
 function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
@@ -316,7 +331,10 @@ function resolveChance(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: ReturnT
   // xG: 슈팅 능력·찬스 퀄리티 기반. 공격 패턴(through↑/longshot↓)·GK 파워플레이(공격 측 +40%) 반영.
   // 기본값(balanced·비활성)이면 ap.chanceQuality=1, qualityBoost=1 → 회귀 불변.
   // B5 attackFocus: 상대의 약한 측면으로 공략을 몰면 찬스 퀄이 오른다(balanced는 1.0).
-  const af = attackFocusEffects(atk.tactics.instructions.attackFocus, flankStrength(def))
+  const af = attackFocusEffects(
+    atk.tactics.instructions.attackFocus,
+    flankStrength(def.tactics.lineup, def.team.squad, def.staminaByPlayer, def.sentOff),
+  )
   const xg = clamp((es.shooting / 100) * 0.35 * fx[atkIdx].chanceQuality * ap.chanceQuality * qualityBoost * af.chanceQuality * Math.pow(strengthRatio, XG_STRENGTH), 0.02, 0.65)
   st.stats[atkIdx].xg = round2(st.stats[atkIdx].xg + xg)
 
