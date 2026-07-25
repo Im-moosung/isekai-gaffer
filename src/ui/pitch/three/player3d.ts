@@ -787,6 +787,7 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
   let diveDir = 1
 
   let prevAction: PlayerPose['action'] | null = null
+  let prevAt = 0
   let blendLeft = 0
 
   /** 이번 프레임의 목표 포즈(액션이 계산해 채운다). */
@@ -1006,9 +1007,12 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
       }
     }
 
-    // 액션이 바뀌면 이전 포즈에서 새 포즈로 크로스페이드(첫 프레임은 스냅).
-    if (prevAction !== null && p.action !== prevAction) blendLeft = BLEND_TIME
+    // 액션이 바뀌거나 **같은 액션이 재발동**(actionT가 되감김)하면 크로스페이드.
+    // 재발동 가드가 없으면 종료 자세(누운 다이브 등)에서 시작 자세로 2.2rad 튄다.
+    // 첫 프레임은 스냅(prevAction === null).
+    if (prevAction !== null && (p.action !== prevAction || at < prevAt - 0.2)) blendLeft = BLEND_TIME
     prevAction = p.action
+    prevAt = at
     if (blendLeft > 0) {
       blendLeft = Math.max(0, blendLeft - dt)
       // 시상수를 남은 시간에 비례해 줄이면 페이드 끝에서 통과(k→1)로 매끄럽게 수렴한다

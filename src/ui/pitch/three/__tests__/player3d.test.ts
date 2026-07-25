@@ -655,31 +655,76 @@ describe('createPlayer — 액션 전환 블렌딩', () => {
   it('액션 전환 직후 관절 변화가 러닝 연속 기준선의 2배를 넘지 않는다(팝 없음)', () => {
     const base = jointSteps([{ action: 'run', speed: 8, frames: 180 }], 0).all
     expect(base).toBeGreaterThan(0.05) // 러닝이 실제로 움직여야 의미 있는 기준선
-    const seq = jointSteps(SEQ, 100)
+    // 전환 순간의 보행 위상에 따라 팝 크기가 달라진다 → 한 주기를 스윕해 최악값을 본다
+    let worstTransition = 0
+    let worstAll = 0
+    for (let k = 0; k < 12; k++) {
+      const r = jointSteps(SEQ, 100 + (k / 12) * 0.5)
+      worstTransition = Math.max(worstTransition, r.transition)
+      worstAll = Math.max(worstAll, r.all)
+    }
     // 블렌딩이 없으면 run→celebrate 2.1, dive→idle 2.2 rad까지 튄다
-    expect(seq.transition).toBeLessThanOrEqual(2 * base)
-    expect(seq.transition).toBeLessThan(0.3)
+    expect(worstTransition).toBeLessThanOrEqual(2 * base)
+    expect(worstTransition).toBeLessThan(0.4)
+    // all에는 킥 임팩트 스윙(의도된 폭발적 동작)이 포함된다
+    expect(worstAll).toBeLessThan(0.55)
   })
 
-  it('시퀀스 전 구간에서 프레임 간 변화가 0.5rad 이하다(킥 스윙 포함)', () => {
-    expect(jointSteps(SEQ, 100).all).toBeLessThan(0.5)
+  it('킥 중에도 위상이 계속 적분된다(러닝만 하던 리그와 위상이 일치)', () => {
+    // 같은 id·같은 속도열이면 위상은 시드부터 프레임까지 완전히 같아야 한다.
+    // 위상 적분이 case 'run' 안으로 들어가면 킥 프레임만큼 위상이 뒤처진다.
+    const KICK_FRAMES = 14 // v=6 보행주기(≈28프레임)의 절반 — 뒤처지면 위상이 반대가 된다
+    const V = 6
+    const hips = (steps: Step[]): number[] => {
+      const rig = createPlayer(THREE, KIT)
+      let t = 0
+      for (const s of steps) {
+        for (let i = 0; i < s.frames; i++) {
+          t += DT
+          rig.apply(
+            poseOf({ action: s.action, speed: s.speed, actionT: i / Math.max(1, s.frames - 1) }),
+            t,
+          )
+        }
+      }
+      const body = rig.root.children.find((c) => c.type === 'Group')!
+      return body.children
+        .filter((c) => c.type === 'Group' && Math.abs(c.position.z) > 1e-9)
+        .map((c) => c.rotation.z)
+    }
+    const plain = hips([{ action: 'run', speed: V, frames: 40 + KICK_FRAMES + 40 }])
+    const kicked = hips([
+      { action: 'run', speed: V, frames: 40 },
+      { action: 'kick', speed: V, frames: KICK_FRAMES },
+      { action: 'run', speed: V, frames: 40 },
+    ])
+    expect(kicked).toHaveLength(2)
+    for (let i = 0; i < plain.length; i++) expect(kicked[i]).toBeCloseTo(plain[i], 9)
+    // 그 구간에서 위상이 실제로 크게 움직였음을 보인다(적분이 멈추면 값이 달라진다)
+    const half = hips([{ action: 'run', speed: V, frames: 40 + 40 }])
+    expect(Math.abs(half[0] - plain[0])).toBeGreaterThan(0.5)
   })
 
-  it('킥·세리머니 중에도 위상이 계속 적분돼 러닝 복귀가 매끄럽다', () => {
+  it('재발동(actionT 되감김)에도 팝이 없다 — 다이브 연속 2회', () => {
     const rig = createPlayer(THREE, KIT)
-    let t = 0
-    for (let i = 0; i < 60; i++) rig.apply(poseOf({ speed: 7 }), (t += DT))
-    // 킥 1초 동안 위상이 멈춰 있으면 복귀 프레임에서 다리가 튄다
-    for (let i = 0; i < 60; i++) rig.apply(poseOf({ action: 'kick', speed: 1, actionT: i / 59 }), (t += DT))
-    for (let i = 0; i < 40; i++) rig.apply(poseOf({ speed: 7 }), (t += DT))
-    // 블렌딩이 끝난 뒤에도 러닝 사이클이 살아 있어야 한다
-    const before: number[] = []
-    rig.root.children[1].traverse((o) => before.push(o.rotation.z))
-    rig.apply(poseOf({ speed: 7 }), (t += DT))
-    const after: number[] = []
-    rig.root.children[1].traverse((o) => after.push(o.rotation.z))
-    const moved = before.some((v, i) => Math.abs(v - after[i]) > 1e-4)
-    expect(moved).toBe(true)
+    let prev: number[] | null = null
+    let worst = 0
+    let t = 50
+    for (let rep = 0; rep < 2; rep++) {
+      for (let i = 0; i < 20; i++) {
+        t += DT
+        rig.apply(poseOf({ action: 'dive', speed: 2, actionT: i / 19 }), t)
+        const cur: number[] = []
+        for (const child of rig.root.children) {
+          child.traverse((o) => cur.push(o.rotation.x, o.rotation.y, o.rotation.z))
+        }
+        if (prev) {
+          for (let k = 0; k < cur.length; k++) worst = Math.max(worst, Math.abs(cur[k] - prev[k]))
+        }
+        prev = cur
+      }
+    }
+    expect(worst).toBeLessThan(0.5) // 가드가 없으면 2회차 첫 프레임에서 2.2rad
   })
 
   it('등장 첫 프레임부터 실제 속도의 자세를 취한다(smoothSpeed 시딩)', () => {
