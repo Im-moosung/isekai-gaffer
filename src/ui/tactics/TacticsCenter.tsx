@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import type { AttackPattern, Mentality, TacticState } from '../../engine/types'
 import { useMatchStore } from '../../game/matchStore'
+import { planRisks, recommendPlan } from '../../game/scouting'
 import { LineupEditor } from '../lineup/LineupScreen'
+import { autoFill } from '../lineup/swap'
 import { ConsolePanel } from '../console/ConsolePanel'
 import { TacticsExtras } from './TacticsExtras'
 import { OppPanel } from './OppPanel'
@@ -31,6 +33,9 @@ export function TacticsCenter({ onKickoff, referenceScore }: {
   const engine = useMatchStore(s => s.engine)
   const submitCommand = useMatchStore(s => s.submitCommand)
   const [tab, setTab] = useState<CenterTab>('lineup')
+  // 코치진 권고는 적용 후에도 닫기 전까지 남긴다 — 근거를 읽으며 수치를 다듬는 것이
+  // 이 화면의 본래 용도이므로, 자동 사라짐(타이머)은 오히려 방해다.
+  const [reasons, setReasons] = useState<{ field: string; text: string }[]>([])
 
   if (!engine) return null
   const home = engine[SIDE]
@@ -39,6 +44,24 @@ export function TacticsCenter({ onKickoff, referenceScore }: {
   // 선발 편집 결과는 곧바로 엔진 tactics로 커밋한다(store가 진실의 원천).
   const setTactics = (next: TacticState) => {
     submitCommand(SIDE, { type: 'formation', tactics: next })
+  }
+
+  // 추천은 현재 전술 위에 덮어쓰는 patch다. 감독이 고른 11인은 유지하고, 포메이션이
+  // 바뀌면 그 11인을 새 슬롯에 적합도순으로 재배치한다(①선발 탭의 포메이션 버튼과 동일 규칙) —
+  // 추천이 XI 자체를 갈아엎으면 되돌릴 수 없는 버튼이 된다.
+  const applyRecommendation = () => {
+    const rec = recommendPlan(home.team, away.team)
+    const formation = rec.patch.formation ?? home.tactics.formation
+    const merged: TacticState = {
+      ...home.tactics,
+      ...rec.patch,
+      instructions: { ...home.tactics.instructions, ...(rec.patch.instructions ?? {}) },
+      lineup: formation === home.tactics.formation
+        ? home.tactics.lineup
+        : autoFill(home.team, formation, home.tactics.lineup.map(l => l.playerId)),
+    }
+    submitCommand(SIDE, { type: 'formation', tactics: merged })
+    setReasons(rec.reasons)
   }
 
   return (
@@ -50,11 +73,29 @@ export function TacticsCenter({ onKickoff, referenceScore }: {
             <span className="tc-head__ref">참고 · 실제 역사 {referenceScore[0]}-{referenceScore[1]}</span>
           )}
         </div>
-        {/* 화살표는 장식이므로 접근성 이름은 "킥오프"로 고정한다. */}
-        <button type="button" className="tc-kickoff" aria-label="킥오프" onClick={onKickoff}>
-          킥오프 <span aria-hidden="true">▶</span>
-        </button>
+        <div className="tc-head__actions">
+          <button type="button" className="tc-recbtn" onClick={applyRecommendation}>
+            <span aria-hidden="true">🧠</span> 추천 적용
+          </button>
+          {/* 화살표는 장식이므로 접근성 이름은 "킥오프"로 고정한다. */}
+          <button type="button" className="tc-kickoff" aria-label="킥오프" onClick={onKickoff}>
+            킥오프 <span aria-hidden="true">▶</span>
+          </button>
+        </div>
       </header>
+
+      {reasons.length > 0 && (
+        <div className="tc-reasons" role="status">
+          <div className="tc-reasons__head">
+            <strong>코치진 권고</strong>
+            <span className="tc-reasons__note">감독 판단으로 수정하십시오</span>
+            <button type="button" className="tc-reasons__x" onClick={() => setReasons([])} aria-label="권고 닫기">✕</button>
+          </div>
+          <ul className="tc-reasons__list">
+            {reasons.map((r, i) => <li key={`${r.field}-${i}`}>{r.text}</li>)}
+          </ul>
+        </div>
+      )}
 
       <div className="tc-body">
         <aside className="tc-war" aria-label="상대 리포트">
@@ -101,12 +142,14 @@ export function TacticsCenter({ onKickoff, referenceScore }: {
   )
 }
 
-/** 하단 검토 요약 — 형태·태도·공격 루트를 한 줄로 확인시킨다. 리스크 카드는 Task 5에서 채운다. */
+/** 하단 검토 요약 — 형태·태도·공격 루트·리스크를 한 줄로 확인시킨다.
+ *  리스크는 킥오프 직전에 "이대로 나가면 무엇이 위험한가"를 알려주는 마지막 관문이다. */
 function PlanSummary() {
   const engine = useMatchStore(s => s.engine)
   if (!engine) return null
   const t = engine.home.tactics
   const ins = t.instructions
+  const risks = planRisks(engine.home.team, t, engine.home.staminaByPlayer)
   return (
     <footer className="tc-summary" aria-label="킥오프 전 검토">
       <div className="tc-card">
@@ -123,6 +166,16 @@ function PlanSummary() {
       <div className="tc-card">
         <span className="tc-card__label">공격 루트</span>
         <span className="tc-card__value">{PATTERN_KO[t.attackPattern ?? 'balanced']}</span>
+      </div>
+      <div className="tc-card tc-card--risk">
+        <span className="tc-card__label">리스크</span>
+        <ul className="tc-risks">
+          {risks.map((r, i) => (
+            <li key={`${r.level}-${i}`} className={r.level === 'warn' ? 'tc-risk tc-risk--warn' : 'tc-risk'}>
+              <span aria-hidden="true">{r.level === 'warn' ? '⚠' : '✅'}</span> {r.text}
+            </li>
+          ))}
+        </ul>
       </div>
     </footer>
   )

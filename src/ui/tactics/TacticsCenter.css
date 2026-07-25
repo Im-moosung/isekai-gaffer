@@ -65,6 +65,61 @@
   cursor: pointer;
 }
 .tc-kickoff:hover { filter: brightness(1.05); }
+.tc-head__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+/* 추천은 보조 액션 — 킥오프(주 액션)와 색으로 위계를 구분한다. */
+.tc-recbtn {
+  padding: 9px 16px;
+  border: 1px solid var(--tc-line);
+  border-radius: 8px;
+  background: rgba(127, 212, 255, 0.12);
+  color: var(--tb-chalk);
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tc-recbtn:hover { background: rgba(127, 212, 255, 0.22); }
+
+/* ── 코치진 권고 — 추천 적용의 근거. 닫기 전까지 남는다. ─────── */
+.tc-reasons {
+  border: 1px solid rgba(127, 212, 255, 0.4);
+  border-radius: 10px;
+  background: rgba(18, 40, 64, 0.85);
+  padding: 10px 14px;
+}
+.tc-reasons__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.tc-reasons__head strong { color: var(--tb-chalk); font-size: 0.9rem; }
+.tc-reasons__note { font-size: 0.78rem; color: var(--bc-text-dim); }
+.tc-reasons__x {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--bc-text-dim);
+  font-family: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.tc-reasons__x:hover { color: var(--bc-text); }
+.tc-reasons__list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 2px 16px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
 
 /* ── 본체: 좌측 상대 리포트 고정 + 우측 설계 탭 ───────────── */
 .tc-body {
@@ -146,6 +201,26 @@
 .tc-card__label { font-size: 0.75rem; color: var(--bc-text-dim); }
 .tc-card__value { font-size: 1rem; font-weight: 800; }
 .tc-card__sub { font-size: 0.8rem; color: var(--bc-text-dim); }
+
+/* 리스크 카드 — 항목이 늘어나도 검토 요약 전체 높이를 밀지 않도록 자체 스크롤. */
+.tc-card--risk { grid-column: span 2; }
+.tc-risks {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+  max-height: 62px;
+  overflow-y: auto;
+}
+.tc-risk {
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--bc-text-dim);
+}
+.tc-risk--warn { color: #f5c542; font-weight: 600; }
+
+@media (max-width: 1100px) {
+  .tc-card--risk { grid-column: span 1; }
+}
 
 @media (max-width: 900px) {
   .tc-body { grid-template-columns: minmax(0, 1fr); }

@@ -2,7 +2,7 @@
 // Phase A Task 4: 킥오프 전 전술 센터 — 'pre'가 개입 phase로 승격되면서
 // 기존 store 바인딩 패널(ConsolePanel·TacticsExtras·OppPanel)이 무수정으로 동작하는지 검증한다.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { render, fireEvent, cleanup } from '@testing-library/react'
+import { render, fireEvent, cleanup, act } from '@testing-library/react'
 import { useMatchStore } from '../../../game/matchStore'
 import { TacticsCenter } from '../TacticsCenter'
 import { makeTestTeam } from '../../../engine/fixtures/testTeams'
@@ -85,6 +85,42 @@ describe('TacticsCenter — 킥오프 전 워룸', () => {
     const t = store().engine!.home.tactics
     expect(t.mentality).toBe('very-defensive')
     expect(t.instructions.lineHeight).toBe(20)
+  })
+
+  it('[추천 적용]이 컨트롤을 실제로 움직이고 근거를 노출한다', () => {
+    const { getByRole, container } = mountPre()
+    // 픽스처 상대는 4-3-3 — 상성 최댓값은 3-5-2(+0.04)다.
+    expect(store().engine!.home.tactics.formation).not.toBe('3-5-2')
+    fireEvent.click(getByRole('button', { name: /추천 적용/ }))
+    expect(store().engine!.home.tactics.formation).toBe('3-5-2')
+    expect(container.querySelector('.tc-reasons')!.textContent).toContain('상성')
+    // 포메이션이 바뀌어도 선발 11인은 유지된다(슬롯만 재배치).
+    expect(store().engine!.home.tactics.lineup.length).toBe(11)
+    // 근거는 닫기 전까지 남는다.
+    fireEvent.click(getByRole('button', { name: '권고 닫기' }))
+    expect(container.querySelector('.tc-reasons')).toBeNull()
+  })
+
+  it('랭킹 격차가 큰 강팀 상대에는 수비적 멘탈리티를 추천한다', () => {
+    store().reset()
+    store().startMatch(home, makeTestTeam('fra', 95), 20260724)
+    const { getByRole, container } = render(<TacticsCenter onKickoff={() => {}} />)
+    fireEvent.click(getByRole('button', { name: /추천 적용/ }))
+    expect(store().engine!.home.tactics.mentality).toBe('defensive')
+    expect(container.querySelector('.tc-summary')!.textContent).toContain('수비')
+  })
+
+  it('리스크 카드가 하이라인+하이프레스를 경고한다', () => {
+    const { container } = mountPre()
+    expect(container.querySelector('.tc-summary')!.textContent).toContain('특이사항 없음')
+    const eng = store().engine!
+    act(() => {
+      store().submitCommand('home', {
+        type: 'instructions',
+        instructions: { ...eng.home.tactics.instructions, lineHeight: 80, pressing: 80 },
+      })
+    })
+    expect(container.querySelector('.tc-risk--warn')!.textContent).toContain('역습')
   })
 
   it('킥오프 버튼이 onKickoff를 호출한다', () => {
