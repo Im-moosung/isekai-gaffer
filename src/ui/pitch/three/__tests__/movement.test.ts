@@ -8,6 +8,7 @@ import { PITCH_H, PITCH_W, toWorld, type FrameState } from '../types'
 import {
   computeFrame, ballHeight, arcKindFor, sampleSequence, gkBox,
   BALL_PEAK, BALL_RADIUS, BALL_SHIFT, CONVERGE_MAX, GK_MAX_SPEED, MAX_SPEED,
+  KICK_REACH, STANDOFF,
   type FrameInput,
 } from '../movement'
 
@@ -136,6 +137,28 @@ describe('computeFrame — 속도 클램프', () => {
     }
   })
 
+  it('실제 안무(무버 포함) 재생에서도 프레임당 클램프를 지킨다', () => {
+    // 무버는 안무 좌표를 목표로 삼지만 이동은 클램프를 통과한다(텔레포트 금지).
+    for (const type of ['goal', 'corner'] as const) {
+      const e = ev(type)
+      const seq = buildSequence(e, base.home, base.away)
+      let prev: FrameState | null = computeFrame(input({ sequence: seq, sequenceSide: 'home', t: 0, event: e }))
+      const dt = 0.033
+      const N = 60
+      for (let k = 1; k <= N; k++) {
+        const f: FrameState = computeFrame(input({ prev, dt, t: k / N, sequence: seq, sequenceSide: 'home', event: e }))
+        for (const p of f.players) {
+          const pp = prev!.players.find(q => q.id === p.id)!
+          const cap = (p.id === homeId(0) || p.id === awayId(0) ? GK_MAX_SPEED : MAX_SPEED) * dt
+          const moved = Math.hypot(p.x - pp.x, p.z - pp.z)
+          if (moved > cap + 1e-9) throw new Error(`${type} frame ${k} ${p.id}: ${moved.toFixed(4)} > ${cap.toFixed(4)}`)
+          expect(p.speed).toBeLessThanOrEqual(MAX_SPEED + 1e-9)
+        }
+        prev = f
+      }
+    }
+  })
+
   it('여러 프레임 누적해도 프레임당 클램프를 지킨다', () => {
     let prev = computeFrame(input())
     const dt = 0.05
@@ -146,6 +169,54 @@ describe('computeFrame — 속도 클램프', () => {
         expect(Math.hypot(p.x - pp.x, p.z - pp.z)).toBeLessThanOrEqual(MAX_SPEED * dt + 1e-9)
       }
       prev = f
+    }
+  })
+})
+
+describe('computeFrame — 선수 간 간격(관통 방지)', () => {
+  it('하이라이트 전 프레임에서 임의의 두 선수 거리가 1m 이상(같은 팀·상대 팀 모두)', () => {
+    for (const type of ['goal', 'shot', 'save', 'miss', 'corner', 'foul'] as const) {
+      const e = ev(type)
+      const seq = buildSequence(e, base.home, base.away)
+      let prev: FrameState | null = null
+      const N = 90
+      for (let k = 0; k <= N; k++) {
+        const f: FrameState = computeFrame(input({ prev, dt: 0.033, t: k / N, sequence: seq, sequenceSide: 'home', event: e }))
+        for (let i = 0; i < f.players.length; i++) {
+          for (let j = i + 1; j < f.players.length; j++) {
+            const a = f.players[i]
+            const b = f.players[j]
+            const d = Math.hypot(a.x - b.x, a.z - b.z)
+            if (d < 1) throw new Error(`${type} frame ${k}: ${a.id}(${a.side}) — ${b.id}(${b.side}) = ${d.toFixed(3)}m`)
+          }
+        }
+        prev = f
+      }
+    }
+  })
+
+  it('평시(시퀀스 없음) 재생에서도 1m 이상', () => {
+    let prev: FrameState | null = null
+    for (let k = 0; k <= 60; k++) {
+      const f: FrameState = computeFrame(input({ prev, dt: 0.033, t: k / 60 }))
+      for (let i = 0; i < f.players.length; i++) {
+        for (let j = i + 1; j < f.players.length; j++) {
+          expect(Math.hypot(f.players[i].x - f.players[j].x, f.players[i].z - f.players[j].z)).toBeGreaterThanOrEqual(1)
+        }
+      }
+      prev = f
+    }
+  })
+
+  it('수렴 선수도 공 좌표에 겹치지 않는다(STANDOFF 유지)', () => {
+    const seq = pinnedBall(50, 50)
+    let prev: FrameState | null = null
+    for (let k = 0; k <= 40; k++) {
+      const f: FrameState = computeFrame(input({ prev, dt: 0.05, t: k / 40, sequence: seq, sequenceSide: 'home' }))
+      prev = f
+    }
+    for (const p of prev!.players) {
+      expect(Math.hypot(p.x - prev!.ball.x, p.z - prev!.ball.z)).toBeGreaterThan(STANDOFF * 0.8)
     }
   })
 })
@@ -341,6 +412,12 @@ describe('볼 높이(Y) — 이벤트 타입별 아크', () => {
     expect(arcKindFor('foul', 0, 1)).toBe('ground')
   })
 
+  it('근거 이벤트를 모르면 지면 궤적(계획: "그 외 지면")', () => {
+    expect(arcKindFor(undefined, 0, 2)).toBe('ground')
+    const f = computeFrame(input({ sequence: pinnedBall(60, 40), sequenceSide: 'home', t: 0.5, event: null }))
+    expect(f.ball.y).toBeCloseTo(BALL_RADIUS, 6)
+  })
+
   it('computeFrame 볼 Y 최대값이 이벤트 타입별 피크', () => {
     const maxY = (type: MatchEvent['type']) => {
       const e = ev(type)
@@ -393,6 +470,26 @@ describe('액션 판정', () => {
     expect(f.event).toBe('goal-home')
   })
 
+  it("goal 라벨은 공이 네트에 들어간 뒤부터 — 그 전엔 'shot'", () => {
+    const e = ev('goal')
+    const seq = buildSequence(e, base.home, base.away)
+    const goalT = seq[seq.length - 1].t
+    for (const t of [0, 0.2, 0.5, goalT - 0.01]) {
+      expect(computeFrame(input({ sequence: seq, sequenceSide: 'home', t, event: e })).event).toBe('shot')
+    }
+    for (const t of [goalT, goalT + 0.05, 1]) {
+      expect(computeFrame(input({ sequence: seq, sequenceSide: 'home', t, event: e })).event).toBe('goal-home')
+    }
+  })
+
+  it('어웨이 득점은 goalT 이후 goal-away', () => {
+    const e = ev('goal', { teamId: away.id })
+    const seq = buildSequence(e, base.home, base.away)
+    const goalT = seq[seq.length - 1].t
+    expect(computeFrame(input({ sequence: seq, sequenceSide: 'away', t: 0.3, event: e })).event).toBe('shot')
+    expect(computeFrame(input({ sequence: seq, sequenceSide: 'away', t: goalT, event: e })).event).toBe('goal-away')
+  })
+
   it('세리머니는 골 이후 2초 창에서만(dwell 환산)', () => {
     const e = ev('goal')
     const seq = buildSequence(e, base.home, base.away)
@@ -411,14 +508,44 @@ describe('액션 판정', () => {
     expect(f.event).toBe('save')
   })
 
-  it('슛/패스 키프레임 시작엔 kicker가 kick(actionT 0~1)', () => {
+  it('공 옆에 선수가 있으면 그 선수가 kick(actionT 0~1)', () => {
+    const striker = homeId(10)
+    const seq: ChoreoStep[] = [
+      { t: 0, ball: { x: 80, y: 50 }, movers: [{ playerId: striker, x: 80, y: 50 }] },
+      { t: 0.6, ball: { x: 99, y: 50 }, movers: [{ playerId: striker, x: 82, y: 50 }] },
+    ]
     const e = ev('goal')
-    const seq = buildSequence(e, base.home, base.away)
-    const f = computeFrame(input({ sequence: seq, sequenceSide: 'home', t: seq[1].t + 0.001, event: e }))
+    const f = computeFrame(input({ sequence: seq, sequenceSide: 'home', t: 0.05, event: e }))
     const kickers = f.players.filter(p => p.action === 'kick')
     expect(kickers).toHaveLength(1)
+    expect(kickers[0].id).toBe(striker)
     expect(kickers[0].actionT).toBeGreaterThanOrEqual(0)
     expect(kickers[0].actionT).toBeLessThanOrEqual(1)
+  })
+
+  it('kick은 구간 시작 볼에서 KICK_REACH 이내 + 안무 팀 선수에게만 부여된다', () => {
+    // 전 이벤트 타입 × 전체 재생(prev 체인) — 허공 슛(먼 선수 kick) 0건이어야 한다.
+    let kickFrames = 0
+    for (const type of ['goal', 'shot', 'save', 'miss', 'corner', 'foul'] as const) {
+      const e = ev(type)
+      const seq = buildSequence(e, base.home, base.away)
+      let prev: FrameState | null = null
+      const N = 60
+      for (let k = 0; k <= N; k++) {
+        const t = k / N
+        const f: FrameState = computeFrame(input({ prev, dt: 0.033, t, sequence: seq, sequenceSide: 'home', event: e }))
+        const s = sampleSequence(seq, t)
+        const sb = toWorld(s.start.ball.x, s.start.ball.y)
+        for (const p of f.players.filter(q => q.action === 'kick')) {
+          kickFrames++
+          expect(p.side).toBe('home')
+          expect(Math.hypot(p.x - sb.x, p.z - sb.z)).toBeLessThan(KICK_REACH)
+        }
+        prev = f
+      }
+    }
+    // 규칙이 kick을 죽이지 않았는지도 확인 — 공 옆에 실제로 선 프레임에서는 발동한다.
+    expect(kickFrames).toBeGreaterThan(0)
   })
 
   it('파울 뒤엔 한 명이 down', () => {

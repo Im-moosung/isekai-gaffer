@@ -34,6 +34,18 @@ export const CONVERGE_COUNT = 3
 export const CONVERGE_MAX = 12
 /** 이 거리(m)를 넘으면 수렴 당김이 0이 된다. */
 export const CONVERGE_RANGE = 40
+/** 수렴 시 공에 이보다 가까이 붙지 않는다(m) — 선수끼리 공 좌표에 겹치는 것 방지. */
+export const STANDOFF = 1.2
+/** 수렴 링: 순번마다 반경을 이만큼 벌린다(m). */
+const RING_STEP = 0.45
+/** 수렴 링: 순번별 각도 오프셋(rad) — 공 주위를 감싸듯 벌어진다. */
+const RING_ANGLES = [0, 0.7, -0.7]
+/** 선수 간 최소 간격(m) — 3D 휴머노이드 관통 방지(표시용 소프트 분리).
+ *  목표가 갈라져도 속도 클램프로 뒤처진 실제 위치는 겹칠 수 있어, 프레임마다
+ *  이동 예산 안에서 떼어낸다(클램프 불변식은 유지). */
+export const MIN_POSE_SEPARATION = 1.3
+/** 킥 판정 최대 거리(m) — 이보다 멀면 킥 모션을 주지 않는다(허공 슛 방지). */
+export const KICK_REACH = 3
 /** GK 박스: 골라인에서의 최대 깊이(m). */
 export const GK_BOX_DEPTH = 6
 /** GK 박스: 중앙에서의 최대 좌우 이동(m). */
@@ -157,7 +169,8 @@ export function arcKindFor(type: MatchEventType | undefined, segIndex: number, s
       // 마지막 구간이 슈팅(상승 궤적), 앞 구간은 패스.
       return segIndex >= segCount - 1 ? 'shot' : 'pass'
     default:
-      return 'pass'
+      // 근거 이벤트를 모르면 계획대로 "그 외 지면".
+      return 'ground'
   }
 }
 
@@ -221,11 +234,13 @@ function idleBall(minute: number, t: number, momentum: number, seed: number): { 
   }
 }
 
-/** 프레임에 실을 이벤트 라벨. */
-function frameEvent(event: MatchEvent | null, homeTeamId: string): FrameEvent {
+/** 프레임에 실을 이벤트 라벨.
+ *  goal은 **공이 네트에 들어간 뒤(scored)** 부터만 'goal-*'를 방출한다. 그 전엔
+ *  아직 슛 진행 중이므로 'shot' — 카메라·FX가 골보다 먼저 터지는 것을 막는다. */
+function frameEvent(event: MatchEvent | null, homeTeamId: string, scored: boolean): FrameEvent {
   if (!event) return null
   switch (event.type) {
-    case 'goal': return event.teamId === homeTeamId ? 'goal-home' : 'goal-away'
+    case 'goal': return scored ? (event.teamId === homeTeamId ? 'goal-home' : 'goal-away') : 'shot'
     case 'save': return 'save'
     case 'corner': return 'corner'
     case 'foul': case 'yellow': case 'red': return 'foul'
@@ -325,19 +340,96 @@ function gkTarget(side: 'home' | 'away', ball: { x: number; z: number }): { x: n
   }
 }
 
-/** 볼에 가까운 CONVERGE_COUNT명을 볼 쪽으로 당긴다(거리 역비례, 오버슛 없음). */
-function applyConvergence(plans: Plan[], ball: { x: number; z: number }): void {
+/**
+ * 볼에 가까운 CONVERGE_COUNT명을 볼 쪽으로 당긴다(거리 역비례).
+ * 공 좌표에 정확히 겹치지 않도록 STANDOFF 반경을 남기고, 순번별 각도·반경
+ * 오프셋으로 공 주위를 링처럼 감싼다(선수 관통 방지).
+ */
+function applyConvergence(plans: Plan[], ball: { x: number; z: number }, side: 'home' | 'away'): void {
   const cand = plans
     .filter(p => !p.isGk && !p.mover)
     .map(p => ({ p, d: Math.hypot(p.tx - ball.x, p.tz - ball.z) }))
     .sort((a, b) => (a.d === b.d ? a.p.index - b.p.index : a.d - b.d))
     .slice(0, CONVERGE_COUNT)
-  for (const { p, d } of cand) {
-    if (d < 1e-6) continue
-    const pull = Math.min(d, CONVERGE_MAX * (1 - Math.min(d, CONVERGE_RANGE) / CONVERGE_RANGE))
-    if (pull <= 0) continue
-    p.tx += ((ball.x - p.tx) / d) * pull
-    p.tz += ((ball.z - p.tz) / d) * pull
+  const fan = side === 'home' ? 1 : -1
+  cand.forEach(({ p, d }, rank) => {
+    if (d < 1e-6) return
+    const pull = Math.min(Math.max(0, d - STANDOFF), CONVERGE_MAX * (1 - Math.min(d, CONVERGE_RANGE) / CONVERGE_RANGE))
+    if (pull <= 0) return
+    const angle = Math.atan2(p.tz - ball.z, p.tx - ball.x) + RING_ANGLES[rank] * fan
+    const radius = Math.max(d - pull, STANDOFF + rank * RING_STEP)
+    p.tx = ball.x + Math.cos(angle) * radius
+    p.tz = ball.z + Math.sin(angle) * radius
+  })
+}
+
+interface Posed {
+  p: Plan
+  pp: PlayerPose | undefined
+  box: { xMin: number; xMax: number; zMin: number; zMax: number } | null
+  /** 이 프레임의 최대 속도(m/s) — 분리 밀어내기도 이 예산을 넘지 않는다. */
+  cap: number
+  x: number
+  z: number
+  speed: number
+}
+
+/**
+ * 실제 포즈끼리 MIN_POSE_SEPARATION 안으로 붙으면 떼어낸다.
+ * 밀어낸 뒤 **직전 위치에서 cap*dt 원판 안으로 재투영**하므로 속도 클램프 불변식이
+ * 깨지지 않는다(겹침은 프레임을 걸쳐 점진적으로 풀린다). GK는 박스가 우선.
+ * 마지막에 실제 이동량으로 speed를 다시 계산한다.
+ */
+function separatePoses(posed: Posed[], dt: number): void {
+  for (let iter = 0; iter < 3; iter++) {
+    let touched = false
+    for (let i = 0; i < posed.length; i++) {
+      for (let j = i + 1; j < posed.length; j++) {
+        const a = posed[i]
+        const b = posed[j]
+        let dx = b.x - a.x
+        let dz = b.z - a.z
+        let d = Math.hypot(dx, dz)
+        if (d >= MIN_POSE_SEPARATION) continue
+        if (d < 1e-6) {
+          const ang = (hash(`${a.p.id}|${b.p.id}`) % 3600) / 3600 * TAU
+          dx = Math.cos(ang)
+          dz = Math.sin(ang)
+          d = 1
+        }
+        const gap = MIN_POSE_SEPARATION - d
+        const ux = dx / d
+        const uz = dz / d
+        const aShare = a.p.isGk ? 0 : b.p.isGk ? 1 : 0.5
+        const bShare = b.p.isGk ? 0 : a.p.isGk ? 1 : 0.5
+        a.x -= ux * gap * aShare
+        a.z -= uz * gap * aShare
+        b.x += ux * gap * bShare
+        b.z += uz * gap * bShare
+        touched = true
+      }
+    }
+    if (!touched) break
+  }
+  for (const q of posed) {
+    // 순서 주의: 경계·박스 클램프 → 이동 예산 재투영.
+    // 예산을 먼저 걸면 박스 클램프가 예산을 넘겨 순간이동시킬 수 있다(박스 밖에서
+    // 시작한 GK가 한 프레임에 27m 튐). 클램프 대상은 볼록 영역이라 pp와 클램프
+    // 결과를 잇는 선분 위의 점도 항상 그 안에 있다.
+    q.x = q.box ? clamp(q.x, q.box.xMin, q.box.xMax) : clamp(q.x, -HALF_W + EDGE_MARGIN, HALF_W - EDGE_MARGIN)
+    q.z = q.box ? clamp(q.z, q.box.zMin, q.box.zMax) : clamp(q.z, -HALF_H + EDGE_MARGIN, HALF_H - EDGE_MARGIN)
+    if (q.pp) {
+      // 이동 예산(속도 클램프) 재적용 — 분리·클램프로 인한 순간이동 금지.
+      const dx = q.x - q.pp.x
+      const dz = q.z - q.pp.z
+      const d = Math.hypot(dx, dz)
+      const budget = q.cap * dt
+      if (d > budget && d > 1e-9) {
+        q.x = q.pp.x + (dx / d) * budget
+        q.z = q.pp.z + (dz / d) * budget
+      }
+    }
+    q.speed = q.pp && dt > 0 ? Math.hypot(q.x - q.pp.x, q.z - q.pp.z) / dt : 0
   }
 }
 
@@ -381,24 +473,56 @@ export function computeFrame(input: FrameInput): FrameState {
 
   const homePlans = planSide('home', input.state.home, ball, moverById, input.minute, t, input.seed)
   const awayPlans = planSide('away', input.state.away, ball, moverById, input.minute, t, input.seed)
-  applyConvergence(homePlans, ball)
-  applyConvergence(awayPlans, ball)
+  applyConvergence(homePlans, ball, 'home')
+  applyConvergence(awayPlans, ball, 'away')
   const plans = [...homePlans, ...awayPlans]
 
-  // ── 3) 액션 컨텍스트 ─────────────────────────────────────────────────
-  // 킥: 현재 구간 시작 시점에 볼과 가장 가까웠던 무버.
+  // ── 3) 스텝(속도 클램프) + 포즈 분리 ─────────────────────────────────
+  const prevById = new Map((prev?.players ?? []).map(p => [p.id, p]))
+  const posed = plans.map(p => {
+    const box = p.isGk ? gkBox(p.side) : null
+    const tx = box ? clamp(p.tx, box.xMin, box.xMax) : clamp(p.tx, -HALF_W + EDGE_MARGIN, HALF_W - EDGE_MARGIN)
+    const tz = box ? clamp(p.tz, box.zMin, box.zMax) : clamp(p.tz, -HALF_H + EDGE_MARGIN, HALF_H - EDGE_MARGIN)
+    const pp = prevById.get(p.id)
+    const stamina = clamp((input.state[p.side].staminaByPlayer[p.id] ?? 100) / 100, 0, 1)
+    const cap = (p.isGk ? GK_MAX_SPEED : MAX_SPEED) * (0.78 + 0.22 * stamina)
+
+    let x = tx
+    let z = tz
+    if (pp && dt > 0) {
+      const dx = tx - pp.x
+      const dz = tz - pp.z
+      const d = Math.hypot(dx, dz)
+      const arrive = d < ARRIVE_RADIUS ? d / ARRIVE_RADIUS : 1
+      const step = Math.min(d, cap * dt * arrive)
+      x = d > 1e-9 ? pp.x + (dx / d) * step : pp.x
+      z = d > 1e-9 ? pp.z + (dz / d) * step : pp.z
+    } else if (pp) {
+      x = pp.x
+      z = pp.z
+    }
+    return { p, pp, box, cap, x, z, speed: 0 }
+  })
+  separatePoses(posed, dt)
+
+  // ── 4) 액션 컨텍스트(실제 포즈 기준) ─────────────────────────────────
+  // 킥: 구간 시작 볼에 가장 가까운 안무 팀 선수. KICK_REACH 밖이면 아무도 차지
+  // 않는다(안무 무버는 속도 클램프로 뒤처질 수 있어 "허공 슛"이 되기 때문).
   let kickerId: string | null = null
   if (sample && !sample.finished && arc !== 'ground' && sample.u < KICK_WINDOW) {
-    let best = Infinity
-    for (const m of sample.start.movers) {
-      const d = Math.hypot(m.x - sample.start.ball.x, m.y - sample.start.ball.y)
-      if (d < best) { best = d; kickerId = m.playerId }
+    const sb = toWorld(sample.start.ball.x, sample.start.ball.y)
+    let best = KICK_REACH
+    for (const q of posed) {
+      if (q.p.side !== seqSide) continue
+      const d = Math.hypot(q.x - sb.x, q.z - sb.z)
+      if (d < best) { best = d; kickerId = q.p.id }
     }
   }
   // 세리머니: 골 키프레임 이후 CELEBRATE_MS 동안 득점팀 전원.
   const goalT = seq ? seq[seq.length - 1].t : 0.4
   const celebrateSpan = Math.max(1e-6, CELEBRATE_MS / dwellMs)
-  const celebrating = event?.type === 'goal' && t >= goalT && t <= goalT + celebrateSpan
+  const scored = t >= goalT
+  const celebrating = event?.type === 'goal' && scored && t <= goalT + celebrateSpan
   const scoringSide: 'home' | 'away' = event?.teamId === homeTeamId ? 'home' : 'away'
   const celebrateT = celebrating ? clamp((t - goalT) / celebrateSpan, 0, 1) : 0
   // 다이브: 슛을 받는 쪽(안무의 볼이 향하는 골문) GK.
@@ -410,40 +534,15 @@ export function computeFrame(input: FrameInput): FrameState {
   let downId: string | null = null
   if (fouled) {
     let best = Infinity
-    for (const p of plans) {
-      if (p.side !== seqSide) continue
-      const d = Math.hypot(p.tx - ball.x, p.tz - ball.z)
-      if (d < best) { best = d; downId = p.id }
+    for (const q of posed) {
+      if (q.p.side !== seqSide) continue
+      const d = Math.hypot(q.x - ball.x, q.z - ball.z)
+      if (d < best) { best = d; downId = q.p.id }
     }
   }
 
-  // ── 4) 스텝(속도 클램프) + 5) 액션 ───────────────────────────────────
-  const prevById = new Map((prev?.players ?? []).map(p => [p.id, p]))
-  const players: PlayerPose[] = plans.map(p => {
-    const box = p.isGk ? gkBox(p.side) : null
-    const tx = box ? clamp(p.tx, box.xMin, box.xMax) : clamp(p.tx, -HALF_W + EDGE_MARGIN, HALF_W - EDGE_MARGIN)
-    const tz = box ? clamp(p.tz, box.zMin, box.zMax) : clamp(p.tz, -HALF_H + EDGE_MARGIN, HALF_H - EDGE_MARGIN)
-    const pp = prevById.get(p.id)
-
-    let x = tx
-    let z = tz
-    let speed = 0
-    if (pp && dt > 0) {
-      const dx = tx - pp.x
-      const dz = tz - pp.z
-      const d = Math.hypot(dx, dz)
-      const stamina = clamp((input.state[p.side].staminaByPlayer[p.id] ?? 100) / 100, 0, 1)
-      const cap = (p.isGk ? GK_MAX_SPEED : MAX_SPEED) * (0.78 + 0.22 * stamina)
-      const arrive = d < ARRIVE_RADIUS ? d / ARRIVE_RADIUS : 1
-      const step = Math.min(d, cap * dt * arrive)
-      x = d > 1e-9 ? pp.x + (dx / d) * step : pp.x
-      z = d > 1e-9 ? pp.z + (dz / d) * step : pp.z
-      speed = step / dt
-    } else if (pp) {
-      x = pp.x
-      z = pp.z
-    }
-
+  // ── 5) 액션 ──────────────────────────────────────────────────────────
+  const players: PlayerPose[] = posed.map(({ p, pp, x, z, speed }) => {
     // yaw: 이동 방향(정지 시 볼 방향)을 스무딩해 따라간다.
     const moving = speed >= IDLE_SPEED
     const aim = moving
@@ -484,5 +583,5 @@ export function computeFrame(input: FrameInput): FrameState {
     ? { x: lerp(prev.focus.x, focusTarget.x, fa), z: lerp(prev.focus.z, focusTarget.z, fa) }
     : focusTarget
 
-  return { players, ball, focus, event: frameEvent(event, homeTeamId) }
+  return { players, ball, focus, event: frameEvent(event, homeTeamId, scored) }
 }
