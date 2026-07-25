@@ -20,5 +20,15 @@ export function pickBestXI(team: { squad: Player[]; profile?: Team['profile'] },
     used.add(candidate.id)
     return { slot, playerId: candidate.id }
   })
-  return { formation: f, lineup, instructions: { lineHeight: 50, pressing: 50, tempo: 50, attackFocus: 'balanced' } }
+  // 초기 지시는 팀 프로필 스타일로 시딩한다. AI는 simulate.defaultTactics에서
+  // profile.style을 쓰는데 유저만 50/50/50으로 시작하던 비대칭을 해소한다.
+  // profile이 없는 호출자는 기존 중립값을 유지한다.
+  const style = team.profile?.style
+  return {
+    formation: f,
+    lineup,
+    instructions: style
+      ? { lineHeight: style.lineHeight, pressing: style.pressing, tempo: style.tempo, attackFocus: 'balanced' }
+      : { lineHeight: 50, pressing: 50, tempo: 50, attackFocus: 'balanced' },
+  }
 }

@@ -4,6 +4,7 @@ import {
   teamExpectation, recommendedTone, EXPECTATION_ADJUST,
 } from '../matchStore'
 import { makeTestTeam, pickBestXI } from '../../engine/fixtures/testTeams'
+import { loadTeam } from '../../data/loader'
 
 const a = makeTestTeam('a', 78), b = makeTestTeam('b', 78)
 const store = () => useMatchStore.getState()
@@ -395,7 +396,7 @@ describe('decisionLog 수집 (기자회견 근거)', () => {
     const log = store().decisionLog
     expect(log).toHaveLength(1)
     expect(log[0].kind).toBe('instructions')
-    expect(log[0].summary).toBe(`45' 지시 변경: 압박 ${cur.pressing}→90`)
+    expect(log[0].summary).toBe(`HT 지시 변경: 압박 ${cur.pressing}→90`)
     expect(log[0].summary).not.toContain('템포')
     expect(log[0].summary).not.toContain('라인')
   })
@@ -416,7 +417,7 @@ describe('decisionLog 수집 (기자회견 근거)', () => {
     const log = store().decisionLog
     expect(log).toHaveLength(1)
     expect(log[0].kind).toBe('sub')
-    expect(log[0].summary).toBe(`45' 교체: ${inName} IN, ${outName} OUT`)
+    expect(log[0].summary).toBe(`HT 교체: ${inName} IN, ${outName} OUT`)
   })
   it('포메이션 변경 → HT 포메이션 로그', () => {
     toHalftime()
@@ -450,5 +451,47 @@ describe('decisionLog 수집 (기자회견 근거)', () => {
     expect(store().decisionLog.map(d => d.kind)).toEqual(['instructions', 'teamtalk'])
     store().reset()
     expect(store().decisionLog).toEqual([])
+  })
+})
+
+describe("'pre'에서 전술 개입이 가능하다", () => {
+  it("phase 'pre'에서 submitCommand가 throw하지 않는다", () => {
+    store().startMatch(loadTeam('kor'), loadTeam('cze'), 777)
+    expect(store().phase).toBe('pre')
+    const eng = store().engine!
+    expect(() => store().submitCommand('home', {
+      type: 'instructions',
+      instructions: { ...eng.home.tactics.instructions, pressing: 75 },
+    })).not.toThrow()
+    expect(store().engine!.home.tactics.instructions.pressing).toBe(75)
+  })
+
+  it("'pre'의 결정 로그는 \"킥오프 전\"으로 표기된다", () => {
+    store().startMatch(loadTeam('kor'), loadTeam('cze'), 777)
+    const eng = store().engine!
+    store().submitCommand('home', {
+      type: 'instructions',
+      instructions: { ...eng.home.tactics.instructions, lineHeight: 30 },
+    })
+    const log = store().decisionLog
+    expect(log[0].summary).toContain('킥오프 전')
+  })
+
+  it("'pre'의 confirmTactics는 부스트를 설정하지 않고 재생도 시작하지 않는다", () => {
+    store().startMatch(loadTeam('kor'), loadTeam('cze'), 777)
+    store().confirmTactics()
+    expect(store().boostUntil).toBe(0)
+    // 'pre'의 확정은 재생을 시작하지 않는다 — 킥오프는 별도 버튼
+    expect(store().phase).toBe('pre')
+  })
+})
+
+describe('pickBestXI는 프로필 스타일로 지시를 시딩한다', () => {
+  it('한국의 초기 지시가 50/50/50이 아니라 프로필 값이다', () => {
+    const kor = loadTeam('kor')
+    const t = pickBestXI(kor)
+    expect(t.instructions.pressing).toBe(kor.profile.style.pressing)
+    expect(t.instructions.lineHeight).toBe(kor.profile.style.lineHeight)
+    expect(t.instructions.tempo).toBe(kor.profile.style.tempo)
   })
 })

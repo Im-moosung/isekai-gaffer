@@ -175,8 +175,16 @@ const TONE_LABEL: Record<TeamTalkTone, string> = {
   rage: '격노', encourage: '격려', calm: '침착', trust: '신뢰',
 }
 
-/** 개입(submitCommand/applyTeamTalk)이 허용되는 phase. */
-const INTERVENTION_PHASES: MatchPhase[] = ['paused-break', 'paused-user', 'paused-moment', 'halftime']
+/** 개입(submitCommand/applyTeamTalk)이 허용되는 phase.
+ *  'pre'는 킥오프 전 전술 센터 — 감독이 계획을 세우는 시점이다. AI 상대는 처음부터
+ *  자기 프로필 스타일로 출전하므로, 유저에게도 같은 출발선을 준다. */
+const INTERVENTION_PHASES: MatchPhase[] = ['pre', 'paused-break', 'paused-user', 'paused-moment', 'halftime']
+
+/** UI 컨트롤 활성 판정의 단일 진실원. 각 패널이 phase 목록을 따로 나열하면
+ *  'pre' 승격 같은 변경이 한 곳에서 새어 store와 UI가 어긋난다. */
+export function canIntervene(phase: MatchPhase): boolean {
+  return INTERVENTION_PHASES.includes(phase)
+}
 
 /** 홈 주전(라인업, 퇴장 제외) 중 최저 스태미나. 동적 순간 'fatigue' 판정용. */
 function homeStaminaFloor(engine: MatchState): number {
@@ -319,6 +327,9 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     const { engine, phase } = get()
     if (!engine) throw new Error('경기 미시작')
     if (!INTERVENTION_PHASES.includes(phase)) throw new Error('개입 중이 아님')
+    // 킥오프 전 계획에는 인게임 부스트를 주지 않는다(사전 계획과 실시간 개입의 가치를 구분).
+    // 재생 시작도 하지 않는다 — 'pre'의 진행은 kickoff()가 담당한다.
+    if (phase === 'pre') return
     // 개입 직후 부스트: 지금부터 BOOST_MINUTES분간 홈 지시 효과 ×1.3(advanceMinute이 엔진 전달).
     set({ phase: 'playing', pauseReason: null, momentPrompt: null, boostUntil: engine.minute + BOOST_MINUTES })
   },
@@ -335,22 +346,22 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     if (!INTERVENTION_PHASES.includes(phase)) throw new Error('개입 불가 시점')
     const minute = engine.minute
     const sideState = engine[side]
+    // 시점 라벨: 킥오프 전 / HT / N'. 결정 로그는 기자회견의 근거가 되므로
+    // "언제 내린 결정인가"가 서사적으로 중요하다. 세 명령 분기가 같은 규칙을 쓴다.
+    const when = phase === 'pre' ? '킥오프 전' : phase === 'halftime' ? 'HT' : `${minute}'`
     let entry: DecisionEntry | null = null
     if (cmd.type === 'instructions') {
       const changed = instructionDiff(sideState.tactics.instructions, cmd.instructions)
       // 변경 축이 0개면 로그 스킵(엔진 적용은 그대로) — "45' 지시 변경: " 같은 빈 요약 방지.
       if (changed.length > 0) {
-        entry = { minute, kind: 'instructions', summary: `${minute}' 지시 변경: ${changed.join(', ')}`, detail: { changed } }
+        entry = { minute, kind: 'instructions', summary: `${when} 지시 변경: ${changed.join(', ')}`, detail: { changed } }
       }
     } else if (cmd.type === 'sub') {
       const nameOf = (id: string) => sideState.team.squad.find(p => p.id === id)?.name.ko ?? id
-      entry = { minute, kind: 'sub', summary: `${minute}' 교체: ${nameOf(cmd.in)} IN, ${nameOf(cmd.out)} OUT`, detail: { in: cmd.in, out: cmd.out } }
+      entry = { minute, kind: 'sub', summary: `${when} 교체: ${nameOf(cmd.in)} IN, ${nameOf(cmd.out)} OUT`, detail: { in: cmd.in, out: cmd.out } }
     } else if (cmd.type === 'formation') {
       const before = sideState.tactics.formation, after = cmd.tactics.formation
-      // 포메이션은 하프타임뿐 아니라 브레이크·감독 타임에서도 바꿀 수 있으므로
-      // 시점을 분 표기로 통일한다(halftime만 "HT"). 지시/교체 로그와 동일 규칙.
       if (before !== after) {
-        const when = phase === 'halftime' ? 'HT' : `${minute}'`
         entry = { minute, kind: 'instructions', summary: `${when} 포메이션: ${before}→${after}`, detail: { before, after } }
       }
     }
