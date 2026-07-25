@@ -398,7 +398,10 @@
   aspect-ratio: 105 / 68;
   border-radius: 8px;
   overflow: hidden;
-  background: #080e18;
+  /* three 청크(724kB)를 await import 하는 동안 이 빈 div가 이미 마운트돼 있다.
+     Suspense 폴백은 Match3D 청크까지만 가려주므로, 그 사이 검은 사각형이 뜨지 않게
+     pixi-pitch·SVG 피치와 같은 잔디색을 깔아 "피치 상시 노출" 원칙을 지킨다. */
+  background: var(--bc-pitch);
   position: relative;
   line-height: 0;
 }

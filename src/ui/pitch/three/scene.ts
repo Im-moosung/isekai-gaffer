@@ -208,6 +208,11 @@ export function buildScene(THREE: ThreeAPI, opts: BuildSceneOptions = {}): Scene
   const camera = new THREE.PerspectiveCamera(40, 16 / 9, 0.5, 900)
   camera.position.set(0, 28, 78)
   camera.lookAt(0, 0, 0)
+  // 카메라를 **씬에 편입**한다. WebGLRenderer.render()는 projectObject(scene, …)로 씬 서브트리만
+  // 렌더 리스트에 담으므로, 카메라 자식으로 붙는 오브젝트(fx3d.flashQuad의 풀스크린 골 섬광)는
+  // 카메라가 씬 밖에 떠 있으면 **영원히 그려지지 않는다**. 씬 루트는 항상 단위행렬이라
+  // 카메라의 월드 변환은 그대로다(호출부가 position/quaternion을 직접 써도 동작 동일).
+  scene.add(camera)
 
   const pitchGroup = new THREE.Group()
   pitchGroup.name = 'pitch'

@@ -106,6 +106,19 @@ describe('buildScene 구조', () => {
     b.dispose()
   })
 
+  // 회귀(F1): 카메라가 씬 밖에 있으면 WebGLRenderer.render()의 projectObject(scene, …)가
+  // 카메라 서브트리를 훑지 않아 카메라 자식(fx3d.flashQuad의 골 섬광 쿼드)이 화면에 절대
+  // 나타나지 않는다. MatchScreen이 DOM 풀스크린 플래시를 제거한 뒤로는 유일한 섬광 경로다.
+  it('카메라가 씬의 자식이다(카메라에 붙는 FX가 렌더 대상에 포함되도록)', () => {
+    const b = build()
+    expect(b.camera.parent).toBe(b.scene)
+    expect(b.scene.children).toContain(b.camera)
+    // 씬 루트가 단위행렬이라 카메라 월드 변환은 편입 전과 동일하다.
+    b.scene.updateMatrixWorld(true)
+    expect(b.camera.matrixWorld.equals(b.camera.matrix)).toBe(true)
+    b.dispose()
+  })
+
   it('피치 평면이 105×68이며 XZ에 눕는다', () => {
     const b = build()
     const geo = b.pitchMesh.geometry as THREE.PlaneGeometry
