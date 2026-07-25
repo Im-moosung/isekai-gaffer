@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { FormationId, GroupIntensity, Mentality, Player, TacticState } from '../../engine/types'
-import { useMatchStore } from '../../game/matchStore'
+import { canIntervene, useMatchStore } from '../../game/matchStore'
 import { buildCoachAdvice, type TacticPatch } from '../../game/coach'
 import { PitchView } from '../pitch/PitchView'
 import { ConsolePanel } from '../console/ConsolePanel'
@@ -229,7 +229,10 @@ export function TacticsBoard() {
         <button
           type="button"
           className="tb-confirm"
-          onClick={confirmTactics}
+          // 작전판 이탈 애니메이션(600ms) 동안 버튼이 DOM에 남아 있어 연타가 가능하다.
+          // 두 번째 클릭은 이미 phase가 'playing'이라 store가 throw한다 — 개입 가능할 때만 보낸다.
+          disabled={!canIntervene(phase)}
+          onClick={() => { if (canIntervene(phase)) confirmTactics() }}
         >
           {halftime ? '후반 시작' : '전술 확정'}
         </button>
