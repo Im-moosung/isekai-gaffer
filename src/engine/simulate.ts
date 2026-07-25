@@ -1,7 +1,7 @@
 // src/engine/simulate.ts
 import { createRng, type Rng } from './rng'
 import { zoneStrength } from './strength'
-import { instructionEffects, formationEdge, mentalityEffects, attackPatternEffects, groupIntensityStaminaFactor } from './tactics'
+import { instructionEffects, formationEdge, mentalityEffects, attackPatternEffects, groupIntensityStaminaFactor, attackFocusEffects, type MatchupContext } from './tactics'
 import { effectiveStats } from './fitness'
 import { pickBestXI } from './lineup'
 import type { Instructions, MatchEvent, MatchState, SideState, SideStats, TacticState, Team } from './types'
@@ -20,6 +20,9 @@ export interface SimulateOpts {
 const MAX_SUBS = 5
 // 전력 차 민감도 — 동급 팀은 비율 1이라 캘리브레이션 계약 무영향, 비대칭 매치업의 승률 분화 담당.
 // 실데이터 검증(esp≥55승) 기준으로 튜닝.
+// 이 값은 '기회의 양'만 늘린다. 슛 수는 ±15%(동급)/±25%(실팀) 캘리브레이션 계약에 묶여 있어
+// 여기만 올리면 전력 서열 게이트와 정면충돌한다. 그래서 전력 차의 나머지 절반은
+// XG_STRENGTH가 '기회의 질'로 싣는다 — 슛 수를 건드리지 않고 서열을 벌리는 축이다.
 const STRENGTH_SENSITIVITY = 1.6
 
 export function createMatch(home: Team, away: Team, opts: { seed: number; homeTactics?: TacticState; awayTactics?: TacticState; firstHalfScript?: { events: MatchEvent[]; score: [number, number] } }): MatchState {
@@ -106,10 +109,49 @@ function applyFirstHalfScript(st: MatchState) {
   st.events.push({ minute: 45, type: 'halftime', teamId: st.home.team.id })
 }
 
+/** 상대 성향 컨텍스트 조립 — 지시 효과의 "상대 억제" 항 입력.
+ *  최전방 pace는 라인업의 ST/LW/RW 실효 pace 평균(체력 반영). 없으면 중립 55. */
+function matchupContext(opp: SideState): MatchupContext {
+  const fronts = opp.tactics.lineup
+    .filter(l => !opp.sentOff.includes(l.playerId) && (l.slot === 'ST' || l.slot === 'LW' || l.slot === 'RW'))
+    .map(l => {
+      const p = opp.team.squad.find(q => q.id === l.playerId)!
+      return effectiveStats(p, l.slot, opp.staminaByPlayer[l.playerId]).pace
+    })
+  const gkSlot = opp.tactics.lineup.find(l => l.slot === 'GK')
+  const gk = gkSlot ? opp.team.squad.find(p => p.id === gkSlot.playerId) : undefined
+  return {
+    oppFrontPace: fronts.length ? fronts.reduce((s, v) => s + v, 0) / fronts.length : 55,
+    oppGkBuildup: gk?.gkStats?.buildup ?? 50,
+    oppPossession: opp.team.profile.style.possession,
+  }
+}
+
+/** 측면별 상대 수비 강도 — attackFocus 판정 입력.
+ *  left: 우리가 왼쪽을 공략 → 상대의 오른쪽 수비(RB/RW)를 만난다. 좌우가 뒤집히는 점에 주의. */
+function flankStrength(def: SideState): { left: number; right: number; center: number } {
+  const pick = (slots: string[]) => {
+    const vals = def.tactics.lineup
+      .filter(l => !def.sentOff.includes(l.playerId) && slots.includes(l.slot))
+      .map(l => {
+        const p = def.team.squad.find(q => q.id === l.playerId)!
+        const es = effectiveStats(p, l.slot, def.staminaByPlayer[l.playerId])
+        return (es.defending + es.physical + es.pace) / 3
+      })
+    return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : 55
+  }
+  return { left: pick(['RB', 'RW']), right: pick(['LB', 'LW']), center: pick(['CB', 'DM']) }
+}
+
 function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
   const zs = [zoneStrength(st.home), zoneStrength(st.away)]
   const sides = [st.home, st.away] as const
-  const fx = [instructionEffects(st.home.tactics.instructions), instructionEffects(st.away.tactics.instructions)]
+  // ctx[0]은 홈이 마주하는 상대(=어웨이)의 컨텍스트다. 인덱스를 뒤집지 말 것.
+  const ctx = [matchupContext(st.away), matchupContext(st.home)] as const
+  const fx = [
+    instructionEffects(st.home.tactics.instructions, ctx[0]),
+    instructionEffects(st.away.tactics.instructions, ctx[1]),
+  ]
 
   // 멘탈리티(5프리셋): instructionEffects 위에 곱. 'balanced'는 전 축 1.0 → 회귀 불변.
   for (const i of [0, 1] as const) {
@@ -130,14 +172,19 @@ function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
     fx[bi].possessionBias = amp(fx[bi].possessionBias)
   }
 
-  // 지속 압박 페널티: 압박 70+ 유지 분 추적 → 10분마다 체력 소모 +15% 가중.
-  // 팀 평균 체력<55 & 압박 70+면 '지친 압박' — 압박 실효 반감 + 파울 1.5배.
+  // 지속 압박 페널티: 압박 70+ 유지 분 추적 → 10분마다 체력 소모 가중.
+  // 가중은 임계 초과분(press-70)/30에 비례하고 +30%에서 멈춘다. 두 가지 이유:
+  //  (1) 임계에서 정확히 0이라 압박 축에 절벽이 없다 — 기존 고정 +15%/10분은 press 69→70에서
+  //      경기당 승점이 0.35 떨어지는 계단을 만들어 "압박은 70 미만" 단일 정답을 강제했다.
+  //  (2) 상한(+30%) 없이는 교체를 쓰지 않는 배치 시뮬에서 90분 풀프레스 시 체력이 0까지 떨어져
+  //      압박 90이 무조건 자살 수가 된다. 이 상한에서도 풀타임 압박 90이면 종료 시 체력 ~25다.
   const staminaWeight = [1, 1]
   for (const i of [0, 1] as const) {
     const press = sides[i].tactics.instructions.pressing
     if (press >= 70) sides[i].sustainedPressMinutes = (sides[i].sustainedPressMinutes ?? 0) + 1
     else sides[i].sustainedPressMinutes = 0
-    staminaWeight[i] = 1 + 0.15 * Math.floor((sides[i].sustainedPressMinutes ?? 0) / 10)
+    const excess = clamp((press - 70) / 30, 0, 1)
+    staminaWeight[i] = 1 + Math.min(0.3, 0.15 * Math.floor((sides[i].sustainedPressMinutes ?? 0) / 10) * excess)
     if (press >= 70 && avgStamina(sides[i]) < 55) {
       fx[i].foulRate *= 1.5
       // 압박 실효 반감: 압박이 만든 이득(1.0 초과분)을 절반으로.
@@ -182,11 +229,12 @@ function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
   const defZone = zoneStrength(def, 'defense').defense
   const ap = attackPatternEffects(atk.tactics.attackPattern)
   const momentumBoost = atkIdx === 0 ? 1 + st.momentum * 0.15 : 1 - st.momentum * 0.15
+  // 수비 측의 suppression(하이라인·하이프레스로 상대 전개를 끊는 항)이 공격 측 찬스를 억제한다.
   const chanceP = clamp(
-    (atk.team.statBaseline.shotsPerGame / (90 * participation)) * Math.pow(atkZone / Math.max(30, defZone), STRENGTH_SENSITIVITY) * fx[atkIdx].chanceRate * ap.chanceRate * fx[defIdx].counterVulnerability * momentumBoost,
+    (atk.team.statBaseline.shotsPerGame / (90 * participation)) * Math.pow(atkZone / Math.max(30, defZone), STRENGTH_SENSITIVITY) * fx[atkIdx].chanceRate * ap.chanceRate * fx[defIdx].counterVulnerability * fx[defIdx].suppression * momentumBoost,
     0.02, 0.45,
   )
-  if (rng.chance(chanceP)) resolveChance(st, atkIdx, defIdx, fx, rng)
+  if (rng.chance(chanceP)) resolveChance(st, atkIdx, defIdx, fx, rng, atkZone / Math.max(30, defZone))
 
   // 4) 체력 감소: 지속 압박 가중 + 그룹 적극성 가중(기본값 전부 1.0 → 불변).
   for (const [idx, side] of [[0, st.home], [1, st.away]] as const) {
@@ -213,7 +261,11 @@ function gkPowerplayActive(st: MatchState, idx: 0 | 1): boolean {
   return st.minute >= 85 && st.score[idx] < st.score[(1 - idx) as 0 | 1]
 }
 
-function resolveChance(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: ReturnType<typeof instructionEffects>[], rng: Rng) {
+// 전력비 → 찬스 '질' 지수. 강팀은 슛을 더 많이 쏠 뿐 아니라 더 좋은 위치에서 쏜다.
+// 동급(비율 1)이면 정확히 1.0이라 동급 캘리브레이션 계약에 무영향.
+const XG_STRENGTH = 0.75
+
+function resolveChance(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: ReturnType<typeof instructionEffects>[], rng: Rng, strengthRatio = 1) {
   const atk = atkIdx === 0 ? st.home : st.away
   const def = defIdx === 0 ? st.home : st.away
   const ap = attackPatternEffects(atk.tactics.attackPattern)
@@ -240,7 +292,9 @@ function resolveChance(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: ReturnT
 
   // xG: 슈팅 능력·찬스 퀄리티 기반. 공격 패턴(through↑/longshot↓)·GK 파워플레이(공격 측 +40%) 반영.
   // 기본값(balanced·비활성)이면 ap.chanceQuality=1, qualityBoost=1 → 회귀 불변.
-  const xg = clamp((es.shooting / 100) * 0.35 * fx[atkIdx].chanceQuality * ap.chanceQuality * qualityBoost, 0.02, 0.65)
+  // B5 attackFocus: 상대의 약한 측면으로 공략을 몰면 찬스 퀄이 오른다(balanced는 1.0).
+  const af = attackFocusEffects(atk.tactics.instructions.attackFocus, flankStrength(def))
+  const xg = clamp((es.shooting / 100) * 0.35 * fx[atkIdx].chanceQuality * ap.chanceQuality * qualityBoost * af.chanceQuality * Math.pow(strengthRatio, XG_STRENGTH), 0.02, 0.65)
   st.stats[atkIdx].xg = round2(st.stats[atkIdx].xg + xg)
 
   // cross는 유효슛 확률 소폭↓(컷인↓·크로스 위주). balanced는 onTargetBias=1 → 불변.

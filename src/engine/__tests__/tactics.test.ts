@@ -124,6 +124,21 @@ describe('MatchupContext — 미지정 시 기존 동작 불변', () => {
       .toBeCloseTo(instructionEffects(ins, slow).counterVulnerability, 12)
   })
 
+  // B2b: 라인을 내리는 선택에도 보상이 있어야 축이 게임이 된다.
+  it('물러선 라인 + 빠른 템포는 점유형 상대에게 역습 보상을 준다', () => {
+    const possessionTeam = { oppFrontPace: 85, oppGkBuildup: 78, oppPossession: 78 }
+    const counter: Instructions = { ...NEUTRAL, lineHeight: 25, tempo: 75 }
+    const slow: Instructions = { ...NEUTRAL, lineHeight: 25, tempo: 50 }
+    expect(instructionEffects(counter, possessionTeam).chanceQuality)
+      .toBeGreaterThan(instructionEffects(slow, possessionTeam).chanceQuality)
+  })
+  it('이미 물러서 있는 상대(점유 40)에겐 노릴 배후가 없어 역습 보상이 0이다', () => {
+    const deepTeam = { oppFrontPace: 78, oppGkBuildup: 66, oppPossession: 40 }
+    const counter: Instructions = { ...NEUTRAL, lineHeight: 25, tempo: 75 }
+    expect(instructionEffects(counter, deepTeam).chanceQuality)
+      .toBeCloseTo(instructionEffects(counter).chanceQuality, 12)
+  })
+
   it('하이프레스 점유 이득은 상대 GK 빌드업이 낮을수록 크다', () => {
     const badGk = { oppFrontPace: 60, oppGkBuildup: 30, oppPossession: 45 }
     const goodGk = { oppFrontPace: 60, oppGkBuildup: 88, oppPossession: 45 }

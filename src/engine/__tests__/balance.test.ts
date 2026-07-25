@@ -29,33 +29,31 @@ function slope(homeId: TeamId, awayId: TeamId, axis: AxisKey): number {
 const MARGIN = 0.08
 
 describe('지시 축 비단조성 — 최적 방향이 상대에 따라 뒤집혀야 한다', () => {
-  // Task 2(축 밸런스)에서 해제한다.
-  // 현재: 라인 상승 이득은 chanceQuality ±5.5%뿐인데 비용은 counterVulnerability ±25%라
-  // 상대와 무관하게 "내릴수록 유리"다. 상대 빌드업 방해 보상 항(B1)이 아예 없다.
-  it.skip('라인: 약체 상대로는 올릴수록 유리해야 한다', () => {
+  // Task 2에서 해결: 라인·압박에 '상대 억제'(suppression)와 압축 이득(chanceRate)을 추가하고
+  // 그 효율을 상대의 후방 전개 능력에 반비례시켰다(tactics.ts trapFactor).
+  it('라인: 약체 상대로는 올릴수록 유리해야 한다', () => {
     expect(slope('kor', 'rsa', 'lineHeight')).toBeGreaterThan(MARGIN)
   }, 300_000)
 
-  it.skip('라인: 강팀 상대로는 올릴수록 불리해야 한다', () => {
+  it('라인: 강팀 상대로는 올릴수록 불리해야 한다', () => {
     expect(slope('kor', 'esp', 'lineHeight')).toBeLessThan(-MARGIN)
   }, 300_000)
 
-  // 현재: 압박 이득은 chanceRate ×1.1 하나인데 비용은 counterVulnerability + foulRate
-  // + staminaDrain + 지속압박 페널티로 4중 누적이라 상대와 무관하게 "내릴수록 유리"다.
-  it.skip('압박: 약체 상대로는 올릴수록 유리해야 한다', () => {
+  // 압박은 counterVulnerability 과금에서 빠지고(B4), 지속압박 체력 가중은 임계 초과분에
+  // 비례하는 연속 함수가 됐다(기존 고정 계단이 press 69→70에서 승점 0.35 절벽을 만들었다).
+  it('압박: 약체 상대로는 올릴수록 유리해야 한다', () => {
     expect(slope('kor', 'rsa', 'pressing')).toBeGreaterThan(MARGIN)
   }, 300_000)
 
-  it.skip('압박: 강팀 상대로는 올릴수록 불리해야 한다', () => {
+  it('압박: 강팀 상대로는 올릴수록 불리해야 한다', () => {
     expect(slope('kor', 'esp', 'pressing')).toBeLessThan(-MARGIN)
   }, 300_000)
 })
 
 describe('지배 전략 방지 — 어느 축도 한쪽 끝이 압도하면 안 된다', () => {
-  // Task 2에서 해제. 중간 전력 상대(멕시코)에서는 어느 축도 뚜렷한 정답이 없어야 한다.
-  // 현재 압박은 폭 0.45(80에서 절벽), 라인은 0.159.
+  // 중간 전력 상대(멕시코)에서는 어느 축도 뚜렷한 정답이 없어야 한다.
   for (const axis of ['lineHeight', 'pressing', 'tempo'] as const) {
-    it.skip(`${axis}: 최고·최저 승점 차가 0.30 미만 (vs 멕시코)`, () => {
+    it(`${axis}: 최고·최저 승점 차가 0.30 미만 (vs 멕시코)`, () => {
       const pts = runAxisSweep('kor', 'mex', axis, GRID, N).map(c => c.points)
       expect(Math.max(...pts) - Math.min(...pts)).toBeLessThan(0.30)
     }, 300_000)
@@ -63,8 +61,7 @@ describe('지배 전략 방지 — 어느 축도 한쪽 끝이 압도하면 안 
 })
 
 describe('유저 개입 레버리지', () => {
-  // Task 2에서 해제. 현재 6.0pp로 목표 8pp에 미달한다(Task 1 실측: base 32.0% → plan 38.0%).
-  it.skip('상대별 맞춤 플랜이 기본값 대비 8pp 이상 승률을 올린다', () => {
+  it('상대별 맞춤 플랜이 기본값 대비 8pp 이상 승률을 올린다', () => {
     // vs 스페인(점유 강팀): 블록을 내리고 역습 — 낮은 라인·낮은 압박·빠른 템포
     const r = runAbBatch('kor', 'esp', {
       instructions: { lineHeight: 25, pressing: 30, tempo: 75, attackFocus: 'balanced' },
@@ -76,8 +73,7 @@ describe('유저 개입 레버리지', () => {
 })
 
 describe('전력 서열 게이트', () => {
-  // Task 2에서 해제. 현재 53.0%로 미달 — FIFA 1위 팀이 20위권 팀에 반반이라는 뜻이다.
-  it.skip('스페인이 홈에서 한국 상대 55% 이상 승률', () => {
+  it('스페인이 홈에서 한국 상대 55% 이상 승률', () => {
     const report = runBatch(loadTeam('esp'), loadTeam('kor'), 400)
     expect(report.homeWinRate).toBeGreaterThanOrEqual(0.55)
   }, 300_000)

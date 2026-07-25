@@ -42,18 +42,21 @@ const dev = (v: number) => (v > 60 ? (v - 60) / 40 : v < 40 ? (v - 40) / 40 : 0)
 
 /** 압박·하이라인의 '가두기' 효율. 상대의 후방 전개 능력(GK 빌드업·점유 성향 평균)이
  *  기준(72) 이하일수록 크고, 그 위(스페인급 78)면 음수 = 벗겨져 역효과.
- *  근거: 실팀 전개 지표 rsa 53 / cze 59 / mex 64 / kor 64 / esp 78. */
+ *  근거: 실팀 전개 지표 rsa 53 / cze 59 / mex 64 / kor 64 / esp 78.
+ *  폭 13은 이 12팀 분포에서 rsa 1.1(상한) · mex 0.62 · esp −0.46이 되도록 잡은 값이다. */
 const trapFactor = (ctx: MatchupContext) =>
-  clamp((72 - (ctx.oppGkBuildup + ctx.oppPossession) / 2) / 20, -0.5, 1.1)
+  clamp((72 - (ctx.oppGkBuildup + ctx.oppPossession) / 2) / 13, -0.5, 1.1)
 
 // 압축 이득의 축 가중. 압박이 라인보다 직접적으로 상대 전개를 끊는다.
 const W_LINE = 0.4, W_PRESS = 0.6
 // 압축 → 자기 찬스 빈도(상대 진영 회수). 라인·압박 최대치 동시 사용 시 ±(0.75×1.1×0.34) ≈ ±28%
 const K_RATE = 0.34
 // 압축 → 상대 찬스 억제. 같은 스케일에 조금 더 큰 계수(방해가 회수보다 확실하다)
-const K_SUP = 0.40
+const K_SUP = 0.50
 // 압박 → 점유 탈취(표시·모멘텀용). 승패 자체엔 참여 빈도 정규화로 중립이다.
 const K_POSS = 0.20
+// 물러선 라인 + 빠른 템포 = 전환 공격. 상대가 나와 있을수록 배후 공간이 커진다.
+const K_COUNTER = 1.0
 
 export function instructionEffects(ins: Instructions, ctx?: MatchupContext) {
   const line = ins.lineHeight, press = ins.pressing, tempo = ins.tempo
@@ -70,6 +73,15 @@ export function instructionEffects(ins: Instructions, ctx?: MatchupContext) {
   // B3 점유 탈취: 압박이 높고 상대 전개가 약할수록 크다.
   const pressGain = ctx ? dev(press) * K_POSS * trap : 0
 
+  // ── B2b 역습 보상 ──
+  // 라인을 내리는 선택에 '안전' 말고 보상도 준다: 물러선 블록(라인<40) + 빠른 템포(>60)는
+  // 전환 공격이다. 보상은 상대가 얼마나 나와 있느냐(점유 성향)에 비례한다 —
+  // 스페인급(78)에겐 배후가 넓고, 이미 물러서 있는 남아공(40)에겐 노릴 배후가 없다.
+  // 두 축 모두 중립대 안이면 0이라 기본 지시·축 스윕(다른 축 50 고정)에는 나타나지 않는다.
+  const counterGain = ctx && line < 40 && tempo > 60
+    ? -dev(line) * ((tempo - 60) / 40) * clamp((ctx.oppPossession - 55) / 45, 0, 1) * K_COUNTER
+    : 0
+
   // ── B2 하이라인 역습 비용을 상대 최전방 속도에 비례 ──
   // pace 75에서 1.0(기존과 동일), 빠르면 최대 1.35, 느리면 0.65까지 완화.
   // 하방(라인 ≤ 50)은 스케일 미적용 — 물러선 라인의 안전은 상대 속도와 무관하다.
@@ -79,7 +91,7 @@ export function instructionEffects(ins: Instructions, ctx?: MatchupContext) {
 
   return {
     chanceRate: lerp(tempo, 0.78, 1.22) * lerp(press, 0.9, 1.1) * (1 + compress * K_RATE),
-    chanceQuality: lerp(tempo, 1.11, 0.89) * lerp(line, 0.945, 1.055),
+    chanceQuality: lerp(tempo, 1.11, 0.89) * lerp(line, 0.945, 1.055) * (1 + counterGain),
     // ── B4 압박 항 제거 ──
     // 역습 취약성은 '라인 뒤 공간'의 함수다. 압박 비용은 foulRate·staminaDrain·지속압박이 담당한다
     // (기존엔 4중 과금이라 압박이 상대와 무관하게 손해였다).
