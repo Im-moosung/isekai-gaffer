@@ -128,6 +128,7 @@ export function MatchScreen({
   const phase = useMatchStore(s => s.phase)
   const engine = useMatchStore(s => s.engine)
   const momentPrompt = useMatchStore(s => s.momentPrompt)
+  const oppNotices = useMatchStore(s => s.oppNotices)
   const startMatch = useMatchStore(s => s.startMatch)
   const kickoff = useMatchStore(s => s.kickoff)
   const advanceMinute = useMatchStore(s => s.advanceMinute)
@@ -378,10 +379,15 @@ export function MatchScreen({
   const dangerEvent = minuteEvents.find(e => (e.type === 'save' || e.type === 'miss') && (e.xg ?? 0) >= DANGER_XG)
   const dangerMoment = replaying && !!dangerEvent
 
-  // 상단 방송 배너 — broadcast 모드(재생 중) 순간 제안만. 정지·하프타임 안내는 작전판이 담당.
-  const bannerText = replaying && momentPrompt
+  // 상단 방송 배너 — broadcast 모드(재생 중) 순간 제안이 우선. 정지·하프타임 안내는 작전판이 담당.
+  // 제안이 없을 때만 상대 감독의 최근 변경 통보를 3분간 흘려보낸다(슬롯 1개를 공유하므로
+  // 감독의 결정 기회를 상대 통보가 가리면 안 된다).
+  const momentBanner = replaying && momentPrompt
     ? `⚡ ${MOMENT_PHRASE[momentPrompt.kind]} — 감독 타임을 쓰시겠습니까?`
     : null
+  const lastNotice = oppNotices.length > 0 ? oppNotices[oppNotices.length - 1] : null
+  const recentNotice = lastNotice && displayMinute - lastNotice.minute < 3 ? lastNotice.text : null
+  const bannerText = momentBanner ?? recentNotice
 
   // ── 렌더러 체인 조립(모든 단계가 같은 props 계약을 받는다) ──────────
   // 3D는 이 2D 체인을 fallback 노드로 주입받는다 — Match3D가 pixi를 정적으로
@@ -455,7 +461,7 @@ export function MatchScreen({
         {/* ── 상단 방송 배너(피치 밖, 스코어버그 아래 얇은 바) ── */}
         {bannerText && (
           <div
-            className={`ms-banner${momentPrompt && replaying ? ' ms-banner--moment' : ''}`}
+            className={`ms-banner${momentBanner ? ' ms-banner--moment' : ' ms-banner--opp'}`}
             role="status"
           >
             <span className="ms-banner__text">{bannerText}</span>

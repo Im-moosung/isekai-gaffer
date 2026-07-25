@@ -22,6 +22,7 @@ export function matchupHint(edge: number): MatchupHint {
  *  키 플레이어 ★ + styleNotes + 매치업 힌트(formationEdge 부호·크기). 상대 스탯도 조회 가능. */
 export function OppPanel() {
   const engine = useMatchStore(s => s.engine)
+  const notices = useMatchStore(s => s.oppNotices)
   const [sel, setSel] = useState<string | null>(null)
 
   if (!engine) return <section className="op" aria-label="상대 분석" />
@@ -56,6 +57,18 @@ export function OppPanel() {
         <span className="op__matchup-vs">{myFormation} vs {oppFormation}</span>
         <span className="op__matchup-text">{hint.text}</span>
       </div>
+
+      {/* 상대 감독의 변경 이력 — 배너는 3분 뒤 사라지므로, 작전판에서 최근 3건을 다시 확인한다. */}
+      {notices.length > 0 && (
+        <ul className="op__timeline" aria-label="상대 변경 이력">
+          {notices.slice(-3).map(n => (
+            <li key={`${n.minute}-${n.text}`} className="op__timeline-row">
+              <span className="op__timeline-min">{n.minute}&apos;</span>
+              <span className="op__timeline-text">{n.text.replace('📢 ', '')}</span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div className="op__board">
         <PitchView state={engine} variant="tactics" />

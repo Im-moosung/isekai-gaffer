@@ -118,6 +118,12 @@
   border-color: var(--bc-accent);
   box-shadow: 0 0 18px -6px var(--bc-accent);
 }
+/* 상대 감독 통보 — 감독의 결정을 요구하지 않는 정보성 배너라 순간 제안보다 조용하게. */
+.ms-banner--opp {
+  border-color: var(--bc-line);
+  opacity: 0.92;
+  font-weight: 600;
+}
 .ms-banner__text {
   color: var(--bc-text);
 }

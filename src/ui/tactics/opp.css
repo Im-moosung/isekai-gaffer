@@ -44,6 +44,27 @@
 .op__matchup--up .op__matchup-text { color: var(--bc-accent); }
 .op__matchup--down .op__matchup-text { color: var(--bc-danger); }
 
+/* 상대 감독 변경 이력 — 최근 3건. 방송 배너가 흘려보낸 정보를 다시 확인하는 자리. */
+.op__timeline {
+  list-style: none;
+  margin: 0;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-radius: 8px;
+  border-left: 3px solid var(--bc-text-dim);
+  background: var(--bc-panel-2);
+}
+.op__timeline-row { display: flex; gap: 6px; font-size: 11.5px; line-height: 1.4; }
+.op__timeline-min {
+  flex: 0 0 auto;
+  font-weight: 800;
+  color: var(--bc-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.op__timeline-text { color: var(--bc-text); }
+
 .op__board {
   border-radius: 10px;
   overflow: hidden;

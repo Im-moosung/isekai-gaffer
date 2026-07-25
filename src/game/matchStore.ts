@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import { createMatch, simulateSegment, applyCommand, type MatchCommand } from '../engine/simulate'
 import type { DecisionEntry, Instructions, MatchEvent, MatchState, TacticState, Team } from '../engine/types'
 import { breakSchedule, detectMoment, type DecisionMoment, type HydrationSchedule } from './matchSession'
+import { decideAwayActions } from './oppAi'
 
 /** 재생 세션 상태 머신.
  *  - 'pre'          킥오프 대기
@@ -195,6 +196,9 @@ function homeStaminaFloor(engine: MatchState): number {
   return vals.length ? Math.min(...vals) : 100
 }
 
+/** 상대 감독의 변경 1건 통보(발동 분 + 배너 문구). */
+export interface OppNotice { minute: number; text: string }
+
 export interface MatchUIState {
   phase: MatchPhase
   engine: MatchState | null
@@ -214,6 +218,10 @@ export interface MatchUIState {
   lastShoutMinute: number | null
   /** 감독 개입 로그 — 기자회견 근거. startMatch/reset 시 초기화. */
   decisionLog: DecisionEntry[]
+  /** 상대 AI가 이미 발동한 액션 키(유형당 1회 제한). */
+  oppFired: string[]
+  /** 상대 변경 통보 이력 — 방송 배너·작전판 상대 탭 타임라인. */
+  oppNotices: OppNotice[]
   startMatch(home: Team, away: Team, seed: number, opts?: StartMatchOpts): void
   /** 킥오프 — 'pre'에서 재생 시작('playing'). */
   kickoff(): void
@@ -250,6 +258,8 @@ const initial = {
   talked: false,
   lastShoutMinute: null as number | null,
   decisionLog: [] as DecisionEntry[],
+  oppFired: [] as string[],
+  oppNotices: [] as OppNotice[],
 }
 
 export const useMatchStore = create<MatchUIState>((set, get) => ({
@@ -275,7 +285,7 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     set({ phase: 'playing' })
   },
   advanceMinute: () => {
-    const { engine, phase, schedule, firedMoments, momentPrompt, boostUntil } = get()
+    const { engine, phase, schedule, firedMoments, momentPrompt, boostUntil, oppFired, oppNotices } = get()
     if (!engine) throw new Error('경기 미시작')
     if (phase !== 'playing') return // 정지 중엔 재개(confirmTactics)로만 진행
     const prevScore: [number, number] = [engine.score[0], engine.score[1]]
@@ -283,23 +293,41 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     // boostUntil=0(초기·미개입)이면 opts 없이 호출 → 기존 동작 불변.
     const nextMinute = engine.minute + 1
     const opts = boostUntil >= nextMinute ? { instructionBoost: { side: 'home' as const, until: boostUntil } } : undefined
-    const next = simulateSegment(engine, nextMinute, opts)
+    let next = simulateSegment(engine, nextMinute, opts)
     const minute = next.minute
 
+    // 상대 감독 — 창(46/60/70/80)에서 교체·전술 스위칭. 완전 결정론이라 시드 회귀에 안전하다.
+    // phase 전이 판정보다 먼저 적용해야 하프타임·브레이크 직전 분에도 반영된다.
+    let firedNext = oppFired
+    let noticesNext = oppNotices
+    for (const a of decideAwayActions(next, minute, firedNext)) {
+      try {
+        next = applyCommand(next, 'away', a.cmd)
+      } catch {
+        // 교체 한도 초과 등은 조용히 건너뛴다 — 상대 AI의 실패가 경기를 멈추면 안 된다.
+        continue
+      }
+      firedNext = [...firedNext, a.notice]
+      noticesNext = [...noticesNext, { minute, text: a.notice }]
+    }
+    // 아래 모든 분기가 이 두 필드를 함께 써야 한다. 하나라도 빠지면 상대 AI가 같은
+    // 액션을 무한 반복하거나(oppFired 소실) 통보가 사라진다.
+    const opp = { oppFired: firedNext, oppNotices: noticesNext }
+
     if (minute >= 90) {
-      set({ engine: next, phase: 'fulltime', pauseReason: null, momentPrompt: null })
+      set({ engine: next, phase: 'fulltime', pauseReason: null, momentPrompt: null, ...opp })
       return
     }
     if (minute === 45) {
-      set({ engine: next, phase: 'halftime', pauseReason: { kind: 'halftime' } })
+      set({ engine: next, phase: 'halftime', pauseReason: { kind: 'halftime' }, ...opp })
       return
     }
     if (schedule && minute === schedule.firstHydration) {
-      set({ engine: next, phase: 'paused-break', pauseReason: { kind: 'hydration1' } })
+      set({ engine: next, phase: 'paused-break', pauseReason: { kind: 'hydration1' }, ...opp })
       return
     }
     if (schedule && minute === schedule.secondHydration) {
-      set({ engine: next, phase: 'paused-break', pauseReason: { kind: 'hydration2' } })
+      set({ engine: next, phase: 'paused-break', pauseReason: { kind: 'hydration2' }, ...opp })
       return
     }
 
@@ -311,11 +339,11 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
         { homeId: next.home.team.id, awayId: next.away.team.id },
       )
       if (moment && !firedMoments.includes(moment.kind)) {
-        set({ engine: next, momentPrompt: moment, firedMoments: [...firedMoments, moment.kind] })
+        set({ engine: next, momentPrompt: moment, firedMoments: [...firedMoments, moment.kind], ...opp })
         return
       }
     }
-    set({ engine: next })
+    set({ engine: next, ...opp })
   },
   pauseByUser: () => {
     const { engine, phase } = get()
