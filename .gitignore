@@ -4,3 +4,7 @@ dist/
 .superpowers/
 .DS_Store
 docs/screenshots/
+
+# 감사 산출물(로컬)
+docs/audit/shots/
+docs/audit/*.json
