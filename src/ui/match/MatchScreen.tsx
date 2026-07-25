@@ -21,6 +21,30 @@ import './match.css'
 // SVG가 잠깐 보였다가 Pixi로 교체). WebGL 불가 폴백 로직은 PixiPitch 내부에 그대로 있다.
 const PixiPitch = lazy(() => import('../pitch/pixi/PixiPitch').then(m => ({ default: m.PixiPitch })))
 
+// ★ 3D 매치 뷰(Phase 4E) — three.js는 pixi보다 훨씬 무거우므로 같은 방식으로 지연 로드한다.
+// Match3D 내부에서 three를 다시 dynamic import하므로 three는 별도 청크로 분리된다
+// (엔트리 청크에 three 시그니처 부재를 build 후 grep으로 검증).
+const Match3D = lazy(() => import('../pitch/three/Match3D').then(m => ({ default: m.Match3D })))
+
+/** 2D/3D 렌더러 선택 기억(기본 3D). 심사·저사양 배려로 언제든 2D로 내릴 수 있다. */
+const RENDER3D_KEY = 'rematch-render3d'
+
+function read3dPref(): boolean {
+  try {
+    return localStorage.getItem(RENDER3D_KEY) !== '0'
+  } catch {
+    return true
+  }
+}
+
+function write3dPref(on: boolean): void {
+  try {
+    localStorage.setItem(RENDER3D_KEY, on ? '1' : '0')
+  } catch {
+    /* ignore */
+  }
+}
+
 /** PixiPitch 청크 로드 실패(네트워크 오류·배포 중 404) 시 React.lazy가 렌더 중 에러를
  *  throw한다. 에러 바운더리가 없으면 이 에러가 위로 전파되어 앱 전체가 백지가 된다
  *  (PixiPitch 내부 WebGL 폴백은 컴포넌트가 로드된 뒤에만 작동 → 이 경로를 못 막는다).
@@ -106,6 +130,8 @@ export function MatchScreen({
 
   const [shootoutOpen, setShootoutOpen] = useState(false)
   const [speed, setSpeed] = useState<PlaybackSpeed>(1)
+  // 렌더러 선택 — 3D(three) ↔ 2D(pixi). localStorage 기억, 기본 3D.
+  const [render3d, setRender3d] = useState(read3dPref)
   // 사운드 — 음소거 상태(sfx 모듈 = localStorage 진실원)와 관중 스웰(골 직후 4초).
   const [muted, setMutedUi] = useState(() => sfx.isMuted())
   // 한국어 TTS 해설 토글(음소거와 별개, localStorage 기억) — 스코어버그 옆 [🎙].
@@ -280,6 +306,13 @@ export function MatchScreen({
     setTtsOnUi(ctts.toggleTts())
   }
 
+  // 2D/3D 렌더러 토글 — 선택을 localStorage에 기억한다(저사양·심사 환경 배려).
+  function toggleRender3d() {
+    const next = !render3d
+    setRender3d(next)
+    write3dPref(next)
+  }
+
   // 토너먼트 무승부 → 승부차기 진입 필요 (캠페인 한정).
   const needsShootout = !!onMatchEnd && !!requireWinner && !!engine && engine.score[0] === engine.score[1]
 
@@ -335,6 +368,25 @@ export function MatchScreen({
     ? `⚡ ${MOMENT_PHRASE[momentPrompt.kind]} — 감독 타임을 쓰시겠습니까?`
     : null
 
+  // ── 렌더러 체인 조립(모든 단계가 같은 props 계약을 받는다) ──────────
+  // 3D는 이 2D 체인을 fallback 노드로 주입받는다 — Match3D가 pixi를 정적으로
+  // import하면 three 청크에 pixi가 딸려오므로, 노드로 넘겨 청크 분리를 유지한다.
+  const pitchProps = {
+    state: engine,
+    lastEvent,
+    sequence: playSequence ? highlight!.seq : undefined,
+    dwellMs: seqDwell,
+    sequenceSide: highlight?.side,
+  }
+  const pitchSvg = <PitchView {...pitchProps} />
+  const pitch2d = (
+    <PitchBoundary fallback={pitchSvg}>
+      <Suspense fallback={pitchSvg}>
+        <PixiPitch {...pitchProps} />
+      </Suspense>
+    </PitchBoundary>
+  )
+
   return (
     <div className={`ms-root ms-root--broadcast${tacticsMounted && !tacticsExiting ? ' ms-root--tactics' : ''}`}>
       <div className={`ms-stage${tacticsMounted && !tacticsExiting ? ' ms-stage--dim' : ''}`}>
@@ -367,6 +419,16 @@ export function MatchScreen({
         >
           🎙
         </button>
+        {/* 2D/3D 렌더러 토글 — TTS 옆. 현재 모드를 표시하고, 누르면 반대로 전환된다. */}
+        <button
+          type="button"
+          className="ms-r3d"
+          aria-label={render3d ? '2D 화면으로 전환' : '3D 화면으로 전환'}
+          aria-pressed={render3d}
+          onClick={toggleRender3d}
+        >
+          {render3d ? '3D' : '2D'}
+        </button>
         {/* 재생 중 감독 타임 버튼 — 스코어버그 옆. pauseByUser로 자유 일시정지. */}
         {replaying && (
           <div className="ms-live-controls">
@@ -391,40 +453,21 @@ export function MatchScreen({
           </div>
         )}
 
-        {/* ── 피치 — 언제나 보인다(가리는 오버레이 없음). broadcast는 PixiJS 렌더러
-            (WebGL 불가·reduced-motion은 PixiPitch 내부에서 SVG 폴백/연출 생략). ── */}
+        {/* ── 피치 — 언제나 보인다(가리는 오버레이 없음).
+            렌더러 체인: Match3D(three) → PixiPitch(pixi) → PitchView(SVG).
+            각 단계는 청크 로드 실패를 PitchBoundary가, 런타임 미지원(WebGL 불가·
+            컨텍스트 로스)을 컴포넌트 내부 폴백이 받아 다음 단계로 넘긴다.
+            토글로 3D를 끄면 2D 체인만 남는다(key로 바운더리 상태까지 리셋). ── */}
         <div className="ms-pitch-wrap">
-          <PitchBoundary
-            fallback={
-              <PitchView
-                state={engine}
-                lastEvent={lastEvent}
-                sequence={playSequence ? highlight!.seq : undefined}
-                dwellMs={seqDwell}
-                sequenceSide={highlight?.side}
-              />
-            }
-          >
-            <Suspense
-              fallback={
-                <PitchView
-                  state={engine}
-                  lastEvent={lastEvent}
-                  sequence={playSequence ? highlight!.seq : undefined}
-                  dwellMs={seqDwell}
-                  sequenceSide={highlight?.side}
-                />
-              }
-            >
-              <PixiPitch
-                state={engine}
-                lastEvent={lastEvent}
-                sequence={playSequence ? highlight!.seq : undefined}
-                dwellMs={seqDwell}
-                sequenceSide={highlight?.side}
-              />
-            </Suspense>
-          </PitchBoundary>
+          {render3d ? (
+            <PitchBoundary key="chain-3d" fallback={pitch2d}>
+              <Suspense fallback={pitchSvg}>
+                <Match3D {...pitchProps} fallback={pitch2d} />
+              </Suspense>
+            </PitchBoundary>
+          ) : (
+            pitch2d
+          )}
         </div>
 
         <Ticker lines={lines} emphasis={dangerMoment} />
