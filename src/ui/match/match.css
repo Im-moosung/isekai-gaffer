@@ -360,6 +360,57 @@
   opacity: 0.5;
 }
 
+/* ── 2D/3D 렌더러 토글 — TTS 바로 오른쪽. 현재 모드를 글자로 표시한다. ── */
+.ms-r3d {
+  position: absolute;
+  top: 62px;
+  left: 100px;
+  z-index: 21;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--bc-line);
+  border-radius: 9px;
+  background: linear-gradient(180deg, var(--bc-panel-2), var(--bc-panel));
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  color: var(--bc-text-dim);
+  font-family: var(--bc-font);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  cursor: pointer;
+}
+/* 3D일 때 강조(현재 모드가 한눈에 보이게). */
+.ms-r3d[aria-pressed='true'] {
+  color: var(--bc-text);
+  border-color: color-mix(in srgb, var(--bc-home) 55%, var(--bc-line));
+}
+
+/* ── 3D 매치 뷰 호스트 — SVG pv-root·pixi-pitch와 동일 비율 규칙 ── */
+.m3d-host {
+  width: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: 105 / 68;
+  border-radius: 8px;
+  overflow: hidden;
+  /* three 청크(724kB)를 await import 하는 동안 이 빈 div가 이미 마운트돼 있다.
+     Suspense 폴백은 Match3D 청크까지만 가려주므로, 그 사이 검은 사각형이 뜨지 않게
+     pixi-pitch·SVG 피치와 같은 잔디색을 깔아 "피치 상시 노출" 원칙을 지킨다. */
+  background: var(--bc-pitch);
+  position: relative;
+  line-height: 0;
+}
+.m3d-host .m3d-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
 /* ── 재생 속도 토글 — 스코어버그 맞은편(우상단) ────────────── */
 .ms-speed {
   position: absolute;
