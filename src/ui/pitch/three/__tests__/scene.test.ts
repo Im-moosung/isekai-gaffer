@@ -1,14 +1,98 @@
 // buildScene은 three를 주입받는다. 테스트에서는 실제 three(WebGL 없이 동작하는 씬 그래프
 // 부분만)를 주입해 구조·결정론·해제를 검증한다. 프로덕션 모듈은 three를 정적 import하지
 // 않으므로 코드 스플릿은 유지된다.
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import * as THREE from 'three'
-import { buildScene, makeContactShadow } from '../scene'
+import { buildScene, makeContactShadow, MAX_CROWD_INSTANCES } from '../scene'
 import { GOAL_H, GOAL_W, POST_R } from '../textures'
 import { PITCH_W, PITCH_H } from '../types'
 
 function build(opts = {}) {
   return buildScene(THREE, { crowdCount: 800, pxPerMeter: 2, ...opts })
+}
+
+// ── canvas 2D 스텁 ────────────────────────────────────────────────
+// vitest 기본 환경(node)에는 document가 없어 textures.makeCanvas가 항상 null을 돌려준다
+// → buildScene이 단색 폴백만 타고 CanvasTexture 경로(clone·repeat·dispose)가 전혀 실행되지 않는다.
+// 아래 스텁은 no-op 2D 컨텍스트를 심어 그 경로를 강제 실행시킨다(픽셀 결과는 검증 대상 아님).
+function makeCtxStub(): CanvasRenderingContext2D {
+  const noop = (): void => {}
+  const gradient = { addColorStop: noop }
+  const ctx = {
+    fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 1,
+    lineCap: 'butt',
+    globalAlpha: 1,
+    font: '',
+    textAlign: 'start',
+    textBaseline: 'alphabetic',
+    fillRect: noop,
+    clearRect: noop,
+    strokeRect: noop,
+    beginPath: noop,
+    closePath: noop,
+    moveTo: noop,
+    lineTo: noop,
+    arc: noop,
+    ellipse: noop,
+    fill: noop,
+    stroke: noop,
+    fillText: noop,
+    save: noop,
+    restore: noop,
+    translate: noop,
+    rotate: noop,
+    scale: noop,
+    putImageData: noop,
+    createImageData: (w: number, h: number) => ({
+      data: new Uint8ClampedArray(w * h * 4),
+      width: w,
+      height: h,
+    }),
+    createPattern: () => ({}),
+    createLinearGradient: () => gradient,
+    createRadialGradient: () => gradient,
+  }
+  return ctx as unknown as CanvasRenderingContext2D
+}
+
+/** globalThis.document를 캔버스 스텁으로 교체하고 복원 함수를 돌려준다(전역 오염 금지). */
+function installCanvasStub(): () => void {
+  const g = globalThis as { document?: unknown }
+  const had = 'document' in g
+  const prev = g.document
+  g.document = {
+    createElement(tag: string) {
+      if (tag !== 'canvas') return {}
+      return {
+        width: 1,
+        height: 1,
+        getContext: (kind: string) => (kind === '2d' ? makeCtxStub() : null),
+      }
+    },
+  }
+  return () => {
+    if (had) g.document = prev
+    else delete g.document
+  }
+}
+
+/** 씬 트리의 머티리얼이 참조하는 모든 텍스처를 수집한다(disposeTree와 같은 규칙). */
+function collectTextures(root: THREE.Object3D): Set<THREE.Texture> {
+  const found = new Set<THREE.Texture>()
+  root.traverse((o) => {
+    const mat = (o as THREE.Mesh).material
+    if (!mat) return
+    for (const m of Array.isArray(mat) ? mat : [mat]) {
+      const rec = m as unknown as Record<string, unknown>
+      for (const key of Object.keys(rec)) {
+        const v = rec[key] as THREE.Texture | null
+        if (v && typeof v === 'object' && v.isTexture) found.add(v)
+      }
+    }
+  })
+  return found
 }
 
 describe('buildScene 구조', () => {
@@ -236,6 +320,77 @@ describe('dispose', () => {
     const b = build({ crowdCount: 500 })
     b.dispose()
     expect(() => b.crowdWave(2, 1)).not.toThrow()
+  })
+
+  it('InstancedMesh.dispose를 호출해 instanceMatrix/instanceColor GPU 버퍼를 해제한다', () => {
+    const b = build({ crowdCount: 500 })
+    const crowd = b.crowd
+    expect(crowd).not.toBeNull()
+    // WebGLObjects.onInstancedMeshDispose는 이 'dispose' 이벤트로만 버퍼를 remove하고 VAO를 release한다.
+    // (attributes가 WeakMap이라 GC로는 gl.deleteBuffer가 절대 호출되지 않는다)
+    let fired = 0
+    crowd!.addEventListener('dispose', () => fired++)
+    const spy = vi.spyOn(crowd!, 'dispose')
+
+    b.dispose()
+
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(fired).toBe(1)
+    spy.mockRestore()
+  })
+
+  it('dispose 후 bundle.crowd가 null이라 해제된 메시를 붙들지 않는다', () => {
+    const b = build({ crowdCount: 400 })
+    expect(b.crowd).not.toBeNull()
+    b.dispose()
+    expect(b.crowd).toBeNull()
+  })
+
+  it('canvas 2D가 있으면 텍스처 경로를 타고 dispose가 전부 해제한다', () => {
+    const restore = installCanvasStub()
+    try {
+      const b = build({ crowdCount: 300 })
+      const texes = collectTextures(b.scene)
+      // 피치 · 네트 · 콘크리트 · 광고보드(side) · 광고보드(end, side.clone())
+      expect(texes.size).toBe(5)
+
+      const byRepeat = [...texes].map((t) => `${t.repeat.x.toFixed(3)}x${t.repeat.y.toFixed(3)}`)
+      // netTex.repeat: 실제 골대 크기 기준 0.6m 타일
+      expect(byRepeat).toContain(`${(GOAL_W / 0.6).toFixed(3)}x${(GOAL_H / 0.6).toFixed(3)}`)
+      // adTexEnd는 adTexSide의 clone이라 repeat만 다른 별개 인스턴스여야 한다
+      expect(byRepeat).toContain('4.000x1.000')
+      expect(byRepeat).toContain('2.500x1.000')
+
+      let disposed = 0
+      for (const t of texes) t.addEventListener('dispose', () => disposed++)
+      b.dispose()
+      expect(disposed).toBe(texes.size)
+      // 폴백이 아니라 실제 map이 붙었는지(= 텍스처 경로였는지) 재확인
+      expect(texes.size).toBeGreaterThan(0)
+    } finally {
+      restore()
+    }
+  })
+
+  it('캔버스 스텁은 테스트 밖으로 새지 않는다', () => {
+    const b = build({ crowdCount: 100 })
+    expect(collectTextures(b.scene).size).toBe(0)
+    b.dispose()
+  })
+})
+
+describe('crowdCount 상한', () => {
+  it('좌석 격자 포화값(MAX_CROWD_INSTANCES)을 넘지 않는다', () => {
+    expect(MAX_CROWD_INSTANCES).toBe(7440)
+    const b = build({ crowdCount: 12000 })
+    expect(b.crowdCount).toBe(MAX_CROWD_INSTANCES)
+    expect(b.crowd!.count).toBe(MAX_CROWD_INSTANCES)
+    b.dispose()
+
+    // 상한 미만 요청은 그대로 근사된다(포화가 항상 걸리는 게 아님).
+    const small = build({ crowdCount: 4000 })
+    expect(small.crowdCount).toBeLessThan(MAX_CROWD_INSTANCES)
+    small.dispose()
   })
 })
 

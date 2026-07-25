@@ -33,7 +33,13 @@ export interface BuildSceneOptions {
   homeColor?: number
   /** 어웨이 팀 컬러. */
   awayColor?: number
-  /** 관중 목표 인원(실제 인스턴스 수는 좌석 격자에 맞춰 근사). 기본 4000. */
+  /**
+   * 관중 목표 인원(실제 인스턴스 수는 좌석 격자에 맞춰 근사). 기본 4000.
+   *
+   * **상한 포화**: 좌석 간격 하한 {@link MIN_SEAT_GAP}(0.9m)과 열 수 {@link STAND_ROWS}(12)가
+   * 격자 용량을 고정하므로 실제 인스턴스 수는 {@link MAX_CROWD_INSTANCES}(현 스탠드 규격에서
+   * 7440)를 넘지 않는다. 즉 12000을 요청해도 7440만 생성된다(0 이하는 관중 없음).
+   */
   crowdCount?: number
   /** 피치 텍스처 해상도(px/m). 기본 20 → 2100×1360. 저사양은 12 권장. */
   pxPerMeter?: number
@@ -51,9 +57,12 @@ export interface SceneBundle {
   stadiumGroup: THREE_NS.Group
   /** 피치 평면(레이캐스트·머티리얼 튜닝용). */
   pitchMesh: THREE_NS.Mesh
-  /** 관중 InstancedMesh(캔버스 없는 환경에서도 생성됨). */
-  crowd: THREE_NS.InstancedMesh | null
-  /** 실제 생성된 관중 인스턴스 수. */
+  /**
+   * 관중 InstancedMesh(캔버스 없는 환경에서도 생성됨).
+   * `dispose()` 이후에는 **null이 된다**(getter로 노출 — 해제된 메시를 붙들지 않는다).
+   */
+  readonly crowd: THREE_NS.InstancedMesh | null
+  /** 실제 생성된 관중 인스턴스 수. 항상 `≤ MAX_CROWD_INSTANCES`. */
   crowdCount: number
   /**
    * 관중 애니메이션. 매 프레임 호출.
@@ -112,6 +121,22 @@ const SIDES: readonly StandSide[] = [
   { yaw: Math.PI / 2, c: 0, s: 1, isEnd: true, inner: END_INNER, length: END_LEN, bias: 'away', boardDist: PITCH_W / 2 + 4 },
   { yaw: -Math.PI / 2, c: 0, s: -1, isEnd: true, inner: END_INNER, length: END_LEN, bias: 'home', boardDist: PITCH_W / 2 + 4 },
 ]
+
+/**
+ * 좌석 격자 최소 간격(m). 사람 어깨너비 하한 — 이보다 촘촘히 붙이면 박스가 서로 겹친다.
+ * 이 하한이 곧 관중 수 상한을 만든다({@link MAX_CROWD_INSTANCES}).
+ */
+const MIN_SEAT_GAP = 0.9
+
+/**
+ * 좌석 격자가 수용 가능한 최대 관중 인스턴스 수 = 4면 × (길이/0.9m 열) × 12행.
+ * 현 스탠드 규격(SIDE_LEN 158m · END_LEN 121m)에서 **7440**.
+ * `buildScene({ crowdCount })`이 이 값에서 포화하므로 호출부는 초과 요청을 기대하면 안 된다.
+ */
+export const MAX_CROWD_INSTANCES: number = SIDES.reduce(
+  (a, s) => a + Math.max(1, Math.round(s.length / MIN_SEAT_GAP)) * STAND_ROWS,
+  0,
+)
 
 /** 관중 중립 색(코트·피부·빈 좌석) — 팀 컬러와 섞여 자연스러운 노이즈를 만든다. */
 const NEUTRALS = [0xd8dde6, 0x39404d, 0xb9a48c, 0x6a7280, 0x272c35]
@@ -339,7 +364,8 @@ export function buildScene(THREE: ThreeAPI, opts: BuildSceneOptions = {}): Scene
   // 목표 인원에서 좌석 간격을 역산 → 4면 열·행 격자에 배치(결정론).
   const totalLen = SIDES.reduce((a, s) => a + s.length, 0)
   const perRow = Math.max(1, targetCrowd / STAND_ROWS)
-  const seatGap = Math.max(0.9, totalLen / perRow)
+  // 간격 하한 때문에 targetCrowd가 커져도 격자가 더 촘촘해지지 않는다 → MAX_CROWD_INSTANCES 포화.
+  const seatGap = Math.max(MIN_SEAT_GAP, totalLen / perRow)
   const colsOf = (len: number) => Math.max(1, Math.round(len / seatGap))
   const crowdCount = targetCrowd > 0 ? SIDES.reduce((a, s) => a + colsOf(s.length) * STAND_ROWS, 0) : 0
 
@@ -467,7 +493,10 @@ export function buildScene(THREE: ThreeAPI, opts: BuildSceneOptions = {}): Scene
     pitchGroup,
     stadiumGroup,
     pitchMesh,
-    crowd,
+    // 값 복사로 노출하면 dispose 후에도 해제된 메시를 붙들게 된다(dangling). getter로 클로저를 본다.
+    get crowd() {
+      return crowd
+    },
     crowdCount,
     crowdWave,
     dispose,
@@ -499,7 +528,7 @@ function seatColor(
   return col
 }
 
-/** three 객체 트리의 geometry/material/texture/light를 전부 해제한다. */
+/** three 객체 트리의 geometry/material/texture/light/인스턴스 버퍼를 전부 해제한다. */
 function disposeTree(root: THREE_NS.Object3D): void {
   const geos = new Set<THREE_NS.BufferGeometry>()
   const mats = new Set<THREE_NS.Material>()
@@ -508,6 +537,7 @@ function disposeTree(root: THREE_NS.Object3D): void {
       geometry?: THREE_NS.BufferGeometry
       material?: THREE_NS.Material | THREE_NS.Material[]
       isLight?: boolean
+      isInstancedMesh?: boolean
       dispose?: () => void
     }
     if (anyObj.geometry) geos.add(anyObj.geometry)
@@ -516,6 +546,10 @@ function disposeTree(root: THREE_NS.Object3D): void {
       else mats.add(anyObj.material)
     }
     if (anyObj.isLight && typeof anyObj.dispose === 'function') anyObj.dispose()
+    // InstancedMesh의 instanceMatrix/instanceColor는 WebGLObjects가 **'dispose' 이벤트로만**
+    // gl.deleteBuffer + VAO release를 한다(attributes가 WeakMap이라 GC로는 회수되지 않는다).
+    // geometry/material만 해제하면 빌드·해제 사이클마다 인스턴스 버퍼가 영구 누수된다.
+    if (anyObj.isInstancedMesh && typeof anyObj.dispose === 'function') anyObj.dispose()
   })
   for (const g of geos) g.dispose()
   for (const m of mats) {
