@@ -36,9 +36,19 @@ export function zoneStrength(side: SideState, phase?: 'attack' | 'defense') {
   const shortage = side.sentOff.length * 0.06
   const gi = side.tactics.groupIntensity
   const pf = side.tactics.phaseFormations
-  // 존별 배수: 그룹 적극성 × 페이즈 틸트. 기본값에서 둘 다 1.0 → (val * 1 * 1) === val (회귀 불변).
+  // 사기 반영: 주전(퇴장 제외) 평균 사기를 존 전력 배수로. 팀토크·외침이 결과에 닿는 유일한 경로다.
+  // 초기값 70에서 정확히 1.0이 되도록 70을 중심으로 정의한다(시드 회귀 불변).
+  // 100→1.06, 40→0.94, 0→0.86. 팀토크 최대 delta +11은 81→1.022로, 체감되되 밸런스를 흔들지 않는다.
+  const moraleVals = side.tactics.lineup
+    .filter(l => !side.sentOff.includes(l.playerId))
+    .map(l => side.moraleByPlayer[l.playerId] ?? 70)
+  const avgMorale = moraleVals.length ? moraleVals.reduce((s, v) => s + v, 0) / moraleVals.length : 70
+  const moraleFactor = 1 + ((avgMorale - 70) / 100) * 0.20
+  // 존별 배수: 그룹 적극성 × 페이즈 틸트 × 사기. 기본값에서 전부 1.0 → (val * 1 * 1 * 1) === val (회귀 불변).
+  // gk 존에는 곱하지 않는다 — 반환값을 소비하는 곳이 없어(resolveChance는 gkStats.saving을 직접 읽는다)
+  // 죽은 경로에 로직을 얹을 이유가 없다.
   const mod = (zone: 'attack' | 'midfield' | 'defense') =>
-    groupIntensityZoneFactor(gi, zone) * (phase ? phaseTilt(pf, phase, zone) : 1.0)
+    groupIntensityZoneFactor(gi, zone) * (phase ? phaseTilt(pf, phase, zone) : 1.0) * moraleFactor
   return {
     attack: avg(zones.attack) * (1 - shortage) * mod('attack'),
     midfield: avg(zones.midfield) * (1 - shortage) * mod('midfield'),
