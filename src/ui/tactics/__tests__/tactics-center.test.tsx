@@ -103,13 +103,17 @@ describe('TacticsCenter — 킥오프 전 워룸', () => {
 
   it('[추천 적용]이 4축 슬라이더 위치까지 실제로 옮긴다', () => {
     // 실팀(스페인 점유 78·라인 62·압박 68)이라야 지시 축 권고가 실제로 움직인다.
+    // 라인 25 = 스페인의 후방 전개 지표 78(GK 빌드업 78·점유 78)에서 파생된 값이다
+    // — 기준 72를 넘으면 압박이 벗겨지므로 추천이 라인·압박을 함께 내린다.
     store().reset()
     store().startMatch(loadTeam('kor'), loadTeam('esp'), 20260724)
     const { getByRole } = render(<TacticsCenter onKickoff={() => {}} />)
     fireEvent.click(getByRole('button', { name: /추천 적용/ }))
     fireEvent.click(getByRole('tab', { name: '② 팀 전술' }))
-    expect((getByRole('slider', { name: '라인' }) as HTMLInputElement).value).toBe('30')
-    expect(store().engine!.home.tactics.instructions.lineHeight).toBe(30)
+    expect((getByRole('slider', { name: '라인' }) as HTMLInputElement).value).toBe('25')
+    expect(store().engine!.home.tactics.instructions.lineHeight).toBe(25)
+    // 압박도 함께 내려간다 — 기존엔 우리 프로필(62) 그대로라 상대 무관이었다.
+    expect(store().engine!.home.tactics.instructions.pressing).toBe(25)
   })
 
   it('랭킹 격차가 큰 강팀 상대에는 수비적 멘탈리티를 추천한다', () => {

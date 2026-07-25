@@ -44,7 +44,9 @@ const dev = (v: number) => (v > 60 ? (v - 60) / 40 : v < 40 ? (v - 40) / 40 : 0)
  *  기준(72) 이하일수록 크고, 그 위(스페인급 78)면 음수 = 벗겨져 역효과.
  *  근거: 실팀 전개 지표 rsa 53 / cze 59 / mex 64 / kor 64 / esp 78.
  *  폭 13은 이 12팀 분포에서 rsa 1.1(상한) · mex 0.62 · esp −0.46이 되도록 잡은 값이다. */
-const trapFactor = (ctx: MatchupContext) =>
+/*  전개 능력에만 의존하므로 인자는 그 두 필드로 좁힌다 — 추천 계층(game/scouting)이
+ *  같은 판별자를 재사용할 때 쓰지도 않는 oppFrontPace를 지어내지 않아도 되게 하기 위함이다. */
+export const trapFactor = (ctx: Pick<MatchupContext, 'oppGkBuildup' | 'oppPossession'>) =>
   clamp((72 - (ctx.oppGkBuildup + ctx.oppPossession) / 2) / 13, -0.5, 1.1)
 
 // 압축 이득의 축 가중. 압박이 라인보다 직접적으로 상대 전개를 끊는다.
