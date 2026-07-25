@@ -33,7 +33,7 @@ function resultLabel(r: MatchRecord): string {
   return r.shootout ? `${base} (${r.shootout[0]}-${r.shootout[1]})` : base
 }
 
-/** 캠페인 허브(워룸 간이판): 진행 바 + 지난 결과 + 다음 상대 카드 + [라인업 짜기].
+/** 캠페인 허브(워룸 간이판): 진행 바 + 지난 결과 + 다음 상대 카드 + [경기 준비].
  *  ended 상태에서는 부모가 EndingScreen으로 전환하므로 방어적으로 null을 반환한다. */
 export function HubScreen({ onProceed }: { onProceed(): void }) {
   const stage = useCampaignStore(s => s.stage)
@@ -111,7 +111,7 @@ export function HubScreen({ onProceed }: { onProceed(): void }) {
 
       <footer className="hub-foot">
         <button type="button" className="hub-proceed" onClick={onProceed}>
-          라인업 짜기
+          경기 준비
         </button>
       </footer>
     </div>

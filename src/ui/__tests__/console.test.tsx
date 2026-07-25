@@ -24,12 +24,23 @@ function toHalftime() {
 }
 
 describe('ConsolePanel (지시 4축)', () => {
-  it('(a) playing/pre 시점엔 "지시 적용" 버튼 disabled + 잠금 문구', () => {
-    store().startMatch(home, away, 42) // phase='pre'
+  it('(a) 재생 중(playing)엔 "지시 적용" 버튼 disabled + 잠금 문구', () => {
+    store().startMatch(home, away, 42)
+    store().kickoff() // phase='playing'
     const { getByRole, getByText } = render(<ConsolePanel side="home" />)
     const btn = getByRole('button', { name: '지시 적용' }) as HTMLButtonElement
     expect(btn.disabled).toBe(true)
     expect(getByText('다음 개입 창까지 잠김')).toBeTruthy()
+  })
+
+  it("(a2) 킥오프 전('pre')은 전술 센터 개입 창이므로 활성", () => {
+    store().startMatch(home, away, 42) // phase='pre'
+    const { getByRole, getByLabelText } = render(<ConsolePanel side="home" />)
+    const btn = getByRole('button', { name: '지시 적용' }) as HTMLButtonElement
+    expect(btn.disabled).toBe(false)
+    fireEvent.change(getByLabelText('템포') as HTMLInputElement, { target: { value: '70' } })
+    fireEvent.click(btn)
+    expect(store().engine!.home.tactics.instructions.tempo).toBe(70)
   })
 
   it('(b) halftime에서 압박 슬라이더 변경 → 적용 → 엔진 지시 반영', () => {

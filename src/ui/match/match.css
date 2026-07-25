@@ -238,6 +238,23 @@
   .ms-scorer { animation: none; }
 }
 
+/* ── 킥오프 전 전술 센터 — 방송 스테이지 아래에 붙는 워룸. 피치를 가리지 않는다.
+   'pre'에선 피치를 얇은 배경 띠로 줄이고 남은 높이를 전부 워룸에 준다
+   (설계가 주인공인 시점). min-height:0이 없으면 flex 자식이 축소되지 않아
+   스테이지(overflow:hidden) 밖으로 내용이 잘려 나간다. ── */
+.ms-precenter {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 0 4px;
+}
+.ms-stage--pre .ms-pitch-wrap {
+  flex: 0 0 auto;
+  max-height: 24vh;
+}
+
 /* ── 하단 바 (킥오프 / 풀타임 스탯·액션) — 피치 아래, 덮지 않음 ────── */
 .ms-bottom {
   flex: 0 0 auto;

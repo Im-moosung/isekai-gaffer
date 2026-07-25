@@ -66,32 +66,31 @@ describe('App 랜딩 스모크', () => {
     expect(useCampaignStore.getState().stage).toBe('group1')
   })
 
-  it('허브 → [라인업 짜기] → 라인업 화면(포메이션·확정 버튼) 진입', () => {
-    const { getByRole, container } = render(<App />)
+  it('허브 → [경기 준비] → 라인업 단독 화면 없이 곧바로 경기(전술 센터)로 진입', () => {
+    const { getByRole, queryByRole } = render(<App />)
     fireEvent.click(getByRole('button', { name: '캠페인 시작' }))
-    fireEvent.click(getByRole('button', { name: '라인업 짜기' }))
-    expect(container.querySelector('.lu-root')).toBeTruthy()
-    expect(getByRole('button', { name: '라인업 확정' })).toBeTruthy()
+    fireEvent.click(getByRole('button', { name: '경기 준비' }))
+    // 라인업 단독 화면(확정 버튼)은 더 이상 라우팅에 없다 — 전술 센터가 흡수했다.
+    expect(queryByRole('button', { name: '라인업 확정' })).toBeNull()
+    // MatchScreen이 목이므로 경기 종료 버튼이 곧바로 보인다.
+    expect(getByRole('button', { name: '경기 종료(목)' })).toBeTruthy()
   })
 })
 
 describe('App 데모 플로우 스모크', () => {
-  it('[바로 지휘하기] → 라인업 선행(확정 버튼) → 경기 진입 + "리더보드 미반영" 표기', () => {
-    const { getByRole, container } = render(<App />)
+  it('[바로 지휘하기] → 곧바로 경기 진입 + "리더보드 미반영" 표기', () => {
+    const { getByRole, queryByRole, container } = render(<App />)
     fireEvent.click(getByRole('button', { name: '바로 지휘하기' }))
-    // 데모도 라인업 화면이 먼저 등장한다(캠페인과 동일).
-    expect(container.querySelector('.lu-root')).toBeTruthy()
-    expect(getByRole('button', { name: '라인업 확정' })).toBeTruthy()
-    fireEvent.click(getByRole('button', { name: '라인업 확정' }))
+    // 데모도 라인업 단독 화면을 거치지 않는다(캠페인과 동일).
+    expect(queryByRole('button', { name: '라인업 확정' })).toBeNull()
     expect(container.textContent).toContain('리더보드 미반영')
-    // 라인업 확정 후 목 MatchScreen이 onMatchEnd를 받아 경기 종료 버튼을 노출(데모도 조립됨)
+    // 목 MatchScreen이 onMatchEnd를 받아 경기 종료 버튼을 노출(데모도 조립됨)
     expect(getByRole('button', { name: '경기 종료(목)' })).toBeTruthy()
   })
 
-  it('데모: 라인업 → 경기 종료 → 기자회견 3답변 → 신문(FICTION) → [다음] → 랜딩 복귀', async () => {
+  it('데모: 경기 종료 → 기자회견 3답변 → 신문(FICTION) → [다음] → 랜딩 복귀', async () => {
     const { getByRole, container } = render(<App />)
     fireEvent.click(getByRole('button', { name: '바로 지휘하기' }))
-    fireEvent.click(getByRole('button', { name: '라인업 확정' }))
     fireEvent.click(getByRole('button', { name: '경기 종료(목)' }))
 
     // 기자회견 렌더(질문 존재)
@@ -114,8 +113,7 @@ describe('App 캠페인 경기 후 플로우 스모크', () => {
   it('경기 결과 → 기자회견(질문) → 3답변 → 신문(FICTION) → [다음] → 허브(다음 상대)', async () => {
     const { getByRole, container } = render(<App />)
     fireEvent.click(getByRole('button', { name: '캠페인 시작' }))
-    fireEvent.click(getByRole('button', { name: '라인업 짜기' }))
-    fireEvent.click(getByRole('button', { name: '라인업 확정' }))
+    fireEvent.click(getByRole('button', { name: '경기 준비' }))
 
     // 목 MatchScreen에서 경기 종료
     fireEvent.click(getByRole('button', { name: '경기 종료(목)' }))

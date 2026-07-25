@@ -28,7 +28,7 @@ describe('HubScreen 스모크', () => {
     // 선호 포메이션 원문 노출
     expect(container.querySelector('.hub-oppcard__meta dd')!.textContent).toContain('3-4-2-1')
 
-    fireEvent.click(getByRole('button', { name: '라인업 짜기' }))
+    fireEvent.click(getByRole('button', { name: '경기 준비' }))
     expect(onProceed).toHaveBeenCalledTimes(1)
   })
 

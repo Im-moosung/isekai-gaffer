@@ -9,6 +9,7 @@ import { Ticker } from '../broadcast/Ticker'
 import { PitchView } from '../pitch/PitchView'
 import { buildSequence } from '../pitch/choreography'
 import { TacticsBoard } from '../tactics/TacticsBoard'
+import { TacticsCenter } from '../tactics/TacticsCenter'
 import { ShootoutPanel } from './ShootoutPanel'
 import { ShoutBar } from './ShoutBar'
 import { minuteDwellMs, EVENT_DWELL_MS, type PlaybackSpeed } from './playback'
@@ -93,8 +94,16 @@ interface MatchScreenProps {
   /** 토너먼트: 무승부 시 승부차기로 승자를 가려야 한다. */
   requireWinner?: boolean
   /** 캠페인: 경기 종료 시 결과 콜백. 미지정 시 데모 동작([다시 보기]).
-   *  4번째 인자 decisionLog는 이 경기의 감독 개입 기록(기자회견 근거). */
-  onMatchEnd?(score: [number, number], staminaByPlayer: Record<string, number>, shootout: [number, number] | undefined, decisionLog: DecisionEntry[]): void
+   *  4번째 인자 decisionLog는 이 경기의 감독 개입 기록(기자회견 근거).
+   *  5번째 인자 finalTactics는 종료 시점 홈 전술 — 다음 경기 초기값 이월용
+   *  (허브 복귀 후엔 matchStore가 reset될 수 있으므로 여기서 미리 붙들어 넘긴다). */
+  onMatchEnd?(
+    score: [number, number],
+    staminaByPlayer: Record<string, number>,
+    shootout: [number, number] | undefined,
+    decisionLog: DecisionEntry[],
+    finalTactics: TacticState,
+  ): void
 }
 
 /** 경기 화면 조립 — ★ 2모드 분리(스펙 §17 Task 4): "시뮬 관전 중인지 작전 지시
@@ -320,7 +329,13 @@ export function MatchScreen({
   function finishMatch(shootout?: [number, number]) {
     if (!engine || !onMatchEnd) return
     const decisionLog = useMatchStore.getState().decisionLog
-    onMatchEnd([engine.score[0], engine.score[1]], { ...engine.home.staminaByPlayer }, shootout, decisionLog)
+    onMatchEnd(
+      [engine.score[0], engine.score[1]],
+      { ...engine.home.staminaByPlayer },
+      shootout,
+      decisionLog,
+      structuredClone(engine.home.tactics),
+    )
   }
 
   // 승부차기 진입 — 키커 순서 확정을 결정 로그에 기록.
@@ -389,7 +404,7 @@ export function MatchScreen({
 
   return (
     <div className={`ms-root ms-root--broadcast${tacticsMounted && !tacticsExiting ? ' ms-root--tactics' : ''}`}>
-      <div className={`ms-stage${tacticsMounted && !tacticsExiting ? ' ms-stage--dim' : ''}`}>
+      <div className={`ms-stage${tacticsMounted && !tacticsExiting ? ' ms-stage--dim' : ''}${phase === 'pre' ? ' ms-stage--pre' : ''}`}>
         <Scorebug
           home={home}
           away={away}
@@ -500,16 +515,13 @@ export function MatchScreen({
         {/* ── 터치라인 외침 바(broadcast 하단) — 재생 중에만. 정지 없이 즉시 사기 보정. ── */}
         {replaying && <ShoutBar />}
 
-        {/* ── 하단 바: 킥오프(pre) / 풀타임 스탯·액션 — 피치 위가 아니라 아래에 확장 ── */}
+        {/* ── 킥오프 전 전술 센터 — 예전 [킥오프] 하단 바를 대체한다.
+            방송 스테이지(피치)는 배경으로 남고, 워룸이 그 아래에 붙는다.
+            tacticsMode에 'pre'를 넣지 않는 이유: TacticsBoard 오버레이가 전술 센터
+            위에 이중으로 뜬다. 'pre'의 지휘 UI는 전술 센터 하나뿐이다. ── */}
         {phase === 'pre' && (
-          <div className="ms-bottom">
-            <div className="ms-bottom__info">
-              <span className="ms-bottom__title">{home.name.ko} vs {away.name.ko}</span>
-              {referenceScore && (
-                <span className="ms-bottom__note">참고 · 실제 역사 {referenceScore[0]}-{referenceScore[1]}</span>
-              )}
-            </div>
-            <button type="button" className="ms-btn ms-btn--primary" onClick={handleKickoff}>킥오프</button>
+          <div className="ms-precenter">
+            <TacticsCenter onKickoff={handleKickoff} referenceScore={referenceScore} />
           </div>
         )}
 

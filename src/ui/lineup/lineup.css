@@ -1,16 +1,49 @@
 /* 라인업 편집 화면 — 방송 토큰(--bc-*) 사용.
    인라인 style은 (1) 피치 칩의 slotCoords 파생 left/top, (2) dnd 드래그 변환에만 한정한다. */
-.lu-root {
+/* 단독 화면 셸(LineupScreen) — 전체화면 높이·배경은 여기가 갖는다.
+   편집 본체(.lu-root)는 전술 센터 탭 안에도 들어가므로 뷰포트 높이를 갖지 않는다. */
+.lu-screen {
   display: flex;
   flex-direction: column;
   gap: 14px;
   width: 100%;
   height: 100vh;
+  min-height: 0;
   padding: 16px;
   box-sizing: border-box;
   background: var(--bc-bg);
   color: var(--bc-text);
   font-family: var(--bc-font);
+}
+.lu-root {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  min-width: 0;
+  /* 단독 화면에선 셸의 남은 높이를 채우고, 임베드에선 내용 높이로 접힌다. */
+  flex: 1 1 0;
+  min-height: 0;
+  box-sizing: border-box;
+  color: var(--bc-text);
+  font-family: var(--bc-font);
+}
+/* 전술 센터 ① 선발 탭 임베드 — 피치는 aspect-ratio 때문에 높이 제한을 받으면
+   가로가 남는다. 그 남는 폭을 벤치가 쓰도록 2열 그리드로 재배치한다.
+   minmax(0, 1fr)로 좌열이 내용 폭에 밀려 커지는 것을 막는다. */
+.lu-root--embed {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 260px);
+  grid-template-rows: auto auto;
+  align-items: start;
+  flex: 0 0 auto;
+}
+.lu-root--embed .lu-head { grid-column: 1 / -1; }
+.lu-root--embed .lu-pitch { max-height: 46vh; }
+.lu-root--embed .lu-bench {
+  min-width: 0;
+  max-height: 46vh;
+  overflow-y: auto;
 }
 
 /* ── 헤더: 제목 + 포메이션 버튼 ─────────────────────────── */

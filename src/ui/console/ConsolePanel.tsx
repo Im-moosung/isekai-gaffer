@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useMatchStore } from '../../game/matchStore'
+import { canIntervene, useMatchStore } from '../../game/matchStore'
 import type { Instructions } from '../../engine/types'
 import './console.css'
 
@@ -30,7 +30,8 @@ export function ConsolePanel({ side }: { side: 'home' | 'away' }) {
   )
   const [error, setError] = useState<string | null>(null)
 
-  const open = phase === 'halftime' || phase === 'paused-break' || phase === 'paused-user' || phase === 'paused-moment'
+  // 킥오프 전(전술 센터)도 개입 창이다 — store의 판정을 그대로 따른다.
+  const open = canIntervene(phase)
 
   // 개입 창(정지·하프타임) 진입 시 현재 엔진 지시값을 draft 초기값으로 동기화.
   useEffect(() => {

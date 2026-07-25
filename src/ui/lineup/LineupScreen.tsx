@@ -15,28 +15,37 @@ interface LineupScreenProps {
   onConfirm(t: TacticState): void
 }
 
-/** 선발 라인업 편집 화면 — 규정 시연영상 필수 요소 "선수 배치".
+/** 선발 편집 UI(제어 컴포넌트). 자체 전술 상태를 갖지 않고 tactics를 받아 onChange로 올린다.
+ *  LineupScreen(레거시 단독 화면)과 TacticsCenter(① 선발 탭)가 같은 UI를 공유하기 위한 추출이다.
+ *
  *  포메이션 6종 전환(적합도순 자동 재배치) + 피치 미니뷰(home 슬롯 좌표 재사용) +
  *  드래그앤드롭·클릭 스왑 병행 + 슬롯별 적합도 경고 색. 상태 변경은 전부 swap.ts 순수 함수 경유.
- *  DnD 상호작용 자체는 수동 검증(Task 8); 여기선 렌더·확정·순수 로직만 테스트한다. */
-export function LineupScreen({ team, initial, onConfirm }: LineupScreenProps) {
-  const [formation, setFormation] = useState<FormationId>(initial.formation)
-  const [lineup, setLineup] = useState<LineupSlot[]>(initial.lineup)
+ *  DnD 상호작용 자체는 수동 검증; 여기선 렌더·확정·순수 로직만 테스트한다.
+ *
+ *  @param embedded 전술 센터 탭 안에 끼워 넣는 모드 — 전체화면 높이·배경을 벗는다. */
+export function LineupEditor({ team, tactics, onChange, embedded }: {
+  team: Team
+  tactics: TacticState
+  onChange(next: TacticState): void
+  embedded?: boolean
+}) {
   const [selected, setSelected] = useState<string | null>(null)
 
   // 클릭 드래그 오인 방지: 4px 이동 후에야 드래그 시작(짧은 탭은 클릭 스왑으로).
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
 
+  const { formation, lineup } = tactics
   const byId = (id: string): Player | undefined => team.squad.find(p => p.id === id)
   const lineupIds = new Set(lineup.map(l => l.playerId))
   const bench = team.squad.filter(p => !lineupIds.has(p.id))
   const selectedPlayer = selected ? byId(selected) : undefined
   const selectedSlot = selected ? lineup.find(l => l.playerId === selected)?.slot : undefined
 
+  const setLineup = (next: LineupSlot[]) => onChange({ ...tactics, lineup: next })
+
   function changeFormation(f: FormationId) {
-    setFormation(f)
     // 현재 선발 11인을 우선 유지한 채 새 포메이션 슬롯에 적합도순 재배치.
-    setLineup(autoFill(team, f, lineup.map(l => l.playerId)))
+    onChange({ ...tactics, formation: f, lineup: autoFill(team, f, lineup.map(l => l.playerId)) })
     setSelected(null)
   }
 
@@ -65,13 +74,9 @@ export function LineupScreen({ team, initial, onConfirm }: LineupScreenProps) {
     if (a != null && b != null) applyMove(String(a), String(b))
   }
 
-  function handleConfirm() {
-    onConfirm({ formation, lineup, instructions: initial.instructions })
-  }
-
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-      <div className="lu-root">
+      <div className={`lu-root${embedded ? ' lu-root--embed' : ''}`}>
         <header className="lu-head">
           <h2 className="lu-title">{team.name.ko} 선발 라인업</h2>
           <div className="lu-formations" role="group" aria-label="포메이션 선택">
@@ -126,14 +131,26 @@ export function LineupScreen({ team, initial, onConfirm }: LineupScreenProps) {
             ))}
           </div>
         </section>
-
-        <footer className="lu-foot">
-          <button type="button" className="lu-confirm" onClick={handleConfirm}>
-            라인업 확정
-          </button>
-        </footer>
       </div>
     </DndContext>
+  )
+}
+
+/** 선발 라인업 편집 화면(레거시 단독 화면) — LineupEditor + 로컬 draft + [라인업 확정].
+ *  캠페인/데모 라우팅은 전술 센터로 흡수됐지만, 단독 편집 화면 계약은 그대로 유지한다. */
+export function LineupScreen({ team, initial, onConfirm }: LineupScreenProps) {
+  const [tactics, setTactics] = useState<TacticState>(initial)
+
+  return (
+    <div className="lu-screen">
+      <LineupEditor team={team} tactics={tactics} onChange={setTactics} />
+      <footer className="lu-foot">
+        {/* 확정은 tactics 전체를 넘긴다 — mentality·groupIntensity 등 확장 필드 유실 방지. */}
+        <button type="button" className="lu-confirm" onClick={() => onConfirm(tactics)}>
+          라인업 확정
+        </button>
+      </footer>
+    </div>
   )
 }
 

@@ -6,7 +6,6 @@ import type { MatchEvent, TacticState } from './engine/types'
 import { MatchScreen } from './ui/match/MatchScreen'
 import { HubScreen } from './ui/campaign/HubScreen'
 import { EndingScreen } from './ui/campaign/EndingScreen'
-import { LineupScreen } from './ui/lineup/LineupScreen'
 import { PressConference } from './ui/press/PressConference'
 import { NewspaperCard } from './ui/press/NewspaperCard'
 import { useCampaignStore } from './game/campaignStore'
@@ -68,21 +67,12 @@ function DemoFlow({ onExit }: { onExit(): void }) {
   const teams = useMemo(() => ({ home: loadTeam('kor'), away: loadTeam('esp') }), [])
   // 데모도 유저는 대한민국(kor)을 지휘한다.
   const teamName = teams.home.name.ko
+  // 킥오프 전 설계는 MatchScreen의 'pre' 전술 센터가 담당한다(라인업 단독 화면 폐지).
+  // useMemo로 참조를 고정해야 MatchScreen의 초기화 effect가 매 렌더 재실행되지 않는다.
   const initial = useMemo(() => pickBestXI(teams.home), [teams.home])
 
-  const [tactics, setTactics] = useState<TacticState | null>(null)
   const [result, setResult] = useState<PostMatch | null>(null)
   const [headline, setHeadline] = useState<Headline | null>(null)
-
-  // 캠페인과 동일하게 데모도 라인업 선행 — 킥오프 전 선발/전술을 짠다.
-  if (!tactics) {
-    return (
-      <div className="demo-wrap">
-        <div className="demo-banner" role="note">데모 · 리더보드 미반영</div>
-        <LineupScreen team={teams.home} initial={initial} onConfirm={setTactics} />
-      </div>
-    )
-  }
 
   if (!result) {
     return (
@@ -92,7 +82,7 @@ function DemoFlow({ onExit }: { onExit(): void }) {
           home={teams.home}
           away={teams.away}
           seed={DEMO_SEED}
-          initialTactics={tactics}
+          initialTactics={initial}
           onMatchEnd={(score, _stamina, shootout, decisions) => {
             // 데모에는 캠페인 기록이 없으므로 임시 MatchRecord를 중립값으로 구성한다
             // (stage='r32' 중립·상대 'esp'). 결정 로그는 matchStore가 수집한 실제 개입 기록.
@@ -130,18 +120,24 @@ function DemoFlow({ onExit }: { onExit(): void }) {
 interface PostMatch {
   record: MatchRecord
   stamina?: Record<string, number>
+  /** 경기 종료 시점의 홈 전술 — 다음 경기 초기값으로 이월한다. */
+  finalTactics?: TacticState
 }
 
-type CampaignStep = 'hub' | 'lineup' | 'match'
+type CampaignStep = 'hub' | 'match'
 
-/** 캠페인 플로우 조립: hub → lineup → match →(자동 recordResult)→ hub … → ending. */
+/** 캠페인 플로우 조립: hub → match(킥오프 전 전술 센터 포함) →(자동 recordResult)→ hub … → ending.
+ *  라인업 단독 화면은 전술 센터에 흡수됐다 — 허브에서 곧장 경기로 들어간다. */
 function CampaignFlow({ onExit }: { onExit(): void }) {
   const stage = useCampaignStore(s => s.stage)
   const ending = useCampaignStore(s => s.ending)
   const [step, setStep] = useState<CampaignStep>('hub')
-  const [tactics, setTactics] = useState<TacticState | null>(null)
+  // 직전 경기의 종료 시점 전술을 다음 경기 초기값으로 이월한다(8경기 반복 마찰 제거).
+  const [carried, setCarried] = useState<TacticState | null>(null)
 
   const kor = useMemo(() => loadTeam('kor'), [])
+  // MatchScreen 초기화 effect의 deps에 들어가므로 참조가 안정적이어야 한다.
+  const initialTactics = useMemo(() => carried ?? pickBestXI(kor), [carried, kor])
 
   // 종료 → 엔딩(부모 store가 stage/ending을 갱신하면 여기로 수렴).
   if (stage === 'ended' || ending) {
@@ -149,26 +145,14 @@ function CampaignFlow({ onExit }: { onExit(): void }) {
   }
 
   if (step === 'hub') {
-    return <HubScreen onProceed={() => setStep('lineup')} />
-  }
-
-  if (step === 'lineup') {
-    // 직전 확정 전술을 유지하며 편집(첫 진입은 기본 XI).
-    const initial = tactics ?? pickBestXI(kor)
-    return (
-      <LineupScreen
-        team={kor}
-        initial={initial}
-        onConfirm={t => { setTactics(t); setStep('match') }}
-      />
-    )
+    return <HubScreen onProceed={() => setStep('match')} />
   }
 
   // step === 'match'
   return (
     <CampaignMatch
-      tactics={tactics ?? pickBestXI(kor)}
-      onBackToHub={() => { setTactics(null); setStep('hub') }}
+      tactics={initialTactics}
+      onBackToHub={next => { if (next) setCarried(next); setStep('hub') }}
     />
   )
 }
@@ -180,7 +164,11 @@ function CampaignFlow({ onExit }: { onExit(): void }) {
  *  recordResult를 먼저 부르면 최종전/탈락전에서 stage='ended'가 되어 부모(CampaignFlow)가
  *  즉시 EndingScreen으로 전환 → 기자회견을 건너뛴다. 따라서 결과를 임시 record로 붙들고
  *  기자회견·신문까지 보여준 뒤, [다음]에서 recordResult로 상태를 전진시킨다. */
-function CampaignMatch({ tactics, onBackToHub }: { tactics: TacticState; onBackToHub(): void }) {
+function CampaignMatch({ tactics, onBackToHub }: {
+  tactics: TacticState
+  /** next: 경기 종료 시점의 홈 전술(다음 경기 이월용). 없으면 이월하지 않는다. */
+  onBackToHub(next: TacticState | null): void
+}) {
   const currentOpponent = useCampaignStore(s => s.currentOpponent)
   const matchSeed = useCampaignStore(s => s.matchSeed)
   const startingStamina = useCampaignStore(s => s.startingStamina)
@@ -219,12 +207,12 @@ function CampaignMatch({ tactics, onBackToHub }: { tactics: TacticState; onBackT
         staminaOverride={derived.staminaOverride}
         referenceScore={derived.referenceScore}
         requireWinner={derived.requireWinner}
-        onMatchEnd={(score, stamina, shootout, decisions) => {
+        onMatchEnd={(score, stamina, shootout, decisions, finalTactics) => {
           const record: MatchRecord = {
             stage, opponentId: oppId, score,
             ...(shootout ? { shootout } : {}), decisions,
           }
-          setResult({ record, stamina })
+          setResult({ record, stamina, finalTactics })
         }}
       />
     )
@@ -252,7 +240,7 @@ function CampaignMatch({ tactics, onBackToHub }: { tactics: TacticState; onBackT
         const { score, shootout, decisions } = result.record
         recordResult(score, result.stamina ?? {}, shootout, decisions)
         // recordResult가 stage='ended'로 갱신한 경우 부모(CampaignFlow)가 엔딩을 렌더한다.
-        onBackToHub()
+        onBackToHub(result.finalTactics ?? null)
       }}
     />
   )

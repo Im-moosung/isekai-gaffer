@@ -1,4 +1,4 @@
-import { useMatchStore } from '../../game/matchStore'
+import { canIntervene, useMatchStore } from '../../game/matchStore'
 import { MENTALITIES, ATTACK_PATTERNS } from '../../engine/tactics'
 import type { AttackPattern, FormationId, GroupIntensity, Mentality, TacticState } from '../../engine/types'
 
@@ -29,7 +29,8 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
   const engine = useMatchStore(s => s.engine)
   const submitCommand = useMatchStore(s => s.submitCommand)
 
-  const open = phase === 'halftime' || phase === 'paused-break' || phase === 'paused-user' || phase === 'paused-moment'
+  // 킥오프 전(전술 센터)도 개입 창이다 — store의 판정을 그대로 따른다.
+  const open = canIntervene(phase)
   const state = engine?.[side]
   if (!state) return null
   const t = state.tactics
