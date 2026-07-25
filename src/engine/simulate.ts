@@ -13,7 +13,7 @@ export type MatchCommand =
 
 /** simulateSegment 옵션. 미지정이면 기존 동작(회귀 불변). */
 export interface SimulateOpts {
-  /** 개입 직후 부스트: 지정 side의 지시 효과를 until 분까지 ×1.3 증폭(방향 강화). */
+  /** 개입 직후 부스트: 지정 side에 until 분까지 고정 보너스(찬스 퀄 +8%·실점 위험 −6%). */
   instructionBoost?: { side: 'home' | 'away'; until: number }
 }
 
@@ -162,14 +162,17 @@ function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
     fx[i].possessionBias *= m.possessionBias
   }
 
-  // 개입 부스트: 지정 side의 지시 방향을 until 분까지 ×1.3 증폭(1.0 기준 편차 확대). 옵션 없으면 불변.
+  // 개입 부스트: 방향 증폭이 아니라 고정 보너스로 준다.
+  // 구 설계 amp(v)=1+(v−1)×1.3은 지시가 중립이면 무효과였고, 저압박·저라인 플랜에서는
+  // 1.0 미만 편차까지 증폭해 역효과였다(감사 실측 스페인전 −3.0pp).
+  // 고정값이면 무엇을 지시했든 항상 같은 방향이라 UI로 약속할 수 있다("작전 지시 효과 8분간 지속").
+  // counterVulnerability는 '자기 팀의 취약성'이고 fx[defIdx]가 공격 측 찬스에 곱해지므로,
+  // 낮추면 부스트받은 팀의 실점 확률이 내려간다.
   const boost = opts.instructionBoost
   if (boost && st.minute <= boost.until) {
     const bi = boost.side === 'home' ? 0 : 1
-    const amp = (v: number) => 1 + (v - 1) * 1.3
-    fx[bi].chanceRate = amp(fx[bi].chanceRate)
-    fx[bi].chanceQuality = amp(fx[bi].chanceQuality)
-    fx[bi].possessionBias = amp(fx[bi].possessionBias)
+    fx[bi].chanceQuality *= 1.08
+    fx[bi].counterVulnerability *= 0.94
   }
 
   // 지속 압박 페널티: 압박 70+ 유지 분 추적 → 10분마다 체력 소모 가중.

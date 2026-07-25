@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createMatch, simulateSegment, applyCommand } from '../simulate'
-import { makeTestTeam } from '../fixtures/testTeams'
+import { makeTestTeam, pickBestXI } from '../fixtures/testTeams'
+import { loadTeam } from '../../data/loader'
 
 const strong = makeTestTeam('str', 88), weak = makeTestTeam('wea', 62)
 const even1 = makeTestTeam('ev1', 78), even2 = makeTestTeam('ev2', 78)
@@ -132,4 +133,44 @@ describe('applyCommand', () => {
     }
     expect(foulsHigh).toBeGreaterThan(foulsBase * 1.1)
   })
+})
+
+// ── 개입 부스트는 지시값과 무관하게 항상 유리해야 한다 ──────────────
+// 구 설계 amp(v)=1+(v−1)×1.3은 지시가 중립이면 무효과였고, 저압박·저라인 플랜에서는
+// 1.0 미만 편차까지 증폭해 오히려 손해였다(감사 실측: 스페인전 −3.0pp).
+// 실팀 데이터로 두 결함을 회귀 고정한다.
+describe('개입 부스트는 지시값과 무관하게 항상 유리하다', () => {
+  it('중립 지시에서도 부스트가 득점을 늘린다', () => {
+    const home = loadTeam('kor'), away = loadTeam('cze')
+    const t = pickBestXI(home)
+    t.instructions = { lineHeight: 50, pressing: 50, tempo: 50, attackFocus: 'balanced' }
+    let boosted = 0, plain = 0
+    for (let s = 0; s < 120; s++) {
+      let a = createMatch(home, away, { seed: 5000 + s, homeTactics: t })
+      a = simulateSegment(a, 45); a = simulateSegment(a, 90)
+      plain += a.score[0]
+      let b = createMatch(home, away, { seed: 5000 + s, homeTactics: t })
+      b = simulateSegment(b, 45)
+      b = simulateSegment(b, 90, { instructionBoost: { side: 'home', until: 90 } })
+      boosted += b.score[0]
+    }
+    expect(boosted).toBeGreaterThan(plain)
+  }, 120_000)
+
+  it('저압박·저라인 플랜에서도 부스트가 역효과를 내지 않는다', () => {
+    const home = loadTeam('kor'), away = loadTeam('esp')
+    const t = pickBestXI(home)
+    t.instructions = { lineHeight: 25, pressing: 30, tempo: 75, attackFocus: 'balanced' }
+    let bw = 0, pw = 0
+    for (let s = 0; s < 150; s++) {
+      let a = createMatch(home, away, { seed: 6000 + s, homeTactics: t })
+      a = simulateSegment(a, 45); a = simulateSegment(a, 90)
+      if (a.score[0] > a.score[1]) pw++
+      let b = createMatch(home, away, { seed: 6000 + s, homeTactics: t })
+      b = simulateSegment(b, 45)
+      b = simulateSegment(b, 90, { instructionBoost: { side: 'home', until: 90 } })
+      if (b.score[0] > b.score[1]) bw++
+    }
+    expect(bw).toBeGreaterThanOrEqual(pw)
+  }, 150_000)
 })

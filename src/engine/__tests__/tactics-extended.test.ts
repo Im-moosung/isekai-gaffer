@@ -264,22 +264,39 @@ describe('GK 파워플레이 (85\'+ & 지는 중)', () => {
 })
 
 // ── 개입 부스트 (simulateSegment opts) ────────────────────────────
-describe('개입 부스트 ×1.3', () => {
+// 방향 증폭(amp)에서 고정 보너스(퀄 +8% / 실점위험 −6%)로 재설계됨.
+// 아래 단언들은 그 의미 변화를 반영한다 — 부스트는 이제 "지시를 키우는 것"이 아니라
+// "무엇을 지시했든 유리하게 만드는 것"이다.
+describe('개입 부스트 — 고정 보너스', () => {
   const attackingHome = (seed: number, boost: boolean) => {
     const base = createMatch(A, B, { seed })
     const m = createMatch(A, B, { seed, homeTactics: { ...base.home.tactics, instructions: { ...base.home.tactics.instructions, tempo: 90, pressing: 65 } } })
     return simulateSegment(m, 90, boost ? { instructionBoost: { side: 'home', until: 90 } } : undefined)
   }
-  it('부스트는 공격 지향 홈의 찬스 빈도를 키운다 (60시드 합)', () => {
+  it('부스트는 공격 지향 홈의 찬스 퀄리티를 키운다 (60시드 xG 합)', () => {
     let on = 0, off = 0
-    for (let s = 0; s < 60; s++) { on += attackingHome(s, true).stats[0].shots; off += attackingHome(s, false).stats[0].shots }
+    for (let s = 0; s < 60; s++) { on += attackingHome(s, true).stats[0].xg; off += attackingHome(s, false).stats[0].xg }
     expect(on).toBeGreaterThan(off)
   })
-  it('until 이전 분만 부스트: 균형 지시(1.0)엔 부스트가 무영향 (증폭 대상 없음)', () => {
+  it('부스트는 홈의 실점 위험을 낮춘다 — 어웨이 찬스 감소 (60시드 슛 합)', () => {
+    let on = 0, off = 0
+    for (let s = 0; s < 60; s++) { on += attackingHome(s, true).stats[1].shots; off += attackingHome(s, false).stats[1].shots }
+    expect(on).toBeLessThan(off)
+  })
+  it('균형 지시(1.0)에서도 부스트가 작동한다 — 증폭 대상이 필요 없는 고정 보너스', () => {
     const base = createMatch(A, B, { seed: 3 })
     const balanced = { ...base.home.tactics, instructions: { lineHeight: 50, pressing: 50, tempo: 50, attackFocus: 'balanced' as const } }
     const on = simulateSegment(createMatch(A, B, { seed: 3, homeTactics: balanced }), 90, { instructionBoost: { side: 'home', until: 90 } })
     const off = simulateSegment(createMatch(A, B, { seed: 3, homeTactics: balanced }), 90)
-    expect(on.events).toEqual(off.events)
+    expect(on.events).not.toEqual(off.events)
+  })
+  it('until 이후 분에는 부스트가 걸리지 않는다', () => {
+    const base = createMatch(A, B, { seed: 7 })
+    const st = createMatch(A, B, { seed: 7, homeTactics: base.home.tactics })
+    // until=0이면 1분부터 이미 범위 밖 → 옵션 미지정과 완전히 동일해야 한다.
+    const expired = simulateSegment(st, 90, { instructionBoost: { side: 'home', until: 0 } })
+    const none = simulateSegment(st, 90)
+    expect(expired.events).toEqual(none.events)
+    expect(expired.score).toEqual(none.score)
   })
 })

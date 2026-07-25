@@ -279,7 +279,7 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     if (!engine) throw new Error('경기 미시작')
     if (phase !== 'playing') return // 정지 중엔 재개(confirmTactics)로만 진행
     const prevScore: [number, number] = [engine.score[0], engine.score[1]]
-    // 개입 부스트 전달: confirmTactics가 세팅한 boostUntil이 이 분을 덮으면 홈(유저) 지시 효과를 ×1.3.
+    // 개입 부스트 전달: confirmTactics가 세팅한 boostUntil이 이 분을 덮으면 홈(유저)에 고정 보너스.
     // boostUntil=0(초기·미개입)이면 opts 없이 호출 → 기존 동작 불변.
     const nextMinute = engine.minute + 1
     const opts = boostUntil >= nextMinute ? { instructionBoost: { side: 'home' as const, until: boostUntil } } : undefined
@@ -330,7 +330,7 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     // 킥오프 전 계획에는 인게임 부스트를 주지 않는다(사전 계획과 실시간 개입의 가치를 구분).
     // 재생 시작도 하지 않는다 — 'pre'의 진행은 kickoff()가 담당한다.
     if (phase === 'pre') return
-    // 개입 직후 부스트: 지금부터 BOOST_MINUTES분간 홈 지시 효과 ×1.3(advanceMinute이 엔진 전달).
+    // 개입 직후 부스트: 지금부터 BOOST_MINUTES분간 찬스 퀄 +8%·실점 위험 −6%(advanceMinute이 엔진 전달).
     set({ phase: 'playing', pauseReason: null, momentPrompt: null, boostUntil: engine.minute + BOOST_MINUTES })
   },
   acceptMoment: () => {
