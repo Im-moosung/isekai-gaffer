@@ -115,7 +115,6 @@ export interface GaitAngles {
 }
 
 const GAIT_FLOOR = 0.18 // 속도 0에서도 남는 최소 진폭(제자리 걸음이 얼어붙지 않게)
-const HIP_AMP = 0.72
 const HIP_BIAS = 0.1 // 달릴수록 힙이 살짝 앞으로 눌린다
 const KNEE_BASE = 0.14
 const KNEE_SWING = 1.35 // 유각기(스윙) 무릎 굴곡
@@ -129,15 +128,34 @@ const LEAN_MAX = 0.3
 const ROLL_AMP = 0.075
 const TWIST_AMP = 0.16
 
+/**
+ * 힙 스윙 진폭(rad). **보폭에 연동**한다 — 접지 중 발이 몸통 대비 정확히 -v로 흘러야
+ * 발이 미끄러지지 않는다. 발의 최대 상대 속도 ≈ L·A·ω, ω = 2πv/stride 이므로
+ * A = stride / (2π·L). 속도와 무관한 상수 진폭을 쓰면 저속·고속 양쪽에서 미끄러진다.
+ *
+ * LEG_EFF는 실측 튜닝값(무릎 굴곡이 발 궤적에 더해지므로 기하학적 다리 길이 0.86보다
+ * 크다). 이 값에서 접지 슬립: v=2 4.3% / v=3 2.8% / v=5 1.1% / v=8 1.2%.
+ * (0.80이면 v=8에서 9.4%, 1.00이면 12.9%로 나빠진다.)
+ */
+const LEG_EFF = 0.87
+function hipAmplitude(sp: number): number {
+  return strideLength(sp) / (TAU * LEG_EFF)
+}
+
 /** 한쪽 다리의 힙·무릎 — 반대쪽은 같은 식에 phase+π를 넣는다(정확한 반대 위상). */
-function legAngles(amp: number, eff: number, phase: number): { hip: number; knee: number } {
+function legAngles(
+  hipAmp: number,
+  amp: number,
+  eff: number,
+  phase: number,
+): { hip: number; knee: number } {
   const s = Math.sin(phase)
   const c = Math.cos(phase)
   // swing: phase=0에서 1(유각 중간 — 발을 접어 끌어올린다), phase=π(입각 중간)에서 0
   const swing = 0.5 + 0.5 * c
   const stance = 0.5 - 0.5 * c
   return {
-    hip: HIP_AMP * amp * s + HIP_BIAS * eff,
+    hip: hipAmp * s + HIP_BIAS * eff,
     // 세제곱으로 유각 중간에만 크게 굽힌다(디딤발은 거의 편 상태를 유지 → 크라우칭 방지)
     knee: -(KNEE_BASE + KNEE_SWING * amp * swing * swing * swing + KNEE_STANCE * amp * stance),
   }
@@ -158,12 +176,14 @@ function armAngles(amp: number, phase: number): { shoulder: number; elbow: numbe
  * @param phase 누적 위상(rad) — advancePhase()로 적분한 값
  */
 export function gaitAngles(speed: number, phase: number): GaitAngles {
-  const eff = clamp01(speed / SPRINT_SPEED)
+  const sp = clamp(speed, 0, SPRINT_SPEED)
+  const eff = sp / SPRINT_SPEED
   const amp = GAIT_FLOOR + (1 - GAIT_FLOOR) * eff
+  const hipAmp = hipAmplitude(sp)
   const opp = phase + Math.PI
 
-  const l = legAngles(amp, eff, phase)
-  const r = legAngles(amp, eff, opp)
+  const l = legAngles(hipAmp, amp, eff, phase)
+  const r = legAngles(hipAmp, amp, eff, opp)
   const al = armAngles(amp, phase)
   const ar = armAngles(amp, opp)
 
@@ -311,7 +331,7 @@ export interface DiveAngles {
 const DIVE_ARC = 0.55
 // 옆으로 누우면 어깨·팔(로컬 z ±0.195)과 손이 아래로 내려온다. 그 반폭만큼 띄워야
 // 몸이 잔디를 파고들지 않는다(실측: 이 값에서 최대 관통 3cm 이하).
-const DIVE_GROUND = 0.3
+const DIVE_GROUND = 0.35
 
 /** 도약 → 체공 → 옆으로 눕기. t는 0~1 클램프, dir는 ±1(0이면 +1). */
 export function diveAngles(t: number, dir: number): DiveAngles {
@@ -514,6 +534,43 @@ interface RigPose {
   shadowScale: number
 }
 
+const POSE_KEYS: readonly (keyof RigPose)[] = [
+  'bodyY',
+  'bodyRoll',
+  'torsoPitch',
+  'torsoTwist',
+  'hipL',
+  'hipR',
+  'kneeL',
+  'kneeR',
+  'shoulderL',
+  'shoulderR',
+  'armOutL',
+  'armOutR',
+  'elbowL',
+  'elbowR',
+  'headPitch',
+  'headYaw',
+  'shadowScale',
+]
+
+/** 액션 전환 크로스페이드 총 길이(초)와 초기 시상수. */
+const BLEND_TIME = 0.3
+const BLEND_TAU = 0.15
+
+/**
+ * cur을 target 쪽으로 k만큼 지수 보간. 액션 전환 순간의 관절 팝을 없앤다.
+ * 정상 구간에서는 k=1(즉시 대입)이라 러닝 사이클 진폭이 감쇠하지 않는다
+ * (상시 1차 지연을 걸면 2.6Hz 스프린트에서 진폭이 절반으로 죽는다).
+ */
+function blendPose(cur: RigPose, target: RigPose, k: number): void {
+  for (const key of POSE_KEYS) cur[key] += (target[key] - cur[key]) * k
+}
+
+function copyPose(cur: RigPose, target: RigPose): void {
+  for (const key of POSE_KEYS) cur[key] = target[key]
+}
+
 function writePose(j: Joints, p: RigPose): void {
   j.body.position.y = p.bodyY
   j.body.rotation.x = p.bodyRoll
@@ -525,8 +582,9 @@ function writePose(j: Joints, p: RigPose): void {
   j.kneeR.rotation.z = p.kneeR
   j.shoulderL.rotation.z = p.shoulderL
   j.shoulderR.rotation.z = p.shoulderR
-  j.shoulderL.rotation.x = -p.armOutL // 왼팔(+Z)은 -X 회전으로 바깥으로 벌어진다
-  j.shoulderR.rotation.x = p.armOutR
+  // 왼쪽은 -Z(정면 +X, 위 +Y ⇒ left = up×forward = -Z). -Z쪽 팔은 +X 회전이 바깥이다.
+  j.shoulderL.rotation.x = p.armOutL
+  j.shoulderR.rotation.x = -p.armOutR
   j.elbowL.rotation.z = p.elbowL
   j.elbowR.rotation.z = p.elbowR
   j.head.rotation.z = -p.headPitch
@@ -676,8 +734,9 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
     elbow.add(hand)
     return { shoulder, elbow }
   }
-  const armL = buildArm(1)
-  const armR = buildArm(-1)
+  // 정면 +X, 위 +Y ⇒ 해부학적 왼쪽 = up × forward = **-Z**, 오른쪽 = +Z
+  const armL = buildArm(-1)
+  const armR = buildArm(1)
 
   // ── 다리: 힙 → 허벅지(+쇼츠) → 무릎 → 정강이(양말) → 신발 ──
   const buildLeg = (sign: number) => {
@@ -700,8 +759,8 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
     knee.add(boot)
     return { hip, knee }
   }
-  const legL = buildLeg(1)
-  const legR = buildLeg(-1)
+  const legL = buildLeg(-1)
+  const legR = buildLeg(1)
 
   const joints: Joints = {
     body,
@@ -727,6 +786,10 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
   let kickRight = true
   let diveDir = 1
 
+  let prevAction: PlayerPose['action'] | null = null
+  let blendLeft = 0
+
+  /** 이번 프레임의 목표 포즈(액션이 계산해 채운다). */
   const pose: RigPose = {
     bodyY: 0,
     bodyRoll: 0,
@@ -746,6 +809,8 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
     headYaw: 0,
     shadowScale: 1,
   }
+  /** 실제로 리그에 써넣는 포즈(목표를 향해 크로스페이드된 값). */
+  const shown: RigPose = { ...pose }
 
   function applyGait(speed: number): void {
     const g = gaitAngles(speed, phase)
@@ -775,6 +840,7 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
       kickRight = seed < 0.78 // 결정론적 주발(약 22%가 왼발잡이)
       diveDir = hash01(`${p.id}:dive`) < 0.5 ? -1 : 1
       root.scale.setScalar(0.965 + 0.07 * seed) // 체격 미세 변주
+      smoothSpeed = p.speed // 등장 프레임부터 실제 속도로 시작(초기 슬로모션 방지)
       seeded = true
     }
     const dt = lastT < 0 ? 0 : clamp(clockT - lastT, 0, 0.1)
@@ -782,6 +848,9 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
 
     // 급가감속에서도 사이클이 튀지 않게 속도를 완만히 따라간다
     smoothSpeed += (p.speed - smoothSpeed) * Math.min(1, dt * 7)
+    // 위상은 **모든 액션에서** 계속 적분한다. 킥·세리머니 중에 멈춰 있으면
+    // 러닝으로 복귀할 때 정지 위상에서 재개돼 다리가 튄다.
+    phase = advancePhase(phase, Math.max(smoothSpeed, p.speed * 0.6), dt)
     const t = clockT + seed * 6.28 // 개체별 시간 오프셋(호흡·세리머니 위상 분산)
     const at = clamp01(p.actionT)
 
@@ -790,7 +859,6 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
 
     switch (p.action) {
       case 'run': {
-        phase = advancePhase(phase, Math.max(smoothSpeed, p.speed * 0.6), dt)
         applyGait(smoothSpeed)
         break
       }
@@ -851,22 +919,32 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
       }
       case 'dive': {
         const d = diveAngles(at, diveDir)
+        // roll>0이면 로컬 +Z(=오른쪽)가 아래로 깔린다. 아래/위 쪽 팔다리 값을 diveDir로
+        // 미러링해야 양방향 다이브의 지면 클리어런스가 같아진다(비대칭 관통 방지).
+        const rightDown = diveDir > 0
+        const pick = (down: number, up: number): [number, number] =>
+          rightDown ? [up, down] : [down, up]
+        const [hipL, hipR] = pick(-0.15, 0.25 - 0.3 * d.tuck)
+        const [kneeL, kneeR] = pick(-0.2 + 0.5 * d.tuck, d.tuck)
+        const [shL, shR] = pick(d.armReach * 0.75, d.armReach)
+        // 옆으로 누우면 시상면이 지면과 평행해진다 → 팔은 벌리지 않아야(=몸 옆으로
+        // 처지지 않아야) 공을 향해 뻗은 모양이 되고 잔디를 파고들지 않는다
+        const [outL, outR] = pick(0.03, 0.05)
+        const [elL, elR] = pick(0.25, 0.1)
         pose.bodyY = d.lift
         pose.bodyRoll = d.roll
         pose.torsoPitch = 0.12
         pose.torsoTwist = 0.18 * diveDir
-        pose.hipL = 0.25 - 0.3 * d.tuck
-        pose.hipR = -0.15
-        pose.kneeL = d.tuck
-        pose.kneeR = -0.2 + 0.5 * d.tuck
-        pose.shoulderL = d.armReach
-        pose.shoulderR = d.armReach * 0.75
-        // 옆으로 누우면 시상면이 지면과 평행해진다 → 팔은 벌리지 않아야(=몸 옆으로
-        // 처지지 않아야) 공을 향해 뻗은 모양이 되고 잔디를 파고들지 않는다
-        pose.armOutL = 0.05
-        pose.armOutR = 0.03
-        pose.elbowL = 0.1
-        pose.elbowR = 0.25
+        pose.hipL = hipL
+        pose.hipR = hipR
+        pose.kneeL = kneeL
+        pose.kneeR = kneeR
+        pose.shoulderL = shL
+        pose.shoulderR = shR
+        pose.armOutL = outL
+        pose.armOutR = outR
+        pose.elbowL = elL
+        pose.elbowR = elR
         pose.headPitch = -0.2
         pose.headYaw = 0
         pose.shadowScale = clamp(1 - 1.1 * d.lift, 0.4, 1)
@@ -876,20 +954,28 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
         // 부상·넘어짐 — 다이브 종료 자세로 누운 채 미세하게 움직인다
         const d = diveAngles(1, diveDir)
         const breath = Math.sin(t * 1.9)
+        const rightDown = diveDir > 0
+        const pick = (down: number, up: number): [number, number] =>
+          rightDown ? [up, down] : [down, up]
+        const [hipL, hipR] = pick(0.2, 0.45)
+        const [kneeL, kneeR] = pick(-0.5, -0.9)
+        const [shL, shR] = pick(0.3, -0.7 + 0.1 * breath)
+        const [outL, outR] = pick(0.06, 0.12)
+        const [elL, elR] = pick(0.4, 0.9)
         pose.bodyY = d.lift
         pose.bodyRoll = d.roll
         pose.torsoPitch = 0.1 + 0.03 * breath
         pose.torsoTwist = 0.1 * diveDir
-        pose.hipL = 0.45
-        pose.hipR = 0.2
-        pose.kneeL = -0.9
-        pose.kneeR = -0.5
-        pose.shoulderL = -0.7 + 0.1 * breath
-        pose.shoulderR = 0.3
-        pose.armOutL = 0.12
-        pose.armOutR = 0.06
-        pose.elbowL = 0.9
-        pose.elbowR = 0.4
+        pose.hipL = hipL
+        pose.hipR = hipR
+        pose.kneeL = kneeL
+        pose.kneeR = kneeR
+        pose.shoulderL = shL
+        pose.shoulderR = shR
+        pose.armOutL = outL
+        pose.armOutR = outR
+        pose.elbowL = elL
+        pose.elbowR = elR
         pose.headPitch = -0.15
         pose.headYaw = 0
         pose.shadowScale = 1.05
@@ -920,7 +1006,18 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
       }
     }
 
-    writePose(joints, pose)
+    // 액션이 바뀌면 이전 포즈에서 새 포즈로 크로스페이드(첫 프레임은 스냅).
+    if (prevAction !== null && p.action !== prevAction) blendLeft = BLEND_TIME
+    prevAction = p.action
+    if (blendLeft > 0) {
+      blendLeft = Math.max(0, blendLeft - dt)
+      // 시상수를 남은 시간에 비례해 줄이면 페이드 끝에서 통과(k→1)로 매끄럽게 수렴한다
+      const tau = BLEND_TAU * (blendLeft / BLEND_TIME)
+      blendPose(shown, pose, tau > 1e-4 ? 1 - Math.exp(-dt / tau) : 1)
+    } else {
+      copyPose(shown, pose)
+    }
+    writePose(joints, shown)
   }
 
   /**

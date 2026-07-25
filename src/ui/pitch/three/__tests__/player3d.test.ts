@@ -1,7 +1,13 @@
 // src/ui/pitch/three/__tests__/player3d.test.ts
-// player3d의 "순수 포즈 수학"만 테스트한다(three 무의존 — node 환경에서 실행).
-// 리그 조립(createPlayer)은 WebGL/three 인스턴스가 필요하므로 여기서 다루지 않는다.
+// 1부: 순수 포즈 수학(three 무의존).
+// 2부: 리그 조립·구동 — **real three를 node에서 로드**해 검증한다. WebGL 컨텍스트 없이도
+//      씬 그래프·행렬·바운딩박스는 전부 계산되므로 yaw 규약·캐시 공유·접지·전환 팝을
+//      실측할 수 있다(렌더러만 만들지 않는다). canvas가 없는 환경이라 등번호 텍스처
+//      폴백 경로도 함께 검증된다.
 import { describe, it, expect } from 'vitest'
+import * as THREE from 'three'
+import { createPlayer, disposePlayerCaches } from '../player3d'
+import type { PlayerPose } from '../types'
 import {
   TAU,
   SPRINT_SPEED,
@@ -64,6 +70,16 @@ describe('gaitAngles — 속도 비례', () => {
 
   it('속도 0에서도 최소 진폭이 남아 "제자리 걸음"이 얼어붙지 않는다', () => {
     expect(swing(0)).toBeGreaterThan(0.05)
+  })
+
+  it('진폭이 실제로 속도에 비례한다(상수 진폭이면 실패하는 비율 단언)', () => {
+    // φ=π/2는 스윙 최대 지점. 바이어스 항이 아니라 스윙 항이 커져야 한다.
+    const fast = gaitAngles(8, Math.PI / 2).hipL
+    const slow = gaitAngles(1, Math.PI / 2).hipL
+    expect(fast / slow).toBeGreaterThan(2)
+    // 힙 진폭은 보폭(strideLength)에 연동된다 — 접지 슬립을 없애는 핵심 관계
+    const ampAt = (v: number): number => (gaitAngles(v, Math.PI / 2).hipL - gaitAngles(v, 0).hipL) / 1
+    expect(ampAt(8) / ampAt(2)).toBeCloseTo(strideLength(8) / strideLength(2), 6)
   })
 
   it('전경 기울기(lean)는 속도에 단조 증가한다', () => {
@@ -134,6 +150,17 @@ describe('gaitAngles — 위상 연속성·주기', () => {
     for (const p of PHASES) {
       expect(gaitAngles(7, p).bounce).toBeCloseTo(gaitAngles(7, p + Math.PI).bounce, 9)
     }
+  })
+
+  it('바운스는 절대 음수가 되지 않는다(발이 잔디를 파고들지 않게)', () => {
+    for (const s of SPEEDS) {
+      for (let p = 0; p < TAU; p += TAU / 180) {
+        expect(gaitAngles(s, p).bounce).toBeGreaterThanOrEqual(0)
+      }
+    }
+    // 디딤 중간(위상 0·π)에서 정확히 0 — 이때 발이 지면에 닿는다
+    expect(gaitAngles(7, 0).bounce).toBeCloseTo(0, 9)
+    expect(gaitAngles(7, Math.PI).bounce).toBeCloseTo(0, 9)
   })
 
   it('결정론: 같은 입력은 항상 같은 객체 값', () => {
@@ -279,8 +306,10 @@ describe('diveAngles', () => {
     for (const t of TS) expect(diveAngles(t, 1).lift).toBeGreaterThanOrEqual(0)
     const mid = diveAngles(0.5, 1).lift
     expect(mid).toBeGreaterThan(diveAngles(1, 1).lift)
-    expect(diveAngles(1, 1).lift).toBeGreaterThan(0) // 누운 몸통 두께만큼은 떠 있다
-    expect(mid).toBeLessThanOrEqual(0.9)
+    // 옆으로 누우면 어깨·팔(로컬 z ±0.195)이 아래로 내려온다. 그 반폭을 못 띄우면
+    // 몸이 잔디를 파고든다 — 실측으로 0.35가 되어야 양방향 클리어런스 ≥ 0.
+    expect(diveAngles(1, 1).lift).toBeGreaterThan(0.25)
+    expect(mid).toBeLessThanOrEqual(0.95)
   })
 
   it('팔은 뻗고 다리는 접히며 범위를 벗어나지 않는다', () => {
@@ -383,5 +412,300 @@ describe('결정론 유틸 (Math.random·Date 미사용)', () => {
     expect(contrastOn(0xffffff)).not.toBe(contrastOn(0x101820))
     expect(luminance(contrastOn(0xffffff))).toBeLessThan(0.5)
     expect(luminance(contrastOn(0x101820))).toBeGreaterThan(0.5)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2부: real three 리그 검증 (node, WebGL 없이 씬 그래프만 계산)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const KIT = { kit: 0xc8102e, accent: 0xffffff, number: 9, isGk: false }
+const DT = 1 / 60
+
+function poseOf(over: Partial<PlayerPose> = {}): PlayerPose {
+  return {
+    id: 'home-9',
+    side: 'home',
+    number: 9,
+    x: 0,
+    z: 0,
+    yaw: 0,
+    speed: 6,
+    action: 'run',
+    actionT: 0,
+    ...over,
+  }
+}
+
+/** 리그 안의 모든 메시(컨택트 섀도우 제외) 월드 바운딩박스. */
+function bodyBox(root: THREE.Object3D): THREE.Box3 {
+  root.updateMatrixWorld(true)
+  const box = new THREE.Box3()
+  root.traverse((o) => {
+    const m = o as THREE.Mesh
+    const type = (m.geometry as THREE.BufferGeometry | undefined)?.type
+    if (m.isMesh && type !== 'CircleGeometry' && type !== 'PlaneGeometry') box.expandByObject(m)
+  })
+  return box
+}
+
+function meshesOf(root: THREE.Object3D): THREE.Mesh[] {
+  const out: THREE.Mesh[] = []
+  root.traverse((o) => {
+    const m = o as THREE.Mesh
+    if (m.isMesh) out.push(m)
+  })
+  return out
+}
+
+describe('createPlayer — 좌표계 계약(yaw)', () => {
+  it('root의 로컬 +X(정면)가 월드 (cos yaw, sin yaw)로 향한다', () => {
+    const rig = createPlayer(THREE, KIT)
+    for (const yaw of [0, Math.PI / 2, 0.7, -1.9, Math.PI]) {
+      rig.apply(poseOf({ yaw, x: 12, z: -5, action: 'idle', speed: 0 }), 1)
+      rig.root.updateMatrixWorld(true)
+      const origin = rig.root.getWorldPosition(new THREE.Vector3())
+      const fwd = rig.root.localToWorld(new THREE.Vector3(1, 0, 0)).sub(origin).normalize()
+      expect(fwd.x).toBeCloseTo(Math.cos(yaw), 6)
+      expect(fwd.z).toBeCloseTo(Math.sin(yaw), 6)
+      expect(fwd.y).toBeCloseTo(0, 6)
+    }
+  })
+
+  it('root.position은 pose의 월드 XZ에 정확히 놓인다(높이는 리그 내부가 담당)', () => {
+    const rig = createPlayer(THREE, KIT)
+    rig.apply(poseOf({ x: -33.5, z: 21.25 }), 1)
+    expect(rig.root.position.x).toBeCloseTo(-33.5, 9)
+    expect(rig.root.position.y).toBeCloseTo(0, 9)
+    expect(rig.root.position.z).toBeCloseTo(21.25, 9)
+  })
+})
+
+describe('createPlayer — 공유 캐시·폴백', () => {
+  it('22명을 두 번 배치해도 새 지오메트리가 생기지 않는다', () => {
+    const make = (i: number): ReturnType<typeof createPlayer> =>
+      createPlayer(THREE, {
+        kit: i < 11 ? 0xc8102e : 0x1b3a8f,
+        accent: i < 11 ? 0xffffff : 0xf5d020,
+        number: i + 1,
+        isGk: i % 11 === 0,
+      })
+    const first = new Set<THREE.BufferGeometry>()
+    for (let i = 0; i < 22; i++) for (const m of meshesOf(make(i).root)) first.add(m.geometry)
+
+    // 2차 배치(다른 킷·번호) — 지오메트리는 전부 1차에서 재사용되어야 한다
+    const fresh: THREE.BufferGeometry[] = []
+    for (let i = 0; i < 22; i++) {
+      for (const m of meshesOf(make(i + 40).root)) if (!first.has(m.geometry)) fresh.push(m.geometry)
+    }
+    expect(fresh).toHaveLength(0)
+    expect(first.size).toBeLessThan(20) // 선수당 21메시인데 고유 지오메트리는 20종 미만
+  })
+
+  it('canvas가 없는 환경에서도 throw 없이 생성·구동된다(단색 폴백)', () => {
+    expect(typeof document).toBe('undefined') // node 환경 전제
+    const rig = createPlayer(THREE, { ...KIT, isGk: true })
+    expect(() => rig.apply(poseOf({ action: 'dive', actionT: 0.5 }), 2)).not.toThrow()
+    // 등번호 평면은 텍스처가 없어도 단색으로 존재한다
+    const planes = meshesOf(rig.root).filter(
+      (m) => (m.geometry as THREE.BufferGeometry).type === 'PlaneGeometry',
+    )
+    expect(planes.length).toBeGreaterThanOrEqual(1)
+    expect(() => rig.dispose()).not.toThrow()
+  })
+})
+
+describe('createPlayer — 접지·비율', () => {
+  it('총신장 약 1.8m (7.5등신 근사)', () => {
+    const rig = createPlayer(THREE, KIT)
+    rig.apply(poseOf({ action: 'idle', speed: 0 }), 1)
+    const box = bodyBox(rig.root)
+    expect(box.max.y).toBeGreaterThan(1.7)
+    expect(box.max.y).toBeLessThan(1.95)
+  })
+
+  it('러닝 한 사이클 내내 발이 잔디를 파고들지 않는다(bounce 부호 회귀)', () => {
+    const rig = createPlayer(THREE, KIT)
+    let t = 0
+    let lowest = 99
+    for (let i = 0; i < 200; i++) {
+      t += DT
+      rig.apply(poseOf({ speed: 7 }), t)
+      lowest = Math.min(lowest, bodyBox(rig.root).min.y)
+    }
+    expect(lowest).toBeGreaterThan(-0.01) // 관통 없음
+    expect(lowest).toBeLessThan(0.06) // 공중 부양도 아님
+  })
+
+  it('다이브·낙하 자세가 양방향 모두 지면 위에 있다(DIVE_GROUND 회귀)', () => {
+    for (const id of ['gkA', 'gkB', 'gk-home', 'gk-away']) {
+      const rig = createPlayer(THREE, { ...KIT, isGk: true })
+      let lowest = 99
+      for (let i = 0; i <= 30; i++) {
+        rig.apply(poseOf({ id, action: 'dive', actionT: i / 30, speed: 1 }), 5 + i * DT)
+        lowest = Math.min(lowest, bodyBox(rig.root).min.y)
+      }
+      rig.apply(poseOf({ id, action: 'down', actionT: 1, speed: 0 }), 9)
+      lowest = Math.min(lowest, bodyBox(rig.root).min.y)
+      expect(lowest).toBeGreaterThan(-0.01)
+    }
+  })
+
+  it('접지 중 발의 대지 속도가 몸통 속도 대비 6% 이내다(풋 스케이팅 회귀)', () => {
+    const measure = (v: number): number => {
+      const rig = createPlayer(THREE, KIT)
+      const feet = meshesOf(rig.root).filter(
+        (m) => (m.geometry as THREE.BufferGeometry).type === 'BoxGeometry',
+      )
+      let t = 0
+      let x = 0
+      for (let i = 0; i < 120; i++) {
+        t += DT
+        x += v * DT
+        rig.apply(poseOf({ x, speed: v }), t) // 워밍업
+      }
+      const frames: { x: number[]; y: number[] }[] = []
+      for (let i = 0; i < 240; i++) {
+        t += DT
+        x += v * DT
+        rig.apply(poseOf({ x, speed: v }), t)
+        rig.root.updateMatrixWorld(true)
+        const p = feet.map((f) => f.getWorldPosition(new THREE.Vector3()))
+        frames.push({ x: p.map((q) => q.x), y: p.map((q) => q.y) })
+      }
+      const floor = Math.min(...frames.flatMap((f) => f.y))
+      let sum = 0
+      let n = 0
+      for (let i = 1; i < frames.length; i++) {
+        for (let k = 0; k < feet.length; k++) {
+          // 실제로 땅에 붙어 있는 프레임만(최저점 +2cm 이내)
+          if (frames[i].y[k] <= floor + 0.02 && frames[i - 1].y[k] <= floor + 0.02) {
+            sum += Math.abs(frames[i].x[k] - frames[i - 1].x[k]) / DT / v
+            n++
+          }
+        }
+      }
+      return sum / Math.max(1, n)
+    }
+    for (const v of [3, 5, 8]) expect(measure(v)).toBeLessThan(0.06)
+  })
+})
+
+describe('createPlayer — 액션 전환 블렌딩', () => {
+  interface Step {
+    action: PlayerPose['action']
+    speed: number
+    frames: number
+  }
+
+  /**
+   * 시퀀스를 구동하며 프레임 간 관절 회전 변화(rad)를 잰다.
+   * `transition` = 액션이 바뀐 직후 6프레임(= 전환 팝), `all` = 전 구간 최대.
+   * root 자신(위치·yaw)은 제외한다.
+   */
+  function jointSteps(steps: Step[], startT: number): { all: number; transition: number } {
+    const rig = createPlayer(THREE, KIT)
+    let prev: number[] | null = null
+    let all = 0
+    let transition = 0
+    let t = startT
+    for (let s = 0; s < steps.length; s++) {
+      const step = steps[s]
+      for (let i = 0; i < step.frames; i++) {
+        t += DT
+        rig.apply(
+          poseOf({
+            action: step.action,
+            speed: step.speed,
+            actionT: i / Math.max(1, step.frames - 1),
+          }),
+          t,
+        )
+        const cur: number[] = []
+        for (const child of rig.root.children) {
+          child.traverse((o) => {
+            cur.push(o.rotation.x, o.rotation.y, o.rotation.z)
+          })
+        }
+        if (prev) {
+          let step2 = 0
+          for (let k = 0; k < cur.length; k++) step2 = Math.max(step2, Math.abs(cur[k] - prev[k]))
+          all = Math.max(all, step2)
+          if (s > 0 && i < 6) transition = Math.max(transition, step2)
+        }
+        prev = cur
+      }
+    }
+    return { all, transition }
+  }
+
+  const SEQ: Step[] = [
+    { action: 'run', speed: 7, frames: 40 },
+    { action: 'celebrate', speed: 0, frames: 50 },
+    { action: 'idle', speed: 0, frames: 30 },
+    { action: 'run', speed: 6, frames: 30 },
+    { action: 'kick', speed: 4, frames: 30 },
+    { action: 'run', speed: 7, frames: 30 },
+    { action: 'dive', speed: 2, frames: 30 },
+    { action: 'idle', speed: 0, frames: 30 },
+    { action: 'down', speed: 0, frames: 20 },
+    { action: 'run', speed: 8, frames: 40 },
+  ]
+
+  it('액션 전환 직후 관절 변화가 러닝 연속 기준선의 2배를 넘지 않는다(팝 없음)', () => {
+    const base = jointSteps([{ action: 'run', speed: 8, frames: 180 }], 0).all
+    expect(base).toBeGreaterThan(0.05) // 러닝이 실제로 움직여야 의미 있는 기준선
+    const seq = jointSteps(SEQ, 100)
+    // 블렌딩이 없으면 run→celebrate 2.1, dive→idle 2.2 rad까지 튄다
+    expect(seq.transition).toBeLessThanOrEqual(2 * base)
+    expect(seq.transition).toBeLessThan(0.3)
+  })
+
+  it('시퀀스 전 구간에서 프레임 간 변화가 0.5rad 이하다(킥 스윙 포함)', () => {
+    expect(jointSteps(SEQ, 100).all).toBeLessThan(0.5)
+  })
+
+  it('킥·세리머니 중에도 위상이 계속 적분돼 러닝 복귀가 매끄럽다', () => {
+    const rig = createPlayer(THREE, KIT)
+    let t = 0
+    for (let i = 0; i < 60; i++) rig.apply(poseOf({ speed: 7 }), (t += DT))
+    // 킥 1초 동안 위상이 멈춰 있으면 복귀 프레임에서 다리가 튄다
+    for (let i = 0; i < 60; i++) rig.apply(poseOf({ action: 'kick', speed: 1, actionT: i / 59 }), (t += DT))
+    for (let i = 0; i < 40; i++) rig.apply(poseOf({ speed: 7 }), (t += DT))
+    // 블렌딩이 끝난 뒤에도 러닝 사이클이 살아 있어야 한다
+    const before: number[] = []
+    rig.root.children[1].traverse((o) => before.push(o.rotation.z))
+    rig.apply(poseOf({ speed: 7 }), (t += DT))
+    const after: number[] = []
+    rig.root.children[1].traverse((o) => after.push(o.rotation.z))
+    const moved = before.some((v, i) => Math.abs(v - after[i]) > 1e-4)
+    expect(moved).toBe(true)
+  })
+
+  it('등장 첫 프레임부터 실제 속도의 자세를 취한다(smoothSpeed 시딩)', () => {
+    // body의 자식 Group 중 좌우 오프셋이 0인 것이 몸통(힙 그룹은 z=±0.10)
+    const torsoOf = (root: THREE.Object3D): THREE.Object3D => {
+      const body = root.children.find((c) => c.type === 'Group')!
+      return body.children.find((c) => c.type === 'Group' && Math.abs(c.position.z) < 1e-9)!
+    }
+    const fast = createPlayer(THREE, KIT)
+    fast.apply(poseOf({ speed: 8 }), 0)
+    // torso.rotation.z = -전경기울기. 시딩이 없으면 첫 프레임이 정지 자세(≈0)가 된다.
+    expect(-torsoOf(fast.root).rotation.z).toBeCloseTo(gaitAngles(8, 0).lean, 6)
+    expect(-torsoOf(fast.root).rotation.z).toBeGreaterThan(0.2)
+
+    const slow = createPlayer(THREE, KIT)
+    slow.apply(poseOf({ speed: 0, action: 'run' }), 0)
+    expect(-torsoOf(slow.root).rotation.z).toBeCloseTo(0, 6)
+  })
+})
+
+describe('disposePlayerCaches', () => {
+  it('공유 캐시를 비워도 이후 생성이 정상 동작한다', () => {
+    createPlayer(THREE, KIT)
+    expect(() => disposePlayerCaches()).not.toThrow()
+    const rig = createPlayer(THREE, KIT)
+    expect(() => rig.apply(poseOf(), 1)).not.toThrow()
+    expect(meshesOf(rig.root).length).toBeGreaterThan(15)
   })
 })
