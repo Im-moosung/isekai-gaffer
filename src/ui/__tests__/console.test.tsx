@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { render, fireEvent, cleanup } from '@testing-library/react'
+import { render, fireEvent, cleanup, act } from '@testing-library/react'
 import { useMatchStore } from '../../game/matchStore'
 import { ConsolePanel } from '../console/ConsolePanel'
 import { SubPanel } from '../console/SubPanel'
@@ -80,5 +80,46 @@ describe('SubPanel (교체)', () => {
 
     fireEvent.click(getByRole('button', { name: '교체 확정' }))
     expect(store().engine!.home.subsUsed).toBe(before + 1)
+  })
+
+  it('(d) 남은 인원과 남은 교체 기회를 함께 표시한다("창"이라 쓰지 않는다)', () => {
+    store().startMatch(home, away, 42)
+    toHalftime()
+    const { container } = render(<SubPanel side="home" />)
+    const count = container.querySelector('.cs-sub__count')!.textContent!
+    expect(count).toContain('교체 0/5명')
+    expect(count).toContain('교체 기회 0/3회')
+    expect(count).not.toContain('창')
+    // 하프타임 교체는 기회를 소모하지 않는다는 사실을 그 자리에서 알린다.
+    expect(container.textContent).toContain('하프타임 교체는 교체 기회를 소모하지 않습니다')
+  })
+
+  it('(e) 기회 소진 시 [교체 확정]이 막히고 이유가 표시된다 — 하프타임 전후로 문구가 다르다', () => {
+    store().startMatch(home, away, 42)
+    store().kickoff()
+    store().advanceMinute()
+    // 전반 30분·기회 3회 소진 상태를 직접 구성(시뮬 없이 규정 표시만 검증).
+    const eng = store().engine!
+    useMatchStore.setState({
+      phase: 'paused-user',
+      pauseReason: { kind: 'user' },
+      engine: { ...eng, minute: 30, home: { ...eng.home, subWindowsUsed: 3, lastSubMinute: 25 } },
+    })
+    const { container, getByRole } = render(<SubPanel side="home" />)
+    expect(container.querySelector('.cs-sub__locked')!.textContent)
+      .toContain('하프타임에는 기회 소모 없이')
+    // 패널 열람 자체는 막지 않는다 — 선수 카드는 그대로 보인다.
+    expect(container.querySelectorAll('.cs-sub__lineup .cs-card').length).toBe(11)
+    const outCard = container.querySelector('.cs-sub__lineup .cs-card') as HTMLElement
+    const inCard = container.querySelector('.cs-sub__bench .cs-card') as HTMLElement
+    fireEvent.click(outCard)
+    fireEvent.click(inCard)
+    expect((getByRole('button', { name: '교체 확정' }) as HTMLButtonElement).disabled).toBe(true)
+
+    // 하프타임을 지난 뒤에는 "하프타임에는…" 안내가 거짓이 되므로 문구가 바뀐다.
+    const eng2 = store().engine!
+    act(() => { useMatchStore.setState({ engine: { ...eng2, minute: 70 } }) })
+    expect(container.querySelector('.cs-sub__locked')!.textContent)
+      .toContain('더 이상 교체할 수 없습니다')
   })
 })

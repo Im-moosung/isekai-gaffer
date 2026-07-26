@@ -95,6 +95,16 @@
   font-weight: 700;
   color: var(--bc-accent);
 }
+/* 교체 기회 소진 안내 — 왜 [교체 확정]이 막혔는지 그 자리에서 말한다. */
+.cs-sub__locked {
+  margin: 6px 0 4px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px dashed var(--bc-danger);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bc-danger);
+}
 .cs-sub__subtitle {
   margin: 12px 0 8px;
   font-size: 12px;

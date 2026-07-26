@@ -214,3 +214,72 @@ describe('planIntact / adaptLag', () => {
     expect(lagged).toBeLessThan(plain)
   })
 })
+
+describe('교체 기회(IFAB Law 3: 경기당 3회)', () => {
+  /** 라인업에 없는 벤치 선수를 순서대로 뽑는다(결정론 — Math.random 금지). */
+  const benchIds = (st: ReturnType<typeof createMatch>, n: number) =>
+    st.home.team.squad
+      .filter(p => !st.home.tactics.lineup.some(l => l.playerId === p.id))
+      .slice(0, n)
+      .map(p => p.id)
+
+  /** 지정 분으로 시계를 옮긴다(시뮬 없이) — 교체 기회 판정만 보려는 테스트용. */
+  const at = (st: ReturnType<typeof createMatch>, minute: number) => ({ ...st, minute })
+
+  it('서로 다른 분의 교체는 각각 기회를 소모하고, 4번째는 거부된다', () => {
+    let st = at(createMatch(even1, even2, { seed: 3 }), 50)
+    const ins = benchIds(st, 4)
+    const outs = [0, 1, 2, 3].map(i => st.home.tactics.lineup[10 - i].playerId)
+    for (let i = 0; i < 3; i++) {
+      st = at(st, 50 + i * 5)
+      st = applyCommand(st, 'home', { type: 'sub', out: outs[i], in: ins[i] })
+      expect(st.home.subWindowsUsed).toBe(i + 1)
+    }
+    st = at(st, 70)
+    expect(() => applyCommand(st, 'home', { type: 'sub', out: outs[3], in: ins[3] }))
+      .toThrow('교체 기회(3회) 모두 사용')
+    // 거부는 상태를 건드리지 않는다(반쪽 교체 금지).
+    expect(st.home.subsUsed).toBe(3)
+  })
+
+  it('같은 분의 복수 교체는 한 번의 기회로 묶인다', () => {
+    let st = at(createMatch(even1, even2, { seed: 3 }), 60)
+    const ins = benchIds(st, 3)
+    const outs = [0, 1, 2].map(i => st.home.tactics.lineup[10 - i].playerId)
+    for (let i = 0; i < 3; i++) {
+      st = applyCommand(st, 'home', { type: 'sub', out: outs[i], in: ins[i] })
+    }
+    expect(st.home.subsUsed).toBe(3)
+    expect(st.home.subWindowsUsed).toBe(1)
+  })
+
+  it('하프타임(45분) 교체는 기회를 소모하지 않는다', () => {
+    let st = at(createMatch(even1, even2, { seed: 3 }), 45)
+    const ins = benchIds(st, 2)
+    const outs = [0, 1].map(i => st.home.tactics.lineup[10 - i].playerId)
+    st = applyCommand(st, 'home', { type: 'sub', out: outs[0], in: ins[0] })
+    st = applyCommand(st, 'home', { type: 'sub', out: outs[1], in: ins[1] })
+    expect(st.home.subsUsed).toBe(2)
+    expect(st.home.subWindowsUsed ?? 0).toBe(0)
+  })
+
+  it('하프타임에 기회를 다 쓴 상태여도 하프타임 교체는 통과한다', () => {
+    let st = at(createMatch(even1, even2, { seed: 3 }), 45)
+    st = { ...st, home: { ...st.home, subWindowsUsed: 3 } }
+    const [inId] = benchIds(st, 1)
+    const out = st.home.tactics.lineup[10].playerId
+    st = applyCommand(st, 'home', { type: 'sub', out, in: inId })
+    expect(st.home.subsUsed).toBe(1)
+    expect(st.home.subWindowsUsed).toBe(3)
+  })
+
+  it('하프타임 교체 직후 46분 교체는 새 기회를 연다', () => {
+    let st = at(createMatch(even1, even2, { seed: 3 }), 45)
+    const ins = benchIds(st, 2)
+    const outs = [0, 1].map(i => st.home.tactics.lineup[10 - i].playerId)
+    st = applyCommand(st, 'home', { type: 'sub', out: outs[0], in: ins[0] })
+    st = at(st, 46)
+    st = applyCommand(st, 'home', { type: 'sub', out: outs[1], in: ins[1] })
+    expect(st.home.subWindowsUsed).toBe(1)
+  })
+})

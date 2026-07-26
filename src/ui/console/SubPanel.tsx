@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import { useMatchStore } from '../../game/matchStore'
+import { MAX_SUBS, MAX_SUB_WINDOWS } from '../../engine/simulate'
 import type { MatchEvent, Player, SideState } from '../../engine/types'
 import { playerMatchStats, hasPlayerMatchStats, type PlayerMatchStats } from '../../game/playerStats'
 import './console.css'
-
-const MAX_SUBS = 5
 
 interface SubPanelProps {
   side: 'home' | 'away'
@@ -62,14 +61,47 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
     }
   }
 
-  const ready = !!out && !!inSel
+  // 교체 기회(IFAB Law 3: 경기당 3회, UI 표기는 "교체 기회") — 하프타임 교체는 기회를
+  // 소모하지 않고, 같은 분의 복수 교체는 이미 연 기회에 묶인다.
+  // ★ 패널을 여는 것 자체는 어떤 상황에서도 막지 않는다. 선수 체력·개인 기록 확인은
+  //   감독이 벤치에서 늘 하는 일이고, 차감되는 것은 실제 교체를 확정했을 때뿐이다.
+  const windowsUsed = state.subWindowsUsed ?? 0
+  const halftime = phase === 'halftime'
+  const minute = engine?.minute ?? 0
+  // 하프타임이 아직 오지 않았다면 "하프타임에는 기회 소모 없이" 안내가 참이다.
+  // 이미 지났다면 그 문장은 거짓이 되므로 문구를 분기한다.
+  const beforeHalftime = minute < 45
+  const sameWindow = state.lastSubMinute !== undefined && state.lastSubMinute === minute
+  const noWindow = windowsUsed >= MAX_SUB_WINDOWS && !halftime && !sameWindow
+
+  const ready = !!out && !!inSel && !noWindow && state.subsUsed < MAX_SUBS
 
   return (
     <section className="cs-panel cs-sub" aria-label="교체">
       <div className="cs-panel__head">
         <h3 className="cs-panel__title">교체</h3>
-        <span className="cs-sub__count">{state.subsUsed}/{MAX_SUBS}</span>
+        {/* 남은 인원과 남은 기회를 함께 — 인원이 남아도 기회가 없으면 못 바꾼다.
+            둘 중 하나만 보여주면 [교체 확정]이 거부되는 이유를 알 수 없다. */}
+        <span className="cs-sub__count">
+          교체 {state.subsUsed}/{MAX_SUBS}명 · 교체 기회 {windowsUsed}/{MAX_SUB_WINDOWS}회
+        </span>
       </div>
+
+      {noWindow && (
+        <p className="cs-sub__locked" role="status">
+          {beforeHalftime
+            ? `교체 기회 ${MAX_SUB_WINDOWS}회를 모두 사용했습니다. 하프타임에는 기회 소모 없이 교체할 수 있습니다.`
+            : `교체 기회 ${MAX_SUB_WINDOWS}회를 모두 사용했습니다. 이번 경기에서는 더 이상 교체할 수 없습니다.`}
+        </p>
+      )}
+      {halftime && (
+        <p className="cs-sub__hint">하프타임 교체는 교체 기회를 소모하지 않습니다.</p>
+      )}
+      {!halftime && sameWindow && (
+        <p className="cs-sub__hint">
+          {state.lastSubMinute}분 교체와 같은 기회로 묶입니다 — 지금 더 바꿔도 기회를 쓰지 않습니다.
+        </p>
+      )}
 
       <p className="cs-sub__hint">
         {!out ? '① 나갈 선수를 고르세요(보드 발광)' : !inSel ? '② 들어올 벤치 선수를 고르세요' : '③ [교체 확정]'}
@@ -108,7 +140,7 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
 
       <div className="cs-panel__foot">
         <button type="button" className="cs-btn" onClick={swap} disabled={!open || !ready}>교체 확정</button>
-        {!open && <span className="cs-lock">다음 개입 창까지 잠김</span>}
+        {!open && <span className="cs-lock">다음 브레이크까지 잠김</span>}
       </div>
       {error && <p className="cs-error" role="alert">{error}</p>}
     </section>

@@ -68,6 +68,14 @@ export interface SideState {
   /** 압박 70+ 연속 유지 분(지속 압박 페널티 추적). 압박<70인 분엔 0으로 리셋.
    *  미지정 시 0으로 취급(기존 상태 호환). */
   sustainedPressMinutes?: number
+  /** 사용한 교체 기회 수(IFAB substitution opportunity). 경기당 3회이며, 같은 분의 복수
+   *  교체는 한 번의 기회로 묶인다(실제로도 같은 정지 상황에서 여러 명을 함께 바꾼다).
+   *  UI 표기는 "교체 기회" — "창/윈도우"는 교체 패널로 오해되므로 쓰지 않는다.
+   *  미지정 시 0으로 취급(기존 상태 호환). */
+  subWindowsUsed?: number
+  /** 마지막 교체가 이뤄진 분. 같은 분의 추가 교체가 새 기회를 소모하지 않도록 판정하는 기준.
+   *  미지정이면 아직 교체 없음(기존 상태 호환). */
+  lastSubMinute?: number
 }
 export interface MatchState {
   minute: number; score: [number, number]   // [home, away]

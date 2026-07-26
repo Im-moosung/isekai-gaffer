@@ -21,7 +21,19 @@ export interface SimulateOpts {
   adaptLag?: { side: 'home' | 'away'; until: number }
 }
 
-const MAX_SUBS = 5
+/** 경기당 교체 인원 상한 — IFAB Law 3(2026) 기준 5명. */
+export const MAX_SUBS = 5
+/** 경기당 교체 기회 상한 — IFAB Law 3(2026)의 substitution opportunity, 3회.
+ *  ⚠ UI 표기는 반드시 "교체 기회"로 쓴다 — 한국어에서 "교체 창"은 교체 패널(UI 창)로 읽혀
+ *  "패널을 몇 번 더 열 수 있다"로 오해된다. 코드 식별자만 window를 유지한다.
+ *  같은 분에 이뤄진 복수 교체는 한 번의 기회로 묶고, 하프타임(45분) 교체는 기회를 소모하지 않는다
+ *  (실제 규정도 하프타임 교체를 기회로 세지 않는다 — 그래서 하프타임의 가치가 올라간다).
+ *  우리 게임은 90분 후 바로 승부차기라 연장전 추가 교체/기회 규정은 해당 없다.
+ *
+ *  ★ 설계 의도: 감독 타임(pauseByUser)에는 횟수 제한이 없지만 교체 기회는 3회뿐이라,
+ *  아무 때나 멈춰 선수를 바꾸면 스스로 자원을 태운다. 인위적인 "정지 N회 제한" 없이
+ *  규정 자체가 개입의 절제를 강제하는 구조다. */
+export const MAX_SUB_WINDOWS = 3
 // 전력 차 민감도 — 동급 팀은 비율 1이라 캘리브레이션 계약 무영향, 비대칭 매치업의 승률 분화 담당.
 // 실데이터 검증(esp≥55승) 기준으로 튜닝.
 // 이 값은 '기회의 양'만 늘린다. 슛 수는 ±15%(동급)/±25%(실팀) 캘리브레이션 계약에 묶여 있어
@@ -418,6 +430,16 @@ export function applyCommand(state: MatchState, sideKey: 'home' | 'away', cmd: M
     const slot = side.tactics.lineup.find(l => l.playerId === cmd.out)
     if (!slot) throw new Error('교체 대상이 라인업에 없음')
     if (side.tactics.lineup.some(l => l.playerId === cmd.in)) throw new Error('이미 출전 중인 선수')
+    // 교체 기회 판정 — 인원 상한과 별개의 규정 축이다. 상태 변경 전에 막아야
+    // "기회는 초과했는데 선수는 이미 바뀐" 반쪽 상태가 남지 않는다.
+    const halftimeSub = st.minute === 45
+    if (!halftimeSub && side.lastSubMinute !== st.minute) {
+      const windows = side.subWindowsUsed ?? 0
+      if (windows >= MAX_SUB_WINDOWS) throw new Error(`교체 기회(${MAX_SUB_WINDOWS}회) 모두 사용`)
+      side.subWindowsUsed = windows + 1
+    }
+    // 하프타임 교체도 lastSubMinute은 갱신한다 — 45분 이후 첫 교체가 새 기회임을 판정하는 데 필요하다.
+    side.lastSubMinute = st.minute
     slot.playerId = cmd.in
     side.subsUsed++
     st.events.push({ minute: st.minute, type: 'sub', teamId: side.team.id, playerId: cmd.in, detail: `out:${cmd.out}` })
