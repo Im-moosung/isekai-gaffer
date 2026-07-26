@@ -110,7 +110,7 @@
     font-size:16pt;
     font-weight:800;
     color:var(--navy);
-    margin:20px 0 12px 0;
+    margin:14px 0 11px 0;
     padding-left:14px;
     border-left:6px solid var(--navy);
     line-height:1.25;
@@ -142,7 +142,7 @@
     border:1px solid var(--line);
   }
 
-  .section{padding:0 0 4mm 0;}
+  .section{padding:0 0 3mm 0;}
 
   /* callouts */
   .lead{
@@ -217,7 +217,7 @@
   .principle p:last-child{margin-bottom:0;}
 
   /* ============ DIAGRAMS ============ */
-  figure{margin:12px 0 14px 0;break-inside:avoid;}
+  figure{margin:8px 0 12px 0;break-inside:avoid;}
   figcaption{
     font-size:8.8pt;
     color:var(--muted);
@@ -229,27 +229,28 @@
     border:1px solid var(--line);
     border-radius:6px;
     background:#fff;
-    padding:16px 16px 18px 16px;
+    padding:13px 15px 14px 15px;
     break-inside:avoid;
   }
   .diagram .dg-title{
     font-size:9pt;letter-spacing:0.14em;text-transform:uppercase;
-    color:var(--blue);font-weight:700;margin-bottom:14px;
+    color:var(--blue);font-weight:700;margin-bottom:12px;
   }
 
   /* --- vertical flow (도식 3) --- */
   .vflow{display:flex;flex-direction:column;align-items:stretch;}
   .vf-row{display:flex;align-items:stretch;gap:10px;}
   .vf-idx{
-    min-width:52px;text-align:right;padding-top:9px;
+    min-width:52px;text-align:right;padding-top:6px;
     font-size:7.8pt;font-weight:700;color:var(--muted);letter-spacing:0.08em;
   }
   .vf-box{
     flex:1;border:1.5px solid var(--navy);border-radius:5px;
-    padding:8px 12px;background:#fff;
+    padding:5px 11px;background:#fff;
+    display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;
   }
-  .vf-box .t{font-size:9.6pt;font-weight:700;color:var(--navy);}
-  .vf-box .d{font-size:8.4pt;color:var(--muted);margin-top:2px;line-height:1.35;}
+  .vf-box .t{font-size:9.3pt;font-weight:700;color:var(--navy);line-height:1.3;}
+  .vf-box .d{font-size:8.1pt;color:var(--muted);line-height:1.3;}
   .vf-box.accent{border-color:var(--blue);background:var(--panel);}
   .vf-box.accent .t{color:var(--blue);}
   .vf-box.loop{border-style:dashed;border-color:var(--line);background:var(--panel);}
@@ -258,10 +259,10 @@
   .vf-box.end .t{color:#fff;}
   .vf-box.end .d{color:rgba(255,255,255,0.78);}
 
-  .vf-link{display:flex;align-items:center;gap:10px;min-height:22px;}
+  .vf-link{display:flex;align-items:center;gap:10px;min-height:12px;}
   .vf-link .sp{min-width:52px;}
   .vf-link .stem{
-    width:1.5px;background:var(--navy);height:22px;margin-left:16px;position:relative;
+    width:1.5px;background:var(--navy);height:12px;margin-left:16px;position:relative;
   }
   .vf-link .stem::after{
     content:"";position:absolute;left:-3.5px;bottom:-1px;
@@ -315,7 +316,32 @@
     padding:5px 10px;font-size:8.3pt;color:var(--muted);
   }
 
-  /* --- intervention timeline (도식 1) --- */
+  /* --- intervention layers (도식 1) --- */
+  .tlx{
+    display:grid;grid-template-columns:62px 1fr;
+    column-gap:10px;row-gap:7px;align-items:center;
+  }
+  .tlx .lane-lbl{
+    font-size:8pt;font-weight:700;color:var(--navy);
+    text-align:right;line-height:1.25;
+  }
+  .tlx .lane-lbl small{display:block;font-weight:500;color:var(--muted);font-size:7pt;margin-top:1px;}
+  .lane{
+    position:relative;border-radius:4px;padding:6px 10px;
+    font-size:8.1pt;line-height:1.3;text-align:center;
+  }
+  .lane.sit{
+    border:1.2px dashed var(--blue);background:#fff;color:var(--navy-soft);
+  }
+  .lane.sit .vm{
+    position:absolute;top:-4.5px;width:8px;height:8px;
+    background:#fff;border:1.2px solid var(--blue);transform:rotate(45deg);
+  }
+  .lane.tt{
+    border:1.2px solid var(--blue);background:var(--panel);
+    color:var(--blue);font-weight:600;
+  }
+
   .tl{position:relative;padding:4px 0 2px 0;}
   .tl-track{display:flex;}
   .tl-seg{flex:1;text-align:center;position:relative;padding-top:28px;}
@@ -430,52 +456,83 @@
     </div>
 
     <h3>개입 지점 — 하이드레이션 브레이크</h3>
-    <p>2026 대회에서 신설된 하이드레이션 브레이크를 <strong>감독 개입 시점</strong>으로 차용함. 전반 1회·하프타임·후반 1회가 기본 개입이며, 경기 상황에 따라 추가 개입이 제안됨(90분당 총 5회 내외).</p>
+    <p>2026 대회에서 신설된 하이드레이션 브레이크를 <strong>감독 개입 시점</strong>으로 차용함. 개입은 세 층으로 구성됨.</p>
+
+    <table>
+      <thead>
+        <tr><th style="width:20%">층</th><th style="width:44%">시점</th><th>성격</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>기본 개입</strong></td><td>전반 하이드레이션 · 하프타임 · 후반 하이드레이션</td><td>정해진 3회</td></tr>
+        <tr><td><strong>상황 개입</strong></td><td>실점 · 득점 · 모멘텀 상실 · 체력 저하 등 발생 시</td><td>제안되며 무시 가능</td></tr>
+        <tr><td><strong>감독 타임</strong></td><td>재생 중 언제든</td><td>사용자가 직접 정지, 횟수 제한 없음</td></tr>
+      </tbody>
+    </table>
+
+    <p>정해진 개입 지점은 <strong>선수단이 감독의 지시를 받는 순간</strong>이므로 지시 효과가 실리며, 감독 타임은 상황을 들여다보기 위한 자유 정지로 구분함. 언제든 멈춰 볼 수 있되, 아무 때나 멈춘다고 팀이 달라지지는 않음.</p>
+
     <p>개입 중에는 <strong>시간이 완전히 정지</strong>하고 카운트다운을 두지 않음 — 감독이 생각하는 시간을 압박하지 않기 위함임.</p>
 
     <figure>
       <div class="diagram">
-        <div class="dg-title">도식 1 · 90분 안의 기본 개입 지점</div>
-        <div class="tl">
-          <div class="tl-track">
-            <div class="tl-seg">
-              <div class="tl-line"></div>
-              <div class="mk"></div>
-              <div class="nm">킥오프</div>
-              <div class="ds">전술 센터에서 설계한 선발·전술로 시작</div>
-            </div>
-            <div class="tl-seg hl">
-              <div class="tl-line"></div>
-              <div class="mk stop"></div>
-              <div class="nm">하이드레이션</div>
-              <div class="ds">전반 1회 · 시간 정지</div>
-            </div>
-            <div class="tl-seg hl">
-              <div class="tl-line"></div>
-              <div class="mk stop"></div>
-              <div class="nm">하프타임</div>
-              <div class="ds">전술 조정 · 교체 · 팀토크</div>
-            </div>
-            <div class="tl-seg hl">
-              <div class="tl-line"></div>
-              <div class="mk stop"></div>
-              <div class="nm">하이드레이션</div>
-              <div class="ds">후반 1회 · 시간 정지</div>
-            </div>
-            <div class="tl-seg">
-              <div class="tl-line"></div>
-              <div class="mk"></div>
-              <div class="nm">경기 종료</div>
-              <div class="ds">기자회견으로 연결</div>
+        <div class="dg-title">도식 1 · 90분 안의 개입 3층 구조</div>
+        <div class="tlx">
+
+          <div class="lane-lbl">기본 개입<small>정해진 3회</small></div>
+          <div class="tl">
+            <div class="tl-track">
+              <div class="tl-seg">
+                <div class="tl-line"></div>
+                <div class="mk"></div>
+                <div class="nm">킥오프</div>
+                <div class="ds">전술 센터에서 설계한 선발·전술로 시작</div>
+              </div>
+              <div class="tl-seg hl">
+                <div class="tl-line"></div>
+                <div class="mk stop"></div>
+                <div class="nm">하이드레이션</div>
+                <div class="ds">전반</div>
+              </div>
+              <div class="tl-seg hl">
+                <div class="tl-line"></div>
+                <div class="mk stop"></div>
+                <div class="nm">하프타임</div>
+                <div class="ds">전술 조정 · 교체 · 팀토크</div>
+              </div>
+              <div class="tl-seg hl">
+                <div class="tl-line"></div>
+                <div class="mk stop"></div>
+                <div class="nm">하이드레이션</div>
+                <div class="ds">후반</div>
+              </div>
+              <div class="tl-seg">
+                <div class="tl-line"></div>
+                <div class="mk"></div>
+                <div class="nm">경기 종료</div>
+                <div class="ds">기자회견으로 연결</div>
+              </div>
             </div>
           </div>
-          <div class="tl-legend">
-            <span><span class="d stop"></span>기본 개입 (시간 정지 · 카운트다운 없음)</span>
-            <span><span class="d play"></span>경기 진행</span>
+
+          <div class="lane-lbl">상황 개입<small>제안 · 무시 가능</small></div>
+          <div class="lane sit">
+            <span class="vm" style="left:19%"></span>
+            <span class="vm" style="left:47%"></span>
+            <span class="vm" style="left:74%"></span>
+            실점 · 득점 · 모멘텀 상실 · 체력 저하 등 발생 시 (시점 가변)
           </div>
+
+          <div class="lane-lbl">감독 타임<small>횟수 제한 없음</small></div>
+          <div class="lane tt">재생 중 언제든 사용자가 직접 정지 — 전 구간</div>
+
+        </div>
+        <div class="tl-legend">
+          <span><span class="d stop"></span>정해진 개입 지점 (지시 효과가 실림)</span>
+          <span><span class="d play"></span>경기 진행</span>
+          <span>모든 개입에서 시간 완전 정지 · 카운트다운 없음</span>
         </div>
       </div>
-      <figcaption>기본 개입은 전반 1회·하프타임·후반 1회이며, 경기 상황에 따라 추가 개입이 제안됨(90분당 총 5회 내외)</figcaption>
+      <figcaption>정해진 3회의 기본 개입 위에, 상황에 따라 제안되는 상황 개입과 사용자가 언제든 거는 감독 타임이 겹쳐 동작함</figcaption>
     </figure>
   </section>
 
