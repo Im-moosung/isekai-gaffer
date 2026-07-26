@@ -399,14 +399,22 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     set({ phase: 'paused-user', pauseReason: { kind: 'user' } })
   },
   confirmTactics: () => {
-    const { engine, phase } = get()
+    const { engine, phase, pauseReason } = get()
     if (!engine) throw new Error('경기 미시작')
     if (!INTERVENTION_PHASES.includes(phase)) throw new Error('개입 중이 아님')
     // 킥오프 전 계획에는 인게임 부스트를 주지 않는다(사전 계획과 실시간 개입의 가치를 구분).
     // 재생 시작도 하지 않는다 — 'pre'의 진행은 kickoff()가 담당한다.
     if (phase === 'pre') return
     // 개입 직후 부스트: 지금부터 BOOST_MINUTES분간 찬스 퀄 +8%·실점 위험 −6%(advanceMinute이 엔진 전달).
-    set({ phase: 'playing', pauseReason: null, momentPrompt: null, boostUntil: engine.minute + BOOST_MINUTES })
+    // 단 자유 정지(감독 타임)에는 주지 않는다 — pauseByUser에 횟수 제한이 없어
+    // 8분마다 정지·확정만 반복하면 부스트가 상시 유지되는 공짜 이득이 생긴다.
+    // 정해진 개입 지점(하이드레이션·하프타임·상황 제안)만 "선수단이 지시를 받는
+    // 순간"으로 보고 효과를 싣는다. 감독 타임은 상황을 들여다보는 자유 정지다.
+    const scheduled = pauseReason?.kind !== 'user'
+    set({
+      phase: 'playing', pauseReason: null, momentPrompt: null,
+      ...(scheduled ? { boostUntil: engine.minute + BOOST_MINUTES } : {}),
+    })
   },
   acceptMoment: () => {
     const { phase, momentPrompt } = get()

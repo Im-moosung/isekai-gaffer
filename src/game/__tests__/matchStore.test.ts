@@ -632,3 +632,33 @@ describe('플랜 스냅샷과 이탈 계산', () => {
     expect(store().adaptUntil).toBe(0)
   })
 })
+
+describe('감독 타임(자유 정지)은 지시 부스트를 주지 않는다', () => {
+  // pauseByUser에 횟수 제한이 없어, 확정마다 부스트를 주면 8분 주기로
+  // 정지·확정만 반복해 부스트를 상시 유지하는 공짜 이득이 생긴다.
+  it('감독 타임 확정은 boostUntil을 올리지 않는다', () => {
+    const s = store()
+    s.startMatch(a, b, 4242)
+    s.kickoff()
+    store().advanceMinute()
+    store().pauseByUser()
+    expect(store().pauseReason?.kind).toBe('user')
+    store().confirmTactics()
+    expect(store().boostUntil).toBe(0)
+    expect(store().phase).toBe('playing')
+  })
+
+  it('하이드레이션 브레이크 확정은 boostUntil을 설정한다', () => {
+    const s = store()
+    s.startMatch(a, b, 4242)
+    s.kickoff()
+    const sched = store().schedule!
+    while (store().phase === 'playing' && store().engine!.minute < sched.firstHydration) {
+      store().advanceMinute()
+    }
+    expect(store().pauseReason?.kind).toBe('hydration1')
+    const at = store().engine!.minute
+    store().confirmTactics()
+    expect(store().boostUntil).toBeGreaterThan(at)
+  })
+})
