@@ -1,0 +1,183 @@
+// src/ui/landing/StadiumBackdrop.tsx
+// 랜딩 첫인상용 3D 스타디움 라이브 배경 — 실제 경기 화면과 **같은 씬 자산**(scene.buildScene)을
+// 재사용해 "3D가 진짜다"를 첫 화면에서 증명한다. 선수·공·FX는 없다(빈 경기장 + 관중 + 조명).
+//
+// 설계 원칙(Match3D와 동일 계약):
+//  - three는 **동적 import만**. 이 모듈 자체도 App에서 lazy로 부른다 → 문안·버튼이 먼저 뜬다.
+//  - WebGL2 불가 · 렌더러 생성 실패 · 청크 로드 실패 · 컨텍스트 로스 → **조용히 사라진다**
+//    (아무것도 렌더하지 않음). 랜딩 CSS 그라디언트가 그대로 배경으로 남는다.
+//  - Math.random·Date 금지. 카메라 위상은 상수, 시간은 three Timer.
+//  - prefers-reduced-motion → rAF 루프 없이 **1프레임만** 그린다(정지 화면).
+//  - 언마운트 시 bundle.dispose()(disposeTree가 InstancedMesh 분기까지 처리) + renderer.dispose()
+//    + forceContextLoss로 GPU 컨텍스트를 즉시 반납한다.
+import { useEffect, useRef, useState } from 'react'
+import { buildScene, type ThreeAPI } from '../pitch/three/scene'
+
+/** 랜딩 배경은 경기 화면보다 가벼워야 한다(첫 로드 체감) — 관중 절반, 피치 텍스처 저해상도. */
+const CROWD_COUNT = 2000
+const PX_PER_M = 10
+
+/** 오빗 반경(m) — 스타디움 볼(가장 먼 스탠드 외곽 ≈ 85m) 바깥에서 전체를 잡는 거리. */
+const ORBIT_R = 148
+/** 카메라 높이(m) — 관중석 지붕선 위에서 내려다보는 항공 확립샷. */
+const ORBIT_Y = 62
+/** 각속도(rad/s) — 한 바퀴 ≈ 3분 30초. 멀미 방지를 위해 아주 느리게. */
+const ORBIT_OMEGA = 0.03
+/** 시작 각(rad) — 메인 스탠드 대각선에서 출발해 첫 프레임부터 관중석이 보인다. */
+const ORBIT_PHASE = 0.85
+/** 상하 드리프트 진폭(m)과 각속도 — 손으로 든 카메라 느낌의 미세 호흡. */
+const BOB_AMP = 1.4
+const BOB_OMEGA = 0.11
+/** 시야각. */
+const FOV = 38
+/** 픽셀비 상한 — 배경일 뿐이므로 2까지 올릴 이유가 없다. */
+const MAX_DPR = 1.5
+
+/** WebGL2 사용 가능 여부(동기). jsdom은 getContext가 null → false → 배경 없음. */
+function webgl2Available(): boolean {
+  try {
+    const c = document.createElement('canvas')
+    const gl = c.getContext('webgl2')
+    // 탐지용 컨텍스트도 브라우저 컨텍스트 상한(≈16)을 잡아먹는다 — 즉시 반납한다.
+    gl?.getExtension('WEBGL_lose_context')?.loseContext()
+    return !!gl
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 랜딩 3D 배경. 준비되면 CSS 트랜지션으로 페이드인한다.
+ * 실패하면 null을 렌더한다 — 호출부(랜딩)는 아무 처리도 하지 않아도 정적 배경으로 남는다.
+ */
+export function StadiumBackdrop() {
+  const hostRef = useRef<HTMLDivElement>(null)
+  const [failed, setFailed] = useState(false)
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+    if (!webgl2Available()) {
+      setFailed(true)
+      return
+    }
+
+    let cancelled = false
+    let teardown: (() => void) | null = null
+
+    void (async () => {
+      let THREE: ThreeAPI
+      try {
+        THREE = (await import('three')) as unknown as ThreeAPI
+      } catch {
+        if (!cancelled) setFailed(true)
+        return
+      }
+      if (cancelled) return
+
+      let renderer: import('three').WebGLRenderer
+      try {
+        renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'default' })
+      } catch {
+        if (!cancelled) setFailed(true)
+        return
+      }
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_DPR))
+      renderer.outputColorSpace = THREE.SRGBColorSpace
+      renderer.toneMapping = THREE.ACESFilmicToneMapping
+      renderer.toneMappingExposure = 1.05
+      renderer.domElement.className = 'landing-bg__canvas'
+      host.appendChild(renderer.domElement)
+
+      // matchMedia가 없는 환경(테스트 jsdom 등)에서는 모션을 켠 것으로 본다.
+      const reduced =
+        typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
+      const bundle = buildScene(THREE, { crowdCount: CROWD_COUNT, pxPerMeter: PX_PER_M })
+      const scene = bundle.scene
+      const camera = bundle.camera
+      camera.fov = FOV
+      camera.updateProjectionMatrix()
+
+      const place = (t: number): void => {
+        const a = ORBIT_PHASE + t * ORBIT_OMEGA
+        camera.position.set(
+          Math.cos(a) * ORBIT_R,
+          ORBIT_Y + Math.sin(t * BOB_OMEGA) * BOB_AMP,
+          Math.sin(a) * ORBIT_R,
+        )
+        camera.lookAt(0, 6, 0)
+      }
+
+      const resize = (): void => {
+        const w = host.clientWidth
+        const h = host.clientHeight
+        if (w < 2 || h < 2) return
+        renderer.setSize(w, h, false)
+        camera.aspect = w / h
+        camera.updateProjectionMatrix()
+      }
+      resize()
+      const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => resize()) : null
+      ro?.observe(host)
+      if (!ro) window.addEventListener('resize', resize)
+
+      const timer = new THREE.Timer()
+      timer.connect(document)
+      let raf = 0
+      const tick = (now: number): void => {
+        raf = requestAnimationFrame(tick)
+        timer.update(now)
+        place(timer.getElapsed())
+        renderer.render(scene, camera)
+      }
+
+      // 컨텍스트 로스 → 즉시 정리하고 정적 배경으로 되돌린다(랜딩은 깨지지 않는다).
+      const onContextLost = (e: Event): void => {
+        e.preventDefault()
+        teardown?.()
+        if (!cancelled) setFailed(true)
+      }
+      renderer.domElement.addEventListener('webglcontextlost', onContextLost)
+
+      let torn = false
+      teardown = () => {
+        if (torn) return
+        torn = true
+        cancelAnimationFrame(raf)
+        timer.dispose()
+        ro?.disconnect()
+        if (!ro) window.removeEventListener('resize', resize)
+        renderer.domElement.removeEventListener('webglcontextlost', onContextLost)
+        bundle.dispose()
+        renderer.dispose()
+        renderer.forceContextLoss?.()
+        renderer.domElement.remove()
+      }
+
+      if (cancelled) {
+        teardown()
+        return
+      }
+
+      if (reduced) {
+        // 모션 최소화 — 카메라를 시작 위치에 세우고 1프레임만 그린다(rAF 없음).
+        place(0)
+        renderer.render(scene, camera)
+      } else {
+        raf = requestAnimationFrame(tick)
+      }
+      setReady(true)
+    })()
+
+    return () => {
+      cancelled = true
+      teardown?.()
+    }
+    // 마운트당 1회 초기화(랜딩은 props가 없다).
+  }, [])
+
+  if (failed) return null
+  return <div ref={hostRef} className={`landing-bg__host${ready ? ' is-ready' : ''}`} aria-hidden="true" />
+}

@@ -1,41 +1,96 @@
-/* 데모 진입 랜딩 — 다크 배경 (방송 토큰 사용). */
+/* 첫인상 랜딩 — 3D 스타디움 라이브 배경 + 대체역사 훅 문안.
+   배경(.landing__bg)이 실패하거나 로드 전이어도 .landing의 그라디언트가 그대로 화면을 채운다. */
 .landing {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 100vh;
   padding: 24px;
   box-sizing: border-box;
-  background: radial-gradient(120% 120% at 50% 0%, #16223c, var(--bc-bg));
+  overflow: hidden; /* 3D 캔버스가 어떤 상황에서도 가로 스크롤을 만들지 않게 */
+  background:
+    radial-gradient(120% 90% at 50% 8%, #1a2a4a 0%, #0d1526 55%, var(--bc-bg) 100%);
   color: var(--bc-text);
   font-family: var(--bc-font);
 }
+/* 3D 배경 레이어 — 텍스트보다 항상 뒤. 비어 있어도(로드 전·실패) 레이아웃에 영향이 없다. */
+.landing__bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none; /* 버튼 클릭이 배경에 막히지 않는다 */
+}
+.landing-bg__host {
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 900ms ease-out;
+}
+.landing-bg__host.is-ready {
+  opacity: 1;
+}
+.landing-bg__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* 가독성 스크림 — 3D가 아무리 밝아도 문안 대비를 확보한다. */
+.landing__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    radial-gradient(70% 55% at 50% 52%, rgba(4, 8, 16, 0.7) 0%, rgba(4, 8, 16, 0.34) 60%, rgba(4, 8, 16, 0.05) 100%),
+    linear-gradient(180deg, rgba(4, 8, 16, 0.5) 0%, rgba(4, 8, 16, 0.08) 42%, rgba(4, 8, 16, 0.62) 100%);
+}
 .landing__card {
-  width: min(560px, 100%);
-  padding: 40px 36px;
-  border: 1px solid var(--bc-line);
-  border-radius: 16px;
-  background: var(--bc-panel);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  position: relative;
+  z-index: 2;
+  width: min(620px, 100%);
+  padding: 44px 40px 32px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background: rgba(9, 14, 26, 0.55);
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
   text-align: center;
 }
 .landing__kicker {
-  margin: 0 0 12px;
+  margin: 0 0 14px;
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
+  letter-spacing: 0.2em;
   color: var(--bc-accent);
 }
 .landing__title {
-  margin: 0 0 12px;
-  font-size: 28px;
+  margin: 0 0 18px;
+  font-size: clamp(30px, 5vw, 52px);
   font-weight: 800;
-  line-height: 1.25;
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  /* index.css의 전역 h1은 --text-h(라이트 테마에서 거의 검정)를 쓴다.
+     랜딩은 항상 다크 배경이므로 색을 고정한다. */
+  color: #ffffff;
+  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.6);
 }
-.landing__sub {
-  margin: 0 0 28px;
-  font-size: 15px;
+.landing__lede {
+  margin: 0 0 30px;
+  font-size: clamp(15px, 1.5vw, 18px);
+  line-height: 1.7;
+  color: #dbe4f4;
+  text-wrap: balance;
+}
+.landing__nowrap {
+  white-space: nowrap;
+}
+.landing__foot {
+  margin: 24px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  letter-spacing: 0.02em;
   color: var(--bc-text-dim);
 }
 .landing__actions {
@@ -66,6 +121,25 @@
 .landing__cta--ghost:hover {
   border-color: var(--bc-accent);
   filter: none;
+}
+/* 모바일 — 3D는 로드하지 않는다(LandingScreen 참고). 카드도 여백을 줄여 문안이 잘리지 않게. */
+@media (max-width: 720px) {
+  .landing {
+    padding: 20px 16px;
+  }
+  .landing__card {
+    padding: 32px 22px 24px;
+  }
+  .landing__cta {
+    width: 100%;
+    padding: 14px 20px;
+  }
+}
+/* 모션 최소화 — 페이드인도 즉시 전환(3D 카메라는 StadiumBackdrop이 정지시킨다). */
+@media (prefers-reduced-motion: reduce) {
+  .landing-bg__host {
+    transition: none;
+  }
 }
 
 /* 데모 배너 — 리더보드 미반영 안내(경기·신문 상단 고정). */

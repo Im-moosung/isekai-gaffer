@@ -57,6 +57,20 @@ describe('App 랜딩 스모크', () => {
     expect(getByRole('button', { name: '바로 지휘하기' })).toBeTruthy()
   })
 
+  // 첫인상 화면의 훅 문안. 심사 1차가 이 화면으로 갈리므로 개발 빌드 흔적이 되살아나면 실패시킨다.
+  it('대체역사 훅 문안이 보이고 "개발 빌드"·"Phase" 표기는 없다', () => {
+    const { container } = render(<App />)
+    const text = container.textContent ?? ''
+    expect(text).toContain('대체역사 축구 감독 시뮬레이션')
+    expect(text).toContain('2026년 6월, 대한민국은 1승 2패로 조별리그를 마쳤다.')
+    expect(text).toContain('당신에게 90분과 다섯 번의 개입이 주어진다.')
+    expect(text).toContain('실제 대회 데이터 기반 · 12개국 312명 · 시드 재현 시뮬레이션')
+    expect(text).not.toContain('개발 빌드')
+    expect(text).not.toContain('Phase')
+    // 데모 배너 문구는 랜딩에 노출되지 않는다(데모 화면 전용).
+    expect(text).not.toContain('리더보드 미반영')
+  })
+
   it('[캠페인 시작] → 허브 렌더(진행 바 8칸 + 첫 상대 체코)', () => {
     const { getByRole, container } = render(<App />)
     fireEvent.click(getByRole('button', { name: '캠페인 시작' }))

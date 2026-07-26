@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { pickBestXI } from './engine/lineup'
 import type { TacticState } from './engine/types'
 import { MatchScreen } from './ui/match/MatchScreen'
+import { LandingScreen } from './ui/landing/LandingScreen'
 import { HubScreen } from './ui/campaign/HubScreen'
 import { EndingScreen } from './ui/campaign/EndingScreen'
 import { PressConference } from './ui/press/PressConference'
@@ -35,29 +36,10 @@ function App() {
   }
 
   return (
-    <main className="landing">
-      <div className="landing__card">
-        <p className="landing__kicker">개발 빌드</p>
-        <h1 className="landing__title">리매치: 코리아 2026 (개발 빌드)</h1>
-        <p className="landing__sub">방송형 축구 감독 시뮬레이터 — Phase 3</p>
-        <div className="landing__actions">
-          <button
-            type="button"
-            className="landing__cta"
-            onClick={() => { resetCampaign(); startCampaign(CAMPAIGN_SEED); setMode('campaign') }}
-          >
-            캠페인 시작
-          </button>
-          <button
-            type="button"
-            className="landing__cta landing__cta--ghost"
-            onClick={() => setMode('demo')}
-          >
-            바로 지휘하기
-          </button>
-        </div>
-      </div>
-    </main>
+    <LandingScreen
+      onCampaign={() => { resetCampaign(); startCampaign(CAMPAIGN_SEED); setMode('campaign') }}
+      onDemo={() => setMode('demo')}
+    />
   )
 }
 
