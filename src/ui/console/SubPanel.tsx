@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useMatchStore } from '../../game/matchStore'
-import type { Player, SideState } from '../../engine/types'
+import type { MatchEvent, Player, SideState } from '../../engine/types'
+import { playerMatchStats, hasPlayerMatchStats, type PlayerMatchStats } from '../../game/playerStats'
 import './console.css'
 
 const MAX_SUBS = 5
@@ -37,6 +38,8 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
 
   const open = phase === 'halftime' || phase === 'paused-break' || phase === 'paused-user' || phase === 'paused-moment'
   const state: SideState | undefined = engine?.[side]
+  // 개인 기록은 "누구를 뺄까"의 근거다 — 카드를 열어야만 보이면 늦다. 진행 전엔 데이터가 없다.
+  const events: MatchEvent[] | null = engine && engine.minute > 0 ? engine.events : null
   if (!state) return <section className="cs-panel" aria-label="교체" />
 
   const squad = state.team.squad
@@ -79,6 +82,7 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
             player={player}
             slot={slot}
             stamina={state.staminaByPlayer[player.id] ?? 0}
+            stats={events ? playerMatchStats(events, player.id) : null}
             selected={out === player.id}
             disabled={!open}
             onSelect={() => pickOut(player.id)}
@@ -94,6 +98,7 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
             player={player}
             slot={player.position}
             stamina={state.staminaByPlayer[player.id] ?? 0}
+            stats={events ? playerMatchStats(events, player.id) : null}
             selected={inSel === player.id}
             disabled={!open || !out}
             onSelect={() => pickIn(player.id)}
@@ -110,8 +115,10 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
   )
 }
 
-function SubCard({ player, slot, stamina, selected, disabled, onSelect }: {
+function SubCard({ player, slot, stamina, stats, selected, disabled, onSelect }: {
   player: Player; slot: Player['position']; stamina: number
+  /** 이 경기 개인 기록. null이면 아직 경기가 진행되지 않은 것(표시 안 함). */
+  stats: PlayerMatchStats | null
   selected: boolean; disabled: boolean; onSelect: () => void
 }) {
   const pct = Math.max(0, Math.min(100, Math.round(stamina)))
@@ -131,6 +138,25 @@ function SubCard({ player, slot, stamina, selected, disabled, onSelect }: {
         {/* 데이터 바인딩 폭(%)만 인라인 — pitch 기하 예외와 동일 취급. 색은 토큰. */}
         <span className={`cs-card__bar${low ? ' cs-card__bar--low' : ''}`} style={{ width: `${pct}%` }} />
       </span>
+      {stats && hasPlayerMatchStats(stats) && <SubCardStats stats={stats} />}
     </button>
+  )
+}
+
+/** 교체 카드 한 줄 기록 — 0인 항목은 생략해 카드가 길어지지 않게 한다.
+ *  유효슛은 일부러 넣지 않는다: 선방당한 슛은 슈터를 알 수 없어 정직하게 셀 수 없다
+ *  (playerStats.ts 주석 참조). 확실한 '슛/골'만 내건다. */
+function SubCardStats({ stats }: { stats: PlayerMatchStats }) {
+  const parts: string[] = []
+  if (stats.goals > 0) parts.push(`⚽${stats.goals}`)
+  if (stats.assists > 0) parts.push(`🅰${stats.assists}`)
+  if (stats.saves > 0) parts.push(`🧤${stats.saves}`)
+  if (stats.shots > 0) parts.push(`슛${stats.shots}`)
+  if (stats.fouls > 0) parts.push(`파울${stats.fouls}`)
+  const carded = stats.reds > 0 ? '🟥' : stats.yellows > 0 ? '🟨' : ''
+  return (
+    <span className={`cs-card__rec${carded ? ' cs-card__rec--carded' : ''}`}>
+      {carded}{parts.join(' · ')}
+    </span>
   )
 }

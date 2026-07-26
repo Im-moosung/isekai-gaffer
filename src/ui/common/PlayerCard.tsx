@@ -1,4 +1,5 @@
 import type { Player, Position } from '../../engine/types'
+import type { PlayerMatchStats } from '../../game/playerStats'
 import './PlayerCard.css'
 
 /** 레이더 한 축 — 표시 라벨 + 값(1~99). */
@@ -96,13 +97,16 @@ interface PlayerCardProps {
   stamina?: number
   /** 실시간 사기 0~100(옵션). */
   morale?: number
+  /** 이 경기 개인 기록(옵션 — 경기 중에만 준다. 킥오프 전엔 데이터가 없으므로 미지정). */
+  matchStats?: PlayerMatchStats
   /** 키 플레이어 강조(★). */
   star?: boolean
 }
 
 /** 재사용 선수 카드 — 이니셜 아바타 + 이름·번호·포지션(+역할) + 육각/삼각 레이더 SVG
- *  + 주발 아이콘 + 체력·사기 게이지(값 제공 시). 어디서든(교체·상대·라인업) 재사용. */
-export function PlayerCard({ player, size = 'full', side = 'home', slot, role, stamina, morale, star }: PlayerCardProps) {
+ *  + 주발 아이콘 + 체력·사기 게이지(값 제공 시) + 이 경기 개인 기록(값 제공 시).
+ *  어디서든(교체·상대·라인업) 재사용. */
+export function PlayerCard({ player, size = 'full', side = 'home', slot, role, stamina, morale, matchStats, star }: PlayerCardProps) {
   const pos = slot ?? player.position
   const axes = playerAxes(player)
   const foot = player.foot ? FOOT_LABEL[player.foot] : null
@@ -135,7 +139,49 @@ export function PlayerCard({ player, size = 'full', side = 'home', slot, role, s
           {morale != null && <Gauge label="사기" value={morale} kind="morale" />}
         </div>
       )}
+
+      {matchStats && <MatchStatLine stats={matchStats} isGk={!!player.gkStats} />}
     </article>
+  )
+}
+
+/** 이 경기 개인 기록 한 줄.
+ *  ★ "유효슛"을 내걸지 않는 이유: 선방당한 슛은 이벤트에 슈터가 남지 않아
+ *  유효슛을 정직하게 셀 수 없다(playerStats.ts 주석 참조). 확실한 것만 보여준다. */
+function MatchStatLine({ stats, isGk }: { stats: PlayerMatchStats; isGk: boolean }) {
+  const cells: { label: string; value: number; warn?: boolean }[] = isGk
+    ? [
+        { label: '선방', value: stats.saves },
+        { label: '파울', value: stats.fouls },
+        { label: '경고', value: stats.yellows, warn: stats.yellows > 0 },
+      ]
+    : [
+        { label: '슛', value: stats.shots },
+        { label: '골', value: stats.goals },
+        { label: '도움', value: stats.assists },
+        { label: '파울', value: stats.fouls },
+        { label: '경고', value: stats.yellows, warn: stats.yellows > 0 },
+      ]
+  return (
+    <div className="pc__match" aria-label="이 경기 기록">
+      <span className="pc__match-title">이 경기</span>
+      <span className="pc__match-cells">
+        {cells.map(c => (
+          <span key={c.label} className={`pc__stat${c.warn ? ' pc__stat--warn' : ''}`}>
+            <span className="pc__stat-label">{c.label}</span>
+            <span className="pc__stat-val">{c.value}</span>
+          </span>
+        ))}
+        {stats.reds > 0 && (
+          <span className="pc__stat pc__stat--red">
+            <span className="pc__stat-label">퇴장</span>
+            <span className="pc__stat-val">{stats.reds}</span>
+          </span>
+        )}
+      </span>
+      {/* 슛 집계의 한계를 라벨 대신 툴팁으로 남긴다 — 카드 안에서 한 줄을 더 쓸 수 없다. */}
+      {!isGk && <span className="pc__match-note" title="선방당한 슛은 이벤트에 슈터가 남지 않아 집계에서 빠집니다">ⓘ</span>}
+    </div>
   )
 }
 

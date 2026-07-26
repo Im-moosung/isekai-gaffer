@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, lazy, Suspense, Component, type ReactNode } from 'react'
-import type { Team, SideStats, TacticState, MatchEvent, DecisionEntry } from '../../engine/types'
+import type { Team, TacticState, MatchEvent, DecisionEntry } from '../../engine/types'
 import { useMatchStore } from '../../game/matchStore'
 import type { MomentKind } from '../../game/matchSession'
 import { commentate } from '../../game/commentary'
@@ -12,6 +12,8 @@ import { TacticsBoard } from '../tactics/TacticsBoard'
 import { TacticsCenter } from '../tactics/TacticsCenter'
 import { PlanBadge } from '../tactics/PlanBadge'
 import { ShootoutPanel } from './ShootoutPanel'
+// 스탯 표는 워룸·작전판과 공유하기 위해 별도 모듈로 뽑았다(StatsTable.tsx).
+import { StatsTable } from './StatsTable'
 import { ShoutBar } from './ShoutBar'
 import { minuteDwellMs, EVENT_DWELL_MS, type PlaybackSpeed } from './playback'
 import * as sfx from '../../audio/sfx'
@@ -596,30 +598,5 @@ function SpeedToggle({ speed, onChange }: { speed: PlaybackSpeed; onChange(s: Pl
         </button>
       ))}
     </div>
-  )
-}
-
-const STAT_ROWS: { key: keyof SideStats; label: string; fmt: (n: number) => string }[] = [
-  { key: 'possession', label: '점유율', fmt: n => `${Math.round(n)}%` },
-  { key: 'shots', label: '슛', fmt: n => `${Math.round(n)}` },
-  { key: 'shotsOnTarget', label: '유효슛', fmt: n => `${Math.round(n)}` },
-  { key: 'xg', label: 'xG', fmt: n => n.toFixed(2) },
-  { key: 'fouls', label: '파울', fmt: n => `${Math.round(n)}` },
-  { key: 'corners', label: '코너', fmt: n => `${Math.round(n)}` },
-]
-
-function StatsTable({ home, away }: { home: SideStats; away: SideStats }) {
-  return (
-    <table className="ms-stats">
-      <tbody>
-        {STAT_ROWS.map(({ key, label, fmt }) => (
-          <tr key={key}>
-            <td className="ms-stats__home">{fmt(home[key])}</td>
-            <th className="ms-stats__label" scope="row">{label}</th>
-            <td className="ms-stats__away">{fmt(away[key])}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
   )
 }

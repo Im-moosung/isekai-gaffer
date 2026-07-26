@@ -122,3 +122,39 @@ describe('PlayerCard 렌더', () => {
     expect(getByLabelText('키 플레이어')).toBeTruthy()
   })
 })
+
+// F5-1: 이 경기 개인 기록 블록.
+describe('PlayerCard — 이 경기 기록', () => {
+  const stats = { shots: 3, shotsOnTarget: 1, goals: 1, assists: 0, fouls: 2, yellows: 1, reds: 0, saves: 0 }
+
+  it('matchStats 미제공 시 블록이 없다(킥오프 전)', () => {
+    const { container } = render(<PlayerCard player={striker} />)
+    expect(container.querySelector('.pc__match')).toBeNull()
+  })
+
+  it('필드 선수는 슛·골·도움·파울·경고를 보여준다 — "유효슛"은 내걸지 않는다', () => {
+    const { container } = render(<PlayerCard player={striker} matchStats={stats} />)
+    const labels = [...container.querySelectorAll('.pc__stat-label')].map(e => e.textContent)
+    expect(labels).toEqual(['슛', '골', '도움', '파울', '경고'])
+    // 선방당한 슛은 슈터를 알 수 없어 유효슛을 정직하게 셀 수 없다 → UI에 노출하지 않는다.
+    expect(container.textContent).not.toContain('유효슛')
+    expect(container.querySelector('.pc__stat--warn')).toBeTruthy() // 경고 1 강조
+  })
+
+  it('GK는 선방을 보여준다(슛/골 대신) — save는 막은 GK의 기록이다', () => {
+    const { container } = render(
+      <PlayerCard player={gk} matchStats={{ ...stats, shots: 0, goals: 0, saves: 4 }} />,
+    )
+    const labels = [...container.querySelectorAll('.pc__stat-label')].map(e => e.textContent)
+    expect(labels).toEqual(['선방', '파울', '경고'])
+    expect(container.querySelector('.pc__match')!.textContent).toContain('4')
+  })
+
+  it('퇴장은 있을 때만 칩이 붙는다', () => {
+    const { container: no } = render(<PlayerCard player={striker} matchStats={stats} />)
+    expect(no.querySelector('.pc__stat--red')).toBeNull()
+    cleanup()
+    const { container: yes } = render(<PlayerCard player={striker} matchStats={{ ...stats, reds: 1 }} />)
+    expect(yes.querySelector('.pc__stat--red')).toBeTruthy()
+  })
+})

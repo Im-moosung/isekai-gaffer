@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { useMatchStore } from '../../game/matchStore'
 import { formationEdge } from '../../engine/tactics'
 import type { Player, SideState } from '../../engine/types'
+import { playerMatchStats } from '../../game/playerStats'
 import { PlayerCard } from '../common/PlayerCard'
+import { MatchStatsPanel } from '../match/StatsTable'
 import { PitchView } from '../pitch/PitchView'
 import './opp.css'
 
@@ -19,7 +21,11 @@ export function matchupHint(edge: number): MatchupHint {
 }
 
 /** 상대 분석 탭(작전판 내) — 상대 포메이션·미니 보드 + 선발 11 리스트(클릭 시 PlayerCard) +
- *  키 플레이어 ★ + styleNotes + 매치업 힌트(formationEdge 부호·크기). 상대 스탯도 조회 가능. */
+ *  키 플레이어 ★ + styleNotes + 매치업 힌트(formationEdge 부호·크기). 상대 스탯도 조회 가능.
+ *
+ *  ★ 팀 경기 스탯(MatchStatsPanel)이 맨 위에 붙는다. 이 패널은 전술 센터(워룸)의 좌측
+ *  고정 열과 작전판의 [상대] 탭 **양쪽에서 렌더되는 유일한 컴포넌트**라, 여기에 한 번
+ *  꽂으면 두 화면 모두에서 스탯을 볼 수 있다(두 화면에 각각 넣으면 워룸에서는 이중 표시). */
 export function OppPanel() {
   const engine = useMatchStore(s => s.engine)
   const notices = useMatchStore(s => s.oppNotices)
@@ -45,6 +51,7 @@ export function OppPanel() {
 
   return (
     <section className="op" aria-label="상대 분석">
+      <MatchStatsPanel />
       <header className="op__head">
         <span className="op__name">{away.team.name.ko}</span>
         <span className="op__form" aria-label="상대 포메이션">{oppFormation}</span>
@@ -100,11 +107,14 @@ export function OppPanel() {
 
       {selected && (
         <div className="op__card">
-          {/* 상대 카드는 기본 스탯(레이더)+프로필만 — 실시간 체력·사기는 비노출(치트 방지). */}
+          {/* 상대 카드는 기본 스탯(레이더)+프로필만 — 실시간 체력·사기는 비노출(치트 방지).
+              반면 이 경기 기록(골·슛·경고)은 중계로 이미 공개된 정보라 감춰 봐야 의미가 없다.
+              킥오프 전에는 이벤트가 없으므로 아예 넘기지 않는다. */}
           <PlayerCard
             player={selected}
             side="away"
             star={keyIds.has(selected.id)}
+            matchStats={engine.minute > 0 ? playerMatchStats(engine.events, selected.id) : undefined}
           />
         </div>
       )}

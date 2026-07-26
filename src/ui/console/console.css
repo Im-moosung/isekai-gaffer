@@ -141,3 +141,14 @@
 }
 .cs-card__bar { display: block; height: 100%; background: var(--bc-accent); }
 .cs-card__bar--low { background: var(--bc-danger); }
+/* 이 경기 개인 기록 — 카드 맨 아랫줄. 0인 항목은 렌더되지 않으므로 기록이 있는
+   선수만 한 줄이 늘어난다(전원에게 붙으면 리스트가 두 배로 길어진다). */
+.cs-card__rec {
+  grid-column: 1 / -1;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--bc-text-dim);
+  text-align: left;
+  line-height: 1.2;
+}
+.cs-card__rec--carded { color: #f5c542; }

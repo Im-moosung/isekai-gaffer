@@ -140,3 +140,50 @@
   text-align: right;
   color: var(--bc-text);
 }
+
+/* ── 이 경기 개인 기록 ────────────────────────────────
+   교체 판단용이라 한 줄에 압축한다. 값 0도 그대로 보여준다 —
+   "기록 없음"과 "표시가 안 됨"을 유저가 구분할 수 있어야 한다. */
+.pc__match {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--bc-line);
+  font-variant-numeric: tabular-nums;
+}
+.pc__match-title {
+  flex: 0 0 auto;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--bc-text-dim);
+}
+.pc__match-cells {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+.pc__stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--bc-panel-2);
+}
+.pc__stat-label { font-size: 9px; color: var(--bc-text-dim); }
+.pc__stat-val { font-size: 11px; font-weight: 800; }
+.pc__stat--warn { background: rgba(245, 197, 66, 0.22); }
+.pc__stat--warn .pc__stat-val { color: #f5c542; }
+.pc__stat--red { background: rgba(255, 82, 82, 0.22); }
+.pc__stat--red .pc__stat-val { color: var(--bc-danger); }
+.pc__match-note {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--bc-text-dim);
+  cursor: help;
+}
+.pc--compact .pc__match-title { display: none; }
