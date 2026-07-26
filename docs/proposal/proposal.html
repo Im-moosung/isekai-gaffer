@@ -9,12 +9,13 @@
   :root{
     --navy:#1B2A4A;
     --navy-soft:#3c4a66;
-    --accent:#2563EB;      /* 정보 구분이 필요한 두 곳에만 사용 */
+    --blue:#2563EB;        /* 포인트 컬러 — 글자와 선에만, 배경/띠에는 쓰지 않음 */
+    --blue-dk:#1D4ED8;
+    --accent:#2563EB;
     --ink:#2f3338;
     --muted:#6b7280;
     --line:#d3d8e0;
     --hair:#e4e7ec;
-    --panel:#f4f6f9;
   }
 
   *{box-sizing:border-box;}
@@ -23,8 +24,8 @@
   body{
     font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;
     color:var(--ink);
-    font-size:10.2pt;
-    line-height:1.5;
+    font-size:10.5pt;
+    line-height:1.58;
     background:#fff;
     -webkit-font-smoothing:antialiased;
   }
@@ -42,12 +43,12 @@
   .cover-head{
     margin:14mm 0 0 0;
     padding-bottom:9px;
-    border-bottom:1px solid var(--navy);
+    border-bottom:1.4px solid var(--blue);
   }
   .cover-head .label{
     font-size:8.6pt;
     letter-spacing:0.3em;
-    color:var(--navy);
+    color:var(--blue);
     font-weight:700;
   }
   .cover-body{
@@ -87,16 +88,16 @@
   }
   .cover-foot .event{font-size:10pt;color:var(--muted);font-weight:500;line-height:1.45;}
   .cover-foot .event b{color:var(--navy);font-weight:700;}
-  .cover-foot .date{font-size:10pt;color:var(--navy);font-weight:700;white-space:nowrap;}
+  .cover-foot .date{font-size:10pt;color:var(--blue);font-weight:700;white-space:nowrap;}
 
   /* ---------- BODY ---------- */
   h2{
-    font-size:15pt;
+    font-size:15.5pt;
     font-weight:800;
-    color:var(--navy);
-    margin:0 0 12px 0;
-    padding-top:9px;
-    border-top:1.6px solid var(--navy);
+    color:var(--blue);
+    margin:0 0 13px 0;
+    padding-top:10px;
+    border-top:1.6px solid var(--blue);
     line-height:1.3;
     letter-spacing:-0.01em;
     break-inside:avoid;
@@ -104,54 +105,54 @@
   }
   h2 .num{
     font-weight:800;
-    margin-right:9px;
-    color:var(--navy);
+    margin-right:10px;
+    color:var(--blue);
   }
 
-  .section{padding:0 0 5mm 0;}
-  .section + .section{padding-top:1mm;}
+  .section{padding:0 0 6mm 0;}
+  .section + .section{padding-top:2mm;}
 
   h3{
-    font-size:11.4pt;
+    font-size:11.6pt;
     font-weight:700;
-    color:var(--navy);
-    margin:12px 0 5px 0;
+    color:var(--blue-dk);
+    margin:14px 0 6px 0;
     letter-spacing:-0.005em;
     break-after:avoid;
     break-inside:avoid;
   }
 
-  p{margin:0 0 8px 0;}
-  strong{font-weight:700;color:var(--navy);}
+  p{margin:0 0 9px 0;}
+  strong{font-weight:700;color:var(--blue-dk);}
 
   /* 번호 매긴 소제목 + 본문 (차별점 · 원칙) — 카드·색띠 없이 위계만으로 구획 */
   .item{
-    margin:0 0 11px 0;
-    padding-left:26px;
+    margin:0 0 14px 0;
+    padding-left:28px;
     break-inside:avoid;
   }
   .item > h4{
-    font-size:11pt;
+    font-size:11.2pt;
     font-weight:700;
     color:var(--navy);
-    margin:0 0 3px -26px;
+    margin:0 0 4px -28px;
     line-height:1.35;
     letter-spacing:-0.005em;
     break-after:avoid;
   }
   .item > h4 .n{
     display:inline-block;
-    width:26px;
-    font-size:10pt;
-    font-weight:700;
-    color:var(--muted);
+    width:28px;
+    font-size:10.4pt;
+    font-weight:800;
+    color:var(--blue);
     font-variant-numeric:tabular-nums;
   }
   .item p:last-child{margin-bottom:0;}
 
   .lead{
-    font-size:11.4pt;
-    line-height:1.5;
+    font-size:11.6pt;
+    line-height:1.55;
     color:var(--navy);
     font-weight:600;
     letter-spacing:-0.005em;
@@ -161,48 +162,49 @@
     font-size:9.4pt;
     line-height:1.5;
     color:var(--muted);
-    border-top:1px solid var(--line);
-    padding-top:7px;
-    margin:2px 0 6px 0;
+    border-top:1px solid var(--blue);
+    padding-top:8px;
+    margin:4px 0 6px 0;
     break-inside:avoid;
   }
-  .note strong{color:var(--navy-soft);font-weight:700;}
+  .note strong{color:var(--blue-dk);font-weight:700;}
 
   /* tables */
   table{
     width:100%;
     border-collapse:collapse;
-    margin:9px 0 12px 0;
-    font-size:9.6pt;
+    margin:9px 0 11px 0;
+    font-size:9.8pt;
   }
   thead{display:table-header-group;}
   tr{break-inside:avoid;}
   th{
-    color:var(--navy);
+    color:var(--blue);
     text-align:left;
-    padding:6px 2px;
+    padding:7px 2px;
     font-weight:700;
-    font-size:9.2pt;
+    font-size:9.4pt;
     letter-spacing:0.02em;
     border:0;
-    border-top:1.2px solid var(--navy);
-    border-bottom:1.2px solid var(--navy);
+    border-top:1.2px solid var(--blue);
+    border-bottom:1.2px solid var(--blue);
   }
   td{
     padding:6px 2px;
     border:0;
     border-bottom:1px solid var(--hair);
     vertical-align:top;
-    line-height:1.45;
+    line-height:1.5;
   }
   th + th, td + td{padding-left:14px;}
-  tbody tr:last-child td{border-bottom:1.2px solid var(--navy);}
+  tbody tr:last-child td{border-bottom:1.2px solid var(--blue);}
   table.two td:first-child{width:26%;}
+  td strong{color:var(--navy);}
 
   /* ============ DIAGRAMS ============ */
-  figure{margin:8px 0 10px 0;break-inside:avoid;}
+  figure{margin:7px 0 9px 0;break-inside:avoid;}
   figcaption{
-    font-size:8.7pt;
+    font-size:8.8pt;
     color:var(--muted);
     margin-top:6px;
     line-height:1.45;
@@ -210,13 +212,13 @@
   .diagram{
     border:1px solid var(--line);
     background:#fff;
-    padding:11px 14px 12px 14px;
+    padding:10px 13px 10px 13px;
     break-inside:avoid;
   }
   .diagram .dg-title{
-    font-size:8.4pt;letter-spacing:0.18em;
-    color:var(--navy);font-weight:700;margin-bottom:8px;
-    padding-bottom:6px;border-bottom:1px solid var(--hair);
+    font-size:8.6pt;letter-spacing:0.18em;
+    color:var(--blue);font-weight:700;margin-bottom:8px;
+    padding-bottom:6px;border-bottom:1px solid var(--blue);
   }
 
   /* --- vertical flow (도식 3) --- */
@@ -231,13 +233,14 @@
     padding:1px 11px;background:#fff;
     display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;
   }
-  .vf-box .t{font-size:9pt;font-weight:700;color:var(--navy);line-height:1.3;}
+  .vf-box .t{font-size:9.2pt;font-weight:700;color:var(--navy);line-height:1.3;}
   .vf-box .d{font-size:8pt;color:var(--muted);line-height:1.3;}
-  .vf-box.accent{background:var(--panel);}
+  .vf-box.accent{border-color:var(--blue);}
+  .vf-box.accent .t{color:var(--blue);}
   .vf-box.loop{border-style:dashed;border-color:var(--line);}
   .vf-box.loop .t{color:var(--navy-soft);font-weight:600;}
-  .vf-box.end{background:var(--navy);border-color:var(--navy);}
-  .vf-box.end .t{color:#fff;}
+  .vf-box.end{border:2px solid var(--navy);}
+  .vf-box.end .t{color:var(--navy);}
 
   .vf-link{display:flex;align-items:center;gap:10px;min-height:6px;}
   .vf-link .sp{min-width:52px;}
@@ -250,7 +253,7 @@
     border-top:6px solid var(--navy);
   }
   .vf-link .lbl{
-    font-size:8pt;font-weight:700;color:var(--navy-soft);
+    font-size:8.1pt;font-weight:700;color:var(--blue);
     white-space:nowrap;letter-spacing:0.02em;
   }
 
@@ -261,17 +264,18 @@
     background:#fff;display:flex;flex-direction:column;overflow:hidden;
   }
   .camp .stg .hd{
-    color:var(--navy);font-size:7.8pt;font-weight:700;
+    color:var(--blue);font-size:7.9pt;font-weight:700;
     padding:4px 9px 3px 9px;letter-spacing:0.14em;
     border-bottom:1px solid var(--hair);
   }
   .camp .stg .bd{padding:7px 9px 9px 9px;flex:1;}
   .camp .stg .bd .ttl{font-size:9.4pt;font-weight:700;color:var(--navy);line-height:1.35;}
   .camp .stg .bd .sub{font-size:8pt;color:var(--muted);margin-top:3px;line-height:1.4;}
-  .camp .stg.gate .bd{background:var(--panel);}
-  .camp .stg.unknown .bd{background:var(--panel);}
+  .camp .stg.gate{border-color:var(--blue);}
+  .camp .stg.gate .bd .ttl{color:var(--blue);}
+  .camp .stg.unknown .bd .ttl{color:var(--navy);}
   .camp .carr{
-    display:flex;align-items:center;color:var(--muted);font-size:9pt;font-weight:700;
+    display:flex;align-items:center;color:var(--blue);font-size:9pt;font-weight:700;
   }
   .pips{display:flex;gap:5px;margin-top:7px;align-items:center;}
   .pips .pip{
@@ -280,11 +284,11 @@
     color:var(--navy);font-weight:700;
   }
   .pips .pip.done{background:var(--navy);color:#fff;}
-  .pips .pip.open{border-color:var(--line);color:var(--navy-soft);}
+  .pips .pip.open{border-color:var(--blue);color:var(--blue);}
   .camp-branch{
     display:flex;align-items:center;gap:8px;margin-top:9px;
   }
-  .camp-branch .bl{font-size:8pt;font-weight:700;color:var(--muted);letter-spacing:0.02em;}
+  .camp-branch .bl{font-size:8pt;font-weight:700;color:var(--blue);letter-spacing:0.02em;}
   .camp-branch .bx{
     border:1px dashed var(--line);padding:4px 10px;
     font-size:8.2pt;color:var(--muted);
@@ -304,12 +308,12 @@
     position:relative;padding:6px 10px;
     font-size:8.1pt;line-height:1.35;text-align:center;
   }
-  .lane.sit{border:1.1px dashed var(--line);background:#fff;color:var(--navy-soft);}
+  .lane.sit{border:1.1px dashed var(--blue);background:#fff;color:var(--navy-soft);}
   .lane.sit .vm{
     position:absolute;top:-4.5px;width:8px;height:8px;
-    background:#fff;border:1.1px solid var(--navy-soft);transform:rotate(45deg);
+    background:#fff;border:1.1px solid var(--blue);transform:rotate(45deg);
   }
-  .lane.tt{border:1.1px solid var(--line);background:var(--panel);color:var(--navy-soft);font-weight:600;}
+  .lane.tt{border:1.1px solid var(--blue);background:#fff;color:var(--navy-soft);font-weight:600;}
   .lane .lane-txt{margin-bottom:4px;}
   .chips{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;}
   .tl .chips{margin-top:9px;}
@@ -317,7 +321,7 @@
     font-size:7.4pt;font-weight:600;line-height:1.2;
     padding:2px 7px;white-space:nowrap;
   }
-  .chip.on{background:var(--navy);color:#fff;border:1px solid var(--navy);}
+  .chip.on{background:#fff;color:var(--blue);border:1px solid var(--blue);font-weight:700;}
   .chip.off{background:#fff;color:#9aa2af;border:1px dashed var(--line);font-weight:500;}
   .chip.mini{padding:1px 6px;font-size:7pt;}
 
@@ -325,13 +329,14 @@
   .tl-track{display:flex;}
   .tl-seg{flex:1;text-align:center;position:relative;padding-top:28px;}
   .tl-line{position:absolute;top:12px;left:0;right:0;height:2px;background:var(--navy);}
+  .tl-seg.hl .nm{color:var(--blue);}
   .tl-seg .mk{
     position:absolute;top:5px;left:50%;transform:translateX(-50%);
     width:16px;height:16px;border-radius:50%;background:#fff;
     border:3px solid #fff;box-shadow:0 0 0 1.5px var(--navy);
   }
   .tl-seg .mk.stop{background:var(--accent);box-shadow:0 0 0 1.5px var(--accent);}
-  .tl-seg .nm{font-size:9pt;font-weight:700;color:var(--navy);}
+  .tl-seg .nm{font-size:9.1pt;font-weight:700;color:var(--navy);}
   .tl-seg .ds{font-size:7.9pt;color:var(--muted);line-height:1.4;margin-top:2px;padding:0 4px;}
   .tl-legend{display:flex;gap:18px;justify-content:center;margin-top:12px;font-size:7.8pt;color:var(--muted);}
   .tl-legend span{display:flex;align-items:center;gap:6px;}
@@ -345,7 +350,7 @@
     display:flex;align-items:center;gap:12px;background:#fff;
   }
   .lay .lk{
-    min-width:64px;font-size:7.8pt;font-weight:700;color:var(--muted);
+    min-width:64px;font-size:7.9pt;font-weight:700;color:var(--blue);
     letter-spacing:0.1em;text-transform:uppercase;
   }
   .lay .lt{font-size:9.5pt;font-weight:700;color:var(--navy);min-width:78px;}
@@ -354,8 +359,9 @@
     font-size:7.6pt;font-weight:700;padding:2px 9px;white-space:nowrap;
   }
   .lay .badge.no{border:1px solid var(--line);color:var(--muted);background:#fff;}
-  .lay .badge.yes{background:var(--accent);color:#fff;border:1px solid var(--accent);}
-  .lay.sim{background:var(--panel);}
+  .lay .badge.yes{background:#fff;color:var(--blue);border:1.2px solid var(--blue);}
+  .lay.nar{border-color:var(--blue);}
+  .lay.nar .lt{color:var(--blue);}
   .lay-arrow{
     height:11px;margin-left:24px;width:1.2px;background:var(--navy);position:relative;
   }
@@ -481,19 +487,19 @@
                 <div class="nm">킥오프</div>
                 <div class="ds">전술 센터에서 설계한 선발·전술로 시작</div>
               </div>
-              <div class="tl-seg">
+              <div class="tl-seg hl">
                 <div class="tl-line"></div>
                 <div class="mk stop"></div>
                 <div class="nm">하이드레이션</div>
                 <div class="ds">전반</div>
               </div>
-              <div class="tl-seg">
+              <div class="tl-seg hl">
                 <div class="tl-line"></div>
                 <div class="mk stop"></div>
                 <div class="nm">하프타임</div>
                 <div class="ds">전술 조정 · 교체 · 팀토크</div>
               </div>
-              <div class="tl-seg">
+              <div class="tl-seg hl">
                 <div class="tl-line"></div>
                 <div class="mk stop"></div>
                 <div class="nm">하이드레이션</div>
@@ -770,25 +776,6 @@
     </table>
 
     <div class="note">실제 대회 규정은 조 3위 중 상위 팀도 진출 가능하나, 경로의 명확성을 위해 <strong>조 1·2위만 진출</strong>로 단순화함.</div>
-  </section>
-
-  <!-- 7 -->
-  <section class="section">
-    <h2><span class="num">7</span>개발 범위</h2>
-    <p>기획서 제출 시점 기준으로 구현 상태와 향후 계획을 구분하여 기재함.</p>
-
-    <table class="two">
-      <thead>
-        <tr><th>구분</th><th>내용</th></tr>
-      </thead>
-      <tbody>
-        <tr><td><strong>구현 완료</strong></td><td>시뮬레이션 엔진과 밸런스 검증, 전술 센터, 경기 중 개입 체계, 코치 조언, 상대 감독 AI, 기자회견·신문, 캠페인 진행과 점수 산정, 3D 중계 화면</td></tr>
-        <tr><td><strong>진행 중</strong></td><td>중계 화면의 표현 품질, 경기 데이터와 화면 표현의 정합성, 여정 화면 시각화</td></tr>
-        <tr><td><strong>검토 중</strong></td><td>경기 중 서사의 AI 확장, 경기 시작 연출</td></tr>
-      </tbody>
-    </table>
-
-    <p>세부 사양은 개발 과정에서 조정될 수 있으며, 본 문서는 <strong>설계 의도와 핵심 구조</strong>를 기술함.</p>
   </section>
 
 </div>
