@@ -113,7 +113,7 @@ describe('NewspaperCard', () => {
     const { container, getByText } = render(
       <NewspaperCard headline={HEADLINE} record={RECORD} teamName="대한민국" />,
     )
-    expect(getByText('리매치 타임스')).toBeTruthy()
+    expect(getByText('일간 축구')).toBeTruthy()
     expect(getByText(HEADLINE.title)).toBeTruthy()
     // 워터마크에 FICTION 문자열 존재
     expect(container.textContent).toContain('FICTION')

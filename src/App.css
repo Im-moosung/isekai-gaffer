@@ -67,7 +67,9 @@
 }
 .landing__title {
   margin: 0 0 18px;
-  font-size: clamp(30px, 5vw, 52px);
+  /* 상한 42px: 제목 최장 줄("현실에서 축덕인 내가,")이 약 11em이라
+     카드 내부 폭(620 - 좌우 40 = 540px) 안에 들어오는 한계값이다. */
+  font-size: clamp(24px, 3.6vw, 42px);
   font-weight: 800;
   line-height: 1.12;
   letter-spacing: -0.01em;
@@ -75,6 +77,10 @@
      랜딩은 항상 다크 배경이므로 색을 고정한다. */
   color: #ffffff;
   text-shadow: 0 2px 24px rgba(0, 0, 0, 0.6);
+}
+/* 절 단위 줄바꿈 고정 — 폭이 아무리 넓어도 두 줄을 유지한다. */
+.landing__title-line {
+  display: block;
 }
 .landing__lede {
   margin: 0 0 30px;
@@ -92,6 +98,14 @@
   line-height: 1.6;
   letter-spacing: 0.02em;
   color: var(--bc-text-dim);
+}
+/* 픽션 고지 — 각주보다 한 단계 더 물러난 톤(작게·흐리게). 시선을 뺏지 않되 항상 보인다. */
+.landing__disclaimer {
+  margin: 8px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.45);
 }
 .landing__actions {
   display: flex;

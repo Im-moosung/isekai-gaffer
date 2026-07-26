@@ -1,5 +1,5 @@
 // src/ui/press/NewspaperCard.tsx
-// 신문 1면 카드. 제호 "리매치 타임스" + 가상 날짜(고정) + 대형 세리프 헤드라인 +
+// 신문 1면 카드. 제호 "일간 축구" + 가상 날짜(고정) + 대형 세리프 헤드라인 +
 // 부제 + 어록 인용 박스 + 스코어박스 + "대체역사 FICTION" 대각선 워터마크.
 // [이미지 저장]은 canvas 2D 직접 드로잉으로 1080×1350 PNG를 만들어 다운로드한다
 // (외부 라이브러리 금지, 시스템 폰트). 저장 로직은 renderNewspaperPng로 분리해
@@ -11,7 +11,10 @@ import './press.css'
 
 // 가상 발행일 — 실제 날짜(Date) 사용 금지, 대체역사 톤을 위해 고정.
 const FAKE_DATE = '2026년 여름'
-const MASTHEAD = '리매치 타임스'
+// 제호는 게임 제목과 일부러 다르다 — 밈 톤 제목은 바깥에서만 쓰고,
+// 신문 1면은 방송·저널 톤을 유지해야 헤드라인이 진짜처럼 읽힌다.
+// 실존 매체명을 피하려고 일반명사 조합("일간 축구")을 골랐다.
+const MASTHEAD = '일간 축구'
 const WATERMARK = '대체역사 FICTION'
 
 // 상대 한글 표기(계층 격리: 외부 로더 비의존). 미등록 id는 코드 그대로.
@@ -52,7 +55,7 @@ export function NewspaperCard({ headline, record, teamName, onNext }: Props) {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `rematch-times-${record.stage}.png`
+      a.download = `daily-soccer-${record.stage}.png`
       document.body.appendChild(a)
       a.click()
       a.remove()

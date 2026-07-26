@@ -73,7 +73,12 @@ export function LandingScreen({ onCampaign, onDemo }: {
 
       <div className="landing__card">
         <p className="landing__kicker">대체역사 축구 감독 시뮬레이션</p>
-        <h1 className="landing__title">리매치: 코리아 2026</h1>
+        {/* 제목은 두 절을 각각 한 줄로 고정한다. 뷰포트에 따라 "내가," 뒤에서
+            끊기거나 "국대 / 감독?"으로 갈라지면 밈 문장의 리듬이 죽는다. */}
+        <h1 className="landing__title">
+          <span className="landing__title-line">현실에서 축덕인 내가,</span>
+          <span className="landing__title-line">이세계에선 국대 감독?</span>
+        </h1>
         <p className="landing__lede">
           {/* 좁은 화면에서 "1 / 승 2패"처럼 숫자와 단위가 갈라지지 않게 묶는다. */}
           2026년 6월, 대한민국은 <span className="landing__nowrap">1승 2패</span>로 조별리그를 마쳤다.
@@ -90,6 +95,9 @@ export function LandingScreen({ onCampaign, onDemo }: {
           </button>
         </div>
         <p className="landing__foot">실제 대회 데이터 기반 · 12개국 312명 · 시드 재현 시뮬레이션</p>
+        {/* 픽션 고지 — 기획서에 "서비스 내 명시"로 약속한 항목이다.
+            실존 대회·선수를 다루는 이상 화면에 남아 있어야 한다(각주 톤, 삭제 금지). */}
+        <p className="landing__disclaimer">※ 실제 2026 월드컵을 모티브로 한 대체역사 픽션입니다</p>
       </div>
     </main>
   )

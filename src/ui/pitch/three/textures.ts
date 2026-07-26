@@ -356,8 +356,13 @@ export function makeConcreteCanvas(size = 256): HTMLCanvasElement | null {
 }
 
 // ── 광고보드(LED 페리미터) ──────────────────────────────────────
-/** 광고보드 기본 문구(가상 브랜드만 — 실존 상표 사용 금지). */
-export const AD_TEXTS = ['REMATCH KOREA 2026', 'DAKER', 'MATCHDAY LIVE']
+/**
+ * 광고보드 기본 문구(가상 브랜드만 — 실존 상표 사용 금지).
+ * 게임 제목("현실에서 축덕인 내가…")을 쓰지 않는 것은 의도다. 광고판은 3D 원경에서
+ * 몇십 픽셀 높이로 흐르므로 짧은 대문자 라틴 문자열만 읽힌다. 더 중요하게는,
+ * 밈 톤 제목은 바깥(탭·랜딩·공유 카드)에서만 쓰고 경기 화면 안쪽은 방송 톤을 유지한다.
+ */
+export const AD_TEXTS = ['KOREA 2026', 'DAKER', 'MATCHDAY LIVE']
 
 /**
  * 페리미터 LED 보드 텍스처. 어두운 배경에 밝은 문구 + 액센트 바.

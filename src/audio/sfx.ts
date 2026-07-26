@@ -46,7 +46,7 @@ type SampleName = keyof typeof SAMPLES
 const buffers: Partial<Record<SampleName, AudioBuffer | null>> = {}
 let loadState: 'idle' | 'loading' | 'ready' = 'idle'
 
-/** 정적 자산 경로(Vite base 고려). 예: '/sfx/crowd.mp3' 또는 '/rematch/sfx/crowd.mp3'. */
+/** 정적 자산 경로(Vite base 고려). 예: '/sfx/crowd.mp3' 또는 '/base/sfx/crowd.mp3'. */
 function sfxUrl(file: string): string {
   let base = '/'
   try {
