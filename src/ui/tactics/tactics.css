@@ -367,8 +367,9 @@
 }
 
 /* ── 코치 회의 (멀티 코치) — 작전판 최상단 카드 리스트 ─────────────
-   수비/공격/피지컬(+세트피스) 코치가 서로 다른 관점을 제안한다(상충 허용).
-   각 카드 [채택]은 부분 전술을 draft에 병합. 맨 아래 [감독 판단대로 간다]는 접기. */
+   발동 조건을 만족한 코치만 등장한다(0~4명 가변, 상충 허용).
+   각 카드 [채택]은 부분 전술을 draft에 병합. 맨 아래 [감독 판단대로 간다]는 접기.
+   조언 0건이면 --quiet 한 줄만 남긴다(근거 없는 카드를 지어내지 않는다). */
 .tb-coach {
   flex: 0 0 auto;
   display: flex;
@@ -378,6 +379,15 @@
   border: 1px solid var(--tb-board-line);
   border-radius: 10px;
   background: rgba(10, 21, 38, 0.6);
+}
+.tb-coach--quiet {
+  padding: 8px 12px;
+}
+.tb-coach__quiet {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(226, 240, 255, 0.62);
 }
 .tb-coach__title {
   margin: 0;

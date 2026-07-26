@@ -111,42 +111,64 @@ describe('TacticsBoard — 확장 전술 지시(Task 5)', () => {
   })
 })
 
-describe('TacticsBoard — 코치 회의 (멀티 코치)', () => {
-  it('작전판 상단에 코치 회의 카드들 + [감독 판단대로 간다] 노출', () => {
-    const { container, getByRole } = mountAt('halftime')
-    const coach = container.querySelector('.tb-coach')!
-    expect(coach).toBeTruthy()
+describe('TacticsBoard — 코치 회의 (근거가 있는 코치만 등장)', () => {
+  /** 코치 발동 조건을 만족하는 실측 데이터를 엔진에 심는다 —
+   *  코치는 근거 없이는 등장하지 않으므로 카드를 보려면 데이터가 있어야 한다. */
+  function seedCoachData() {
+    const e = store().engine!
+    const next = {
+      ...e,
+      minute: 60,
+      score: [0, 1] as [number, number],
+      stats: [
+        { ...e.stats[0], shots: 4, shotsOnTarget: 1, corners: 5, xg: 0.3 },
+        { ...e.stats[1], shots: 9, shotsOnTarget: 6, corners: 3, xg: 1.8 },
+      ] as typeof e.stats,
+      home: { ...e.home, staminaByPlayer: { ...e.home.staminaByPlayer, [e.home.tactics.lineup[3].playerId]: 40 } },
+    }
+    act(() => { useMatchStore.setState({ engine: next }) })
+  }
+
+  it('근거가 없으면(킥오프 직후·전 스탯 0) 카드 대신 "특별히 드릴 말씀 없습니다" 한 줄만 나온다', () => {
+    const { container } = mountAt('paused-user')
+    expect(container.querySelectorAll('.tb-coach__card').length).toBe(0)
+    expect(container.querySelector('.tb-coach__quiet')!.textContent).toContain('특별히 드릴 말씀 없습니다')
+  })
+
+  it('근거가 쌓이면 작전판 상단에 카드들 + [감독 판단대로 간다] 노출', () => {
+    const r = mountAt('halftime')
+    seedCoachData()
+    const coach = r.container.querySelector('.tb-coach')!
     expect(coach.querySelectorAll('.tb-coach__card').length).toBeGreaterThanOrEqual(2)
     // 코치 회의가 tb-main(작전판 본체)보다 먼저 온다(상단·진입 시 가장 먼저).
-    const root = container.querySelector('.tb-root')!
-    const kids = Array.from(root.children)
+    const kids = Array.from(r.container.querySelector('.tb-root')!.children)
     const coachIdx = kids.findIndex(k => k.classList.contains('tb-coach'))
     const mainIdx = kids.findIndex(k => k.classList.contains('tb-main'))
     expect(coachIdx).toBeGreaterThanOrEqual(0)
     expect(coachIdx).toBeLessThan(mainIdx)
-    expect(getByRole('button', { name: '감독 판단대로 간다' })).toBeTruthy()
+    expect(r.getByRole('button', { name: '감독 판단대로 간다' })).toBeTruthy()
   })
 
   it('[채택] → 부분 전술이 draft(엔진 tactics)에 병합된다', () => {
-    const { container } = mountAt('halftime')
-    const before = store().engine!.home.tactics
-    const beforeLine = before.instructions.lineHeight
-    const beforePress = before.instructions.pressing
-    // 수비 코치 카드(첫 카드) 채택 → 라인 하향.
-    const cards = container.querySelectorAll('.tb-coach__card')
+    const r = mountAt('halftime')
+    seedCoachData()
+    const cards = r.container.querySelectorAll('.tb-coach__card')
     const defCard = Array.from(cards).find(c => c.querySelector('.tb-coach__role')!.textContent === '수비 코치')!
     fireEvent.click(defCard.querySelector('.tb-coach__adopt') as HTMLElement)
-    expect(store().engine!.home.tactics.instructions.lineHeight).toBeLessThan(beforeLine)
-    // 압박은 수비 코치 패치 대상이 아니므로 불변.
-    expect(store().engine!.home.tactics.instructions.pressing).toBe(beforePress)
-    expect(store().engine!.home.tactics.groupIntensity!.defense).toBe(-1)
+    const after = store().engine!.home.tactics
+    // 수비 코치는 상대 후방 전개 지표에서 라인·압박을 함께 뽑는다(scouting과 같은 축).
+    expect(after.instructions.lineHeight).toBe(55)
+    expect(after.instructions.pressing).toBe(55)
+    // +1이 '적극(강화)'이다 — 수비를 굳히자면서 -1을 걸면 존 전력이 오히려 떨어진다.
+    expect(after.groupIntensity!.defense).toBe(1)
   })
 
   it('[감독 판단대로 간다] → 카드 접힘', () => {
-    const { container, getByRole } = mountAt('paused-user')
-    expect(container.querySelector('.tb-coach')).toBeTruthy()
-    fireEvent.click(getByRole('button', { name: '감독 판단대로 간다' }))
-    expect(container.querySelector('.tb-coach')).toBeNull()
+    const r = mountAt('paused-user')
+    seedCoachData()
+    expect(r.container.querySelectorAll('.tb-coach__card').length).toBeGreaterThan(0)
+    fireEvent.click(r.getByRole('button', { name: '감독 판단대로 간다' }))
+    expect(r.container.querySelector('.tb-coach')).toBeNull()
   })
 })
 

@@ -84,6 +84,18 @@ const AXIS_MIN = 20
 // (스페인 78)조차 블록만 세우면 충분했다(라인 20 실측: 수비적 +18.0 / 매우 수비적 +16.7).
 const K_MENTALITY = 2
 
+/** trap → 목표 (라인, 압박). **킥오프 추천과 경기 중 코치 조언이 같은 축을 말해야** 하므로
+ *  공식을 여기 한 벌만 두고 game/coach.ts가 재사용한다(엔진 compress와 같은 판별자에서 파생). */
+export function trapAxis(trap: number): { lineHeight: number; pressing: number } {
+  const axis = 50 + trap * K_AXIS * (trap < 0 ? K_DOWN : 1)
+  return { lineHeight: clampTo(axis, AXIS_MIN, 100), pressing: clampTo(axis, AXIS_MIN, PRESS_MAX) }
+}
+
+/** trap → 태세. 축과 같은 사다리에서 뽑아야 "수비적으로 가되 라인은 올려라"가 구조적으로 불가능하다. */
+export function trapMentality(trap: number): Mentality {
+  return MENTALITIES[Math.min(4, Math.max(0, 2 + Math.round(trap * K_MENTALITY)))]
+}
+
 const MENTALITY_KO: Record<Mentality, string> = {
   'very-defensive': '매우 수비적', 'defensive': '수비적', 'balanced': '균형',
   'attacking': '공격적', 'very-attacking': '매우 공격적',
@@ -116,14 +128,14 @@ export function recommendPlan(me: Team, opp: Team): PlanRecommendation {
   const trap = trapFactor({ oppGkBuildup: gkBuildup, oppPossession: s.possession })
   // 라인과 압박은 같은 값에서 나온다(엔진의 compress도 두 축을 하나의 trap으로 묶는다).
   // 갈리는 건 상한뿐이다 — 압박에만 체력·파울 비용이 걸려 68에서 멈춘다.
-  const axis = 50 + trap * K_AXIS * (trap < 0 ? K_DOWN : 1)
-  ins.lineHeight = clampTo(axis, AXIS_MIN, 100)
-  ins.pressing = clampTo(axis, AXIS_MIN, PRESS_MAX)
+  const targetAxis = trapAxis(trap)
+  ins.lineHeight = targetAxis.lineHeight
+  ins.pressing = targetAxis.pressing
   // 멘탈리티도 같은 사다리에서 뽑는다. 이전 판의 FIFA 랭킹 규칙(격차 ≥15 → 수비적)은
   // 실측으로 기각했다: trap 파생 라인에서 수비적은 공격적보다 항상 나빴다
   // (n=400 — fra 공격적 +10.2 vs 수비적 +1.0 / eng +6.3 vs +1.5 / mar +7.5 vs +0.8).
   const mentalityIndex = Math.min(4, Math.max(0, 2 + Math.round(trap * K_MENTALITY)))
-  const mentality = MENTALITIES[mentalityIndex]
+  const mentality = trapMentality(trap) // === MENTALITIES[mentalityIndex] — 사다리 정의는 한 곳(trapMentality)뿐이다.
   patch.mentality = mentality
   // 그룹 적극성도 같은 태세를 따른다 — 나갈 땐 공격 라인을, 물러설 땐 수비 라인을 끌어올린다.
   // 실측(n=400, trap 파생 라인 · 지정 없음 대비): 공격 태세의 attack+1은 arg +4.0 / fra +5.0 /

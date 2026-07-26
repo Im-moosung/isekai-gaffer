@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { FormationId, GroupIntensity, Mentality, Player, TacticState } from '../../engine/types'
 import { canIntervene, useMatchStore } from '../../game/matchStore'
-import { buildCoachAdvice, type TacticPatch } from '../../game/coach'
+import { buildCoachAdvice, hasPatch, type TacticPatch } from '../../game/coach'
 import { PitchView } from '../pitch/PitchView'
 import { ConsolePanel } from '../console/ConsolePanel'
 import { SubPanel } from '../console/SubPanel'
@@ -266,8 +266,9 @@ function PlanDiff({ plan, current }: { plan: TacticState; current: TacticState }
 
 const DEFAULT_GI: GroupIntensity = { attack: 0, midfield: 0, defense: 0 }
 
-/** 코치 회의 카드 리스트 — 수비/공격/피지컬(+세트피스) 코치가 서로 다른 관점을 제안한다.
+/** 코치 회의 카드 리스트 — 발동 조건을 만족한 코치만 등장한다(0~4명 가변).
  *  각 카드 [채택]은 부분 전술(TacticPatch)을 현재 draft에 병합해 즉시 반영한다(유저가 이후 수정 가능).
+ *  전술 축으로 표현할 수 없는 조언(교체 권유 등)은 패치가 비어 있어 [채택]이 붙지 않는다.
  *  맨 아래 [감독 판단대로 간다]는 전체 카드를 접는다(전부 무시 — 감독의 딜레마 존중). */
 function CoachMeeting() {
   const engine = useMatchStore(s => s.engine)
@@ -276,7 +277,15 @@ function CoachMeeting() {
 
   if (!engine || dismissed) return null
   const advice = buildCoachAdvice(engine, SIDE)
-  if (advice.length === 0) return null
+  // 조언 0건은 정상 상태다(근거 없는 코치는 침묵한다). 다만 섹션을 통째로 감추면
+  // 기능이 고장난 것처럼 보이고 "아직 판단할 근거가 없다"는 정보도 사라지므로 한 줄만 남긴다.
+  if (advice.length === 0) {
+    return (
+      <section className="tb-coach tb-coach--quiet" aria-label="코치 회의">
+        <p className="tb-coach__quiet">코치진: 특별히 드릴 말씀 없습니다.</p>
+      </section>
+    )
+  }
 
   // TacticPatch → 현재 tactics에 병합 후 formation 명령으로 제출(엔진은 tactics 통째 교체).
   const adopt = (p: TacticPatch) => {
@@ -300,9 +309,11 @@ function CoachMeeting() {
             <div className="tb-coach__role">{a.coach}</div>
             <p className="tb-coach__rationale">{a.rationale}</p>
             <p className="tb-coach__proposal">{a.proposal}</p>
-            <button type="button" className="tb-coach__adopt" onClick={() => adopt(a.apply)}>
-              채택
-            </button>
+            {hasPatch(a.apply) && (
+              <button type="button" className="tb-coach__adopt" onClick={() => adopt(a.apply)}>
+                채택
+              </button>
+            )}
           </li>
         ))}
       </ul>
