@@ -206,6 +206,9 @@ describe('startMatch opts 확장', () => {
     expect(store().engine!.home.staminaByPlayer[a.squad[1].id]).toBe(100)
     expect(store().engine!.home.staminaByPlayer['ghost']).toBeUndefined()
   })
+  // 엔진/스토어 기능 계약이므로 유지한다. 단 App은 더 이상 이 옵션을 넘기지 않는다
+  // (F1 B안 · 2026-07-26 — 조별 경기도 전반부터 완전 시뮬).
+  // 아래 팀토크 테스트들도 "하프타임에 지고 있는 상태"를 만들려고 이 옵션을 도구로 쓸 뿐이다.
   it('firstHalfScript 전달 시 전반은 시뮬 대신 스크립트 스코어를 재현한다', () => {
     const events = [{ minute: 30, type: 'goal' as const, teamId: a.id }]
     store().startMatch(a, b, 42, { firstHalfScript: { events, score: [1, 0] } })

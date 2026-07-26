@@ -65,6 +65,13 @@ export function simulateSegment(state: MatchState, toMinute: number, opts: Simul
   // 채택한 45 분할 방식: toMinute<45 이면 minute만 전진하고 이벤트는 미적용, 45 도달 시 일괄 적용.
   //   → 어느 분할 지점(예: 30→45)에서도 전반 결과가 동일해 분할 결정론이 유지된다.
   // 후반(45→90)은 기존 시뮬 그대로이며 분 파생 RNG(seed*10007+minute)도 불변이다.
+  //
+  // ⚠ 현재 App에서 미사용 — F1 B안으로 배선 해제(2026-07-26).
+  // 이유: 조별 3경기가 1~44분에 simulateMinute을 한 번도 돌지 않아 22' 하이드레이션 시점에
+  // 체력 100·슛 0·xG 0·점유율 50%였고, 전술 센터에서 설계한 플랜이 전반 45분 동안
+  // 결과에 아무 영향도 주지 않았다(Phase A 간판 기능이 꺼짐).
+  // 기능 자체는 되돌릴 수 있게 남긴다 — 아래 분기는 엔진/스토어 테스트에서만 진입한다.
+  // (App.tsx는 더 이상 firstHalfScript를 MatchScreen에 넘기지 않는다.)
   if (st.firstHalfScript && st.minute < 45) {
     if (toMinute < 45) { st.minute = toMinute; return st }
     applyFirstHalfScript(st)

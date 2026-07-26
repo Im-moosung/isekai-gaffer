@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 // 예외 승인: App.tsx는 캠페인/데모 기본 XI 산정(lineup)을 위해
 // 엔진 모듈 직접 import를 허용한다(조립 최상단 진입점 한정).
 import { pickBestXI } from './engine/lineup'
-import type { MatchEvent, TacticState } from './engine/types'
+import type { TacticState } from './engine/types'
 import { MatchScreen } from './ui/match/MatchScreen'
 import { HubScreen } from './ui/campaign/HubScreen'
 import { EndingScreen } from './ui/campaign/EndingScreen'
@@ -186,12 +186,16 @@ function CampaignMatch({ tactics, onBackToHub }: {
   const [headline, setHeadline] = useState<Headline | null>(null)
 
   // 매치별 파생 props는 seed(진행 순 고정)에 고정 memo → MatchScreen 재초기화 방지.
+  //
+  // [F1 B안 · 2026-07-26] 조별 경기도 1분부터 90분까지 완전 시뮬한다.
+  // 예전에는 여기서 firstHalfScript를 만들어 넘겼고, 그러면 엔진이 전반 45분을 통째로 건너뛰어
+  // 유저 플랜이 조별 3경기의 절반 동안 무력화됐다. 배선을 끊어 전반부터 전술이 작동하게 한다.
+  // GROUP_MATCHES에서 남겨 쓰는 것은 realScore 하나 — "참고 · 실제 역사 2-1" 기준선 표시용이다.
   const derived = useMemo(() => {
     const staminaOverride: Record<string, number> = {}
     for (const p of kor.squad) staminaOverride[p.id] = startingStamina(p.id)
     const gm: GroupMatch | undefined = isGroup ? GROUP_MATCHES.find(m => m.opponent === oppId) : undefined
-    const firstHalfScript = gm ? toFirstHalfScript(gm, kor.id, oppId) : undefined
-    return { staminaOverride, firstHalfScript, referenceScore: gm?.realScore, requireWinner: !isGroup }
+    return { staminaOverride, referenceScore: gm?.realScore, requireWinner: !isGroup }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seed])
 
@@ -203,7 +207,6 @@ function CampaignMatch({ tactics, onBackToHub }: {
         away={opp}
         seed={seed}
         initialTactics={tactics}
-        firstHalfScript={derived.firstHalfScript}
         staminaOverride={derived.staminaOverride}
         referenceScore={derived.referenceScore}
         requireWinner={derived.requireWinner}
@@ -246,16 +249,9 @@ function CampaignMatch({ tactics, onBackToHub }: {
   )
 }
 
-/** 조별 전반 스크립트(ScriptEvent[]) → 엔진 firstHalfScript(MatchEvent[] + 전반 스코어). */
-function toFirstHalfScript(m: GroupMatch, homeId: string, awayId: string): { events: MatchEvent[]; score: [number, number] } {
-  const events: MatchEvent[] = m.firstHalfScript.map(e => ({
-    minute: e.minute, type: e.type, teamId: e.teamId, detail: e.playerName,
-  }))
-  const score: [number, number] = [
-    events.filter(e => e.teamId === homeId).length,
-    events.filter(e => e.teamId === awayId).length,
-  ]
-  return { events, score }
-}
+// [F1 B안 · 2026-07-26] toFirstHalfScript(ScriptEvent[] → 엔진 firstHalfScript) 제거.
+// 조별 전반을 스크립트로 재현하지 않으므로 변환기가 필요 없다.
+// 엔진의 firstHalfScript 지원과 GROUP_MATCHES의 데이터는 그대로 남아 있으니
+// 되돌리려면 이 자리에 변환기를 복원하고 MatchScreen에 prop을 다시 넘기면 된다.
 
 export default App

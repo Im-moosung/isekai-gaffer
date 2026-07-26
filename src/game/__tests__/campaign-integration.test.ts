@@ -49,11 +49,9 @@ function autoPlayCampaign(campaignSeed: number): RunResult {
     const opp = TEAMS[oppId]
     const isGroup = GROUP_STAGES.has(stage)
 
-    // 조별: 실제 전반 재현 스크립트(전 경기 전반 0-0, 빈 이벤트). 토너먼트: 스크립트 없음.
-    const match = createMatch(kor, opp, {
-      seed: mseed,
-      ...(isGroup ? { firstHalfScript: { events: [], score: [0, 0] as [number, number] } } : {}),
-    })
+    // [F1 B안 · 2026-07-26] 조별도 전반 스크립트 없이 1~90분 완전 시뮬한다.
+    // isGroup은 이제 시뮬 방식이 아니라 승부차기 필요 여부(무승부 허용)만 가른다.
+    const match = createMatch(kor, opp, { seed: mseed })
     const done = simulateSegment(match, 90)
     const score: [number, number] = [done.score[0], done.score[1]] // [kor, 상대]
 
