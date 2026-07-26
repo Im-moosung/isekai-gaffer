@@ -3,7 +3,6 @@
 // 최소 Fake speechSynthesis/SpeechSynthesisUtterance를 주입해 큐 정책·강조·토글을 검증한다.
 // 실제 음성 출력은 사용자가 dev 서버에서 최종 판정.
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import type { MatchEvent, MatchEventType } from '../../engine/types'
 
 const TTS_KEY = 'rematch-tts'
 
@@ -59,8 +58,6 @@ async function loadFresh(opts: { synth?: unknown } = {}) {
   vi.stubGlobal('SpeechSynthesisUtterance', FakeUtterance)
   return await import('../commentary-tts')
 }
-
-const ev = (type: MatchEventType, minute = 10): MatchEvent => ({ minute, type, teamId: 'KOR' })
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -200,24 +197,87 @@ describe('commentary-tts 토글 + localStorage 기억', () => {
   })
 })
 
-describe('pickSpokenEvent 대표 이벤트 선정 우선순위', () => {
-  it('goal > save > miss > corner > foul (최상위 1개)', async () => {
-    const { pickSpokenEvent } = await loadFresh({})
-    expect(pickSpokenEvent([ev('foul'), ev('corner'), ev('goal')])?.type).toBe('goal')
-    expect(pickSpokenEvent([ev('foul'), ev('save'), ev('miss')])?.type).toBe('save')
-    expect(pickSpokenEvent([ev('foul'), ev('miss'), ev('corner')])?.type).toBe('miss')
-    expect(pickSpokenEvent([ev('foul'), ev('corner')])?.type).toBe('corner')
-    expect(pickSpokenEvent([ev('foul')])?.type).toBe('foul')
+// ★ 대표 이벤트 선정(구 pickSpokenEvent)은 playback.pickDramaEvent로 이관했다 —
+//   음성과 안무가 하나의 선택자를 공유해야 하므로 오디오 모듈이 가질 규칙이 아니다.
+//   우선순위 테스트는 src/ui/match/__tests__/playback.test.ts에 있다.
+
+describe('countSyllables — 한국어 발화 음절 수', () => {
+  it('한글 음절만 센다(공백·구두점 0)', async () => {
+    const { countSyllables } = await loadFresh({})
+    expect(countSyllables('골망을 흔듭니다!')).toBe(7)
+    expect(countSyllables('   ,.!\'')).toBe(0)
+    expect(countSyllables('')).toBe(0)
   })
 
-  it('발화 대상 아닌 타입만 있으면 null', async () => {
-    const { pickSpokenEvent } = await loadFresh({})
-    expect(pickSpokenEvent([ev('kickoff'), ev('chance'), ev('shot')])).toBeNull()
-    expect(pickSpokenEvent([ev('yellow'), ev('sub'), ev('halftime')])).toBeNull()
+  it('숫자는 한국어 수사 길이(자리당 1.5음절)로 근사한다', async () => {
+    const { countSyllables } = await loadFresh({})
+    expect(countSyllables('7')).toBe(1.5) // "칠"
+    expect(countSyllables('72')).toBe(3) // "칠십이"
   })
 
-  it('빈 배열 → null', async () => {
-    const { pickSpokenEvent } = await loadFresh({})
-    expect(pickSpokenEvent([])).toBeNull()
+  it('한글·숫자 혼합 실문장', async () => {
+    const { countSyllables } = await loadFresh({})
+    // "72' 손흥민, 골망을 흔듭니다!" → 숫자 2자리(3) + 한글 10
+    expect(countSyllables("72' 손흥민, 골망을 흔듭니다!")).toBe(13)
+  })
+})
+
+describe('estimateSpeechMs — 발화 소요 시간 추정', () => {
+  it('빈 문장은 0(발화 없음 → 체류 보정 없음)', async () => {
+    const { estimateSpeechMs } = await loadFresh({})
+    expect(estimateSpeechMs('')).toBe(0)
+    expect(estimateSpeechMs('  ')).toBe(0)
+  })
+
+  it('음절 수에 비례해 길어진다', async () => {
+    const { estimateSpeechMs } = await loadFresh({})
+    const short = estimateSpeechMs('골입니다')
+    const long = estimateSpeechMs('골입니다 골입니다 골입니다 골입니다')
+    expect(long).toBeGreaterThan(short)
+  })
+
+  it('important(rate 상향)는 같은 문장을 더 짧게 읽는다', async () => {
+    const { estimateSpeechMs } = await loadFresh({})
+    const line = "72' 손흥민, 골망을 흔듭니다!"
+    expect(estimateSpeechMs(line, true)).toBeLessThan(estimateSpeechMs(line, false))
+  })
+
+  it('실문장 추정치가 상식 범위(1~4초)에 있다 — 실측 계수 회귀 고정', async () => {
+    const { estimateSpeechMs, SYLLABLES_PER_SEC, SPEECH_TAIL_MS } = await loadFresh({})
+    expect(SYLLABLES_PER_SEC).toBe(5.6)
+    expect(SPEECH_TAIL_MS).toBe(650)
+    for (const line of [
+      "72' 손흥민, 골망을 흔듭니다!",
+      "45' 대한민국 골키퍼가 슛을 걷어냅니다.",
+      "13' 이강인의 슛, 골문을 빗나갑니다.",
+      "88' 스페인의 코너킥 기회입니다.",
+    ]) {
+      const ms = estimateSpeechMs(line)
+      expect(ms).toBeGreaterThan(1000)
+      expect(ms).toBeLessThan(4000)
+    }
+  })
+
+  it('결정론 — 같은 입력에 항상 같은 값', async () => {
+    const { estimateSpeechMs } = await loadFresh({})
+    const line = "72' 손흥민, 골망을 흔듭니다!"
+    expect(estimateSpeechMs(line)).toBe(estimateSpeechMs(line))
+  })
+})
+
+describe('willSpeak — 실제로 소리가 나는 상태인가', () => {
+  it('미지원 환경이면 false', async () => {
+    const ctts = await loadFresh({})
+    ctts.initVoice()
+    expect(ctts.willSpeak()).toBe(false)
+  })
+
+  it('ko 보이스 확보 + 토글 ON이면 true, OFF면 false', async () => {
+    const { synth } = makeFakeSynth(() => [{ lang: 'ko-KR', name: 'Yuna' }])
+    const ctts = await loadFresh({ synth })
+    ctts.initVoice()
+    expect(ctts.willSpeak()).toBe(true)
+    ctts.setTtsEnabled(false)
+    expect(ctts.willSpeak()).toBe(false)
   })
 })

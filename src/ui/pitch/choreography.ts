@@ -54,8 +54,13 @@ function stepsFromBall(
 }
 
 /**
- * 이벤트 → 안무 키프레임 시퀀스(2~4스텝).
- * @param event      연출할 이벤트(goal/shot/save/miss/corner/foul 등).
+ * 이벤트 → 안무 키프레임 시퀀스(2~4스텝). 안무가 없는 타입은 빈 배열.
+ *
+ * 안무가 있는 타입은 playback.DRAMA_PRIORITY(주인공 선택자의 후보 집합)와 정확히
+ * 일치해야 한다 — 화면이 그릴 수 없는 이벤트를 음성이 주인공으로 고르면 안 된다.
+ * 이 일치는 choreography.test.ts가 양방향으로 고정한다.
+ *
+ * @param event      연출할 이벤트(goal/shot/chance/save/miss/corner/foul 등).
  * @param homeState  홈 팀 상태(공격 방향·라인업 판정).
  * @param awayState  어웨이 팀 상태.
  */
@@ -115,13 +120,33 @@ export function buildSequence(event: MatchEvent, homeState: SideState, awayState
       ]
       break
     }
-    default: {
-      // shot·chance 등 → 골문 향한 3스텝.
+    case 'shot': {
+      // 슛 — 골문 정면으로 때렸으나 결과(골/세이브/미스)가 따로 없는 장면.
+      // 블록·굴절로 골문 앞에서 멈추는 궤적(save보다 얕고, miss처럼 벗어나지 않는다).
+      const blockY = [50, 46, 54][variant]
       path = [
         { t: 0, x: 58, y: laneY },
         { t: 0.4, x: 82, y: laneY },
-        { t: 0.72, x: 95, y: 50 },
+        { t: 0.72, x: 95, y: blockY },
       ]
+      break
+    }
+    case 'chance': {
+      // 찬스 — 마무리 없이 박스 안까지 들어간 침투. 슛 계열보다 짧게 끊어
+      // "기회를 만들었다"까지만 보여준다(골문에 닿지 않는다).
+      path = [
+        { t: 0, x: 55, y: laneY },
+        { t: 0.38, x: 72, y: laneY },
+        { t: 0.7, x: 84, y: (laneY + 50) / 2 },
+      ]
+      break
+    }
+    default: {
+      // 안무가 없는 타입(kickoff·sub·halftime·fulltime) — 빈 시퀀스.
+      // ★ 예전엔 default가 슛 궤적을 돌려줬다. 그 탓에 교체·하프타임이 주인공으로
+      //   뽑히면 "말은 교체인데 화면은 슛"이 됐다. 빈 배열이면 렌더러가 안무를
+      //   재생하지 않는다(PitchView·stage·movement 모두 length===0을 처리한다).
+      path = []
     }
   }
 

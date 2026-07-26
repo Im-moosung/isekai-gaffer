@@ -15,7 +15,9 @@ import { ShootoutPanel } from './ShootoutPanel'
 // 스탯 표는 워룸·작전판과 공유하기 위해 별도 모듈로 뽑았다(StatsTable.tsx).
 import { StatsTable } from './StatsTable'
 import { ShoutBar } from './ShoutBar'
-import { minuteDwellMs, EVENT_DWELL_MS, type PlaybackSpeed } from './playback'
+import {
+  minuteDwellWithSpeech, pickDramaEvent, isImportantEvent, type PlaybackSpeed,
+} from './playback'
 import * as sfx from '../../audio/sfx'
 import './match.css'
 
@@ -192,7 +194,10 @@ export function MatchScreen({
       const diff = Math.abs(eng.score[0] - eng.score[1])
       const clutch = m >= 80 && diff <= 1
       // 블로우아웃(3골차+) 가속 — 승부 갈린 뒤 늘어짐 방지.
-      const dwell = minuteDwellMs(m, eventsAtMinute, speed, clutch, diff)
+      // 해설이 들리는 상태면 주인공 이벤트 발화 길이를 dwell 하한으로 쓴다(말 잘림 방지).
+      const dwell = minuteDwellWithSpeech(
+        m, eventsAtMinute, home, away, speed, clutch, diff, ctts.willSpeak(),
+      )
       timer = setTimeout(() => {
         if (cancelled) return
         advanceMinute()
@@ -201,7 +206,8 @@ export function MatchScreen({
     }
     schedule()
     return () => { cancelled = true; clearTimeout(timer) }
-  }, [phase, speed, advanceMinute])
+    // ttsOn: 해설 토글이 dwell 하한(발화 길이 보정)을 켜고 끄므로 의존에 포함한다.
+  }, [phase, speed, advanceMinute, home, away, ttsOn])
 
   // ── 모드 전환 연출: 작전판 마운트/이탈 ──────────────────────────────
   // tacticsMode 진입 시 즉시 마운트(entrance 애니메이션은 CSS가 담당),
@@ -222,22 +228,20 @@ export function MatchScreen({
     return () => clearTimeout(t)
   }, [tacticsMode, tacticsMounted])
 
-  // ── 현재 분 하이라이트 안무: 그 분의 최고 가중 이벤트를 골라 시퀀스로 번역 ──
+  // ── 현재 분 하이라이트 안무: 그 분의 **주인공 이벤트**를 시퀀스로 번역 ──
+  // ★ 주인공은 pickDramaEvent 하나가 정한다 — 아래 TTS 효과도 같은 함수를 쓰므로
+  //   "말한 이벤트 = 그린 이벤트"가 구조적으로 보장된다(예전엔 규칙이 둘이었다).
   // engine이 분 단위로 전진하므로 engine 참조가 바뀔 때(=분 전환)만 재계산 → 한 분
   // 재생 동안 시퀀스 참조가 안정적(ChoreoLayer 타이머가 중간에 리셋되지 않음).
   const highlight = useMemo(() => {
     if (!engine) return null
     const m = engine.minute
-    let drama: MatchEvent | undefined
-    let best = -1
-    for (const e of engine.events) {
-      if (e.minute !== m) continue
-      const w = EVENT_DWELL_MS[e.type] ?? -1
-      if (w > best) { best = w; drama = e }
-    }
+    const drama = pickDramaEvent(engine.events.filter(e => e.minute === m))
     if (!drama) return null
+    const seq = buildSequence(drama, engine.home, engine.away)
+    if (seq.length === 0) return null
     const side: 'home' | 'away' = drama.teamId === engine.home.team.id ? 'home' : 'away'
-    return { seq: buildSequence(drama, engine.home, engine.away), side }
+    return { seq, side }
   }, [engine])
 
   // ── 사운드 배선(매치데이 2.0) — 모두 sfx는 미지원 환경 no-op ──────────
@@ -265,7 +269,9 @@ export function MatchScreen({
     swellTimerRef.current = setTimeout(() => setCrowdSwell(false), 4000)
   }, [phase, engine])
 
-  // TTS 해설: 재생 중 현재 분의 대표 이벤트(goal>save>miss>corner>foul) 1개만 발화(과밀 방지).
+  // TTS 해설: 재생 중 현재 분의 **주인공 이벤트** 1개만 발화(과밀 방지).
+  // ★ 위 highlight 안무와 동일한 pickDramaEvent를 쓴다 — 말하는 이벤트와 그리는
+  //   이벤트가 항상 같아야 한다(이 계약은 MatchScreen 테스트가 고정한다).
   // commentate() 문장을 그대로 읽고, goal·save는 important(rate·pitch 강조 + 발화 중 선점).
   // 분당 1회(spokenMinuteRef)만 발동 — 미지원·보이스 없음·토글 OFF면 조용한 no-op.
   useEffect(() => {
@@ -273,12 +279,11 @@ export function MatchScreen({
     const m = engine.minute
     if (spokenMinuteRef.current === m) return
     spokenMinuteRef.current = m
-    const eventsAtMinute = engine.events.filter(e => e.minute === m)
-    const spoken = ctts.pickSpokenEvent(eventsAtMinute)
+    const spoken = pickDramaEvent(engine.events.filter(e => e.minute === m))
     if (!spoken) return
-    const important = spoken.type === 'goal' || spoken.type === 'save'
-    ctts.speak(commentate(spoken, home, away), { important })
-  }, [phase, engine, home, away])
+    // speed를 함께 넘긴다 — 빨리감기 중계는 발화도 빨라져야 체류 시간과 맞는다.
+    ctts.speak(commentate(spoken, home, away), { important: isImportantEvent(spoken), speed })
+  }, [phase, engine, home, away, speed])
 
   // 작전판 진입·pause 시 진행 중 발화를 취소한다(작전 지시 중 해설이 새지 않게).
   useEffect(() => {
@@ -367,8 +372,11 @@ export function MatchScreen({
   const minuteEvents = engine.events.filter(e => e.minute === displayMinute)
   const diffNow = Math.abs(shownScore[0] - shownScore[1])
   const clutchNow = displayMinute >= 80 && diffNow <= 1
-  // 시퀀스 재생 총 시간 = 그 분의 실제 dwell(재생 루프와 동일 산식).
-  const seqDwell = minuteDwellMs(displayMinute, minuteEvents, speed, clutchNow, diffNow)
+  // 시퀀스 재생 총 시간 = 그 분의 실제 dwell(재생 루프와 동일 함수 — 어긋나면 안무가
+  // 분 전환보다 늦게 끝나거나 일찍 끝나 정적이 생긴다).
+  const seqDwell = minuteDwellWithSpeech(
+    displayMinute, minuteEvents, home, away, speed, clutchNow, diffNow, ctts.willSpeak(),
+  )
   const playSequence = replaying && !!highlight
   // 골 드라마: 이번 분 득점. 상대 골이면 실점 연출로 차별화.
   const goalEvent = minuteEvents.find(e => e.type === 'goal')

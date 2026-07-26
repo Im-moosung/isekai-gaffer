@@ -111,3 +111,42 @@ describe('buildSequence — 무버 선정', () => {
     expect(s[0].movers.length).toBeLessThanOrEqual(3)
   })
 })
+
+// ── 안무 없는 타입은 빈 시퀀스(Phase B-1) ────────────────────
+// 예전엔 default가 슛 궤적을 돌려줘서 교체·하프타임이 주인공으로 뽑히면
+// "말은 교체인데 화면은 슛"이 됐다. 이제 안무가 정의된 타입만 시퀀스를 낸다.
+describe('buildSequence — 안무 유무', () => {
+  it('kickoff·sub·halftime·fulltime은 빈 배열', () => {
+    for (const t of ['kickoff', 'sub', 'halftime', 'fulltime'] as MatchEventType[]) {
+      expect(seq(t), `${t}`).toEqual([])
+    }
+  })
+
+  it('shot·chance는 안무가 있다(3스텝)', () => {
+    expect(seq('shot')).toHaveLength(3)
+    expect(seq('chance')).toHaveLength(3)
+  })
+
+  it('shot은 골문 앞에서 멈춘다(골처럼 네트에 닿지 않는다)', () => {
+    const s = seq('shot')
+    const g = seq('goal')
+    const last = s[s.length - 1].ball.x
+    expect(last).toBeGreaterThan(90)
+    expect(last).toBeLessThan(g[g.length - 1].ball.x)
+  })
+
+  it('chance는 마무리가 없다 — 슛 계열보다 골문에서 멀리 끝난다', () => {
+    const c = seq('chance')
+    const s = seq('shot')
+    expect(c[c.length - 1].ball.x).toBeLessThan(s[s.length - 1].ball.x)
+  })
+
+  it('shot·chance도 away면 x가 미러된다', () => {
+    for (const t of ['shot', 'chance'] as MatchEventType[]) {
+      const h = buildSequence(ev(t, { teamId: home.id }), state.home, state.away)
+      const a = buildSequence(ev(t, { teamId: away.id }), state.home, state.away)
+      expect(h[h.length - 1].ball.x + a[a.length - 1].ball.x).toBeCloseTo(100, 5)
+      expect(a[a.length - 1].ball.x).toBeLessThan(a[0].ball.x)
+    }
+  })
+})
