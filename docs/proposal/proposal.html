@@ -8,13 +8,13 @@
 <style>
   :root{
     --navy:#1B2A4A;
-    --navy-soft:#2d3f63;
-    --blue:#2563EB;
-    --ink:#333333;
+    --navy-soft:#3c4a66;
+    --accent:#2563EB;      /* 정보 구분이 필요한 두 곳에만 사용 */
+    --ink:#2f3338;
     --muted:#6b7280;
-    --line:#d9dee7;
-    --panel:#f5f7fb;
-    --panel-head:#eceff5;
+    --line:#d3d8e0;
+    --hair:#e4e7ec;
+    --panel:#f4f6f9;
   }
 
   *{box-sizing:border-box;}
@@ -23,7 +23,7 @@
   body{
     font-family:"Apple SD Gothic Neo","Pretendard","Noto Sans KR",sans-serif;
     color:var(--ink);
-    font-size:10.5pt;
+    font-size:10.2pt;
     line-height:1.5;
     background:#fff;
     -webkit-font-smoothing:antialiased;
@@ -32,99 +32,91 @@
   /* ---------- COVER ---------- */
   .cover{
     position:relative;
-    background:#ffffff;
+    background:#fff;
     color:var(--navy);
     height:257mm;
     display:flex;
     flex-direction:column;
     page-break-after:always;
-    padding:0;
   }
-  .cover .topbar{
-    height:6px;
-    background:var(--navy);
-    margin:16mm 18mm 0 18mm;
-    position:relative;
+  .cover-head{
+    margin:14mm 0 0 0;
+    padding-bottom:9px;
+    border-bottom:1px solid var(--navy);
   }
-  .cover .topbar::after{
-    content:"";
-    position:absolute;
-    left:0;top:0;height:6px;width:64px;
-    background:var(--blue);
-  }
-  .cover .toplabel{
-    margin:10px 18mm 0 18mm;
-    font-size:9pt;
-    letter-spacing:0.28em;
-    color:var(--muted);
-    text-transform:uppercase;
-    font-weight:600;
+  .cover-head .label{
+    font-size:8.6pt;
+    letter-spacing:0.3em;
+    color:var(--navy);
+    font-weight:700;
   }
   .cover-body{
     flex:1;
     display:flex;
     flex-direction:column;
     justify-content:center;
-    padding:0 18mm;
-  }
-  .cover .eyebrow{
-    color:var(--blue);
-    font-weight:700;
-    letter-spacing:0.04em;
-    font-size:11pt;
-    margin-bottom:14px;
+    padding-bottom:14mm;
   }
   .cover h1{
-    font-size:37pt;
-    line-height:1.14;
-    margin:0;
+    font-size:38pt;
+    line-height:1.16;
+    margin:0 0 20px 0;
     font-weight:800;
-    letter-spacing:-0.01em;
+    letter-spacing:-0.02em;
     color:var(--navy);
   }
-  .cover .rule{
-    width:56px;height:4px;background:var(--blue);
-    margin:22px 0 22px 0;
-  }
   .cover .subtitle{
-    font-size:13pt;
-    line-height:1.55;
+    font-size:16pt;
+    line-height:1.45;
     color:var(--navy-soft);
+    font-weight:600;
+    letter-spacing:-0.01em;
+    margin:0;
+    padding-top:18px;
+    border-top:1px solid var(--line);
     max-width:150mm;
-    font-weight:500;
   }
   .cover-foot{
-    margin:0 18mm 18mm 18mm;
-    padding-top:14px;
+    padding-top:12px;
+    margin-bottom:12mm;
     border-top:1px solid var(--line);
     display:flex;
     justify-content:space-between;
     align-items:flex-end;
+    gap:12mm;
   }
-  .cover-foot .event{font-size:10.5pt;color:var(--muted);font-weight:500;}
+  .cover-foot .event{font-size:10pt;color:var(--muted);font-weight:500;line-height:1.45;}
   .cover-foot .event b{color:var(--navy);font-weight:700;}
-  .cover-foot .date{font-size:10pt;color:var(--navy);font-weight:700;}
+  .cover-foot .date{font-size:10pt;color:var(--navy);font-weight:700;white-space:nowrap;}
 
   /* ---------- BODY ---------- */
   h2{
-    font-size:16pt;
+    font-size:15pt;
     font-weight:800;
     color:var(--navy);
-    margin:14px 0 11px 0;
-    padding-left:14px;
-    border-left:6px solid var(--navy);
-    line-height:1.25;
+    margin:0 0 12px 0;
+    padding-top:9px;
+    border-top:1.6px solid var(--navy);
+    line-height:1.3;
+    letter-spacing:-0.01em;
     break-inside:avoid;
     break-after:avoid;
   }
-  h2 .num{color:var(--blue);}
-  .section:first-of-type h2{margin-top:4px;}
+  h2 .num{
+    font-weight:800;
+    margin-right:9px;
+    color:var(--navy);
+  }
+
+  .section{padding:0 0 5mm 0;}
+  .section + .section{padding-top:1mm;}
 
   h3{
-    font-size:12pt;
+    font-size:11.4pt;
     font-weight:700;
     color:var(--navy);
-    margin:13px 0 6px 0;
+    margin:12px 0 5px 0;
+    letter-spacing:-0.005em;
     break-after:avoid;
     break-inside:avoid;
   }
@@ -132,137 +124,125 @@
   p{margin:0 0 8px 0;}
   strong{font-weight:700;color:var(--navy);}
 
-  code{
-    font-family:"SF Mono",Menlo,Consolas,monospace;
-    background:var(--panel);
-    padding:1px 5px;
-    border-radius:3px;
-    font-size:9pt;
-    color:var(--navy);
-    border:1px solid var(--line);
+  /* 번호 매긴 소제목 + 본문 (차별점 · 원칙) — 카드·색띠 없이 위계만으로 구획 */
+  .item{
+    margin:0 0 11px 0;
+    padding-left:26px;
+    break-inside:avoid;
   }
-
-  .section{padding:0 0 3mm 0;}
-
-  /* callouts */
-  .lead{
+  .item > h4{
     font-size:11pt;
+    font-weight:700;
+    color:var(--navy);
+    margin:0 0 3px -26px;
+    line-height:1.35;
+    letter-spacing:-0.005em;
+    break-after:avoid;
+  }
+  .item > h4 .n{
+    display:inline-block;
+    width:26px;
+    font-size:10pt;
+    font-weight:700;
+    color:var(--muted);
+    font-variant-numeric:tabular-nums;
+  }
+  .item p:last-child{margin-bottom:0;}
+
+  .lead{
+    font-size:11.4pt;
+    line-height:1.5;
     color:var(--navy);
     font-weight:600;
-    background:var(--panel);
-    border-left:4px solid var(--navy);
-    padding:11px 15px;
-    margin:0 0 14px 0;
-    break-inside:avoid;
+    letter-spacing:-0.005em;
+    margin:0 0 8px 0;
   }
-  .concept{
-    font-size:10.5pt;
-    background:var(--panel);
-    border-left:4px solid var(--blue);
-    padding:11px 15px;
-    margin:0 0 12px 0;
-    break-inside:avoid;
-    color:var(--navy-soft);
-  }
-  .concept b{color:var(--navy);}
   .note{
-    font-size:9.7pt;
+    font-size:9.4pt;
+    line-height:1.5;
     color:var(--muted);
-    border-left:3px solid var(--line);
-    padding:8px 14px;
-    margin:6px 0 12px 0;
-    background:var(--panel);
+    border-top:1px solid var(--line);
+    padding-top:7px;
+    margin:2px 0 6px 0;
     break-inside:avoid;
   }
-  .note strong{color:var(--navy-soft);}
+  .note strong{color:var(--navy-soft);font-weight:700;}
 
   /* tables */
   table{
     width:100%;
     border-collapse:collapse;
-    margin:10px 0 14px 0;
-    font-size:9.7pt;
+    margin:9px 0 12px 0;
+    font-size:9.6pt;
   }
   thead{display:table-header-group;}
   tr{break-inside:avoid;}
   th{
-    background:var(--panel-head);
     color:var(--navy);
     text-align:left;
-    padding:6px 10px;
+    padding:6px 2px;
     font-weight:700;
-    border:1px solid var(--line);
-    border-bottom:2px solid var(--navy);
+    font-size:9.2pt;
+    letter-spacing:0.02em;
+    border:0;
+    border-top:1.2px solid var(--navy);
+    border-bottom:1.2px solid var(--navy);
   }
-  td{padding:5px 10px;border:1px solid var(--line);vertical-align:top;}
-  tbody tr:nth-child(even){background:var(--panel);}
-  table.two td:first-child{width:30%;}
-
-  /* principle blocks */
-  .principle{
-    border:1px solid var(--line);
-    border-left:4px solid var(--blue);
-    border-radius:5px;
-    padding:11px 15px;
-    margin:0 0 10px 0;
-    break-inside:avoid;
+  td{
+    padding:6px 2px;
+    border:0;
+    border-bottom:1px solid var(--hair);
+    vertical-align:top;
+    line-height:1.45;
   }
-  .principle .pt{
-    font-size:10.5pt;font-weight:700;color:var(--navy);margin-bottom:4px;
-  }
-  .principle .pt .pn{
-    color:var(--blue);font-size:8.5pt;letter-spacing:0.12em;
-    display:block;font-weight:700;margin-bottom:2px;text-transform:uppercase;
-  }
-  .principle p:last-child{margin-bottom:0;}
+  th + th, td + td{padding-left:14px;}
+  tbody tr:last-child td{border-bottom:1.2px solid var(--navy);}
+  table.two td:first-child{width:26%;}
 
   /* ============ DIAGRAMS ============ */
-  figure{margin:8px 0 12px 0;break-inside:avoid;}
+  figure{margin:8px 0 10px 0;break-inside:avoid;}
   figcaption{
-    font-size:8.8pt;
+    font-size:8.7pt;
     color:var(--muted);
-    margin-top:8px;
-    text-align:center;
-    line-height:1.4;
+    margin-top:6px;
+    line-height:1.45;
   }
   .diagram{
     border:1px solid var(--line);
-    border-radius:6px;
     background:#fff;
-    padding:13px 15px 14px 15px;
+    padding:11px 14px 12px 14px;
     break-inside:avoid;
   }
   .diagram .dg-title{
-    font-size:9pt;letter-spacing:0.14em;text-transform:uppercase;
-    color:var(--blue);font-weight:700;margin-bottom:12px;
+    font-size:8.4pt;letter-spacing:0.18em;
+    color:var(--navy);font-weight:700;margin-bottom:8px;
+    padding-bottom:6px;border-bottom:1px solid var(--hair);
   }
 
   /* --- vertical flow (도식 3) --- */
   .vflow{display:flex;flex-direction:column;align-items:stretch;}
   .vf-row{display:flex;align-items:stretch;gap:10px;}
   .vf-idx{
-    min-width:52px;text-align:right;padding-top:6px;
-    font-size:7.8pt;font-weight:700;color:var(--muted);letter-spacing:0.08em;
+    min-width:52px;text-align:right;padding-top:4px;
+    font-size:7.8pt;font-weight:700;color:var(--muted);letter-spacing:0.06em;
   }
   .vf-box{
-    flex:1;border:1.5px solid var(--navy);border-radius:5px;
-    padding:3px 11px;background:#fff;
+    flex:1;border:1.2px solid var(--navy);
+    padding:1px 11px;background:#fff;
     display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;
   }
-  .vf-box .t{font-size:9.3pt;font-weight:700;color:var(--navy);line-height:1.3;}
-  .vf-box .d{font-size:8.1pt;color:var(--muted);line-height:1.3;}
-  .vf-box.accent{border-color:var(--blue);background:var(--panel);}
-  .vf-box.accent .t{color:var(--blue);}
-  .vf-box.loop{border-style:dashed;border-color:var(--line);background:var(--panel);}
-  .vf-box.loop .t{color:var(--navy-soft);}
+  .vf-box .t{font-size:9pt;font-weight:700;color:var(--navy);line-height:1.3;}
+  .vf-box .d{font-size:8pt;color:var(--muted);line-height:1.3;}
+  .vf-box.accent{background:var(--panel);}
+  .vf-box.loop{border-style:dashed;border-color:var(--line);}
+  .vf-box.loop .t{color:var(--navy-soft);font-weight:600;}
   .vf-box.end{background:var(--navy);border-color:var(--navy);}
   .vf-box.end .t{color:#fff;}
-  .vf-box.end .d{color:rgba(255,255,255,0.78);}
 
-  .vf-link{display:flex;align-items:center;gap:10px;min-height:9px;}
+  .vf-link{display:flex;align-items:center;gap:10px;min-height:6px;}
   .vf-link .sp{min-width:52px;}
   .vf-link .stem{
-    width:1.5px;background:var(--navy);height:9px;margin-left:16px;position:relative;
+    width:1.2px;background:var(--navy);height:6px;margin-left:16px;position:relative;
   }
   .vf-link .stem::after{
     content:"";position:absolute;left:-3.5px;bottom:-1px;
@@ -270,50 +250,44 @@
     border-top:6px solid var(--navy);
   }
   .vf-link .lbl{
-    font-size:8pt;font-weight:700;color:var(--blue);
-    border:1px solid var(--line);border-radius:20px;
-    padding:1px 9px;background:var(--panel);white-space:nowrap;
+    font-size:8pt;font-weight:700;color:var(--navy-soft);
+    white-space:nowrap;letter-spacing:0.02em;
   }
 
   /* --- campaign stages (도식 4) --- */
   .camp{display:flex;align-items:stretch;gap:6px;}
   .camp .stg{
-    flex:1;border:1.5px solid var(--navy);border-radius:5px;
+    flex:1;border:1.2px solid var(--navy);
     background:#fff;display:flex;flex-direction:column;overflow:hidden;
   }
   .camp .stg .hd{
-    background:var(--navy);color:#fff;font-size:8.2pt;font-weight:700;
-    padding:5px 9px;letter-spacing:0.03em;
+    color:var(--navy);font-size:7.8pt;font-weight:700;
+    padding:4px 9px 3px 9px;letter-spacing:0.14em;
+    border-bottom:1px solid var(--hair);
   }
-  .camp .stg .bd{padding:8px 9px 9px 9px;flex:1;}
-  .camp .stg .bd .ttl{font-size:9.4pt;font-weight:700;color:var(--navy);line-height:1.3;}
-  .camp .stg .bd .sub{font-size:8pt;color:var(--muted);margin-top:3px;line-height:1.35;}
-  .camp .stg.gate{border-color:var(--blue);}
-  .camp .stg.gate .hd{background:var(--blue);}
+  .camp .stg .bd{padding:7px 9px 9px 9px;flex:1;}
+  .camp .stg .bd .ttl{font-size:9.4pt;font-weight:700;color:var(--navy);line-height:1.35;}
+  .camp .stg .bd .sub{font-size:8pt;color:var(--muted);margin-top:3px;line-height:1.4;}
   .camp .stg.gate .bd{background:var(--panel);}
-  .camp .stg.gate .bd .ttl{color:var(--blue);}
-  .camp .stg.unknown{border-style:solid;background:var(--panel);}
+  .camp .stg.unknown .bd{background:var(--panel);}
   .camp .carr{
-    display:flex;align-items:center;color:var(--muted);font-size:11pt;font-weight:700;
+    display:flex;align-items:center;color:var(--muted);font-size:9pt;font-weight:700;
   }
-  .pips{display:flex;gap:4px;margin-top:7px;align-items:center;}
+  .pips{display:flex;gap:5px;margin-top:7px;align-items:center;}
   .pips .pip{
-    width:14px;height:14px;border-radius:3px;border:1.2px solid var(--navy);
+    width:14px;height:14px;border:1.1px solid var(--navy);
     background:#fff;font-size:6.6pt;line-height:12px;text-align:center;
     color:var(--navy);font-weight:700;
   }
   .pips .pip.done{background:var(--navy);color:#fff;}
-  .pips .pip.open{border-color:var(--blue);color:var(--blue);border-style:dashed;}
+  .pips .pip.open{border-color:var(--line);color:var(--navy-soft);}
   .camp-branch{
-    display:flex;align-items:center;gap:8px;margin-top:10px;
-    padding-left:2px;
+    display:flex;align-items:center;gap:8px;margin-top:9px;
   }
-  .camp-branch .bl{
-    font-size:8pt;font-weight:700;color:var(--muted);
-  }
+  .camp-branch .bl{font-size:8pt;font-weight:700;color:var(--muted);letter-spacing:0.02em;}
   .camp-branch .bx{
-    border:1.2px dashed var(--line);border-radius:4px;background:var(--panel);
-    padding:5px 10px;font-size:8.3pt;color:var(--muted);
+    border:1px dashed var(--line);padding:4px 10px;
+    font-size:8.2pt;color:var(--muted);
   }
 
   /* --- intervention layers (도식 1) --- */
@@ -323,80 +297,67 @@
   }
   .tlx .lane-lbl{
     font-size:8pt;font-weight:700;color:var(--navy);
-    text-align:right;line-height:1.25;
+    text-align:right;line-height:1.3;
   }
   .tlx .lane-lbl small{display:block;font-weight:500;color:var(--muted);font-size:7pt;margin-top:1px;}
   .lane{
-    position:relative;border-radius:4px;padding:6px 10px;
-    font-size:8.1pt;line-height:1.3;text-align:center;
+    position:relative;padding:6px 10px;
+    font-size:8.1pt;line-height:1.35;text-align:center;
   }
-  .lane.sit{
-    border:1.2px dashed var(--blue);background:#fff;color:var(--navy-soft);
-  }
+  .lane.sit{border:1.1px dashed var(--line);background:#fff;color:var(--navy-soft);}
   .lane.sit .vm{
     position:absolute;top:-4.5px;width:8px;height:8px;
-    background:#fff;border:1.2px solid var(--blue);transform:rotate(45deg);
+    background:#fff;border:1.1px solid var(--navy-soft);transform:rotate(45deg);
   }
-  .lane.tt{
-    border:1.2px solid var(--blue);background:var(--panel);
-    color:var(--blue);font-weight:600;
-  }
+  .lane.tt{border:1.1px solid var(--line);background:var(--panel);color:var(--navy-soft);font-weight:600;}
   .lane .lane-txt{margin-bottom:4px;}
-  .chips{
-    display:flex;flex-wrap:wrap;gap:4px;justify-content:center;
-  }
+  .chips{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;}
   .tl .chips{margin-top:9px;}
   .chip{
     font-size:7.4pt;font-weight:600;line-height:1.2;
-    border-radius:20px;padding:2px 7px;white-space:nowrap;
+    padding:2px 7px;white-space:nowrap;
   }
   .chip.on{background:var(--navy);color:#fff;border:1px solid var(--navy);}
-  .lane.sit .chip.on,.lane.tt .chip.on{background:var(--blue);border-color:var(--blue);}
-  .chip.off{
-    background:#fff;color:#9aa2af;border:1px dashed var(--line);font-weight:500;
-  }
+  .chip.off{background:#fff;color:#9aa2af;border:1px dashed var(--line);font-weight:500;}
   .chip.mini{padding:1px 6px;font-size:7pt;}
 
   .tl{position:relative;padding:4px 0 2px 0;}
   .tl-track{display:flex;}
   .tl-seg{flex:1;text-align:center;position:relative;padding-top:28px;}
-  .tl-line{position:absolute;top:12px;left:0;right:0;height:3px;background:var(--navy);}
+  .tl-line{position:absolute;top:12px;left:0;right:0;height:2px;background:var(--navy);}
   .tl-seg .mk{
     position:absolute;top:5px;left:50%;transform:translateX(-50%);
     width:16px;height:16px;border-radius:50%;background:#fff;
     border:3px solid #fff;box-shadow:0 0 0 1.5px var(--navy);
   }
-  .tl-seg .mk.stop{background:var(--blue);box-shadow:0 0 0 1.5px var(--blue);}
+  .tl-seg .mk.stop{background:var(--accent);box-shadow:0 0 0 1.5px var(--accent);}
   .tl-seg .nm{font-size:9pt;font-weight:700;color:var(--navy);}
-  .tl-seg .ds{font-size:7.9pt;color:var(--muted);line-height:1.35;margin-top:2px;padding:0 4px;}
-  .tl-seg.hl .nm{color:var(--blue);}
-  .tl-legend{display:flex;gap:18px;justify-content:center;margin-top:12px;font-size:8pt;color:var(--muted);}
+  .tl-seg .ds{font-size:7.9pt;color:var(--muted);line-height:1.4;margin-top:2px;padding:0 4px;}
+  .tl-legend{display:flex;gap:18px;justify-content:center;margin-top:12px;font-size:7.8pt;color:var(--muted);}
   .tl-legend span{display:flex;align-items:center;gap:6px;}
   .tl-legend .d{width:9px;height:9px;border-radius:50%;}
-  .tl-legend .d.stop{background:var(--blue);}
-  .tl-legend .d.play{background:#fff;box-shadow:0 0 0 1px var(--navy);}
+  .tl-legend .d.stop{background:var(--accent);}
 
   /* --- layer stack (도식 2) --- */
   .layers{display:flex;flex-direction:column;gap:0;}
   .lay{
-    border:1.5px solid var(--navy);border-radius:5px;padding:6px 12px;
+    border:1.2px solid var(--navy);padding:6px 12px;
     display:flex;align-items:center;gap:12px;background:#fff;
   }
   .lay .lk{
-    min-width:72px;font-size:8pt;font-weight:700;color:var(--blue);
-    letter-spacing:0.08em;text-transform:uppercase;
+    min-width:64px;font-size:7.8pt;font-weight:700;color:var(--muted);
+    letter-spacing:0.1em;text-transform:uppercase;
   }
-  .lay .lt{font-size:9.5pt;font-weight:700;color:var(--navy);min-width:96px;}
-  .lay .ld{font-size:8.4pt;color:var(--muted);line-height:1.35;flex:1;}
+  .lay .lt{font-size:9.5pt;font-weight:700;color:var(--navy);min-width:78px;}
+  .lay .ld{font-size:8.4pt;color:var(--muted);line-height:1.4;flex:1;}
   .lay .badge{
-    font-size:7.6pt;font-weight:700;border-radius:20px;padding:2px 9px;white-space:nowrap;
+    font-size:7.6pt;font-weight:700;padding:2px 9px;white-space:nowrap;
   }
-  .lay .badge.no{border:1px solid var(--line);color:var(--muted);background:var(--panel);}
-  .lay .badge.yes{background:var(--blue);color:#fff;}
-  .lay.sim{background:var(--panel);border-color:var(--navy);}
-  .lay.nar{border-color:var(--blue);}
+  .lay .badge.no{border:1px solid var(--line);color:var(--muted);background:#fff;}
+  .lay .badge.yes{background:var(--accent);color:#fff;border:1px solid var(--accent);}
+  .lay.sim{background:var(--panel);}
   .lay-arrow{
-    height:11px;margin-left:24px;width:1.5px;background:var(--navy);position:relative;
+    height:11px;margin-left:24px;width:1.2px;background:var(--navy);position:relative;
   }
   .lay-arrow::after{
     content:"";position:absolute;left:-3.5px;bottom:-1px;
@@ -412,14 +373,13 @@
 
 <!-- ======================= COVER ======================= -->
 <section class="cover">
-  <div class="topbar"></div>
-  <div class="toplabel">데이커 월간 해커톤 · 내가 축구 감독이라면</div>
+  <div class="cover-head">
+    <div class="label">데이커 월간 해커톤 · 내가 축구 감독이라면</div>
+  </div>
 
   <div class="cover-body">
-    <div class="eyebrow">월드컵 감독 캠페인 시뮬레이션</div>
-    <h1>현실에서 축덕인 내가,<br>이세계에선 국대 감독<span style="color:var(--blue)">?</span></h1>
-    <div class="rule"></div>
-    <p class="subtitle">실제 대회 데이터 기반 월드컵 감독 캠페인 시뮬레이션</p>
+    <h1>현실에서 축덕인 내가,<br>이세계에선 국대 감독?</h1>
+    <p class="subtitle">실제 대회 데이터 기반<br>월드컵 감독 캠페인 시뮬레이션</p>
   </div>
 
   <div class="cover-foot">
@@ -433,10 +393,10 @@
 
   <!-- 1 -->
   <section class="section">
-    <h2><span class="num">1.</span> 서비스 개요</h2>
+    <h2><span class="num">1</span>서비스 개요</h2>
 
     <h3>한 줄 정의</h3>
-    <div class="concept">조별리그에서 끝난 대한민국의 2026 월드컵을, 사용자가 감독이 되어 우승까지 끌고 가는 <b>웹 기반 감독 캠페인 시뮬레이션</b>임.</div>
+    <p class="lead">조별리그에서 끝난 대한민국의 2026 월드컵을, 사용자가 감독이 되어 우승까지 끌고 가는 웹 기반 감독 캠페인 시뮬레이션임.</p>
 
     <h3>전제</h3>
     <p>2026년 6월, 대한민국은 1승 2패 승점 3으로 조별리그를 마침. 본 서비스는 그 지점에서 갈라지는 <strong>다른 세계선</strong>을 다룸. 실제로 벌어진 결과는 사라지지 않고 <strong>기준선</strong>으로 화면에 남으며, 사용자는 그것을 넘어서야 함.</p>
@@ -444,29 +404,46 @@
     <h3>제목의 의도</h3>
     <p>축구를 아는 사람은 많지만 결정하는 자리에 서는 사람은 없음. 축덕은 포메이션도 알고 교체 타이밍에도 의견이 있으나 권한이 없는 존재임. 본 서비스는 그 간극을 뒤집는 것을 콘셉트로 삼음 — <strong>지식은 이미 있으니, 권한을 준다.</strong></p>
 
-    <h3>차별점 요약</h3>
-    <p>공모 예시 네 가지(드래그앤드롭 전술 보드 / 상대 분석 기반 전술 추천 / "내가 감독이었다면" 시나리오 / 스탯 기반 교체·전술 변경)를 <strong>모두 포함</strong>하되, 단일 경기가 아닌 <strong>조별리그부터 결승까지 8경기 캠페인</strong>으로 확장한 점이 핵심 차별점임.</p>
+    <h3>차별점</h3>
+    <p>공모 예시 네 가지(드래그앤드롭 전술 보드 / 상대 분석 기반 전술 추천 / "내가 감독이었다면" 시나리오 / 스탯 기반 교체·전술 변경)를 모두 포함함. 그 위에 아래 세 가지를 더함.</p>
+
+    <div class="item">
+      <h4><span class="n">1.</span>축구의 실제 규정이 곧 게임 규칙임</h4>
+      <p>개입 시점을 2026 신설 하이드레이션 브레이크에서 가져오고, 개입 층마다 권한을 나눔 — 선수를 전원 소집한 때에만 구조를 바꿀 수 있고, 경기가 흐르는 중에는 교체와 외침뿐임. 교체는 IFAB 기준 5명·기회 3회이며 하프타임은 예외임. <strong>"언제 무엇을 할 수 있는가"라는 제약 자체가 전략의 축이 됨.</strong></p>
+    </div>
+
+    <div class="item">
+      <h4><span class="n">2.</span>결정이 기록되고, 경기 후에 추궁당함</h4>
+      <p>모든 개입이 결정 로그로 남고 경기 후 기자회견 질문이 그 기록에서 생성됨. 킥오프 플랜에서 얼마나 이탈했는지가 질문을 바꾸며, 답변의 톤이 다음 날 신문 1면 헤드라인으로 이어짐. <strong>단발 시뮬레이션에는 없는, 결정이 서사로 회수되는 구조임.</strong></p>
+    </div>
+
+    <div class="item">
+      <h4><span class="n">3.</span>상대마다 정답이 다르며, 그것을 검증함</h4>
+      <p>같은 전술이 상대에 따라 유·불리가 뒤집히도록 설계하고, 이를 배치 시뮬레이션 회귀 검증으로 고정함. 강팀에게 통하는 수가 약팀에게는 손해가 되고, 잘못된 판단은 실제로 승률을 떨어뜨림. <strong>조작 가능한 값이 장식이 아니라 실제 변수임.</strong></p>
+    </div>
+
+    <p>이 세 가지를 <strong>조별리그부터 결승까지 8경기 캠페인</strong>에 담아 한 경기가 아닌 여정으로 구성함.</p>
   </section>
 
   <!-- 2 -->
   <section class="section">
-    <h2><span class="num">2.</span> "감독 경험" 설계 의도</h2>
+    <h2><span class="num">2</span>"감독 경험" 설계 의도</h2>
 
     <h3>감독은 무엇을 하는 사람인가</h3>
     <p>감독은 공을 차지 않음. <strong>결정만 함.</strong> 따라서 감독 게임의 재미는 조작의 화려함이 아니라 <strong>결정의 무게</strong>에서 나온다고 보고, 아래 세 원칙을 설계 기준으로 삼음.</p>
 
-    <div class="principle">
-      <div class="pt"><span class="pn">원칙 1</span>모든 결정에 대가가 있음</div>
+    <div class="item">
+      <h4><span class="n">1.</span>모든 결정에 대가가 있음</h4>
       <p>압박을 올리면 볼을 높은 위치에서 회수하나 체력이 타고 파울이 늘어남. 라인을 올리면 상대를 가두나 뒷공간을 내줌. <strong>공짜 선택이 없어야 결정이 결정이 됨.</strong> 각 조작에는 예상 효과와 대가를 즉시 표시함.</p>
     </div>
 
-    <div class="principle">
-      <div class="pt"><span class="pn">원칙 2</span>근거 없이 조언하지 않음</div>
+    <div class="item">
+      <h4><span class="n">2.</span>근거 없이 조언하지 않음</h4>
       <p>코치진은 데이터에 근거가 있을 때만 발언함. 할 말이 없으면 침묵하며, 상황에 따라 등장 인원이 달라짐. 억지 근거로 조언 수를 채우지 않음. 코치들의 의견은 서로 충돌할 수 있고, 사용자는 <strong>전부 무시하고 자기 판단으로 갈 수 있음.</strong></p>
     </div>
 
-    <div class="principle">
-      <div class="pt"><span class="pn">원칙 3</span>상대가 다르면 정답이 다름</div>
+    <div class="item">
+      <h4><span class="n">3.</span>상대가 다르면 정답이 다름</h4>
       <p>강팀 상대의 최적해와 약팀 상대의 최적해가 달라야 전술이 선택이 됨. 상대의 후방 전개 능력·공격진의 질·선호 포메이션에 따라 권장 전술이 갈리며, 잘못된 판단은 실제로 승률을 떨어뜨림.</p>
     </div>
 
@@ -475,7 +452,7 @@
 
     <table>
       <thead>
-        <tr><th style="width:17%">층</th><th style="width:45%">시점</th><th>권한</th></tr>
+        <tr><th style="width:14%">층</th><th style="width:49%">시점</th><th>권한</th></tr>
       </thead>
       <tbody>
         <tr><td><strong>전원 소집</strong></td><td>전반 하이드레이션 · 하프타임 · 후반 하이드레이션</td><td>포메이션 · 태세 · 전 전술 축 · 교체 · 팀토크</td></tr>
@@ -504,19 +481,19 @@
                 <div class="nm">킥오프</div>
                 <div class="ds">전술 센터에서 설계한 선발·전술로 시작</div>
               </div>
-              <div class="tl-seg hl">
+              <div class="tl-seg">
                 <div class="tl-line"></div>
                 <div class="mk stop"></div>
                 <div class="nm">하이드레이션</div>
                 <div class="ds">전반</div>
               </div>
-              <div class="tl-seg hl">
+              <div class="tl-seg">
                 <div class="tl-line"></div>
                 <div class="mk stop"></div>
                 <div class="nm">하프타임</div>
                 <div class="ds">전술 조정 · 교체 · 팀토크</div>
               </div>
-              <div class="tl-seg hl">
+              <div class="tl-seg">
                 <div class="tl-line"></div>
                 <div class="mk stop"></div>
                 <div class="nm">하이드레이션</div>
@@ -577,7 +554,7 @@
 
   <!-- 3 -->
   <section class="section">
-    <h2><span class="num">3.</span> 페이지 구성</h2>
+    <h2><span class="num">3</span>페이지 구성</h2>
     <table class="two">
       <thead>
         <tr><th>화면</th><th>역할</th></tr>
@@ -596,7 +573,7 @@
 
   <!-- 4 -->
   <section class="section">
-    <h2><span class="num">4.</span> 핵심 인터랙션</h2>
+    <h2><span class="num">4</span>핵심 인터랙션</h2>
     <table class="two">
       <thead>
         <tr><th>인터랙션</th><th>내용</th></tr>
@@ -618,7 +595,7 @@
 
   <!-- 5 -->
   <section class="section">
-    <h2><span class="num">5.</span> 데이터 활용 방식</h2>
+    <h2><span class="num">5</span>데이터 활용 방식</h2>
 
     <h3>선수·팀 데이터</h3>
     <p>12개국 312명의 실명·포지션·등번호를 교차 검증하여 구성함. 능력치는 공개된 경기 기록과 평가를 근거로 6축(슈팅·패스·드리블·수비·피지컬·스피드)으로 환산하며, 골키퍼는 별도 지표를 사용함.</p>
@@ -627,8 +604,7 @@
     <p>각 팀의 점유율·패스 성공률·슈팅·파울 등 실측 지표를 <strong>시뮬레이션 검증 목표</strong>로 사용함. 기본 상태의 시뮬 결과가 실제 대회 평균과 일정 범위 안에서 일치하는지를 자동 검증하여, 팀별 특성이 결과에 드러나도록 함.</p>
 
     <h3>재현 가능한 시뮬레이션</h3>
-    <p>경기 결과는 <strong>시드 기반 결정론</strong>으로 산출함. 같은 전술·같은 시드는 항상 같은 결과를 내며, 이는 리더보드 점수의 신뢰성과 밸런스 검증의 근거가 됨.</p>
-    <div class="concept"><b>AI는 결과 계산에 관여하지 않음</b> — 서사 계층에만 사용함.</div>
+    <p>경기 결과는 <strong>시드 기반 결정론</strong>으로 산출함. 같은 전술·같은 시드는 항상 같은 결과를 내며, 이는 리더보드 점수의 신뢰성과 밸런스 검증의 근거가 됨. <strong>AI는 결과 계산에 관여하지 않음</strong> — 서사 계층에만 사용함.</p>
 
     <figure>
       <div class="diagram">
@@ -668,7 +644,7 @@
 
   <!-- 6 -->
   <section class="section">
-    <h2><span class="num">6.</span> 주요 사용 흐름</h2>
+    <h2><span class="num">6</span>주요 사용 흐름</h2>
 
     <figure>
       <div class="diagram">
@@ -798,7 +774,7 @@
 
   <!-- 7 -->
   <section class="section">
-    <h2><span class="num">7.</span> 개발 범위</h2>
+    <h2><span class="num">7</span>개발 범위</h2>
     <p>기획서 제출 시점 기준으로 구현 상태와 향후 계획을 구분하여 기재함.</p>
 
     <table class="two">
