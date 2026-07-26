@@ -14,6 +14,9 @@
 import type { MatchEvent, MatchEventType, MatchState, SideState } from '../../../engine/types'
 import type { ChoreoStep } from '../choreography'
 import { slotCoords } from '../formations'
+// 보폭 모델은 표시 계층 전체가 **하나**를 공유한다(player3d가 정본).
+// player3d는 three를 정적 import하지 않으므로 이 import로 번들이 커지지 않는다.
+import { MIN_GAIT_SPEED, strideLength } from './player3d'
 import {
   PITCH_H, PITCH_W, toWorld,
   type BallPose, type FrameEvent, type FrameState, type PlayerAction, type PlayerPose,
@@ -58,14 +61,18 @@ export const CELEBRATE_MS = 2000
 export const DEFAULT_DWELL_MS = 3000
 /** 킥 모션이 유지되는 구간 진행도. */
 const KICK_WINDOW = 0.3
-/** 러닝 사이클 1주기 이동거리(m) — actionT(발 위상) 누적에 쓴다. */
-const STRIDE = 2.2
 /** focus 스무딩 시상수(s). */
 const FOCUS_TAU = 0.4
 /** yaw 스무딩 시상수(s). */
 const YAW_TAU = 0.12
-/** 이 속도(m/s) 미만은 idle. */
+/** 이 속도(m/s) 이상이면 run으로 진입한다. */
 const IDLE_SPEED = 0.4
+/**
+ * run에서 idle로 빠지는 문턱(m/s) — 진입 문턱보다 낮게 두는 **히스테리시스**.
+ * 분리 밀어내기·목표 흔들림 때문에 실측 속도는 문턱 근처에서 프레임마다 오르내리는데,
+ * 단일 문턱이면 run↔idle이 깜빡이며 매번 0.3s 크로스페이드가 재시작돼 발이 떤다.
+ */
+const RUN_EXIT_SPEED = IDLE_SPEED * 0.6
 /** 피치 밖으로 나가지 않게 두는 여유(m). */
 const EDGE_MARGIN = 0.5
 
@@ -544,16 +551,23 @@ export function computeFrame(input: FrameInput): FrameState {
   // ── 5) 액션 ──────────────────────────────────────────────────────────
   const players: PlayerPose[] = posed.map(({ p, pp, x, z, speed }) => {
     // yaw: 이동 방향(정지 시 볼 방향)을 스무딩해 따라간다.
-    const moving = speed >= IDLE_SPEED
+    const wasRun = pp?.action === 'run'
+    const moving = speed >= (wasRun ? RUN_EXIT_SPEED : IDLE_SPEED)
     const aim = moving
       ? Math.atan2(z - (pp?.z ?? z), x - (pp?.x ?? x))
       : Math.atan2(ball.z - z, ball.x - x)
     const yaw = pp ? approachAngle(pp.yaw, aim, dt > 0 ? 1 - Math.exp(-dt / YAW_TAU) : 0) : aim
 
-    let action: PlayerAction = speed >= IDLE_SPEED ? 'run' : 'idle'
-    let actionT = speed >= IDLE_SPEED
-      ? (((pp?.actionT ?? 0) + (speed * dt) / STRIDE) % 1 + 1) % 1
-      : (pp?.actionT ?? 0)
+    // 보폭 위상 — **이동거리 / 공유 보폭 모델**로 누적한다. 액션과 무관하게 항상 진행해야
+    // 킥·세리머니 뒤 러닝으로 복귀할 때 다리가 튀지 않는다. 최초 프레임은 선수별 해시로
+    // 분산시켜 22명이 한 몸처럼 걷지 않게 한다.
+    const prevPhase = pp?.gaitPhase ?? unit(`gait:${p.id}`)
+    const stepV = Math.max(speed, MIN_GAIT_SPEED)
+    const gaitPhase = (((prevPhase + (stepV * dt) / strideLength(speed)) % 1) + 1) % 1
+
+    let action: PlayerAction = moving ? 'run' : 'idle'
+    // run의 actionT는 곧 보폭 위상이다(예전에는 별도 상수 보폭으로 계산돼 렌더러가 무시했다).
+    let actionT = moving ? gaitPhase : (pp?.actionT ?? 0)
     if (kickerId === p.id) {
       action = 'kick'
       actionT = clamp((sample?.u ?? 0) / KICK_WINDOW, 0, 1)
@@ -571,7 +585,7 @@ export function computeFrame(input: FrameInput): FrameState {
       actionT = celebrateT
     }
 
-    return { id: p.id, side: p.side, number: p.number, x, z, yaw, speed, action, actionT }
+    return { id: p.id, side: p.side, number: p.number, x, z, yaw, speed, action, actionT, gaitPhase }
   })
 
   // ── 6) focus 스무딩 ──────────────────────────────────────────────────

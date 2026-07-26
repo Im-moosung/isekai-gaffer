@@ -88,24 +88,41 @@ export function contrastOn(color: number): number {
   return luminance(color) > 0.45 ? 0x14181f : 0xffffff
 }
 
+// ── 신체 치수(m) ─────────────────────────────────────────────────────────────
+// 총신장 ≈ 1.80, 머리 지름 ≈ 0.23 ⇒ 약 7.8등신(7.5등신 근사).
+// 보행 역기구학이 이 값들을 직접 쓰므로 리그 조립부보다 앞에 둔다.
+const HIP_Y = 0.94
+const THIGH_LEN = 0.47
+const SHIN_LEN = 0.46
+const SHOULDER_Y = 0.5 // 힙(몸통 피벗) 기준 어깨 높이 → 월드 1.44
+const UPPER_ARM = 0.3
+const FOREARM = 0.26
+const LEG_Z = 0.1
+const ARM_Z = 0.195
+
 // ── 러닝 사이클 ───────────────────────────────────────────────────────────────
 
 /** 한 스트라이드(=2보, 위상 0→2π) 동안의 관절 각(rad)과 몸통 오프셋. */
 export interface GaitAngles {
-  /** 힙 스윙(양수 = 다리가 앞으로) */
+  /** 힙 스윙(양수 = 허벅지가 앞으로) */
   hipL: number
   hipR: number
   /** 무릎(음수 = 굴곡, 정강이가 뒤로) */
   kneeL: number
   kneeR: number
-  /** 어깨 스윙(양수 = 팔이 앞으로) — 같은 쪽 다리와 교차한다 */
+  /** 발목(정강이 기준 상대각). 접지 중에는 발바닥이 지면과 평행해진다 */
+  ankleL: number
+  ankleR: number
+  /** 어깨 스윙(양수 = 팔이 앞으로) — 같은 쪽 발의 전후 위치와 교차한다 */
   shoulderL: number
   shoulderR: number
   /** 팔꿈치(양수 = 굴곡, 하완이 앞으로) */
   elbowL: number
   elbowR: number
-  /** 골반 상하 바운스(m, 부호 있음) */
+  /** 골반 수직 오프셋(m, 부호 있음). 선 자세 기준이며 러닝 중에는 항상 ≤ 0이다 */
   bounce: number
+  /** 접지 최저점 대비 골반 상승량(m, ≥ 0) — 체공 정도. 그림자 크기에 쓴다 */
+  bob: number
   /** 전경 기울기(rad, 양수 = 앞으로 숙임) — 속도 비례 */
   lean: number
   /** 몸통 좌우 롤(rad) */
@@ -115,10 +132,6 @@ export interface GaitAngles {
 }
 
 const GAIT_FLOOR = 0.18 // 속도 0에서도 남는 최소 진폭(제자리 걸음이 얼어붙지 않게)
-const HIP_BIAS = 0.1 // 달릴수록 힙이 살짝 앞으로 눌린다
-const KNEE_BASE = 0.14
-const KNEE_SWING = 1.35 // 유각기(스윙) 무릎 굴곡
-const KNEE_STANCE = 0.22 // 입각기(디딤) 충격 흡수
 const ARM_AMP = 0.62
 const ELBOW_BASE = 0.28
 const ELBOW_MID = 0.75
@@ -127,94 +140,218 @@ const BOUNCE_AMP = 0.052
 const LEAN_MAX = 0.3
 const ROLL_AMP = 0.075
 const TWIST_AMP = 0.16
+/** 유각기 발목 저측굴곡(rad) — 발끝이 아래로 떨어진다. */
+const TOE_AMP = 0.45
+
+// ── 보행 기하 상수 ──────────────────────────────────────────────────────────
+// 아래 값들은 "발이 미끄러지지 않는다"를 **풀 수 있는 조건**을 만든다.
+// 힙 관절 높이 HIP_Y에서 발목이 지면 접촉 높이 ANKLE_H까지 내려가려면 다리가
+// STAND_DROP만큼 뻗어야 하고, 그 상태에서 앞뒤로 E만큼 더 도달해야 접지 구간이
+// 생긴다. 즉 다리 길이 > STAND_DROP 이어야 한다(기존 0.86 < 0.90이라 발이 애초에
+// 땅에 닿지 못했다 — 미끄러짐의 숨은 원인 중 하나).
+
+/** 발바닥이 지면에 닿을 때의 발목 관절 높이(m) = 부츠 중심 오프셋 + 두께 절반. */
+export const ANKLE_H = 0.04
+/** 힙 관절 → 발목의 수직 거리(m), 선 자세 기준. */
+const STAND_DROP = HIP_Y - ANKLE_H
+/** 무릎이 잠기지 않도록 링크 합의 99.5%까지만 뻗는다. */
+const LEG_REACH = (THIGH_LEN + SHIN_LEN) * 0.995
 
 /**
- * 힙 스윙 진폭(rad). **보폭에 연동**한다 — 접지 중 발이 몸통 대비 정확히 -v로 흘러야
- * 발이 미끄러지지 않는다. 발의 최대 상대 속도 ≈ L·A·ω, ω = 2πv/stride 이므로
- * A = stride / (2π·L). 속도와 무관한 상수 진폭을 쓰면 저속·고속 양쪽에서 미끄러진다.
+ * 접지율(duty factor) — 한 다리가 한 스트라이드 중 지면에 붙어 있는 시간 비율.
+ * 빠를수록 접지 시간이 짧고 체공이 길다(문헌: 스프린트 ≈ 0.21).
  *
- * LEG_EFF는 실측 튜닝값(무릎 굴곡이 발 궤적에 더해지므로 기하학적 다리 길이 0.86보다
- * 크다). 이 값에서 접지 슬립: v=2 4.3% / v=3 2.8% / v=5 1.1% / v=8 1.2%.
- * (0.80이면 v=8에서 9.4%, 1.00이면 12.9%로 나빠진다.)
+ * 이 값이 접지 구간의 이동거리 L·δ를 정하고, 그 절반이 다리가 앞뒤로 도달해야 하는
+ * 거리 E가 된다. E가 커질수록 골반을 더 낮춰야 발이 닿으므로(crouch),
+ * **보행 δ를 실측치(≈0.6)까지 올리면 걷는 자세가 앉은 자세가 된다.**
+ * 다리 길이 0.93m·힙 높이 0.94m라는 이 리그의 비율에서 타협점이 0.44다.
  */
-const LEG_EFF = 0.87
-function hipAmplitude(sp: number): number {
-  return strideLength(sp) / (TAU * LEG_EFF)
+function dutyFactor(eff: number): number {
+  return 0.44 - 0.23 * eff
 }
 
-/** 한쪽 다리의 힙·무릎 — 반대쪽은 같은 식에 phase+π를 넣는다(정확한 반대 위상). */
-function legAngles(
-  hipAmp: number,
-  amp: number,
-  eff: number,
-  phase: number,
-): { hip: number; knee: number } {
-  const s = Math.sin(phase)
-  const c = Math.cos(phase)
-  // swing: phase=0에서 1(유각 중간 — 발을 접어 끌어올린다), phase=π(입각 중간)에서 0
-  const swing = 0.5 + 0.5 * c
-  const stance = 0.5 - 0.5 * c
+/** 유각기 발 지면 클리어런스(m) — 빠를수록 높이 든다. */
+function swingLift(eff: number): number {
+  return 0.07 + 0.1 * eff
+}
+
+/**
+ * 2링크 역기구학. 힙 로컬 좌표 (fx = 앞, fy = 아래)에 발목을 놓는 힙·무릎 각을 푼다.
+ * 무릎이 앞으로 나오는 해(사람 다리)를 고른다. 도달 불가면 반경을 클램프한다
+ * (유각기에만 발생하며 공중이라 보이지 않는다).
+ */
+export function solveLeg(fx: number, fy: number): { hip: number; knee: number } {
+  const r = clamp(Math.hypot(fx, fy), Math.abs(THIGH_LEN - SHIN_LEN) + 1e-4, LEG_REACH)
+  const beta = Math.atan2(fx, fy) // 힙→발목 방향(0 = 바로 아래)
+  const d = Math.acos(clamp((THIGH_LEN * THIGH_LEN + r * r - SHIN_LEN * SHIN_LEN) / (2 * THIGH_LEN * r), -1, 1))
+  const g = Math.acos(clamp((SHIN_LEN * SHIN_LEN + r * r - THIGH_LEN * THIGH_LEN) / (2 * SHIN_LEN * r), -1, 1))
+  return { hip: beta + d, knee: -(d + g) }
+}
+
+interface GaitPlan {
+  /** 포화된 유효 속도(m/s) */
+  sp: number
+  eff: number
+  amp: number
+  /** 한 스트라이드 이동거리(로컬 단위 — root.scale 보정 후) */
+  L: number
+  duty: number
+  /** 접지 구간 반각(rad) = π·duty */
+  a: number
+  /** 접지 전후 도달거리 절반(m) */
+  E: number
+  /** 접지 최저점에서의 골반 하강량(m, ≥ 0) */
+  crouch: number
+  bobAmp: number
+  lift: number
+}
+
+/**
+ * 속도에서 보행 기하를 유도한다.
+ * crouch는 튜닝값이 아니라 **역기구학 도달 조건에서 나온 값**이다 —
+ * 접지 구간 끝(발이 가장 멀리 뻗은 순간)에 hypot(E, fy) = LEG_REACH가 되도록
+ * 골반 높이를 낮춘다. 빨리 달릴수록 보폭이 길어 더 낮게 앉는다(실제와 같다).
+ */
+function gaitPlan(speed: number, scale: number): GaitPlan {
+  const sp = clamp(speed, 0, SPRINT_SPEED)
+  const eff = sp / SPRINT_SPEED
+  const amp = GAIT_FLOOR + (1 - GAIT_FLOOR) * eff
+  const duty = dutyFactor(eff)
+  const s = scale > 1e-6 ? scale : 1
+  // root.scale이 걸린 상태에서도 **월드** 보폭이 strideLength(v)여야 하므로 로컬로 환산한다.
+  const L = strideLength(sp) / s
+  const bobAmp = BOUNCE_AMP * amp
+  const E = Math.min((L * duty) / 2, LEG_REACH * 0.96)
+  // 접지 구간 끝의 골반 상승량(접지 중 bob은 양끝에서 최대, 중간에서 0)
+  const bobEnd = bobAmp * (0.5 - 0.5 * Math.cos(TAU * duty))
+  const crouch = Math.max(0, STAND_DROP + bobEnd - Math.sqrt(Math.max(1e-6, LEG_REACH * LEG_REACH - E * E)))
+  return { sp, eff, amp, L, duty, a: Math.PI * duty, E, crouch, bobAmp, lift: swingLift(eff) }
+}
+
+/** 골반 수직 오프셋. 접지 중간(위상 0·π)에서 최저, 체공(±π/2)에서 최고 — 실제 러닝의 COM 궤적. */
+function gaitBob(plan: GaitPlan, phase: number): number {
+  return plan.bobAmp * (0.5 - 0.5 * Math.cos(2 * phase))
+}
+
+/** 한쪽 발의 힙 로컬 목표 위치(fx = 앞, fy = 아래)와 접지 여부. */
+export interface FootTarget {
+  fx: number
+  fy: number
+  grounded: boolean
+  /** 유각기 진행도 0~1(접지 중에는 -1) */
+  psi: number
+}
+
+/**
+ * 발 궤적 — 이 함수가 "발이 미끄러지지 않는다"의 정의 그 자체다.
+ *
+ * 접지 구간(|φ-π| ≤ a)에서 fx는 위상에 대해 **정확히 -L/2π 기울기의 직선**이다.
+ * 위상은 이동거리로 적분되므로(dφ/dt = 2π·v/L) dfx/dt = -v가 되어
+ * 발의 대지 속도가 정확히 0이 된다. 눈대중 사인파가 아니라 이 등식이 근거다.
+ *
+ * 유각 구간은 양끝에서 같은 기울기를 갖는 3차 에르미트로 이어 붙인다(C1 연속) —
+ * 착지 순간 발이 이미 -v로 흐르고 있어야 접지 시작에서 튀지 않는다.
+ */
+function footTarget(plan: GaitPlan, phase: number): FootTarget {
+  let d = ((phase - Math.PI) % TAU + TAU) % TAU
+  if (d > Math.PI) d -= TAU
+  const fyGround = STAND_DROP - plan.crouch + gaitBob(plan, phase)
+  if (Math.abs(d) <= plan.a) {
+    return { fx: -(plan.L / TAU) * d, fy: fyGround, grounded: true, psi: -1 }
+  }
+  const span = TAU - 2 * plan.a
+  const psi = (d > plan.a ? d - plan.a : d + TAU - plan.a) / span
+  // 양끝 기울기 m을 맞춘 3차 에르미트: g(0)=0, g(1)=1, g'(0)=g'(1)=m
+  const m = -(1 - plan.duty) / plan.duty
+  const g = m * (2 * psi ** 3 - 3 * psi ** 2 + psi) + (-2 * psi ** 3 + 3 * psi ** 2)
   return {
-    hip: hipAmp * s + HIP_BIAS * eff,
-    // 세제곱으로 유각 중간에만 크게 굽힌다(디딤발은 거의 편 상태를 유지 → 크라우칭 방지)
-    knee: -(KNEE_BASE + KNEE_SWING * amp * swing * swing * swing + KNEE_STANCE * amp * stance),
+    fx: -plan.E + 2 * plan.E * g,
+    fy: fyGround - plan.lift * Math.sin(Math.PI * psi),
+    grounded: false,
+    psi,
   }
 }
 
-/** 한쪽 팔의 어깨·팔꿈치 — 같은 쪽 다리와 반대 위상(교차 스윙). */
-function armAngles(amp: number, phase: number): { shoulder: number; elbow: number } {
-  const s = Math.sin(phase)
+/**
+ * 왼발의 힙 로컬 목표 위치·접지 여부(오른발은 phase+π). 접지 계약을 외부에서
+ * 검증할 수 있게 공개한다 — 어느 위상이 입각기인지 알아야 슬립을 잴 수 있다.
+ */
+export function gaitFoot(speed: number, phase: number, scale = 1): FootTarget {
+  return footTarget(gaitPlan(speed, scale), phase)
+}
+
+/** 한쪽 다리의 힙·무릎·발목. 발목은 접지 중 발바닥을 지면과 평행하게 유지한다. */
+function legFromFoot(f: FootTarget): { hip: number; knee: number; ankle: number } {
+  const { hip, knee } = solveLeg(f.fx, f.fy)
+  // 발바닥 수평 유지 = 힙+무릎+발목 = 0. 유각기에는 발끝을 살짝 떨어뜨린다.
+  const ankle = -(hip + knee) - (f.grounded ? 0 : TOE_AMP * Math.sin(Math.PI * f.psi))
+  return { hip, knee, ankle }
+}
+
+/** 한쪽 팔의 어깨·팔꿈치 — 같은 쪽 **발**의 전후 위치와 반대 위상(교차 스윙). */
+function armAngles(amp: number, swing: number): { shoulder: number; elbow: number } {
   return {
-    shoulder: -ARM_AMP * amp * s,
-    elbow: ELBOW_BASE + amp * (ELBOW_MID + ELBOW_AMP * -s), // 팔이 앞으로 올 때 더 접힌다
+    shoulder: -ARM_AMP * amp * swing,
+    elbow: ELBOW_BASE + amp * (ELBOW_MID + ELBOW_AMP * -swing), // 팔이 앞으로 올 때 더 접힌다
   }
 }
 
 /**
  * 러닝/워킹 한 프레임의 전신 각도. 결정론 순수 함수.
  * @param speed m/s (0 이하는 0, SPRINT_SPEED 이상은 포화)
- * @param phase 누적 위상(rad) — advancePhase()로 적분한 값
+ * @param phase 누적 위상(rad) — movement의 gaitPhase(×2π) 또는 advancePhase()의 값
+ * @param scale root.scale(체격 변주). 월드 보폭을 유지하려면 로컬 궤적을 1/scale 해야 한다
  */
-export function gaitAngles(speed: number, phase: number): GaitAngles {
-  const sp = clamp(speed, 0, SPRINT_SPEED)
-  const eff = sp / SPRINT_SPEED
-  const amp = GAIT_FLOOR + (1 - GAIT_FLOOR) * eff
-  const hipAmp = hipAmplitude(sp)
+export function gaitAngles(speed: number, phase: number, scale = 1): GaitAngles {
+  const plan = gaitPlan(speed, scale)
   const opp = phase + Math.PI
 
-  const l = legAngles(hipAmp, amp, eff, phase)
-  const r = legAngles(hipAmp, amp, eff, opp)
-  const al = armAngles(amp, phase)
-  const ar = armAngles(amp, opp)
+  const fl = footTarget(plan, phase)
+  const fr = footTarget(plan, opp)
+  const l = legFromFoot(fl)
+  const r = legFromFoot(fr)
+  // 팔 스윙 세기는 발의 전후 위치를 도달거리로 정규화한 값(유각 오버슛은 클램프)
+  const norm = (fx: number): number => clamp(fx / Math.max(plan.E, 1e-3), -1.2, 1.2)
+  const al = armAngles(plan.amp, norm(fl.fx))
+  const ar = armAngles(plan.amp, norm(fr.fx))
+  const bob = gaitBob(plan, phase)
 
   return {
     hipL: l.hip,
     hipR: r.hip,
     kneeL: l.knee,
     kneeR: r.knee,
+    ankleL: l.ankle,
+    ankleR: r.ankle,
     shoulderL: al.shoulder,
     shoulderR: ar.shoulder,
     elbowL: al.elbow,
     elbowR: ar.elbow,
-    // 한 스트라이드에 두 번(보마다). 디딤 중간(phase 0·π)에서 0, 체공에서 최대.
-    // 음수로 내려가지 않게 해 발이 잔디를 파고들지 않는다.
-    bounce: BOUNCE_AMP * amp * (0.5 - 0.5 * Math.cos(2 * phase)),
-    lean: LEAN_MAX * (0.25 * eff + 0.75 * eff * eff),
-    roll: ROLL_AMP * amp * Math.sin(phase),
-    twist: TWIST_AMP * amp * Math.sin(phase),
+    bounce: bob - plan.crouch,
+    bob,
+    lean: LEAN_MAX * (0.25 * plan.eff + 0.75 * plan.eff * plan.eff),
+    roll: ROLL_AMP * plan.amp * Math.sin(phase),
+    twist: TWIST_AMP * plan.amp * Math.sin(phase),
   }
 }
 
-/** 한 스트라이드(2보)에 나아가는 거리(m). 빠를수록 보폭이 길어져 케이던스가 폭주하지 않는다. */
+/**
+ * 한 스트라이드(2보)에 나아가는 거리(m). 빠를수록 보폭이 길어져 케이던스가 폭주하지 않는다.
+ * **movement와 player3d가 공유하는 단 하나의 보폭 모델**이다 — 두 계층이 다른 보폭을 쓰면
+ * 위상 진행 속도와 발 궤적 기울기가 어긋나 그 차이가 그대로 미끄러짐이 된다.
+ * SPRINT_SPEED에서 포화시키는 이유도 같다(러닝 사이클 진폭과 같은 지점에서 포화해야 한다).
+ */
 export function strideLength(speed: number): number {
-  return 1.1 + 0.28 * clamp(speed, 0, 12)
+  return 1.1 + 0.28 * clamp(speed, 0, SPRINT_SPEED)
 }
 
 /** 정지에 가까워도 다리가 완전히 멈추지 않도록 하는 최소 보행 속도(m/s). */
-const MIN_GAIT_SPEED = 0.35
+export const MIN_GAIT_SPEED = 0.35
 
 /**
  * 누적 거리 기반 위상 적분 — 프레임 dt가 흔들려도 걸음 속도가 일정하다.
+ * movement.computeFrame이 gaitPhase를 공급하지 못할 때만 쓰이는 폴백이며,
+ * 같은 strideLength를 쓰므로 두 경로의 케이던스는 동일하다.
  * dt는 0~0.1s로 클램프(탭 비활성 복귀 시 위상 점프 방지). 결과는 [0, TAU).
  */
 export function advancePhase(phase: number, speed: number, dt: number): number {
@@ -232,8 +369,12 @@ export interface KickAngles {
   hipKick: number
   /** 차는 다리 무릎(음수 = 굴곡) */
   kneeKick: number
-  hipSupport: number
-  kneeSupport: number
+  /**
+   * 디딤 다리 하중 0~1(0 → 1 → 0). 디딤 다리의 관절각은 접지 역기구학이 풀므로
+   * 여기서는 **하중만** 내보낸다(예전의 hipSupport·kneeSupport 상수 각도는
+   * 다리 길이를 바꾸면 즉시 지면을 파고들어 접지 계약을 깨뜨렸다).
+   */
+  plant: number
   /** 상체(양수 = 앞으로 숙임, 음수 = 뒤로 젖힘) */
   torsoLean: number
   /** 반대편 팔 균형 스윙 */
@@ -277,12 +418,10 @@ export function kickAngles(t: number): KickAngles {
     armSwing = 0.95 * (1 - p)
   }
 
-  const plant = Math.sin(Math.PI * u) // 디딤발 하중(0 → 1 → 0)
   return {
     hipKick,
     kneeKick,
-    hipSupport: 0.14 * plant,
-    kneeSupport: -(0.18 + 0.3 * plant),
+    plant: Math.sin(Math.PI * u), // 디딤발 하중(0 → 1 → 0)
     torsoLean,
     armSwing,
   }
@@ -328,10 +467,11 @@ export interface DiveAngles {
   tuck: number
 }
 
-const DIVE_ARC = 0.55
+const DIVE_ARC = 0.5
 // 옆으로 누우면 어깨·팔(로컬 z ±0.195)과 손이 아래로 내려온다. 그 반폭만큼 띄워야
-// 몸이 잔디를 파고들지 않는다(실측: 이 값에서 최대 관통 3cm 이하).
-const DIVE_GROUND = 0.35
+// 몸이 잔디를 파고들지 않는다. B-2에서 다리가 0.05m 길어져 접힌 다리도 더 아래로
+// 내려오므로 그만큼 올렸다(실측: 이 값에서 양방향 관통 0 이하).
+const DIVE_GROUND = 0.41
 
 /** 도약 → 체공 → 옆으로 눕기. t는 0~1 클램프, dir는 ±1(0이면 +1). */
 export function diveAngles(t: number, dir: number): DiveAngles {
@@ -366,16 +506,6 @@ export interface PlayerRig {
   apply(pose: PlayerPose, clockT: number): void
   dispose(): void
 }
-
-// 신체 치수(m) — 총신장 ≈ 1.80, 머리 지름 ≈ 0.23 ⇒ 약 7.8등신(7.5등신 근사)
-const HIP_Y = 0.94
-const THIGH_LEN = 0.44
-const SHIN_LEN = 0.42
-const SHOULDER_Y = 0.5 // 힙(몸통 피벗) 기준 어깨 높이 → 월드 1.44
-const UPPER_ARM = 0.3
-const FOREARM = 0.26
-const LEG_Z = 0.1
-const ARM_Z = 0.195
 
 const SKIN_TONES = [0xf0c9a4, 0xe0ac7e, 0xc68642, 0xa2673f, 0x7c4a26]
 const HAIR_TONES = [0x141010, 0x2b1d14, 0x0d0d10, 0x4a2f1a, 0x5d4030]
@@ -504,6 +634,8 @@ interface Joints {
   hipR: Three.Group
   kneeL: Three.Group
   kneeR: Three.Group
+  ankleL: Three.Group
+  ankleR: Three.Group
   shoulderL: Three.Group
   shoulderR: Three.Group
   elbowL: Three.Group
@@ -514,13 +646,24 @@ interface Joints {
 /** 한 프레임의 최종 리그 포즈. 매 프레임 전 필드를 덮어써 이전 액션 포즈가 남지 않는다. */
 interface RigPose {
   bodyY: number
+  /** 전신 롤(다리 포함) — 다이브·낙하처럼 몸 전체가 눕는 동작 전용 */
   bodyRoll: number
+  /**
+   * 상체만의 롤. 보행 중 좌우 흔들림은 **반드시 여기에 넣는다** —
+   * body에 넣으면 리그 전체가 body 원점을 중심으로 기울어 디딤발이 지면에서
+   * 뜨거나 파고든다(편심 = 다리 z 0.10 + 부츠 z 반폭 0.0575 = 0.1575m,
+   * 스프린트 입각기 최대 롤 0.046rad ⇒ 7.2mm 오차. 실측으로 확인).
+   */
+  torsoRoll: number
   torsoPitch: number
   torsoTwist: number
   hipL: number
   hipR: number
   kneeL: number
   kneeR: number
+  /** 발목(정강이 기준 상대각) — 접지 중 발바닥을 지면과 평행하게 유지한다 */
+  ankleL: number
+  ankleR: number
   shoulderL: number
   shoulderR: number
   /** 팔 벌림(양수 = 몸에서 바깥으로) */
@@ -537,12 +680,15 @@ interface RigPose {
 const POSE_KEYS: readonly (keyof RigPose)[] = [
   'bodyY',
   'bodyRoll',
+  'torsoRoll',
   'torsoPitch',
   'torsoTwist',
   'hipL',
   'hipR',
   'kneeL',
   'kneeR',
+  'ankleL',
+  'ankleR',
   'shoulderL',
   'shoulderR',
   'armOutL',
@@ -574,12 +720,15 @@ function copyPose(cur: RigPose, target: RigPose): void {
 function writePose(j: Joints, p: RigPose): void {
   j.body.position.y = p.bodyY
   j.body.rotation.x = p.bodyRoll
+  j.torso.rotation.x = p.torsoRoll
   j.torso.rotation.z = -p.torsoPitch // 앞으로 숙이기 = -Z 회전
   j.torso.rotation.y = p.torsoTwist
   j.hipL.rotation.z = p.hipL
   j.hipR.rotation.z = p.hipR
   j.kneeL.rotation.z = p.kneeL
   j.kneeR.rotation.z = p.kneeR
+  j.ankleL.rotation.z = p.ankleL
+  j.ankleR.rotation.z = p.ankleR
   j.shoulderL.rotation.z = p.shoulderL
   j.shoulderR.rotation.z = p.shoulderR
   // 왼쪽은 -Z(정면 +X, 위 +Y ⇒ left = up×forward = -Z). -Z쪽 팔은 +X 회전이 바깥이다.
@@ -751,13 +900,19 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
     knee.position.y = -THIGH_LEN
     hip.add(knee)
     knee.add(limbMesh(three, 'shin', 0.062, SHIN_LEN, socksMat)) // 정강이 = 양말(액센트)
+    // 발목 관절 — 접지 중 발바닥을 지면과 평행하게 유지하려면 정강이와 별도 자유도가 필요하다.
+    // (정강이에 고정된 발은 디딤 중 발끝·뒤꿈치가 번갈아 지면을 파고들며 접지점이 흔들린다.)
+    const ankle = new three.Group()
+    ankle.position.y = -SHIN_LEN
+    knee.add(ankle)
     const boot = new three.Mesh(
       cachedGeo('boot', () => new three.BoxGeometry(0.25, 0.07, 0.115)),
       bootMat,
     )
-    boot.position.set(0.048, -SHIN_LEN - 0.005, 0)
-    knee.add(boot)
-    return { hip, knee }
+    // 부츠 바닥 = 발목 -0.04 ⇒ ANKLE_H와 일치해야 접지 계산이 맞는다.
+    boot.position.set(0.048, -0.005, 0)
+    ankle.add(boot)
+    return { hip, knee, ankle }
   }
   const legL = buildLeg(-1)
   const legR = buildLeg(1)
@@ -770,6 +925,8 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
     hipR: legR.hip,
     kneeL: legL.knee,
     kneeR: legR.knee,
+    ankleL: legL.ankle,
+    ankleR: legR.ankle,
     shoulderL: armL.shoulder,
     shoulderR: armR.shoulder,
     elbowL: armL.elbow,
@@ -794,12 +951,15 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
   const pose: RigPose = {
     bodyY: 0,
     bodyRoll: 0,
+    torsoRoll: 0,
     torsoPitch: 0,
     torsoTwist: 0,
     hipL: 0,
     hipR: 0,
     kneeL: 0,
     kneeR: 0,
+    ankleL: 0,
+    ankleR: 0,
     shoulderL: 0,
     shoulderR: 0,
     armOutL: 0.12,
@@ -814,15 +974,18 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
   const shown: RigPose = { ...pose }
 
   function applyGait(speed: number): void {
-    const g = gaitAngles(speed, phase)
+    const g = gaitAngles(speed, phase, root.scale.x)
     pose.bodyY = g.bounce
-    pose.bodyRoll = g.roll
+    pose.bodyRoll = 0 // 보행 롤은 상체에만 — 다리를 기울이면 디딤발이 뜬다
+    pose.torsoRoll = g.roll
     pose.torsoPitch = g.lean
     pose.torsoTwist = g.twist
     pose.hipL = g.hipL
     pose.hipR = g.hipR
     pose.kneeL = g.kneeL
     pose.kneeR = g.kneeR
+    pose.ankleL = g.ankleL
+    pose.ankleR = g.ankleR
     pose.shoulderL = g.shoulderL
     pose.shoulderR = g.shoulderR
     pose.elbowL = g.elbowL
@@ -831,7 +994,14 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
     pose.armOutR = pose.armOutL
     pose.headPitch = -0.55 * g.lean // 몸이 숙어도 시선은 앞을 본다
     pose.headYaw = 0
-    pose.shadowScale = 1 - 2.2 * Math.max(0, g.bounce)
+    // 체공(bob)이 클수록 그림자를 줄인다. bounce는 이제 음수 구간이라 bob을 쓴다.
+    pose.shadowScale = 1 - 2.2 * g.bob
+  }
+
+  /** 한쪽 발을 지면(y=0)에 붙인 채 전후 fx에 놓는 힙·무릎·발목. 정지 계열 액션 공용. */
+  function plantLeg(fx: number, bodyY: number): { hip: number; knee: number; ankle: number } {
+    const { hip, knee } = solveLeg(fx, STAND_DROP + bodyY)
+    return { hip, knee, ankle: -(hip + knee) }
   }
 
   function apply(p: PlayerPose, clockT: number): void {
@@ -849,9 +1019,15 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
 
     // 급가감속에서도 사이클이 튀지 않게 속도를 완만히 따라간다
     smoothSpeed += (p.speed - smoothSpeed) * Math.min(1, dt * 7)
-    // 위상은 **모든 액션에서** 계속 적분한다. 킥·세리머니 중에 멈춰 있으면
+    // 보폭 위상은 **movement(두뇌)가 계산한 값을 그대로 소비**한다. 표시 계층이 자체
+    // 적분하면 두 보폭 모델이 어긋나 그 차이가 그대로 발 미끄러짐이 된다.
+    // gaitPhase가 없는 호출(단위 테스트·구버전 프레임)만 같은 strideLength로 폴백한다.
+    // 어느 경로든 위상은 **모든 액션에서** 계속 진행한다 — 킥·세리머니 중에 멈춰 있으면
     // 러닝으로 복귀할 때 정지 위상에서 재개돼 다리가 튄다.
-    phase = advancePhase(phase, Math.max(smoothSpeed, p.speed * 0.6), dt)
+    phase =
+      p.gaitPhase != null && Number.isFinite(p.gaitPhase)
+        ? (((p.gaitPhase % 1) + 1) % 1) * TAU
+        : advancePhase(phase, Math.max(smoothSpeed, p.speed * 0.6), dt)
     const t = clockT + seed * 6.28 // 개체별 시간 오프셋(호흡·세리머니 위상 분산)
     const at = clamp01(p.actionT)
 
@@ -866,18 +1042,25 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
       case 'kick': {
         applyGait(smoothSpeed * 0.35) // 팔·상체 기본값을 먼저 깔고 킥으로 덮는다
         const k = kickAngles(at)
+        // 디딤 다리는 접지 IK로 푼다 — 하중이 실릴수록 살짝 앞·아래로 눌린다.
+        const bodyY = -0.014 * k.plant
+        const sup = plantLeg(0.1 * k.plant, bodyY)
         if (kickRight) {
           pose.hipR = k.hipKick
           pose.kneeR = k.kneeKick
-          pose.hipL = k.hipSupport
-          pose.kneeL = k.kneeSupport
+          pose.ankleR = 0 // 차는 발은 정강이와 일직선(임팩트 면을 만든다)
+          pose.hipL = sup.hip
+          pose.kneeL = sup.knee
+          pose.ankleL = sup.ankle
           pose.shoulderL = k.armSwing
           pose.shoulderR = -0.35 * k.armSwing
         } else {
           pose.hipL = k.hipKick
           pose.kneeL = k.kneeKick
-          pose.hipR = k.hipSupport
-          pose.kneeR = k.kneeSupport
+          pose.ankleL = 0
+          pose.hipR = sup.hip
+          pose.kneeR = sup.knee
+          pose.ankleR = sup.ankle
           pose.shoulderR = k.armSwing
           pose.shoulderL = -0.35 * k.armSwing
         }
@@ -887,8 +1070,9 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
         pose.armOutR = 0.34
         pose.elbowL = 0.5
         pose.elbowR = 0.5
-        pose.bodyY = 0.02 * Math.sin(Math.PI * at)
-        pose.bodyRoll = (kickRight ? 1 : -1) * 0.12 * Math.sin(Math.PI * at)
+        pose.bodyY = bodyY
+        pose.bodyRoll = 0
+        pose.torsoRoll = (kickRight ? 1 : -1) * 0.12 * Math.sin(Math.PI * at)
         pose.headPitch = 0.16
         pose.headYaw = 0
         pose.shadowScale = 1
@@ -899,13 +1083,19 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
         const air = c.jump / CELEBRATE_JUMP
         const wave = Math.sin(t * 7.5)
         pose.bodyY = c.jump
-        pose.bodyRoll = 0.05 * wave
+        pose.bodyRoll = 0
+        pose.torsoRoll = 0.05 * wave
         pose.torsoPitch = c.lean
         pose.torsoTwist = 0.12 * wave
-        pose.hipL = 0.12 + 0.35 * air
-        pose.hipR = 0.12 + 0.2 * air
-        pose.kneeL = -0.25 - 0.7 * air
-        pose.kneeR = -0.2 - 0.45 * air
+        // 착지 순간(air=0)에는 두 발이 정확히 지면에 붙고, 뜰수록 다리를 접는다.
+        const cl = plantLeg(0.06, 0)
+        const cr = plantLeg(-0.06, 0)
+        pose.hipL = cl.hip + 0.35 * air
+        pose.hipR = cr.hip + 0.2 * air
+        pose.kneeL = cl.knee - 0.7 * air
+        pose.kneeR = cr.knee - 0.45 * air
+        pose.ankleL = cl.ankle * (1 - air)
+        pose.ankleR = cr.ankle * (1 - air)
         // 두 팔을 머리 위로(2.6rad ≈ 149° → 위·앞을 가리킨다)
         pose.shoulderL = 2.6 * c.arm
         pose.shoulderR = 2.6 * c.arm
@@ -933,13 +1123,19 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
         const [outL, outR] = pick(0.03, 0.05)
         const [elL, elR] = pick(0.25, 0.1)
         pose.bodyY = d.lift
-        pose.bodyRoll = d.roll
+        pose.bodyRoll = d.roll // 다이브는 다리까지 함께 눕는다
+        pose.torsoRoll = 0
         pose.torsoPitch = 0.12
         pose.torsoTwist = 0.18 * diveDir
         pose.hipL = hipL
         pose.hipR = hipR
         pose.kneeL = kneeL
         pose.kneeR = kneeR
+        // 도약 직전에는 아직 서 있으므로 발바닥을 지면과 평행하게 두고(그러지 않으면
+        // 부츠 앞코가 잔디를 파고든다), 몸이 눕는 만큼 정강이와 일직선으로 편다.
+        const flat = 1 - clamp01(at / 0.4)
+        pose.ankleL = -(hipL + kneeL) * flat
+        pose.ankleR = -(hipR + kneeR) * flat
         pose.shoulderL = shL
         pose.shoulderR = shR
         pose.armOutL = outL
@@ -965,12 +1161,15 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
         const [elL, elR] = pick(0.4, 0.9)
         pose.bodyY = d.lift
         pose.bodyRoll = d.roll
+        pose.torsoRoll = 0
         pose.torsoPitch = 0.1 + 0.03 * breath
         pose.torsoTwist = 0.1 * diveDir
         pose.hipL = hipL
         pose.hipR = hipR
         pose.kneeL = kneeL
         pose.kneeR = kneeR
+        pose.ankleL = 0
+        pose.ankleR = 0
         pose.shoulderL = shL
         pose.shoulderR = shR
         pose.armOutL = outL
@@ -986,14 +1185,22 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
         // idle — 미세 호흡 + 좌우 체중 이동
         const breath = Math.sin(t * 1.85)
         const shift = Math.sin(t * 0.62)
-        pose.bodyY = 0.006 * breath
-        pose.bodyRoll = 0.035 * shift
+        // 선 자세는 러닝보다 골반이 높다(무릎이 거의 펴진다). LEG_REACH를 넘지 않는
+        // 한도(=STAND_DROP + 0.025) 안에서만 올려야 발이 지면에서 뜨지 않는다.
+        const bodyY = 0.018 + 0.005 * breath
+        const il = plantLeg(0.06 + 0.03 * shift, bodyY)
+        const ir = plantLeg(-0.06 - 0.03 * shift, bodyY)
+        pose.bodyY = bodyY
+        pose.bodyRoll = 0
+        pose.torsoRoll = 0.025 * shift
         pose.torsoPitch = 0.045 + 0.012 * breath
         pose.torsoTwist = 0.03 * shift
-        pose.hipL = 0.05 + 0.05 * shift
-        pose.hipR = 0.05 - 0.05 * shift
-        pose.kneeL = -0.11 - 0.03 * shift
-        pose.kneeR = -0.11 + 0.03 * shift
+        pose.hipL = il.hip
+        pose.hipR = ir.hip
+        pose.kneeL = il.knee
+        pose.kneeR = ir.knee
+        pose.ankleL = il.ankle
+        pose.ankleR = ir.ankle
         pose.shoulderL = 0.03 + 0.02 * breath
         pose.shoulderR = 0.03 - 0.02 * breath
         pose.armOutL = 0.13 + 0.02 * breath

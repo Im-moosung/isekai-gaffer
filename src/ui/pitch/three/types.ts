@@ -37,6 +37,14 @@ export interface PlayerPose {
   action: PlayerAction
   /** 액션 진행도 0~1 */
   actionT: number
+  /**
+   * 보폭 위상 0~1 (한 스트라이드 = 2보). 이동거리를 공유 보폭 모델
+   * `strideLength(speed)`로 나눠 누적한 값이며, **액션과 무관하게 항상 진행**한다.
+   * 렌더러(player3d)는 자체 위상을 적분하지 않고 이 값을 소비한다 —
+   * 두 계층이 다른 보폭 모델을 쓰면 그 차이가 그대로 발 미끄러짐이 된다.
+   * 선택 필드인 이유는 구버전 프레임·단위 테스트가 폴백 경로를 탈 수 있게 하기 위함이다.
+   */
+  gaitPhase?: number
 }
 
 export interface BallPose {

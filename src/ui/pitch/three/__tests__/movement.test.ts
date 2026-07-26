@@ -4,6 +4,7 @@ import { createMatch } from '../../../../engine/simulate'
 import { makeTestTeam } from '../../../../engine/fixtures/testTeams'
 import { buildSequence, type ChoreoStep } from '../../choreography'
 import { slotCoords } from '../../formations'
+import { strideLength } from '../player3d'
 import { PITCH_H, PITCH_W, toWorld, type FrameState } from '../types'
 import {
   computeFrame, ballHeight, arcKindFor, sampleSequence, gkBox,
@@ -556,6 +557,20 @@ describe('액션 판정', () => {
     expect(f.event).toBe('foul')
   })
 
+  it('모든 gaitPhase는 0~1', () => {
+    const e = ev('goal')
+    const seq = buildSequence(e, base.home, base.away)
+    let prev: FrameState | null = null
+    for (let k = 0; k <= 20; k++) {
+      const f: FrameState = computeFrame(input({ prev, dt: 0.05, t: k / 20, sequence: seq, sequenceSide: 'home', event: e }))
+      for (const p of f.players) {
+        expect(p.gaitPhase).toBeGreaterThanOrEqual(0)
+        expect(p.gaitPhase).toBeLessThan(1)
+      }
+      prev = f
+    }
+  })
+
   it('모든 actionT는 0~1', () => {
     for (const type of ['goal', 'shot', 'save', 'corner', 'foul'] as const) {
       const e = ev(type)
@@ -638,5 +653,118 @@ describe('볼 스핀', () => {
       expect(prev.ball.spin).toBeGreaterThanOrEqual(0)
       expect(prev.ball.spin).toBeLessThan(Math.PI * 2)
     }
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// B-2: 보폭 모델 통일 — movement가 계산한 gaitPhase가 렌더러의 정본이다
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('gaitPhase(보폭 위상)', () => {
+  /** 한 선수를 dt 간격으로 n프레임 굴리며 (속도, 위상) 궤적을 얻는다. */
+  function trace(n: number, dt: number): { speed: number; phase: number }[] {
+    let prev: FrameState | null = null
+    const out: { speed: number; phase: number }[] = []
+    for (let k = 0; k < n; k++) {
+      const f: FrameState = computeFrame(input({ prev, dt, t: (k % 20) / 20, minute: 30 }))
+      const p = f.players[5]
+      out.push({ speed: p.speed, phase: p.gaitPhase! })
+      prev = f
+    }
+    return out
+  }
+
+  it('위상 증가분 = 이동거리 / strideLength(speed) — 공유 보폭 모델을 쓴다', () => {
+    const dt = 1 / 60
+    const tr = trace(40, dt)
+    let checked = 0
+    for (let i = 1; i < tr.length; i++) {
+      const v = tr[i].speed
+      if (v < 1) continue // 정지 구간은 최소 보행 속도 바닥이 걸려 별도 계약
+      const expected = (v * dt) / strideLength(v)
+      let d = tr[i].phase - tr[i - 1].phase
+      if (d < 0) d += 1 // 랩어라운드
+      expect(d).toBeCloseTo(expected, 9)
+      checked++
+    }
+    expect(checked).toBeGreaterThan(5)
+  })
+
+  it('상수 보폭(옛 STRIDE=2.2)과는 다른 값이다 — 회귀 가드', () => {
+    const dt = 1 / 60
+    const tr = trace(40, dt)
+    const fast = tr.find((r) => r.speed > 4)
+    expect(fast).toBeDefined()
+    expect(strideLength(fast!.speed)).not.toBeCloseTo(2.2, 2)
+  })
+
+  it('22명의 초기 위상이 서로 다르다(한 몸처럼 걷지 않는다)', () => {
+    const f = computeFrame(input())
+    const phases = new Set(f.players.map((p) => p.gaitPhase!.toFixed(6)))
+    expect(phases.size).toBeGreaterThan(18)
+  })
+
+  it('run의 actionT는 곧 gaitPhase다(더 이상 죽은 값이 아니다)', () => {
+    let prev: FrameState | null = null
+    let found = 0
+    for (let k = 0; k < 30; k++) {
+      const f: FrameState = computeFrame(input({ prev, dt: 1 / 60, t: k / 30 }))
+      for (const p of f.players) {
+        if (p.action !== 'run') continue
+        expect(p.actionT).toBe(p.gaitPhase)
+        found++
+      }
+      prev = f
+    }
+    expect(found).toBeGreaterThan(0)
+  })
+
+  it('위상은 액션과 무관하게 계속 진행한다(킥·세리머니 뒤 다리가 튀지 않게)', () => {
+    const e = ev('goal')
+    const seq = buildSequence(e, base.home, base.away)
+    let prev: FrameState | null = null
+    let moved = 0
+    for (let k = 0; k <= 20; k++) {
+      const f: FrameState = computeFrame(input({ prev, dt: 0.05, t: k / 20, sequence: seq, sequenceSide: 'home', event: e }))
+      if (prev) {
+        for (const p of f.players) {
+          if (p.action === 'run') continue
+          const q = prev.players.find((o) => o.id === p.id)!
+          if (Math.abs(p.gaitPhase! - q.gaitPhase!) > 1e-9) moved++
+        }
+      }
+      prev = f
+    }
+    expect(moved).toBeGreaterThan(0)
+  })
+})
+
+describe('저속 히스테리시스', () => {
+  // 분리 밀어내기·목표 흔들림 때문에 실측 속도는 IDLE_SPEED(0.4) 근처에서 프레임마다
+  // 오르내린다. 단일 문턱이면 run↔idle이 깜빡이고 매번 0.3s 크로스페이드가 재시작돼
+  // 발이 떤다. 이탈 문턱을 진입 문턱의 60%(0.24)로 낮춰 그 구간을 흡수한다.
+  it('run 중 속도가 이탈 문턱 위에 있으면 idle로 떨어지지 않는다', () => {
+    let band = 0
+    for (const dts of [[0.02, 0.09], [1 / 60, 1 / 60], [0.03, 0.05, 0.11]]) {
+      let prev: FrameState | null = null
+      for (let k = 0; k < 200; k++) {
+        const f: FrameState = computeFrame(
+          input({ prev, dt: dts[k % dts.length], t: (k % 20) / 20, minute: 30 + Math.floor(k / 20) }),
+        )
+        if (prev) {
+          for (const p of f.players) {
+            const q = prev.players.find((o) => o.id === p.id)!
+            if (q.action !== 'run') continue
+            if (p.speed >= 0.24 && p.speed < 0.4) {
+              band++
+              expect(p.action).toBe('run') // 히스테리시스가 없으면 여기서 idle이 된다
+            }
+            if (p.speed < 0.24) expect(p.action).not.toBe('run')
+          }
+        }
+        prev = f
+      }
+    }
+    expect(band).toBeGreaterThan(20) // 실제로 문턱 밴드를 지나갔는지(공허한 통과 방지)
   })
 })

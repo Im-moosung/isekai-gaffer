@@ -19,6 +19,7 @@ import {
   diveAngles,
   strideLength,
   advancePhase,
+  gaitFoot,
   hash01,
   shade,
   mixColor,
@@ -42,19 +43,36 @@ describe('gaitAngles — 좌우 대칭', () => {
     }
   })
 
-  it('팔은 같은 쪽 다리와 교차한다(부호 반대)', () => {
+  // 갱신(B-2): 예전 계약은 "팔은 같은 쪽 **힙 각도**와 부호가 반대"였다. 접지 역기구학을
+  // 도입한 뒤 힙 각도는 무릎 굴곡 때문에 사이클 대부분에서 양수로 치우친다(실제 러너도
+  // 그렇다). 교차 스윙의 실제 의미는 "팔이 같은 쪽 **발의 전후 위치**와 반대"이므로
+  // 그 쪽으로 옮긴다 — 발 위치가 이제 정본이기 때문이다.
+  it('팔은 같은 쪽 발의 전후 위치와 교차한다(부호 반대)', () => {
     for (const p of PHASES) {
       const g = gaitAngles(7, p)
-      // 스윙 성분이 충분히 클 때만(바이어스로 부호가 흐려지는 구간 제외)
-      if (Math.abs(g.hipL) > 0.25) expect(Math.sign(g.shoulderL)).toBe(-Math.sign(g.hipL))
-      if (Math.abs(g.hipR) > 0.25) expect(Math.sign(g.shoulderR)).toBe(-Math.sign(g.hipR))
+      const fl = gaitFoot(7, p)
+      const fr = gaitFoot(7, p + Math.PI)
+      if (Math.abs(fl.fx) > 0.05) expect(Math.sign(g.shoulderL)).toBe(-Math.sign(fl.fx))
+      if (Math.abs(fr.fx) > 0.05) expect(Math.sign(g.shoulderR)).toBe(-Math.sign(fr.fx))
     }
   })
 
-  it('양 다리 위상차 때문에 두 힙이 동시에 같은 방향으로 최대가 되지 않는다', () => {
-    for (const p of PHASES) {
-      const g = gaitAngles(8, p)
-      expect(Math.abs(g.hipL + g.hipR)).toBeLessThan(0.5) // 바이어스 합만 남는다
+  // 갱신(B-2): 예전 계약 |hipL + hipR| < 0.5은 "힙 각이 0을 중심으로 대칭 진동한다"는
+  // 낡은 사인파 모델의 부산물이었다. 두 다리가 한 몸처럼 움직이는 버그를 잡는 게 원래
+  // 의도이므로, 그 의도를 직접 만족하는 **접지 배타성**으로 옮긴다.
+  it('두 다리는 반주기 어긋나 있어 접지 구간이 절반 이상 겹치지 않는다', () => {
+    for (const s of [1, 3, 6, 8]) {
+      let both = 0
+      let some = 0
+      for (let p = 0; p < TAU; p += TAU / 360) {
+        const l = gaitFoot(s, p).grounded
+        const r = gaitFoot(s, p + Math.PI).grounded
+        if (l && r) both++
+        if (l || r) some++
+      }
+      // 접지율 δ(속도 의존, 0.44→0.21)의 두 배가 "적어도 한 발" 구간이다
+      expect(some).toBeGreaterThan(360 * 0.4)
+      expect(both).toBeLessThan(360 * 0.1) // 두 발이 동시에 디딤인 구간은 거의 없다
     }
   })
 })
@@ -72,14 +90,25 @@ describe('gaitAngles — 속도 비례', () => {
     expect(swing(0)).toBeGreaterThan(0.05)
   })
 
-  it('진폭이 실제로 속도에 비례한다(상수 진폭이면 실패하는 비율 단언)', () => {
-    // φ=π/2는 스윙 최대 지점. 바이어스 항이 아니라 스윙 항이 커져야 한다.
-    const fast = gaitAngles(8, Math.PI / 2).hipL
-    const slow = gaitAngles(1, Math.PI / 2).hipL
-    expect(fast / slow).toBeGreaterThan(2)
-    // 힙 진폭은 보폭(strideLength)에 연동된다 — 접지 슬립을 없애는 핵심 관계
-    const ampAt = (v: number): number => (gaitAngles(v, Math.PI / 2).hipL - gaitAngles(v, 0).hipL) / 1
-    expect(ampAt(8) / ampAt(2)).toBeCloseTo(strideLength(8) / strideLength(2), 6)
+  // 갱신(B-2): 예전에는 "힙 각 진폭 ∝ strideLength"가 미끄러짐 방지의 근사 관계였다
+  // (힙 각을 사인파로 두고 진폭을 보폭에 맞추는 방식). 이제는 **발 궤적**이 보폭에서
+  // 직접 유도되므로, 검증 지점을 근사 관계가 아니라 그 정의식으로 옮긴다.
+  it('접지 구간의 발 전후 이동이 정확히 보폭만큼이다(정의식)', () => {
+    for (const v of [1, 3, 6, 8]) {
+      const f = gaitFoot(v, Math.PI)
+      expect(f.grounded).toBe(true)
+      expect(f.fx).toBeCloseTo(0, 12) // 접지 중간에서 발이 힙 바로 아래
+      // 위상 0.3rad 진행 = 발이 뒤로 0.3·L/2π 이동(접지 구간 반각은 최소 0.66rad).
+      // 이것이 "미끄러지지 않는다"의 정의다 — 위상은 이동거리/보폭으로 적분되므로
+      // 이 기울기가 곧 발의 대지 속도 0을 뜻한다.
+      const d = 0.3
+      const back = gaitFoot(v, Math.PI + d).fx - f.fx
+      expect(gaitFoot(v, Math.PI + d).grounded).toBe(true)
+      expect(back).toBeCloseTo((-d * strideLength(v)) / TAU, 12)
+    }
+    // 도달거리 E는 속도(=보폭)에 따라 커진다 — 상수 보폭이면 실패한다
+    const reach = (v: number): number => Math.abs(gaitFoot(v, Math.PI + 0.5).fx)
+    expect(reach(8)).toBeGreaterThan(reach(1) * 1.5)
   })
 
   it('전경 기울기(lean)는 속도에 단조 증가한다', () => {
@@ -152,15 +181,24 @@ describe('gaitAngles — 위상 연속성·주기', () => {
     }
   })
 
-  it('바운스는 절대 음수가 되지 않는다(발이 잔디를 파고들지 않게)', () => {
+  // 갱신(B-2): 예전 계약은 "bounce ≥ 0, 디딤 중간에서 정확히 0"이었다. 그 부호 규약은
+  // 관통 방지 수단이었는데, 이제 관통은 접지 역기구학이 막는다(발을 y=0에 직접 놓는다).
+  // 반대로 실제 러닝의 COM은 **디딤 중간에서 가장 낮고 체공에서 가장 높다** — 옛 규약은
+  // 그 부호가 뒤집혀 있었다. 새 계약은 그 물리를 단언한다.
+  it('골반은 디딤 중간에서 최저, 체공에서 최고다(COM 궤적 부호)', () => {
     for (const s of SPEEDS) {
       for (let p = 0; p < TAU; p += TAU / 180) {
-        expect(gaitAngles(s, p).bounce).toBeGreaterThanOrEqual(0)
+        const b = gaitAngles(s, p).bounce
+        expect(b).toBeLessThanOrEqual(1e-12) // 선 자세보다 높아지지 않는다
+        expect(gaitAngles(s, p).bob).toBeGreaterThanOrEqual(0)
       }
     }
-    // 디딤 중간(위상 0·π)에서 정확히 0 — 이때 발이 지면에 닿는다
-    expect(gaitAngles(7, 0).bounce).toBeCloseTo(0, 9)
-    expect(gaitAngles(7, Math.PI).bounce).toBeCloseTo(0, 9)
+    // 디딤 중간(위상 0·π)이 최저, 체공(±π/2)이 최고
+    const low = gaitAngles(7, Math.PI).bounce
+    const high = gaitAngles(7, Math.PI / 2).bounce
+    expect(low).toBeLessThan(high)
+    expect(gaitAngles(7, 0).bounce).toBeCloseTo(low, 9)
+    expect(gaitAngles(7, 0).bob).toBeCloseTo(0, 9)
   })
 
   it('결정론: 같은 입력은 항상 같은 객체 값', () => {
@@ -217,8 +255,10 @@ describe('kickAngles', () => {
       const k = kickAngles(t)
       expect(k.kneeKick).toBeLessThanOrEqual(0)
       expect(k.kneeKick).toBeGreaterThanOrEqual(-1.5)
-      expect(k.kneeSupport).toBeLessThanOrEqual(0)
-      expect(k.kneeSupport).toBeGreaterThanOrEqual(-0.8)
+      // 갱신(B-2): 디딤 다리 관절각(hipSupport·kneeSupport)은 접지 IK가 대신 푼다.
+      // kickAngles는 하중(plant)만 내보내며, 그 값이 0~1을 벗어나면 IK 입력이 깨진다.
+      expect(k.plant).toBeGreaterThanOrEqual(0)
+      expect(k.plant).toBeLessThanOrEqual(1)
       expect(Math.abs(k.torsoLean)).toBeLessThanOrEqual(0.4)
       expect(Math.abs(k.armSwing)).toBeLessThanOrEqual(1.2)
       for (const v of Object.values(k)) expect(Number.isFinite(v)).toBe(true)
@@ -551,7 +591,20 @@ describe('createPlayer — 접지·비율', () => {
     }
   })
 
-  it('접지 중 발의 대지 속도가 몸통 속도 대비 6% 이내다(풋 스케이팅 회귀)', () => {
+  // 갱신(B-2): 접지 판정 창을 "최저점 + 2cm 고정"에서 "발 이동 높이의 하위 10%"로
+  // 바꾸고 기준을 6% → 5%로 조인다.
+  //
+  // 창을 바꾼 이유: 발이 실제로 y=0에 붙게 되자 고정 2cm 창이 **유각 프레임을 대량으로
+  // 빨아들인다**(변경 전에는 발이 8~12mm 떠 있어 창이 상대적으로 좁았다). 저속일수록
+  // 유각 클리어런스가 낮아 창의 대부분이 공중 프레임이 된다 — 즉 이 지표는 속도별로
+  // 다른 것을 재고 있었다. 이동 높이 비례 창은 속도에 무관하게 "가장 낮은 구간"을 본다.
+  //
+  // 같은 계측식으로 잰 변경 전후(평균 슬립 / 몸통 속도):
+  //   v=1 106.5% → 3.6% / v=3 5.1% → 0.1% / v=6 4.3% → 0.1%
+  //   v=7.5 4.5% → 0.1% / v=9 10.9% → 0.1%
+  // 남은 몇 %는 창에 섞인 이착지 직전후 프레임이며, 순수 입각 구간의 슬립은
+  // 아래 "입각 구간에서 발의 대지 속도가 정확히 0" 테스트가 0으로 못박는다.
+  it('접지 구간 발의 대지 속도가 몸통 속도 대비 5% 이내다(풋 스케이팅 회귀)', () => {
     const measure = (v: number): number => {
       const rig = createPlayer(THREE, KIT)
       const feet = meshesOf(rig.root).filter(
@@ -573,13 +626,15 @@ describe('createPlayer — 접지·비율', () => {
         const p = feet.map((f) => f.getWorldPosition(new THREE.Vector3()))
         frames.push({ x: p.map((q) => q.x), y: p.map((q) => q.y) })
       }
-      const floor = Math.min(...frames.flatMap((f) => f.y))
+      const ys = frames.flatMap((f) => f.y)
+      const floor = Math.min(...ys)
+      // 발이 오르내린 높이의 하위 10% — 속도에 무관하게 "가장 낮은 구간"을 고른다
+      const win = floor + 0.1 * (Math.max(...ys) - floor)
       let sum = 0
       let n = 0
       for (let i = 1; i < frames.length; i++) {
         for (let k = 0; k < feet.length; k++) {
-          // 실제로 땅에 붙어 있는 프레임만(최저점 +2cm 이내)
-          if (frames[i].y[k] <= floor + 0.02 && frames[i - 1].y[k] <= floor + 0.02) {
+          if (frames[i].y[k] <= win && frames[i - 1].y[k] <= win) {
             sum += Math.abs(frames[i].x[k] - frames[i - 1].x[k]) / DT / v
             n++
           }
@@ -587,7 +642,112 @@ describe('createPlayer — 접지·비율', () => {
       }
       return sum / Math.max(1, n)
     }
-    for (const v of [3, 5, 8]) expect(measure(v)).toBeLessThan(0.06)
+    for (const v of [1, 3, 6, 7.5, 9]) expect(measure(v)).toBeLessThan(0.05)
+  })
+
+  /**
+   * 엄밀 접지 계약 — B-2의 핵심 산출물.
+   *
+   * movement가 하는 것과 **똑같이** 보폭 위상을 적분해 리그에 주입하고
+   * (gaitPhase += v·dt / strideLength(v)), gaitFoot이 입각기라고 말하는 프레임에서만
+   * 부츠의 월드 X 이동량을 잰다. 발이 땅에 붙어 있다면 이 값은 0이어야 한다 —
+   * "미끄러짐이 줄었다"가 아니라 "0이다"가 계약이다.
+   *
+   * 허용 오차 1e-6 m/s의 근거: 궤적이 위상에 대해 정확히 선형이라 이론값이 0이고,
+   * 남는 것은 배정밀도 반올림뿐이다(실측 최대 ~1e-13 m/s).
+   * 두 계층이 다른 보폭 모델을 쓰면 그 차이가 곧바로 v·|1 - L₁/L₂|로 나타난다.
+   */
+  it('입각 구간에서 발의 대지 속도가 정확히 0이다(보폭 모델 통일 계약)', () => {
+    for (const v of [1, 3, 6, 7.5, 9]) {
+      const rig = createPlayer(THREE, KIT)
+      const feet = meshesOf(rig.root).filter(
+        (m) => (m.geometry as THREE.BufferGeometry).type === 'BoxGeometry',
+      )
+      const scale = rig.root.scale.x
+      const L = strideLength(v)
+      let t = 0
+      let x = 0
+      let ph = 0
+      let prevX: number[] | null = null
+      let prevG: boolean[] | null = null
+      let worst = 0
+      let samples = 0
+      for (let i = 0; i < 600; i++) {
+        t += DT
+        x += v * DT
+        ph = (ph + (v * DT) / L) % 1 // movement.computeFrame과 동일한 적분식
+        rig.apply(poseOf({ x, speed: v, gaitPhase: ph }), t)
+        rig.root.updateMatrixWorld(true)
+        const phase = ph * TAU
+        const g = [gaitFoot(v, phase, scale).grounded, gaitFoot(v, phase + Math.PI, scale).grounded]
+        const cur = feet.map((f) => f.getWorldPosition(new THREE.Vector3()).x)
+        if (i > 120 && prevX && prevG) {
+          for (let k = 0; k < 2; k++) {
+            if (g[k] && prevG[k]) {
+              worst = Math.max(worst, Math.abs(cur[k] - prevX[k]) / DT)
+              samples++
+            }
+          }
+        }
+        prevX = cur
+        prevG = g
+      }
+      expect(samples).toBeGreaterThan(50) // 실제로 입각 프레임을 봤는지 확인
+      expect(worst).toBeLessThan(1e-6)
+    }
+  })
+
+  it('입각 중 부츠 바닥이 지면(y=0)에 붙어 있다', () => {
+    for (const v of [1, 3, 6, 8]) {
+      const rig = createPlayer(THREE, KIT)
+      const feet = meshesOf(rig.root).filter(
+        (m) => (m.geometry as THREE.BufferGeometry).type === 'BoxGeometry',
+      )
+      const scale = rig.root.scale.x
+      let worst = 0
+      for (let i = 0; i < 180; i++) {
+        const ph = i / 180
+        rig.apply(poseOf({ speed: v, gaitPhase: ph }), 10 + i * DT)
+        rig.root.updateMatrixWorld(true)
+        const phase = ph * TAU
+        const g = [gaitFoot(v, phase, scale).grounded, gaitFoot(v, phase + Math.PI, scale).grounded]
+        for (let k = 0; k < 2; k++) {
+          if (!g[k]) continue
+          const geo = feet[k].geometry as THREE.BufferGeometry
+          geo.computeBoundingBox()
+          const bb = geo.boundingBox!.clone().applyMatrix4(feet[k].matrixWorld)
+          worst = Math.max(worst, Math.abs(bb.min.y))
+        }
+      }
+      // 접지 오차는 0이어야 한다. 보행 롤은 상체에만 걸리므로 다리를 기울이지 않는다
+      // (body에 걸면 편심 0.1575m × 롤 0.046rad = 7.2mm가 그대로 오차가 된다).
+      // 남는 것은 부동소수 오차뿐이라 0.1mm면 충분하다.
+      expect(worst).toBeLessThan(0.0001)
+    }
+  })
+
+  it('movement가 준 gaitPhase를 그대로 소비한다(자체 적분하지 않는다)', () => {
+    // 같은 gaitPhase면 프레임 이력·dt와 무관하게 같은 다리 자세여야 한다.
+    const hips = (frames: number, phaseAt: (i: number) => number): number[] => {
+      const rig = createPlayer(THREE, KIT)
+      let t = 0
+      for (let i = 0; i < frames; i++) {
+        t += DT
+        rig.apply(poseOf({ speed: 6, gaitPhase: phaseAt(i) }), t)
+      }
+      const body = rig.root.children.find((c) => c.type === 'Group')!
+      return body.children
+        .filter((c) => c.type === 'Group' && Math.abs(c.position.z) > 1e-9)
+        .map((c) => c.rotation.z)
+    }
+    const a = hips(40, (i) => (0.31 + i * 0.017) % 1)
+    const b = hips(90, (i) => (0.31 + (39 + (i - 89)) * 0.017 + 1) % 1) // 다른 이력, 같은 끝 위상
+    expect(a).toHaveLength(2)
+    for (let i = 0; i < a.length; i++) expect(b[i]).toBeCloseTo(a[i], 9)
+    // 위상을 고정하면 다리가 멈춘다(자체 적분이 남아 있으면 계속 움직인다)
+    const frozen = hips(60, () => 0.42)
+    const frozen2 = hips(120, () => 0.42)
+    for (let i = 0; i < frozen.length; i++) expect(frozen2[i]).toBeCloseTo(frozen[i], 12)
   })
 })
 
