@@ -104,6 +104,11 @@ export function instructionEffects(ins: Instructions, ctx?: MatchupContext) {
     staminaDrain: lerp(press, 0.74, 1.26) * lerp(tempo, 0.915, 1.085),
     /** 이 팀의 수비 태세가 상대 찬스 빈도를 억제하는 배수. ctx 없으면 1.0 */
     suppression,
+    /** 이 팀이 **내주는 찬스의 질**(상대 xG) 배수. 지시 축은 여기서 항상 1.0이다 —
+     *  라인의 뒷공간 비용은 이미 counterVulnerability(찬스 빈도)에 한 번 과금돼 있고,
+     *  같은 축에 이중 과금하면 Task 2가 세운 라인 게이트의 균형이 무너진다.
+     *  멘탈리티(E1)가 이 항을 쓴다 — 이유는 MENTALITY_FX 주석 참고. */
+    concedeQuality: 1.0,
   }
 }
 
@@ -124,14 +129,40 @@ export function attackFocusEffects(
 // ── 멘탈리티 5프리셋 ────────────────────────────────────────────
 // instructionEffects 위에 곱해지는 배수. 'balanced'는 전 축 정확히 1.0 → 기존 동작 불변.
 // 공격적일수록 찬스 빈도·퀄·점유 편향↑ + 역습 취약성↑(리스크), 수비적일수록 반대.
-export const MENTALITIES: Mentality[] = ['very-defensive', 'defensive', 'balanced', 'attacking', 'very-attacking']
-const MENTALITY_FX: Record<Mentality, { chanceRate: number; chanceQuality: number; counterVulnerability: number; possessionBias: number }> = {
-  'very-defensive': { chanceRate: 0.84, chanceQuality: 0.94, counterVulnerability: 0.78, possessionBias: 0.90 },
-  'defensive':      { chanceRate: 0.92, chanceQuality: 0.97, counterVulnerability: 0.89, possessionBias: 0.95 },
-  'balanced':       { chanceRate: 1.0,  chanceQuality: 1.0,  counterVulnerability: 1.0,  possessionBias: 1.0 },
-  'attacking':      { chanceRate: 1.09, chanceQuality: 1.03, counterVulnerability: 1.13, possessionBias: 1.05 },
-  'very-attacking': { chanceRate: 1.18, chanceQuality: 1.06, counterVulnerability: 1.28, possessionBias: 1.10 },
+//
+// ── E1 수정(멘탈리티 지배 제거) ─────────────────────────────────
+// 문제: 착수 전 실측(n=400, 지시 중립)에서 승점 기울기(매우공격 − 매우수비)가
+// rsa +0.210 / mex +0.107 / **esp +0.035** 로 전 상대에서 양수였다. 세계 2위 상대로도
+// 총공세가 손해가 아니었다는 뜻이고, 그러면 멘탈리티 5단은 정답이 하나뿐인 장식이 된다.
+//
+// 원인: 공격적 태세의 유일한 비용인 counterVulnerability가 **찬스 빈도**에만 붙는데,
+// chanceP는 clamp(…, 0.02, 0.45) 상한에 걸린다. 강팀을 상대할수록 전력비 항
+// (ratio^STRENGTH_SENSITIVITY)이 이미 상한을 밀어붙이고 있어서, 정작 처벌이 가장 커야 할
+// 매치업에서 +28%가 상한에 먹혀 사라졌다. 반대로 이득(chanceRate·chanceQuality)은
+// 우리 쪽 chanceP에 그대로 붙는다 — 비용만 희석되는 비대칭이었다.
+//
+// 처방 둘. 둘 다 상한에 먹히지 않는 경로다.
+//  (1) concedeQuality — 내주는 찬스의 **질**(상대 xG)에 과금한다. 라인을 밀어올린 팀이
+//      역습에 걸리면 상대는 슛을 '더 많이'가 아니라 '더 좋은 자리에서' 잡는다.
+//      xG clamp(0.02~0.65)는 빈도 상한보다 훨씬 여유가 있어 강팀 상대에서도 실제로 물린다.
+//      이 항이 상대 전력에 비례해 아프기 때문에(강팀 슈터 × 높은 strengthRatio) 기울기의
+//      부호가 상대별로 갈린다 — 게이트가 요구하는 바로 그 성질이다.
+//  (2) staminaDrain — 총공세는 체력을 태운다. 90분에 걸쳐 누적되는 비용이라 어떤 clamp도
+//      우회할 수 없고, 후반 실효 능력치 하락으로 공수 양쪽에 되돌아온다.
+//
+// 그리고 두 위험 항(counterVulnerability·concedeQuality)은 **상대 공격진이 우리 수비보다
+// 얼마나 강한가**에 비례해 물린다(simulate.ts mentalityRiskScale). 균일 배수로 두면
+// 부호를 상대별로 가를 수 없다는 것이 1차 조정의 실측 결론이었다 —
+// 균일하게 세게 매기면 esp 기울기가 −0.30으로 내려가는 동시에 rsa도 −0.035로 함께 뒤집혔다.
+// 뒷공간을 내주는 대가는 그 공간을 쓸 상대가 있을 때만 발생한다.
+const MENTALITY_FX: Record<Mentality, { chanceRate: number; chanceQuality: number; counterVulnerability: number; possessionBias: number; concedeQuality: number; staminaDrain: number }> = {
+  'very-defensive': { chanceRate: 0.84, chanceQuality: 0.94, counterVulnerability: 0.78, possessionBias: 0.90, concedeQuality: 0.90, staminaDrain: 0.96 },
+  'defensive':      { chanceRate: 0.92, chanceQuality: 0.97, counterVulnerability: 0.89, possessionBias: 0.95, concedeQuality: 0.95, staminaDrain: 0.98 },
+  'balanced':       { chanceRate: 1.0,  chanceQuality: 1.0,  counterVulnerability: 1.0,  possessionBias: 1.0,  concedeQuality: 1.0,  staminaDrain: 1.0 },
+  'attacking':      { chanceRate: 1.09, chanceQuality: 1.03, counterVulnerability: 1.13, possessionBias: 1.05, concedeQuality: 1.06, staminaDrain: 1.03 },
+  'very-attacking': { chanceRate: 1.18, chanceQuality: 1.06, counterVulnerability: 1.28, possessionBias: 1.10, concedeQuality: 1.13, staminaDrain: 1.06 },
 }
+export const MENTALITIES: Mentality[] = ['very-defensive', 'defensive', 'balanced', 'attacking', 'very-attacking']
 export function mentalityEffects(m: Mentality = 'balanced') { return MENTALITY_FX[m] }
 
 // ── 공격 패턴 4종 ───────────────────────────────────────────────
@@ -149,11 +180,35 @@ const ATTACK_PATTERN_FX: Record<AttackPattern, { chanceRate: number; chanceQuali
 export function attackPatternEffects(p: AttackPattern = 'balanced') { return ATTACK_PATTERN_FX[p] }
 
 // ── 그룹(라인) 적극성 ───────────────────────────────────────────
-// 각 라인 -1|0|1. 존 전력 배수: +1 → 1.06, 0 → 1.0(불변), -1 → 0.95.
+// 각 라인 -1|0|1. **무게중심 이동**이지 공짜 부스트가 아니다.
+//
+// E3 수정: 이전엔 존 무관하게 +1 → 1.06, −1 → 0.95였고 비용은 체력 −4%뿐이었다.
+// 실측에서 attack:+1은 상대와 무관하게 +3~5pp — 사실상 정답이 하나인 축이었다
+// (반면 midfield:+1은 음수였다. 미드필드 존이 점유 판정에만 쓰이고 점유는 참여 빈도
+//  정규화로 승패에 거의 중립이기 때문이다. 같은 배수인데 부호가 갈리는 건 설계가 아니다).
+//
+// 이제 한 라인을 끌어올리면 **그 뒤 라인이 얇아진다** — 실제 축구의 무게중심 이동이다.
+// 전방을 밀어올리면 뒤가 비고(공격+1 → 수비 존 0.97), 뒤를 두껍게 하면 앞이 고립된다.
+// 미드필드는 앞뒤 양쪽에서 조금씩 가져오므로 절반씩(0.985) 나눠 문다.
+// 전부 0이면 모든 존이 정확히 1.0 → 기존 동작 불변(시드 회귀 유지).
+const GI_ZONE_FX: Record<'attack' | 'midfield' | 'defense', Record<'attack' | 'midfield' | 'defense', number>> = {
+  //   적극 라인 ↓        영향 대상 존 →  attack        midfield      defense
+  attack:   { attack: 1.06,  midfield: 1.0,  defense: 0.97 },
+  midfield: { attack: 0.985, midfield: 1.06, defense: 0.985 },
+  defense:  { attack: 0.97,  midfield: 1.0,  defense: 1.06 },
+}
 export function groupIntensityZoneFactor(gi: GroupIntensity | undefined, zone: 'attack' | 'midfield' | 'defense'): number {
   if (!gi) return 1.0
-  const v = gi[zone]
-  return v > 0 ? 1.06 : v < 0 ? 0.95 : 1.0
+  let f = 1.0
+  for (const line of ['attack', 'midfield', 'defense'] as const) {
+    const v = gi[line]
+    if (v === 0) continue
+    const up = GI_ZONE_FX[line][zone]
+    // 자제(−1)는 적극(+1)의 거울상이되 크기를 5/6로 둔다 — 물러서는 선택이 나가는 선택보다
+    // 효과가 작아야 "전부 자제"가 새로운 지배 전략이 되지 않는다(체력은 오히려 아낀다).
+    f *= v > 0 ? up : 1 + (1 - up) * (5 / 6)
+  }
+  return f
 }
 // 체력 소모 배수: 적극(+1) 라인 하나당 +4% 가중, 자제(-1)는 -2%. 전부 0 → 1.0(불변).
 export function groupIntensityStaminaFactor(gi: GroupIntensity | undefined): number {

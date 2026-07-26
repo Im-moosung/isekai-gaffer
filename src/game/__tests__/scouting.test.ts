@@ -2,14 +2,14 @@
 // 추천은 "정답"이 아니라 근거를 붙인 출발점이므로, 테스트는 수치가 아니라
 // (1) 상대 성향에 대한 방향성 (2) 결정론 (3) 근거 문구 존재를 고정한다.
 import { describe, it, expect } from 'vitest'
-import { recommendPlan, planRisks } from '../scouting'
+import { recommendPlan, planRisks, trapAxis, edgeMentality, planEdge } from '../scouting'
 import { loadTeam, TEAM_IDS, type TeamId } from '../../data/loader'
 import { pickBestXI } from '../../engine/lineup'
 // balance는 계측 전용 모듈이다(UI·게임 로직에서 import 금지). 추천이 엔진 밸런스와
 // 실제로 일치하는지는 시뮬레이션으로만 증명할 수 있으므로 테스트에서만 쓴다.
 import { runAbBatch } from '../../engine/balance'
 import { flankStrength, weakestFlank } from '../../engine/simulate'
-import { attackFocusEffects } from '../../engine/tactics'
+import { attackFocusEffects, trapFactor } from '../../engine/tactics'
 
 describe('recommendPlan', () => {
   it('점유 강팀(스페인) 상대로는 라인을 내리고 수비적 멘탈리티를 권한다', () => {
@@ -69,23 +69,34 @@ describe('recommendPlan', () => {
     expect(new Set(lines).size).toBe(4)
   })
 
-  // ── 문면 일관성 ────────────────────────────────────────────────
-  // 태세(멘탈리티)와 축(라인)이 서로 다른 규칙에서 나오면 "수비적으로 가되 라인은 74까지
-  // 올리십시오" 같은 모순이 나온다. 지금은 둘 다 trapFactor 하나에서 파생되므로 모순이
-  // 구조적으로 불가능하지만, 나중에 누가 규칙을 하나 더 얹어도 여기서 걸리도록 고정한다.
-  it('멘탈리티와 라인이 모순되지 않는다 — 수비적이면 라인 ≤60, 공격적이면 라인 ≥40', () => {
+  // ── 두 판별자 · 두 축 ──────────────────────────────────────────
+  // 이전 판은 축과 태세를 모두 trapFactor에서 뽑고 "수비적이면 라인 ≤60"을 고정했다.
+  // E1 후속 실측이 그 규칙을 기각했다 — eng·fra는 라인을 끝까지 올리고 태세는 최하단인
+  // 조합이 최적이다(scouting.ts의 라인 스윕 표 참고: eng 라인 20 +3.0 → 80 +15.2).
+  // 그래서 지금 고정하는 것은 "두 축이 각자의 판별자를 정확히 따르는가"다.
+  // 문면 모순은 캡이 아니라 **근거 문구가 두 판별자를 모두 말하는 것**으로 막는다(아래 테스트).
+  it('라인·압박은 trap에서, 태세는 매치업 우위에서 나온다 (판별자 배선 고정)', () => {
     const kor = loadTeam('kor')
     for (const opp of TEAM_IDS) {
       if (opp === 'kor') continue
-      const r = recommendPlan(kor, loadTeam(opp))
-      const line = r.patch.instructions!.lineHeight
-      const m = r.patch.mentality
-      if (m === 'defensive' || m === 'very-defensive') {
-        expect(line, `${opp}: ${m}인데 라인 ${line}`).toBeLessThanOrEqual(60)
-      }
-      if (m === 'attacking' || m === 'very-attacking') {
-        expect(line, `${opp}: ${m}인데 라인 ${line}`).toBeGreaterThanOrEqual(40)
-      }
+      const t = loadTeam(opp)
+      const r = recommendPlan(kor, t)
+      const gk = pickBestXI(t).lineup.find(l => l.slot === 'GK')
+      const buildup = t.squad.find(p => p.id === gk?.playerId)?.gkStats?.buildup ?? 50
+      const axis = trapAxis(trapFactor({ oppGkBuildup: buildup, oppPossession: t.profile.style.possession }))
+      expect(r.patch.instructions!.lineHeight, `${opp} 라인`).toBe(axis.lineHeight)
+      expect(r.patch.instructions!.pressing, `${opp} 압박`).toBe(axis.pressing)
+      expect(r.patch.mentality, `${opp} 태세`).toBe(edgeMentality(planEdge(kor, t)))
+    }
+  })
+
+  it('근거 문구가 두 판별자를 모두 말한다 — 전개 지표(축)와 매치업 지수(태세)', () => {
+    const kor = loadTeam('kor')
+    for (const opp of TEAM_IDS) {
+      if (opp === 'kor') continue
+      const posture = recommendPlan(kor, loadTeam(opp)).reasons.find(x => x.field === 'lineHeight')!
+      expect(posture.text, opp).toContain('상대 후방 전개 지표')
+      expect(posture.text, opp).toContain('매치업 지수')
     }
   })
 

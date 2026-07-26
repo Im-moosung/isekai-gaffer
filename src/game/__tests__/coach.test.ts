@@ -390,7 +390,9 @@ describe('buildCoachAdvice — R5 제안의 유효성', () => {
   it('전개가 강한 상대(지표 78)에겐 수비 코치가 라인을 내려 블록을 세운다', () => {
     const def = find(underPressure(oppWithBuildup('esp', 78, 78), 60), '수비 코치')!
     expect(def.apply.instructions!.lineHeight!).toBeLessThan(50)
-    expect(def.apply.mentality).toBe('defensive')
+    // 태세는 trap이 아니라 매치업 우위(engine matchupEdge)가 정한다(E1 후속).
+    // 이 픽스처는 상대가 우리보다 강하므로(80 vs 76) 사다리 최하단이다.
+    expect(def.apply.mentality).toBe('very-defensive')
     expect(def.proposal).toContain('블록을 세웁시다')
   })
 
@@ -398,7 +400,10 @@ describe('buildCoachAdvice — R5 제안의 유효성', () => {
     const def = find(underPressure(oppWithBuildup('rsa', 50, 56), 60), '수비 코치')!
     expect(def.apply.instructions!.lineHeight!).toBeGreaterThan(50)
     expect(def.apply.instructions!.pressing!).toBeGreaterThan(50)
-    expect(def.apply.mentality).toBeUndefined()
+    // 축과 태세는 이제 서로 다른 판별자에서 나온다(축=trap, 태세=매치업 우위).
+    // 이 픽스처는 "전개는 약하지만 우리보다 강한 상대"(80 vs 76) — 전방에서 가두러 나가되
+    // 볼을 잃었을 때는 무리하지 않는다. 실측이 지지하는 조합이다(scouting.ts 라인 스윕 표).
+    expect(def.apply.mentality).toBe('very-defensive')
     expect(def.proposal).toContain('전방에서 가둘 수 있습니다')
   })
 

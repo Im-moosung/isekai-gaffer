@@ -169,6 +169,37 @@ export function weakestFlank(f: { left: number; right: number; center: number })
   return (['left', 'right', 'center'] as const).reduce((a, b) => (f[a] <= f[b] ? a : b))
 }
 
+// E1: 멘탈리티 위험 항의 상대 의존 스케일.
+// "뒷공간을 내주는 대가는 그 공간을 쓸 상대가 있을 때만 발생한다."
+//
+// 판별자는 **매치업 우위**(edge) — 두 방향 전력비의 곱이다:
+//   edge = (우리 공격/상대 수비) × (우리 수비/상대 공격)
+// 한 방향 비만 쓰면 부호를 가르지 못한다. 실팀 12팀의 존 전력이 73~82로 압축돼 있어
+// 단방향 비의 폭이 kor 기준 0.97~1.10뿐이었고, 제곱해도 rsa 0.98 / esp 1.15로
+// 실측 기울기가 거의 움직이지 않았다(1차 조정 실패). 비의 비는 두 방향의 차이가 곱으로
+// 합쳐져 폭이 두 배가 되고(0.90~1.10), 체력 저하처럼 양 팀에 공통으로 걸리는 요인은
+// 분자·분모에서 상쇄돼 경기 중에도 안정적이다.
+//
+// 지수 −10: 폭 ±10%를 실제 태세 판단이 갈리는 스케일(0.4~2.0)로 펴기 위한 값이다.
+// (kor 기준 실측 edge: rsa 1.095 → 0.39 · mex 1.045 → 0.64 · eng 0.928 → 2.06 · esp 0.956 → 1.55)
+// 동급(edge 1.0)이면 정확히 1.0이라 캘리브레이션 계약(동급 팀)에 무영향.
+// clamp는 퇴장·극단 라인업에서 발산을 막는다.
+const RISK_SENSITIVITY = 10
+
+/** 매치업 우위 — 두 방향 전력비의 곱. 1.0이 대등, >1이면 우리가 우위다.
+ *  추천 계층(game/scouting·game/coach)이 태세를 고를 때 같은 값을 읽는다. */
+export function matchupEdge(
+  ours: { attack: number; defense: number },
+  theirs: { attack: number; defense: number },
+): number {
+  return (ours.attack / Math.max(30, theirs.defense)) * (ours.defense / Math.max(30, theirs.attack))
+}
+
+const mentalityRiskScale = (
+  ours: { attack: number; defense: number },
+  theirs: { attack: number; defense: number },
+) => clamp(Math.pow(matchupEdge(ours, theirs), -RISK_SENSITIVITY), 0.35, 2.5)
+
 function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
   const zs = [zoneStrength(st.home), zoneStrength(st.away)]
   const sides = [st.home, st.away] as const
@@ -182,10 +213,15 @@ function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
   // 멘탈리티(5프리셋): instructionEffects 위에 곱. 'balanced'는 전 축 1.0 → 회귀 불변.
   for (const i of [0, 1] as const) {
     const m = mentalityEffects(sides[i].tactics.mentality)
+    const risk = mentalityRiskScale(zs[i], zs[(1 - i) as 0 | 1])
     fx[i].chanceRate *= m.chanceRate
     fx[i].chanceQuality *= m.chanceQuality
-    fx[i].counterVulnerability *= m.counterVulnerability
     fx[i].possessionBias *= m.possessionBias
+    // E1: 태세의 **이득**은 그대로, **위험**만 상대 역습 능력에 비례해 물린다.
+    // 1.0으로부터의 편차에 risk를 곱하므로 balanced(전 축 1.0)는 여전히 완전 불변이다.
+    fx[i].counterVulnerability *= 1 + (m.counterVulnerability - 1) * risk
+    fx[i].concedeQuality *= 1 + (m.concedeQuality - 1) * risk
+    fx[i].staminaDrain *= m.staminaDrain
   }
 
   // 개입 부스트: 방향 증폭이 아니라 고정 보너스로 준다.
@@ -342,7 +378,9 @@ function resolveChance(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: ReturnT
     atk.tactics.instructions.attackFocus,
     flankStrength(def.tactics.lineup, def.team.squad, def.staminaByPlayer, def.sentOff),
   )
-  const xg = clamp((es.shooting / 100) * 0.35 * fx[atkIdx].chanceQuality * ap.chanceQuality * qualityBoost * af.chanceQuality * Math.pow(strengthRatio, XG_STRENGTH), 0.02, 0.65)
+  // E1: 수비 측이 공격적 태세로 나와 있으면 내주는 찬스의 '질'이 오른다(역습은 좋은 자리에서 잡힌다).
+  // 기본(balanced)은 concedeQuality=1 → 회귀 불변.
+  const xg = clamp((es.shooting / 100) * 0.35 * fx[atkIdx].chanceQuality * ap.chanceQuality * qualityBoost * af.chanceQuality * fx[defIdx].concedeQuality * Math.pow(strengthRatio, XG_STRENGTH), 0.02, 0.65)
   st.stats[atkIdx].xg = round2(st.stats[atkIdx].xg + xg)
 
   // cross는 유효슛 확률 소폭↓(컷인↓·크로스 위주). balanced는 onTargetBias=1 → 불변.

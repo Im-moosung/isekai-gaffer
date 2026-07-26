@@ -150,7 +150,13 @@ Task 5b 후속 보정(`f5bfa55`) 중 계측으로 발견. 추천 계층이 아�
 Task 2가 라인·압박에서 제거한 것과 **같은 종류의 단조 지배**다. 밸런스 게이트 9개는
 라인·압박·템포만 검사하므로 아래 축들을 잡지 못한다.
 
-### E1. `very-attacking` 멘탈리티가 지배적 (가장 심각)
+### E1. `very-attacking` 멘탈리티가 지배적 (가장 심각) — **해결 (2026-07-26)**
+
+> 처리 완료. `MENTALITY_FX`에 `concedeQuality`·`staminaDrain`을 추가하고, 두 위험 항
+> (`counterVulnerability`·`concedeQuality`)을 매치업 우위(`simulate.matchupEdge`)에 비례해
+> 물리도록 바꿨다. 추천 계층의 태세도 trap이 아니라 같은 edge에서 뽑는다.
+> 밸런스 게이트 3개 추가(멘탈리티 스윕 2 + 나쁜 판단 페널티 1) — 총 24개 통과.
+> 실측 기울기(매우공격 − 매우수비, n=400): rsa +0.218 / mex +0.100 / esp **−0.350**.
 
 n=600 실측에서 `trap > 0`인 상대 **10팀 전부**에 대해 `very-attacking`이 `attacking`을
 승률·승점 양쪽에서 이긴다. `MENTALITY_FX['very-attacking']`의 `counterVulnerability: 1.28`이
@@ -173,7 +179,12 @@ n=600 실측에서 `trap > 0`인 상대 **10팀 전부**에 대해 `very-attacki
 `recommendPlan`은 이걸 알면서도 일부러 trap 비례값을 권하고 항상 100을 권하지 않는다
 (상대별 차별화 유지 + "무조건 최대"는 조언이 아니므로). 상대당 1~3pp를 남겨두는 선택이다.
 
-### E3. `groupIntensity`의 존별 부호가 어긋난다
+### E3. `groupIntensity`의 존별 부호가 어긋난다 — **해결 (2026-07-26)**
+
+> 처리 완료. `groupIntensityZoneFactor`가 존별 독립 배수에서 **무게중심 이동**으로 바뀌었다:
+> 한 라인을 올리면 그 뒤 라인이 얇아진다(attack +1 → attack 1.06 · defense 0.97).
+> E1 작업 중 "나쁜 판단 페널티" 게이트가 attack:+1의 공짜 이득에 막혀 통과하지 못해
+> 같은 패스에서 함께 고쳤다.
 
 `attack: +1`은 체력 −4%에 **+3~5pp** — 사실상 공짜다.
 반면 `midfield: +1`은 **음수**(arg −3.6pp, mar −3.8pp).

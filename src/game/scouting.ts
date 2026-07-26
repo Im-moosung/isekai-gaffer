@@ -7,7 +7,8 @@ import { MENTALITIES, formationEdge, trapFactor } from '../engine/tactics'
 import { mapFormation } from '../engine/formations'
 import { positionFitness } from '../engine/fitness'
 import { pickBestXI } from '../engine/lineup'
-import { flankStrength, weakestFlank } from '../engine/simulate'
+import { flankStrength, weakestFlank, matchupEdge } from '../engine/simulate'
+import { kickoffZones } from '../engine/strength'
 
 export interface PlanRecommendation {
   patch: Partial<TacticState>
@@ -36,23 +37,23 @@ function oppGkBuildup(opp: Team): number {
   return gk?.gkStats?.buildup ?? 50
 }
 
-// ── 태세를 엔진 판별자 하나에서 통째로 파생 (Phase A 보정 2차) ──────────────
+// ── 추천은 엔진 판별자에서 파생한다 (별도 규칙표 금지) ──────────────────────
 // 엔진에서 하이라인·하이프레스의 **보상**(compress 항)은 정확히 trapFactor에 비례한다.
-// 그래서 추천도 별도 규칙표를 만들지 않고 같은 판별자에서 목표치를 뽑는다 —
-// 나중에 엔진의 기준(72)이나 폭(13)을 손봐도 조언이 자동으로 따라온다.
+// 그래서 축은 그 판별자에서, 태세는 엔진이 태세 위험을 스케일할 때 쓰는 판별자
+// (simulate.matchupEdge)에서 그대로 뽑는다 — 엔진 계수를 손봐도 조언이 자동으로 따라온다.
 //
-// 1차(28bd711)는 **축만** trap에서 뽑고 멘탈리티는 FIFA 랭킹 격차에서 따로 뽑았다.
-// 두 규칙이 서로를 몰라서 "수비적 태세로 가되 라인을 74까지 올리십시오"라는 문면 모순이
-// 났고, 정작 토너먼트 상대에겐 효과도 없었다(n=400 실측 Δpp: arg +1.0 / mar +1.5 /
-// fra +2.3 / eng +3.3 — 조별 상대의 +3.7~+9.8과 비교하면 사실상 무효).
-//
-// 2차인 지금은 **축·멘탈리티·그룹 적극성을 모두 trap 하나에서** 뽑는다. 레버가 하나뿐이라
-// 문면 모순이 구조적으로 불가능해진다(아래 사다리 주석의 구간 증명 참고).
+// 판(版) 이력:
+//  1차(28bd711) 축=trap · 태세=FIFA 랭킹 격차. 두 규칙이 서로를 몰라 "수비적으로 가되 라인은
+//    74까지"라는 문면 모순이 났고 토너먼트 상대엔 효과도 없었다(Δpp: arg +1.0 / fra +2.3).
+//  2차 축·태세·그룹 적극성을 전부 trap 하나에서. 문면 모순은 사라졌지만, 그 전제는
+//    "공격적 태세는 상대와 무관하게 이득"이라는 당시 엔진 상태였다.
+//  3차(지금, E1 후속) 엔진이 태세 위험을 매치업 우위에 비례해 물리게 되면서 그 전제가 깨졌다.
+//    축은 trap, 태세는 edge — 판별자 둘, 축 둘이다. 문면 모순은 캡이 아니라 근거 문구가
+//    두 판별자를 모두 말하는 것으로 막는다(recommendPlan의 axisClause·postureClause).
 //
 // 검증하고 **기각한** 가설: "강팀에겐 스페인처럼 라인을 내려야 하는데 trap이 그걸 못 잡는다."
-// 실측(n=400, 라인·압박을 25/25로 내리고 수비적)은 전부 더 나빴다 —
-// arg −1.2 / fra −0.3 / eng +0.8 / mar −5.0. 아르헨티나·프랑스 상대로도 **올리는 쪽**이
-// 맞았고, 틀린 것은 축이 아니라 멘탈리티 규칙이었다.
+// 3차 엔진에서 다시 재본 라인 스윕도 같은 결론이다 — eng·fra는 태세가 최하단이어도
+// 라인은 올릴수록 유리했다(coherentAxis를 걷어낸 근거, 아래 표 참고).
 
 // 기울기 45: trap 상한 1.1에서 라인 99.5 ≈ 100.
 // 근거는 라인 스윕(n=400, 압박 68·공격 라인 적극성 고정)이다. trap>0인 10팀 전부 라인은
@@ -72,18 +73,23 @@ const K_DOWN = 1.5
 const PRESS_MAX = 68
 // 하한 20: 격자 실측의 하한이 20이라 그 아래는 검증되지 않았다. 검증 범위 밖으로 나가지 않는다.
 const AXIS_MIN = 20
-// 태세 사다리 기울기 2 = trap 0.5마다 한 칸. K_AXIS와 맞물려 한 칸이 축 22.5의 이동에 대응한다.
-// MENTALITIES(엔진 정본)는 [매우 수비적, 수비적, 균형, 공격적, 매우 공격적]이고 중립은 index 2다.
+// ── 태세는 trap이 아니라 **매치업 우위**(edge)에서 뽑는다 (E1 후속) ──────────
+// 2차 판(위 주석)은 축·태세·그룹 적극성을 전부 trap 하나에서 뽑았다. 그 전제는
+// "공격적 태세는 상대와 무관하게 이득"이라는 당시 엔진 상태였고, E1 수정으로 그 전제가 깨졌다.
+// 이제 공격 태세의 위험(counterVulnerability·concedeQuality)은 상대 공격진이 우리 수비보다
+// 얼마나 강한가(engine matchupEdge)에 비례해 물린다.
 //
-// **이 한 줄이 문면 일관성을 구조적으로 보장한다.** trap이 clamp(−0.5, 1.1)이므로:
-//   defensive(1)      ⟺ trap ∈ [−0.50, −0.25) ⟹ 라인 = 50 + trap·45·1.5 ∈ [20, 33]  (≤ 60 ✓)
-//   balanced(2)       ⟺ trap ∈ [−0.25,  0.25) ⟹ 라인 ∈ [33, 61]                      (제약 없음)
-//   attacking(3)      ⟺ trap ∈ [ 0.25,  0.75) ⟹ 라인 = 50 + trap·45 ∈ [61, 84]      (≥ 40 ✓)
-//   very-attacking(4) ⟺ trap ≥ 0.75           ⟹ 라인 ≥ 84                            (≥ 40 ✓)
-// very-defensive(0)는 trap ≤ −0.75가 필요해 도달 불가다 — 현재 데이터의 최강 전개팀
-// (스페인 78)조차 블록만 세우면 충분했다(라인 20 실측: 수비적 +18.0 / 매우 수비적 +16.7).
-const K_MENTALITY = 2
-
+// 실측(n=300, 추천 축 위에서 멘탈리티만 스윕한 최적값 · 기본 지시 대비 Δpp):
+//   rsa edge 1.096 → 매우공격(+12.7)  cze 1.069 → 공격(+11.7)  ecu 1.054 → 공격(+7.7)
+//   can 1.049 → 매우공격(+16.3)  mex 1.045 → 매우공격(+8.0)   mar 1.021 → 공격(+10.0)
+//   nor 0.997 → 균형(+12.0)      esp 0.956 → 균형(+17.3)      arg 0.955 → 매우수비(+8.0)
+//   eng 0.927 → 매우수비(+12.3)  fra 0.898 → 매우수비(+16.7)
+// trap으로는 이 서열을 만들 수 없다 — eng·arg·fra는 trap 0.58~0.65(가둘 수 있는 상대)인데
+// 최적 태세는 최하단이다.
+// 계수 25: 위 11점의 최소제곱 기울기는 23.3이지만, 사다리는 반올림 계단이라 기울기 자체보다
+// **계단 경계가 실측 argmax와 맞는지**가 중요하다. 정수 후보를 실측과 대조하면 25가 가장 적게
+// 어긋난다(23이면 mar·esp가 한 칸씩 더 어긋나 6곳, 25면 4곳이며 전부 한 칸 차이다).
+const K_MENTALITY_EDGE = 25
 /** trap → 목표 (라인, 압박). **킥오프 추천과 경기 중 코치 조언이 같은 축을 말해야** 하므로
  *  공식을 여기 한 벌만 두고 game/coach.ts가 재사용한다(엔진 compress와 같은 판별자에서 파생). */
 export function trapAxis(trap: number): { lineHeight: number; pressing: number } {
@@ -91,9 +97,33 @@ export function trapAxis(trap: number): { lineHeight: number; pressing: number }
   return { lineHeight: clampTo(axis, AXIS_MIN, 100), pressing: clampTo(axis, AXIS_MIN, PRESS_MAX) }
 }
 
-/** trap → 태세. 축과 같은 사다리에서 뽑아야 "수비적으로 가되 라인은 올려라"가 구조적으로 불가능하다. */
-export function trapMentality(trap: number): Mentality {
-  return MENTALITIES[Math.min(4, Math.max(0, 2 + Math.round(trap * K_MENTALITY)))]
+// ── "높은 라인 + 수비적 태세"는 모순이 아니다 (실측으로 확인) ─────────────────
+// 이전 판은 태세가 수비적이면 라인을 60에서 잘라(캡) 문면 모순을 막으려 했다.
+// 실측이 그 캡을 기각했다 — 추천 플랜의 라인·압박만 스윕한 결과(n=600, Δpp 대 기본 지시):
+//   eng(매우 수비적): 라인 20 +3.0 · 40 +9.3 · 60 +11.3 · 70 +14.8 · 80 +15.2
+//   fra(매우 수비적): 라인 20 +8.3 · 40 +15.3 · 60 +18.2 · 70 +20.3 · 80 +21.2
+//   arg(수비적):      라인 20 +0.8 · 40 +4.2  · 60 +1.7  · 70 +4.3  · 80 +5.7
+// 즉 잉글랜드·프랑스 상대의 최적은 **라인을 끝까지 올리고 태세는 최하단**이다.
+// 축과 태세는 서로 다른 것을 재기 때문이다:
+//   축(trap)  — 상대가 후방에서 볼을 빼낼 수 있는가 → 나가서 끊을 값이 있는가
+//   태세(edge) — 볼을 잃었을 때 상대가 처벌할 수 있는가 → 얼마나 걸고 나갈 것인가
+// 전방에서 압박해 끊되 잡았을 때 무리하지 않는 것은 실제 축구의 표준 처방이다.
+// 캡을 씌우면 그 처방을 표현할 수 없어 eng·fra에서 4~5pp를 버린다.
+// 대신 **근거 문구가 두 판별자를 모두 말하도록** 강제한다(아래 postureClause·axisClause).
+
+/** 매치업 우위 → 태세 사다리 index(0~4). MENTALITIES는 [매우 수비적 … 매우 공격적]이고 중립은 2다. */
+export function edgeMentalityIndex(edge: number): number {
+  return Math.min(4, Math.max(0, Math.round(2 + (edge - 1) * K_MENTALITY_EDGE)))
+}
+
+/** 매치업 우위 → 태세. */
+export function edgeMentality(edge: number): Mentality {
+  return MENTALITIES[edgeMentalityIndex(edge)]
+}
+
+/** 두 팀의 킥오프 매치업 우위(엔진 판별자 그대로). */
+export function planEdge(me: Team, opp: Team): number {
+  return matchupEdge(kickoffZones(me), kickoffZones(opp))
 }
 
 const MENTALITY_KO: Record<Mentality, string> = {
@@ -122,24 +152,27 @@ export function recommendPlan(me: Team, opp: Team): PlanRecommendation {
   }
   const patch: Partial<TacticState> = {}
 
-  // 상대의 후방 전개 능력(GK 빌드업 · 점유 성향의 평균)이 태세 전체의 유일한 구동자다.
+  // 판별자는 둘이다. 서로 다른 것을 재고 서로 다른 축을 정한다.
+  //  (1) trap — 상대의 후방 전개 능력. "가둘 수 있는가"를 재고 **라인·압박**을 정한다.
+  //  (2) edge — 매치업 우위. "볼을 잃었을 때 처벌받는가"를 재고 **태세**를 정한다.
+  // 둘을 하나로 묶었던 이전 판이 틀렸다는 것은 실측이 보였다(edgeMentalityIndex 주석 참고):
+  // 잉글랜드·아르헨티나·프랑스는 trap이 높은데(가둘 수 있다) 최적 태세는 최하단이다.
   const gkBuildup = oppGkBuildup(opp)
   const buildupIndex = Math.round((gkBuildup + s.possession) / 2)
   const trap = trapFactor({ oppGkBuildup: gkBuildup, oppPossession: s.possession })
+  const myZones = kickoffZones(me), oppZones = kickoffZones(opp)
+  const edge = matchupEdge(myZones, oppZones)
   // 라인과 압박은 같은 값에서 나온다(엔진의 compress도 두 축을 하나의 trap으로 묶는다).
   // 갈리는 건 상한뿐이다 — 압박에만 체력·파울 비용이 걸려 68에서 멈춘다.
+  const mentalityIndex = edgeMentalityIndex(edge)
   const targetAxis = trapAxis(trap)
   ins.lineHeight = targetAxis.lineHeight
   ins.pressing = targetAxis.pressing
-  // 멘탈리티도 같은 사다리에서 뽑는다. 이전 판의 FIFA 랭킹 규칙(격차 ≥15 → 수비적)은
-  // 실측으로 기각했다: trap 파생 라인에서 수비적은 공격적보다 항상 나빴다
-  // (n=400 — fra 공격적 +10.2 vs 수비적 +1.0 / eng +6.3 vs +1.5 / mar +7.5 vs +0.8).
-  const mentalityIndex = Math.min(4, Math.max(0, 2 + Math.round(trap * K_MENTALITY)))
-  const mentality = trapMentality(trap) // === MENTALITIES[mentalityIndex] — 사다리 정의는 한 곳(trapMentality)뿐이다.
+  const mentality = MENTALITIES[mentalityIndex]
   patch.mentality = mentality
-  // 그룹 적극성도 같은 태세를 따른다 — 나갈 땐 공격 라인을, 물러설 땐 수비 라인을 끌어올린다.
-  // 실측(n=400, trap 파생 라인 · 지정 없음 대비): 공격 태세의 attack+1은 arg +4.0 / fra +5.0 /
-  // eng +3.0 / mex +3.8pp. 스페인(블록)의 defense+1은 +3.0pp.
+  // 그룹 적극성은 태세를 따른다 — 나갈 땐 공격 라인을, 물러설 땐 수비 라인을 끌어올린다.
+  // E3 수정 이후 이 선택은 공짜가 아니다: 한 라인을 올리면 그 뒤 라인이 얇아진다
+  // (engine tactics.GI_ZONE_FX). 그래서 태세와 같은 방향일 때만 값이 있다.
   // 이전 판의 "상대 압박 ≥65면 midfield+1"은 실측에서 오히려 손해라 제거했다
   // (지정 없음 대비 arg −3.6 / mar −3.8pp).
   patch.groupIntensity = mentalityIndex >= 3
@@ -148,18 +181,23 @@ export function recommendPlan(me: Team, opp: Team): PlanRecommendation {
       ? { attack: 0, midfield: 0, defense: 1 }
       : { attack: 0, midfield: 0, defense: 0 }
 
-  // 축과 태세를 **한 문장 안에서** 함께 말한다. 둘이 같은 trap에서 나오므로 서로를 배신할 수 없다.
+  // 축과 태세를 한 문장 안에서 말하되, **각자의 근거 수치를 붙여** 말한다.
+  // 축은 전개 지표에서, 태세는 매치업 지수에서 나온다 — 유저가 둘을 따로 검증할 수 있어야 한다.
   const indexText = `상대 후방 전개 지표 ${buildupIndex} (GK 빌드업 ${gkBuildup} · 점유 성향 ${s.possession})`
   const axisText = `라인 ${ins.lineHeight} · 압박 ${ins.pressing}`
-  reasons.push({
-    field: 'lineHeight',
-    // 조사는 숫자 읽기에 따라 '로/으로'가 갈리므로 '까지'로 통일한다(85→팔십오'로', 86→팔십육'으로').
-    text: mentalityIndex >= 3
-      ? `${indexText} — 기준 72보다 낮아 전방에서 가둘 수 있습니다. ${axisText}까지 올리고 ${MENTALITY_KO[mentality]} 태세로 나섭니다`
-      : mentalityIndex <= 1
-        ? `${indexText} — 기준 72를 넘어 압박이 벗겨집니다. ${axisText}까지 내려 ${MENTALITY_KO[mentality]} 태세로 블록을 세웁니다`
-        : `${indexText} — 기준 72와 비슷해 어느 쪽도 크게 통하지 않습니다. ${axisText}의 중간 강도에 ${MENTALITY_KO[mentality]} 태세를 권합니다`,
-  })
+  // 조사는 숫자 읽기에 따라 '로/으로'가 갈리므로 '까지'로 통일한다(85→팔십오'로', 86→팔십육'으로').
+  const axisClause = trap >= 0.25
+    ? `기준 72보다 낮아 전방에서 가둘 수 있습니다. ${axisText}까지 올립니다`
+    : trap <= -0.25
+      ? `기준 72를 넘어 압박이 벗겨집니다. ${axisText}까지 내려 블록을 세웁니다`
+      : `기준 72와 비슷해 어느 쪽도 크게 통하지 않습니다. ${axisText}의 중간 강도로 형태를 고정합니다`
+  const edgeText = `매치업 지수 ${edge.toFixed(2)} (우리 공격 ${myZones.attack.toFixed(0)}·수비 ${myZones.defense.toFixed(0)} vs 상대 공격 ${oppZones.attack.toFixed(0)}·수비 ${oppZones.defense.toFixed(0)})`
+  const postureClause = mentalityIndex >= 3
+    ? `${edgeText} — 우리가 우위라 ${MENTALITY_KO[mentality]} 태세로 나섭니다`
+    : mentalityIndex <= 1
+      ? `${edgeText} — 상대 공격진이 우리 수비보다 강해 볼을 잃었을 때 처벌이 큽니다. ${MENTALITY_KO[mentality]} 태세로 무리하지 않습니다`
+      : `${edgeText} — 전력이 대등해 ${MENTALITY_KO[mentality]} 태세로 균형을 잡습니다`
+  reasons.push({ field: 'lineHeight', text: `${indexText} — ${axisClause}. ${postureClause}` })
 
   if (s.possession >= 70) {
     // 태세는 이미 위에서 정해졌다(점유 78인 스페인은 trap −0.46 → 수비적 · 라인 20).
@@ -203,7 +241,9 @@ export function recommendPlan(me: Team, opp: Team): PlanRecommendation {
   if (gap >= 15) {
     // 문구가 태세를 지시하면 안 된다 — 스페인(블록)과 아르헨티나(하이라인)가 같은 이 문장을
     // 받는데, "물러서라"거나 "나가라"고 쓰면 둘 중 하나에서 반드시 추천과 어긋난다.
-    reasons.push({ field: 'note', text: `FIFA 랭킹 ${me.fifaRanking}위 vs ${opp.fifaRanking}위 — 전력차가 큽니다. 태세는 랭킹이 아니라 상대의 후방 전개 지표에 맞춥니다` })
+    // 태세를 정하는 건 trap(후방 전개)이 아니라 edge(매치업 우위)다 — 문구가 실제 배선과
+    // 어긋나면 유저가 근거를 검증할 수 없다.
+    reasons.push({ field: 'note', text: `FIFA 랭킹 ${me.fifaRanking}위 vs ${opp.fifaRanking}위 — 전력차가 큽니다. 태세는 랭킹이 아니라 실제 스쿼드 매치업 지수에 맞춥니다` })
   } else if (gap <= -15) {
     reasons.push({ field: 'note', text: `FIFA 랭킹 ${me.fifaRanking}위 vs ${opp.fifaRanking}위 — 주도권을 잡을 수 있는 매치업입니다` })
   }

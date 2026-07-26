@@ -17,7 +17,9 @@ import type {
   AttackPattern, GroupIntensity, Instructions, MatchState, Mentality, SideState,
 } from '../engine/types'
 import { trapFactor } from '../engine/tactics'
-import { trapAxis, trapMentality } from './scouting'
+import { matchupEdge } from '../engine/simulate'
+import { zoneStrength } from '../engine/strength'
+import { trapAxis, edgeMentality } from './scouting'
 
 /** 코치 직함(익명 — 실명 금지). */
 export type CoachRole = '수비 코치' | '공격 코치' | '피지컬 코치' | '세트피스 코치'
@@ -248,6 +250,10 @@ export function buildCoachAdvice(engine: MatchState, side: 'home' | 'away'): Coa
   // 전개가 약한 팀 상대로는 틀린 조언이다 — 엔진의 compress 이득이 정확히 trapFactor에
   // 비례하므로(tactics.ts) 같은 판별자를 재사용한다(scouting.ts와 동일 패턴).
   const bu = oppBuildup(oppState)
+  // 태세는 trap이 아니라 매치업 우위(edge)가 정한다 — 킥오프 추천(scouting.recommendPlan)과
+  // 같은 판별자여야 "코치가 하프타임에 킥오프 플랜을 배신하는" 조언이 나오지 않는다.
+  // 여기서는 **지금 그라운드의** 존 전력을 읽으므로 체력·퇴장·사기가 반영된 실시간 값이다.
+  const edge = matchupEdge(zoneStrength(ownState), zoneStrength(oppState))
   const axis = trapAxis(bu.trap)
   const compress = bu.trap >= 0.25 // 가둘 수 있다(라인·압박을 올리는 쪽이 이득)
   const block = bu.trap <= -0.25 // 벗겨진다(내려앉아 블록을 세우는 쪽이 이득)
@@ -266,7 +272,7 @@ export function buildCoachAdvice(engine: MatchState, side: 'home' | 'away'): Coa
       : block
         ? `기준 72를 넘어 우리 압박이 벗겨집니다 — ${axisText}까지 내려 블록을 세웁시다.`
         : `기준 72와 비슷해 어느 쪽도 크게 통하지 않습니다 — ${axisText}의 중간 강도로 형태를 고정합시다.`
-    const men = trapMentality(bu.trap)
+    const men = edgeMentality(edge)
 
     advice.push({
       coach: '수비 코치',

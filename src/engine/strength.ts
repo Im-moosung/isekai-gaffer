@@ -1,7 +1,8 @@
 // src/engine/strength.ts
-import type { SideState, Position } from './types'
+import type { SideState, Position, Team } from './types'
 import { effectiveStats, positionFitness } from './fitness'
 import { groupIntensityZoneFactor, phaseTilt } from './tactics'
+import { pickBestXI } from './lineup'
 
 const ZONE_OF: Record<Position, 'gk' | 'defense' | 'midfield' | 'attack'> = {
   GK: 'gk', CB: 'defense', LB: 'defense', RB: 'defense',
@@ -55,4 +56,13 @@ export function zoneStrength(side: SideState, phase?: 'attack' | 'defense') {
     defense: avg(zones.defense) * (1 - shortage) * mod('defense'),
     gk: avg(zones.gk),
   }
+}
+
+/** 킥오프 시점(체력 100·사기 70·최적 XI)의 존 전력. 추천 계층(game/scouting·game/coach)이
+ *  엔진과 **같은 판별자**로 매치업을 읽을 수 있게 하려고 여기 둔다 — 수식을 복제하면
+ *  "조언이 말하는 매치업"과 "엔진이 계산하는 매치업"이 어긋난다. */
+export function kickoffZones(team: Team) {
+  const staminaByPlayer: Record<string, number> = {}, moraleByPlayer: Record<string, number> = {}
+  team.squad.forEach(p => { staminaByPlayer[p.id] = 100; moraleByPlayer[p.id] = 70 })
+  return zoneStrength({ team, tactics: pickBestXI(team), staminaByPlayer, moraleByPlayer, subsUsed: 0, sentOff: [] })
 }
