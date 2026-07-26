@@ -22,12 +22,18 @@ interface LineupScreenProps {
  *  드래그앤드롭·클릭 스왑 병행 + 슬롯별 적합도 경고 색. 상태 변경은 전부 swap.ts 순수 함수 경유.
  *  DnD 상호작용 자체는 수동 검증; 여기선 렌더·확정·순수 로직만 테스트한다.
  *
- *  @param embedded 전술 센터 탭 안에 끼워 넣는 모드 — 전체화면 높이·배경을 벗는다. */
-export function LineupEditor({ team, tactics, onChange, embedded }: {
+ *  @param embedded 전술 센터 탭 안에 끼워 넣는 모드 — 전체화면 높이·배경을 벗는다.
+ *  @param staminaByPlayer 킥오프 전 컨디션(캠페인 이월 체력 포함). 주면 칩·벤치 카드에
+ *    작은 게이지가 붙고 선택 카드에 체력 게이지가 뜬다 — 선발을 짜는 1차 근거라
+ *    "카드를 열어야만 보이는" 정보로 두지 않는다.
+ *  @param moraleByPlayer 사기(선택 카드 게이지에만 — 리스트까지 두 줄이면 칩이 뭉갠다). */
+export function LineupEditor({ team, tactics, onChange, embedded, staminaByPlayer, moraleByPlayer }: {
   team: Team
   tactics: TacticState
   onChange(next: TacticState): void
   embedded?: boolean
+  staminaByPlayer?: Record<string, number>
+  moraleByPlayer?: Record<string, number>
 }) {
   const [selected, setSelected] = useState<string | null>(null)
 
@@ -106,6 +112,7 @@ export function LineupEditor({ team, tactics, onChange, embedded }: {
                 slot={slot.slot}
                 x={c.x}
                 y={c.y}
+                stamina={staminaByPlayer?.[slot.playerId]}
                 selected={selected === slot.playerId}
                 onClick={() => handleClick(slot.playerId)}
               />
@@ -113,7 +120,12 @@ export function LineupEditor({ team, tactics, onChange, embedded }: {
           })}
           {selectedPlayer && (
             <div className="lu-pop" role="group" aria-label="선수 카드">
-              <PlayerCard player={selectedPlayer} slot={selectedSlot ?? selectedPlayer.position} />
+              <PlayerCard
+                player={selectedPlayer}
+                slot={selectedSlot ?? selectedPlayer.position}
+                stamina={staminaByPlayer?.[selectedPlayer.id]}
+                morale={moraleByPlayer?.[selectedPlayer.id]}
+              />
             </div>
           )}
         </div>
@@ -125,6 +137,7 @@ export function LineupEditor({ team, tactics, onChange, embedded }: {
               <BenchCard
                 key={player.id}
                 player={player}
+                stamina={staminaByPlayer?.[player.id]}
                 selected={selected === player.id}
                 onClick={() => handleClick(player.id)}
               />
@@ -165,11 +178,35 @@ function useDragDrop(id: string) {
   return { setRef, attributes: drag.attributes, listeners: drag.listeners, isDragging: drag.isDragging, isOver: drop.isOver, dragStyle }
 }
 
-function PitchChip({ player, slot, x, y, selected, onClick }: {
-  player: Player; slot: Position; x: number; y: number; selected: boolean; onClick(): void
+/** 체력 임계 — 40 미만은 경고, 70 미만은 주의. 교체 판단의 눈금이라 색으로만 구분한다
+ *  (수치는 게이지 옆에 함께 적어 색맹 사용자도 읽을 수 있게 한다). */
+function staminaTone(pct: number): 'low' | 'mid' | 'ok' {
+  if (pct < 40) return 'low'
+  if (pct < 70) return 'mid'
+  return 'ok'
+}
+
+/** 리스트용 초소형 체력 게이지 — 칩·벤치 카드에 한 줄로 붙는다. */
+function MiniStamina({ value, showValue }: { value: number; showValue?: boolean }) {
+  const pct = Math.max(0, Math.min(100, Math.round(value)))
+  return (
+    <span className="lu-sta" aria-label={`체력 ${pct}%`}>
+      <span className="lu-sta__track">
+        {/* 데이터 바인딩 폭(%)만 인라인 — pitch 기하 예외와 동일 취급. 색은 토큰. */}
+        <span className={`lu-sta__bar lu-sta__bar--${staminaTone(pct)}`} style={{ width: `${pct}%` }} />
+      </span>
+      {showValue && <span className="lu-sta__val">{pct}</span>}
+    </span>
+  )
+}
+
+function PitchChip({ player, slot, x, y, stamina, selected, onClick }: {
+  player: Player; slot: Position; x: number; y: number; stamina?: number
+  selected: boolean; onClick(): void
 }) {
   const { setRef, attributes, listeners, isDragging, isOver, dragStyle } = useDragDrop(player.id)
   const level = fitLevel(player, slot)
+  const staLabel = stamina != null ? ` 체력 ${Math.round(stamina)}` : ''
   return (
     <button
       ref={setRef}
@@ -178,19 +215,23 @@ function PitchChip({ player, slot, x, y, selected, onClick }: {
       style={{ left: `${x}%`, top: `${y}%`, ...dragStyle }}
       {...attributes}
       {...listeners}
-      aria-label={`${player.name.ko} ${slot} 적합도 ${level}`}
+      aria-label={`${player.name.ko} ${slot} 적합도 ${level}${staLabel}`}
       aria-pressed={selected}
       onClick={onClick}
     >
       <span className="lu-chip__num">{player.number}</span>
       <span className="lu-chip__name">{player.name.ko}</span>
       <span className="lu-chip__slot">{slot}</span>
+      {stamina != null && <MiniStamina value={stamina} />}
     </button>
   )
 }
 
-function BenchCard({ player, selected, onClick }: { player: Player; selected: boolean; onClick(): void }) {
+function BenchCard({ player, stamina, selected, onClick }: {
+  player: Player; stamina?: number; selected: boolean; onClick(): void
+}) {
   const { setRef, attributes, listeners, isDragging, isOver, dragStyle } = useDragDrop(player.id)
+  const staLabel = stamina != null ? ` 체력 ${Math.round(stamina)}` : ''
   return (
     <button
       ref={setRef}
@@ -199,7 +240,7 @@ function BenchCard({ player, selected, onClick }: { player: Player; selected: bo
       style={dragStyle}
       {...attributes}
       {...listeners}
-      aria-label={`${player.name.ko} ${player.position} 벤치`}
+      aria-label={`${player.name.ko} ${player.position} 벤치${staLabel}`}
       aria-pressed={selected}
       onClick={onClick}
     >
@@ -209,6 +250,7 @@ function BenchCard({ player, selected, onClick }: { player: Player; selected: bo
         <span className="lu-card__pos">{player.position}</span>
       </span>
       <PlayerRadar player={player} className="lu-card__radar" />
+      {stamina != null && <MiniStamina value={stamina} showValue />}
     </button>
   )
 }

@@ -130,7 +130,17 @@ export function TacticsCenter({ onKickoff, referenceScore }: {
           </div>
           <div className="tc-tabbody">
             {tab === 'lineup' && (
-              <LineupEditor team={home.team} tactics={home.tactics} onChange={setTactics} embedded />
+              // 컨디션은 킥오프 전에 가장 중요한 정보다(캠페인 이월 체력이 여기 반영돼 있다 —
+              // matchStore.startMatch가 staminaOverride로 엔진 초기값을 이미 덮어썼으므로
+              // 여기서 campaignStore를 다시 읽지 않는다. 진실의 원천은 엔진 하나다).
+              <LineupEditor
+                team={home.team}
+                tactics={home.tactics}
+                onChange={setTactics}
+                embedded
+                staminaByPlayer={home.staminaByPlayer}
+                moraleByPlayer={home.moraleByPlayer}
+              />
             )}
             {tab === 'team' && (
               <div className="tc-team">

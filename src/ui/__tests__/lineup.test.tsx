@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { render, fireEvent, cleanup } from '@testing-library/react'
-import { LineupScreen } from '../lineup/LineupScreen'
+import { LineupScreen, LineupEditor } from '../lineup/LineupScreen'
 import { makeTestTeam, pickBestXI } from '../../engine/fixtures/testTeams'
 import type { TacticState } from '../../engine/types'
 
@@ -85,5 +85,54 @@ describe('LineupScreen — PlayerCard 팝오버·벤치 컴팩트 카드 (Task 7
     expect(container.querySelector('.lu-pop .pc-radar__poly')).toBeTruthy()
     fireEvent.click(chip) // 같은 칩 재클릭 → 선택 해제
     expect(container.querySelector('.lu-pop')).toBeNull()
+  })
+})
+
+// F3: 킥오프 전 컨디션 노출. 배선이 끊기면 "체력을 추가했는데 안 보인다"가 재발하므로
+// (1) 리스트에 게이지가 뜨는지 (2) 선택 카드에 체력·사기 게이지가 붙는지를 함께 고정한다.
+describe('LineupEditor — 컨디션 표시 (F3)', () => {
+  const stamina: Record<string, number> = Object.fromEntries(
+    team.squad.map((p, i) => [p.id, 20 + ((i * 7) % 80)]),
+  )
+  const morale: Record<string, number> = Object.fromEntries(team.squad.map(p => [p.id, 72]))
+
+  it('컨디션을 주지 않으면 게이지가 없다(레거시 단독 화면 계약 유지)', () => {
+    const { container } = render(<LineupScreen team={team} initial={initial} onConfirm={() => {}} />)
+    expect(container.querySelector('.lu-sta')).toBeNull()
+  })
+
+  it('선발 칩·벤치 카드 전부에 체력 게이지가 붙는다', () => {
+    const { container } = render(
+      <LineupEditor team={team} tactics={initial} onChange={() => {}} staminaByPlayer={stamina} />,
+    )
+    expect(container.querySelectorAll('.lu-chip .lu-sta')).toHaveLength(11)
+    expect(container.querySelectorAll('.lu-card .lu-sta')).toHaveLength(team.squad.length - 11)
+  })
+
+  it('체력 구간별로 색 클래스가 갈린다(위험/주의/양호)', () => {
+    const ids = team.squad.map(p => p.id)
+    const tri: Record<string, number> = { [ids[0]]: 12, [ids[1]]: 55, [ids[2]]: 95 }
+    const { container } = render(
+      <LineupEditor team={team} tactics={initial} onChange={() => {}} staminaByPlayer={tri} />,
+    )
+    expect(container.querySelector('.lu-sta__bar--low')).toBeTruthy()
+    expect(container.querySelector('.lu-sta__bar--mid')).toBeTruthy()
+    expect(container.querySelector('.lu-sta__bar--ok')).toBeTruthy()
+  })
+
+  it('선수 선택 카드에 체력·사기 게이지가 함께 뜬다', () => {
+    const { container } = render(
+      <LineupEditor
+        team={team}
+        tactics={initial}
+        onChange={() => {}}
+        staminaByPlayer={stamina}
+        moraleByPlayer={morale}
+      />,
+    )
+    fireEvent.click(container.querySelector('.lu-chip') as HTMLElement)
+    const pop = container.querySelector('.lu-pop') as HTMLElement
+    expect(pop.querySelector('.pc-gauge--stamina')).toBeTruthy()
+    expect(pop.querySelector('.pc-gauge--morale')).toBeTruthy()
   })
 })

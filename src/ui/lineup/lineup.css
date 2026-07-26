@@ -49,6 +49,14 @@
   max-height: 33vh;
   overflow-y: auto;
 }
+/* ★ 임베드 피치는 33vh(≈262px)로 눌려 있는데 선수 카드는 350px다 — .lu-pitch가
+   overflow:hidden이라 카드 아랫부분이 잘린다. 하필 잘리는 것이 맨 아래 붙는
+   체력·사기 게이지라 "컨디션을 추가했는데 안 보인다"가 그대로 재발한다.
+   레이더를 줄여 카드 전체가 피치 안에 들어오게 한다(축 라벨은 유지 — 여기서
+   size='compact'로 내리면 라벨까지 사라진다). */
+.lu-root--embed .lu-pop { width: 190px; max-height: calc(100% - 16px); }
+.lu-root--embed .lu-pop .pc { padding: 8px; gap: 6px; }
+.lu-root--embed .lu-pop .pc-radar { max-width: 118px; }
 
 /* ── 헤더: 제목 + 포메이션 버튼 ─────────────────────────── */
 .lu-head {
@@ -171,6 +179,36 @@
 .lu-chip--sel { outline: 3px solid var(--bc-accent); outline-offset: 1px; }
 .lu-chip--over { box-shadow: 0 0 0 3px var(--bc-accent); }
 .lu-chip--drag { opacity: 0.9; }
+
+/* ── 체력 미니 게이지(칩·벤치 카드) ────────────────────
+   교체·선발 판단의 1차 근거라 카드를 열지 않아도 리스트에서 바로 읽혀야 한다.
+   높이 4px·색 3단(위험/주의/양호)으로 칩 레이아웃을 밀지 않는 선에서만 얹는다. */
+.lu-sta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+.lu-sta__track {
+  flex: 1 1 auto;
+  display: block;
+  height: 4px;
+  min-width: 0;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+}
+.lu-sta__bar { display: block; height: 100%; border-radius: 3px; }
+.lu-sta__bar--ok { background: #37d67a; }
+.lu-sta__bar--mid { background: #f5c542; }
+.lu-sta__bar--low { background: var(--bc-danger); }
+.lu-sta__val {
+  flex: 0 0 auto;
+  font-size: 9px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--bc-text-dim);
+}
 
 /* ── 벤치 ─────────────────────────────────────────── */
 .lu-bench {
