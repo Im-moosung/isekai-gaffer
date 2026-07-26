@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormationId, GroupIntensity, Mentality, Player, TacticState } from '../../engine/types'
 import { canIntervene, useMatchStore } from '../../game/matchStore'
 import { buildCoachAdvice, hasPatch, type TacticPatch } from '../../game/coach'
+import { playerMatchStats } from '../../game/playerStats'
 import { PitchView } from '../pitch/PitchView'
 import { ConsolePanel } from '../console/ConsolePanel'
 import { SubPanel } from '../console/SubPanel'
@@ -154,9 +155,9 @@ export function TacticsBoard() {
               <div className="tb-pop" role="group" aria-label="선수 카드">
                 {compare ? (
                   <div className="tb-pop__compare">
-                    <PlayerCard player={outPlayer!} size="compact" side={SIDE} role="OUT" stamina={home.staminaByPlayer[outPlayer!.id]} />
+                    <PlayerCard player={outPlayer!} size="compact" side={SIDE} role="OUT" stamina={home.staminaByPlayer[outPlayer!.id]} matchStats={playerMatchStats(engine.events, outPlayer!.id)} />
                     <span className="tb-pop__arrow" aria-hidden="true">→</span>
-                    <PlayerCard player={inPlayer!} size="compact" side={SIDE} role="IN" stamina={home.staminaByPlayer[inPlayer!.id]} />
+                    <PlayerCard player={inPlayer!} size="compact" side={SIDE} role="IN" stamina={home.staminaByPlayer[inPlayer!.id]} matchStats={playerMatchStats(engine.events, inPlayer!.id)} />
                   </div>
                 ) : (
                   <PlayerCard
@@ -164,6 +165,7 @@ export function TacticsBoard() {
                     side={SIDE}
                     stamina={home.staminaByPlayer[popPlayer!.id]}
                     morale={home.moraleByPlayer[popPlayer!.id]}
+                    matchStats={playerMatchStats(engine.events, popPlayer!.id)}
                   />
                 )}
                 <button type="button" className="tb-pop__close" aria-label="카드 닫기" onClick={() => { setPop(null) }}>✕</button>
