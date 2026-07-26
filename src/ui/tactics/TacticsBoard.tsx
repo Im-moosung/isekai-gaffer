@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { FormationId, GroupIntensity, Mentality, Player, TacticState } from '../../engine/types'
-import { canIntervene, useMatchStore } from '../../game/matchStore'
+import { canIntervene, interventionLevel, touchlineNotice, useMatchStore } from '../../game/matchStore'
 import { buildCoachAdvice, hasPatch, type TacticPatch } from '../../game/coach'
 import { playerMatchStats } from '../../game/playerStats'
 import { PitchView } from '../pitch/PitchView'
@@ -64,9 +64,15 @@ export function TacticsBoard() {
   const engine = useMatchStore(s => s.engine)
   const pauseReason = useMatchStore(s => s.pauseReason)
   const matchPlan = useMatchStore(s => s.matchPlan)
+  const schedule = useMatchStore(s => s.schedule)
   const confirmTactics = useMatchStore(s => s.confirmTactics)
   const submitCommand = useMatchStore(s => s.submitCommand)
-  const [tab, setTab] = useState<TacticsTab>('tactics')
+  // 개입 권한 등급 — 'touchline'(감독 타임·상황 개입)에서는 교체와 열람만 가능하다.
+  const level = interventionLevel(phase, pauseReason)
+  const full = level === 'full'
+  // 터치라인 등급으로 들어왔다면 유일하게 할 수 있는 일(교체) 탭을 먼저 연다
+  // — 잠긴 전술 탭을 첫 화면으로 보여주면 "고장난 건가"로 읽힌다.
+  const [tab, setTab] = useState<TacticsTab>(() => (full ? 'tactics' : 'sub'))
   // 보드 상호작용 상태: 팝오버 대상(any) + 교체 아웃/인(교체 미리보기 고스트·비교 카드).
   const [pop, setPop] = useState<string | null>(null)
   const [subOut, setSubOut] = useState<string | null>(null)
@@ -113,13 +119,21 @@ export function TacticsBoard() {
         <span className="tb-head__reason">{reasonText(pauseReason, halftime)}</span>
       </div>
 
+      {/* 터치라인 안내 — 잠긴 이유와 언제 풀리는지를 함께 말한다.
+          이 문구가 없으면 대부분이 비활성인 작전판이 '고장'으로 읽힌다. */}
+      {!full && (
+        <p className="tb-touchline" role="status">
+          {touchlineNotice(engine.minute, schedule)}
+        </p>
+      )}
+
       {/* 플랜 대비 — 킥오프 때 세운 계획과 지금의 차이를 축별로 보여준다.
           작전판에서 지시를 만질 때 "무엇을 계획했었는지"가 눈앞에 없으면
           이탈이 누적되는 줄도 모르고 매번 갈아엎게 된다. */}
       {matchPlan && <PlanDiff plan={matchPlan} current={home.tactics} />}
 
       {/* 코치 회의 — 작전판 최상단(진입 시 가장 먼저). 멀티 코치·[감독 판단대로 간다] 포함. */}
-      <CoachMeeting />
+      <CoachMeeting canAdopt={full} />
 
       {halftime && (
         <div className="tb-talk">
@@ -135,6 +149,8 @@ export function TacticsBoard() {
                 key={f}
                 type="button"
                 aria-pressed={f === formation}
+                // 포메이션 교체는 선수 열한 명을 모아 놓고 해야 하는 지시다(전원 소집 등급 전용).
+                disabled={!full}
                 className={`tb-formsel__btn${f === formation ? ' tb-formsel__btn--active' : ''}`}
                 onClick={() => changeFormation(f)}
               >
@@ -183,7 +199,7 @@ export function TacticsBoard() {
               className={`tb-tab${tab === 'tactics' ? ' tb-tab--active' : ''}`}
               onClick={() => setTab('tactics')}
             >
-              전술
+              전술{!full && ' 🔒'}
             </button>
             <button
               type="button"
@@ -207,6 +223,11 @@ export function TacticsBoard() {
           <div className="tb-side__body">
             {tab === 'tactics' && (
               <div className="tb-tactics">
+                {!full && (
+                  <p className="tb-locked" role="status">
+                    🔒 {touchlineNotice(engine.minute, schedule)}
+                  </p>
+                )}
                 <ConsolePanel side={SIDE} />
                 <TacticsExtras side={SIDE} />
               </div>
@@ -271,8 +292,10 @@ const DEFAULT_GI: GroupIntensity = { attack: 0, midfield: 0, defense: 0 }
 /** 코치 회의 카드 리스트 — 발동 조건을 만족한 코치만 등장한다(0~4명 가변).
  *  각 카드 [채택]은 부분 전술(TacticPatch)을 현재 draft에 병합해 즉시 반영한다(유저가 이후 수정 가능).
  *  전술 축으로 표현할 수 없는 조언(교체 권유 등)은 패치가 비어 있어 [채택]이 붙지 않는다.
- *  맨 아래 [감독 판단대로 간다]는 전체 카드를 접는다(전부 무시 — 감독의 딜레마 존중). */
-function CoachMeeting() {
+ *  맨 아래 [감독 판단대로 간다]는 전체 카드를 접는다(전부 무시 — 감독의 딜레마 존중).
+ *  canAdopt=false(터치라인 등급)면 조언은 그대로 읽되 [채택]은 걸지 않는다 — 채택은
+ *  전술 축을 바꾸는 일이라 전원 소집 사항이고, 열람까지 막으면 정보만 사라진다. */
+function CoachMeeting({ canAdopt }: { canAdopt: boolean }) {
   const engine = useMatchStore(s => s.engine)
   const submitCommand = useMatchStore(s => s.submitCommand)
   const [dismissed, setDismissed] = useState(false)
@@ -311,7 +334,7 @@ function CoachMeeting() {
             <div className="tb-coach__role">{a.coach}</div>
             <p className="tb-coach__rationale">{a.rationale}</p>
             <p className="tb-coach__proposal">{a.proposal}</p>
-            {hasPatch(a.apply) && (
+            {canAdopt && hasPatch(a.apply) && (
               <button type="button" className="tb-coach__adopt" onClick={() => adopt(a.apply)}>
                 채택
               </button>

@@ -187,6 +187,58 @@ export function canIntervene(phase: MatchPhase): boolean {
   return INTERVENTION_PHASES.includes(phase)
 }
 
+/** 개입 권한 등급.
+ *  - 'full'      전원 소집 — 선수 열한 명을 모아 놓고 지시할 수 있는 시점.
+ *  - 'touchline' 터치라인 — 경기가 흐르는 중이라 교체와 열람만 가능.
+ *  - 'none'      개입 불가. */
+export type InterventionLevel = 'none' | 'touchline' | 'full'
+
+/** 정지 사유에서 개입 권한 등급을 판정한다 — canIntervene 옆에 두는 두 번째 단일 진실원.
+ *
+ *  왜 등급을 나누는가: 실제 축구에서 포메이션·멘탈리티·전 전술 축을 갈아엎으려면
+ *  선수단을 모아 놓고 말해야 한다. 경기가 흐르는 중에 감독이 할 수 있는 건 교체와
+ *  터치라인에서 소리치는 정도다. 아무 때나 정지해 작전판을 통째로 여는 기존 동작은
+ *  비현실적일 뿐 아니라, 정해진 개입 지점(하이드레이션 브레이크)을 컨셉의 중심에
+ *  놓고서 정작 그 지점을 특별하지 않게 만든다.
+ *
+ *  'pre'는 pauseReason이 null이라 phase로 판정한다(킥오프 전 전술 센터 = 전원 소집). */
+export function interventionLevel(phase: MatchPhase, pauseReason: PauseReason | null): InterventionLevel {
+  if (phase === 'pre') return 'full'
+  if (!INTERVENTION_PHASES.includes(phase)) return 'none'
+  switch (pauseReason?.kind) {
+    case 'hydration1':
+    case 'hydration2':
+    case 'halftime':
+      return 'full'
+    case 'user':
+    case 'moment':
+      return 'touchline'
+    default:
+      // 정지 phase인데 사유가 없다면(비정상) 가장 좁은 권한으로 떨어뜨린다.
+      return 'touchline'
+  }
+}
+
+/** 다음 '전원 소집' 시점(분). 하이드레이션 ×2와 하프타임(45) 중 현재 분 이후 가장 이른 것.
+ *  남은 브레이크가 없으면 null. */
+export function nextBreakMinute(minute: number, schedule: HydrationSchedule | null): number | null {
+  const marks = schedule
+    ? [schedule.firstHydration, 45, schedule.secondHydration]
+    : [45]
+  const next = marks.filter(m => m > minute).sort((x, y) => x - y)[0]
+  return next ?? null
+}
+
+/** 터치라인 등급에서 화면에 띄울 안내 문구.
+ *  UX 함정: 감독 타임에 들어갔는데 대부분이 잠겨 있으면 "고장난 건가"로 읽힌다.
+ *  잠긴 이유와 언제 풀리는지를 반드시 함께 말해야 한다. */
+export function touchlineNotice(minute: number, schedule: HydrationSchedule | null): string {
+  const next = nextBreakMinute(minute, schedule)
+  return next === null
+    ? '경기 진행 중 — 교체와 외침만 가능합니다. 남은 브레이크가 없습니다 — 이번 전술로 끝까지 갑니다.'
+    : `경기 진행 중 — 교체와 외침만 가능합니다. 전술 변경은 다음 브레이크(${next}분)에서.`
+}
+
 /** 홈 주전(라인업, 퇴장 제외) 중 최저 스태미나. 동적 순간 'fatigue' 판정용. */
 function homeStaminaFloor(engine: MatchState): number {
   const home = engine.home
@@ -424,9 +476,14 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
   },
   dismissMoment: () => set({ momentPrompt: null }),
   submitCommand: (side, cmd) => {
-    const { engine, phase, decisionLog, matchPlan, planDeviation } = get()
+    const { engine, phase, pauseReason, schedule, decisionLog, matchPlan, planDeviation } = get()
     if (!engine) throw new Error('경기 미시작')
     if (!INTERVENTION_PHASES.includes(phase)) throw new Error('개입 불가 시점')
+    // 스토어가 최종 방어선이다 — UI가 섹션을 접는 것만으로는 부족하다.
+    // 터치라인 등급에서는 교체만 통과시킨다(포메이션·멘탈리티·전술 축은 전원 소집 사항).
+    if (interventionLevel(phase, pauseReason) === 'touchline' && cmd.type !== 'sub') {
+      throw new Error(touchlineNotice(engine.minute, schedule))
+    }
     const minute = engine.minute
     const sideState = engine[side]
     // 시점 라벨: 킥오프 전 / HT / N'. 결정 로그는 기자회견의 근거가 되므로

@@ -60,6 +60,31 @@
   color: var(--tb-chalk);
 }
 
+/* ── 터치라인 등급 안내 ────────────────────────────────────────
+   감독 타임·상황 개입에서는 교체와 외침만 가능하다. 잠긴 이유와 언제 풀리는지를
+   눈에 띄게 말해 주지 않으면 비활성 컨트롤이 '고장'으로 읽힌다. */
+.tb-touchline {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--bc-accent);
+  border-left-width: 4px;
+  border-radius: 10px;
+  background: rgba(200, 245, 66, 0.08);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tb-chalk);
+}
+.tb-locked {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border: 1px dashed var(--tb-board-line);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bc-text-dim);
+}
+
 /* ── 하프타임 팀토크 카드(상단) ─────────────────────────────── */
 .tb-talk {
   flex: 0 0 auto;

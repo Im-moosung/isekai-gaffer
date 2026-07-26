@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { canIntervene, useMatchStore } from '../../game/matchStore'
+import { interventionLevel, useMatchStore } from '../../game/matchStore'
 import type { Instructions } from '../../engine/types'
 import './console.css'
 
@@ -22,6 +22,7 @@ const FOCUS: { value: Instructions['attackFocus']; label: string }[] = [
  *  킥오프 전('pre')엔 즉시 반영 — 아래 `immediate` 주석 참조. */
 export function ConsolePanel({ side }: { side: 'home' | 'away' }) {
   const phase = useMatchStore(s => s.phase)
+  const pauseReason = useMatchStore(s => s.pauseReason)
   const engine = useMatchStore(s => s.engine)
   const submitCommand = useMatchStore(s => s.submitCommand)
 
@@ -32,7 +33,8 @@ export function ConsolePanel({ side }: { side: 'home' | 'away' }) {
   const [error, setError] = useState<string | null>(null)
 
   // 킥오프 전(전술 센터)도 개입 창이다 — store의 판정을 그대로 따른다.
-  const open = canIntervene(phase)
+  // 전술 4축은 '전원 소집'(킥오프 전·하이드레이션·하프타임) 사항이라 터치라인 등급에선 잠긴다.
+  const open = interventionLevel(phase, pauseReason) === 'full'
 
   /** 킥오프 전에는 시계가 멈춰 있다. "묶어서 결정"할 이유가 없고, 같은 화면의
    *  TacticsExtras·[추천 적용]은 이미 즉시 반영이라 두 모델이 섞이면 하단 검토 요약의
@@ -122,7 +124,7 @@ export function ConsolePanel({ side }: { side: 'home' | 'away' }) {
         {immediate
           ? <span className="cs-live">조작 즉시 반영 — 하단 검토 요약에서 확인하십시오</span>
           : <button type="button" className="cs-btn" onClick={apply} disabled={!open}>지시 적용</button>}
-        {!open && <span className="cs-lock">다음 개입 창까지 잠김</span>}
+        {!open && <span className="cs-lock">다음 브레이크까지 잠김</span>}
       </div>
       {error && <p className="cs-error" role="alert">{error}</p>}
     </section>

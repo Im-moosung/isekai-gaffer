@@ -1,4 +1,4 @@
-import { canIntervene, useMatchStore } from '../../game/matchStore'
+import { interventionLevel, useMatchStore } from '../../game/matchStore'
 import { MENTALITIES, ATTACK_PATTERNS } from '../../engine/tactics'
 import type { AttackPattern, FormationId, GroupIntensity, Mentality, TacticState } from '../../engine/types'
 
@@ -26,11 +26,13 @@ const DEFAULT_GI: GroupIntensity = { attack: 0, midfield: 0, defense: 0 }
  *  개입 창(정지·하프타임)에서만 활성. */
 export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
   const phase = useMatchStore(s => s.phase)
+  const pauseReason = useMatchStore(s => s.pauseReason)
   const engine = useMatchStore(s => s.engine)
   const submitCommand = useMatchStore(s => s.submitCommand)
 
   // 킥오프 전(전술 센터)도 개입 창이다 — store의 판정을 그대로 따른다.
-  const open = canIntervene(phase)
+  // 확장 전술도 구조 변경이라 '전원 소집' 등급에서만 열린다(터치라인에선 열람만).
+  const open = interventionLevel(phase, pauseReason) === 'full'
   const state = engine?.[side]
   if (!state) return null
   const t = state.tactics

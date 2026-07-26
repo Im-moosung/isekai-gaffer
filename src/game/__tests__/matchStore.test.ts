@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import {
   useMatchStore, TEAM_TALK_TABLE, scoreSituation, SHOUT_TABLE, SHOUT_COOLDOWN,
   teamExpectation, recommendedTone, EXPECTATION_ADJUST, computeDeviation,
+  interventionLevel, nextBreakMinute, touchlineNotice,
 } from '../matchStore'
 import { makeTestTeam, pickBestXI } from '../../engine/fixtures/testTeams'
 import { loadTeam } from '../../data/loader'
@@ -11,6 +12,13 @@ const a = makeTestTeam('a', 78), b = makeTestTeam('b', 78)
 const store = () => useMatchStore.getState()
 
 beforeEach(() => store().reset())
+
+/** 전술 변경은 '전원 소집' 등급(하이드레이션·하프타임·킥오프 전)에서만 가능하다.
+ *  감독 타임(paused-user)은 교체·열람만 되는 터치라인 등급이라, 지시/포메이션을
+ *  검증하는 테스트는 하이드레이션 브레이크 정지를 써야 한다. */
+function pauseAtBreak() {
+  useMatchStore.setState({ phase: 'paused-break', pauseReason: { kind: 'hydration1' } })
+}
 
 /** 킥오프 후 하프타임까지 재생 — 도중 하이드레이션 브레이크는 confirmTactics로 재개.
  *  경기가 시작 안 됐으면 기본 매치(a,b,42)로 시작한다. */
@@ -131,11 +139,11 @@ describe('재생 세션 상태 머신', () => {
     expect(store().engine!.home.tactics.instructions.pressing).toBe(90)
     expect(before).not.toBe(90)
   })
-  it('paused-user에서도 submitCommand 허용', () => {
+  it('하이드레이션 브레이크에서 submitCommand 허용', () => {
     store().startMatch(a, b, 42)
     store().kickoff()
     store().advanceMinute()
-    store().pauseByUser()
+    pauseAtBreak()
     store().submitCommand('home', { type: 'instructions', instructions: { lineHeight: 50, pressing: 77, tempo: 50, attackFocus: 'balanced' } })
     expect(store().engine!.home.tactics.instructions.pressing).toBe(77)
   })
@@ -564,7 +572,7 @@ describe('플랜 스냅샷과 이탈 계산', () => {
     store().startMatch(loadTeam('kor'), loadTeam('cze'), 111)
     store().kickoff()
     store().advanceMinute()
-    store().pauseByUser()
+    pauseAtBreak()
     const eng = store().engine!
     store().submitCommand('home', {
       type: 'instructions', instructions: { ...eng.home.tactics.instructions, pressing: 90, lineHeight: 20 },
@@ -577,7 +585,7 @@ describe('플랜 스냅샷과 이탈 계산', () => {
     const orig = store().engine!.home.tactics.instructions
     store().kickoff()
     store().advanceMinute()
-    store().pauseByUser()
+    pauseAtBreak()
     store().submitCommand('home', { type: 'instructions', instructions: { ...orig, pressing: 90 } })
     expect(store().planDeviation).toBe(1)
     store().submitCommand('home', { type: 'instructions', instructions: { ...orig } })
@@ -588,7 +596,7 @@ describe('플랜 스냅샷과 이탈 계산', () => {
     store().startMatch(loadTeam('kor'), loadTeam('cze'), 111)
     store().kickoff()
     store().advanceMinute()
-    store().pauseByUser()
+    pauseAtBreak()
     const away = store().engine!.away.tactics
     store().submitCommand('away', {
       type: 'formation', tactics: { ...away, formation: '5-4-1', mentality: 'very-defensive' },
@@ -601,7 +609,7 @@ describe('플랜 스냅샷과 이탈 계산', () => {
     store().startMatch(loadTeam('kor'), loadTeam('cze'), 111)
     store().kickoff()
     store().advanceMinute()
-    store().pauseByUser()
+    pauseAtBreak()
     const eng = store().engine!
     store().submitCommand('home', {
       type: 'instructions', instructions: { ...eng.home.tactics.instructions, pressing: 90 },
@@ -616,7 +624,7 @@ describe('플랜 스냅샷과 이탈 계산', () => {
     store().startMatch(loadTeam('kor'), loadTeam('cze'), 111)
     store().kickoff()
     store().advanceMinute()
-    store().pauseByUser()
+    pauseAtBreak()
     const t = store().engine!.home.tactics
     store().submitCommand('home', { type: 'formation', tactics: { ...t, mentality: 'very-attacking' } })
     expect(store().adaptUntil).toBeGreaterThan(0)
@@ -660,5 +668,88 @@ describe('감독 타임(자유 정지)은 지시 부스트를 주지 않는다',
     const at = store().engine!.minute
     store().confirmTactics()
     expect(store().boostUntil).toBeGreaterThan(at)
+  })
+})
+
+describe('개입 권한 2등급 — 전원 소집 vs 터치라인', () => {
+  const INS = { lineHeight: 50, pressing: 88, tempo: 50, attackFocus: 'balanced' } as const
+
+  /** 감독 타임에 들어간 상태를 만든다(터치라인 등급). */
+  function toManagerTime() {
+    store().startMatch(a, b, 42)
+    store().kickoff()
+    store().advanceMinute()
+    store().pauseByUser()
+  }
+
+  /** 라인업 밖 벤치 선수 1명(결정론 — squad 순서). */
+  const benchId = () => {
+    const home = store().engine!.home
+    return home.team.squad.find(p => !home.tactics.lineup.some(l => l.playerId === p.id))!.id
+  }
+
+  it('등급 판정: 킥오프 전·하이드레이션·하프타임은 full, 감독 타임·상황 개입은 touchline', () => {
+    expect(interventionLevel('pre', null)).toBe('full')
+    expect(interventionLevel('paused-break', { kind: 'hydration1' })).toBe('full')
+    expect(interventionLevel('paused-break', { kind: 'hydration2' })).toBe('full')
+    expect(interventionLevel('halftime', { kind: 'halftime' })).toBe('full')
+    expect(interventionLevel('paused-user', { kind: 'user' })).toBe('touchline')
+    expect(interventionLevel('playing', null)).toBe('none')
+    expect(interventionLevel('fulltime', null)).toBe('none')
+  })
+
+  it('감독 타임에서 instructions 명령은 거부된다', () => {
+    toManagerTime()
+    const before = store().engine!.home.tactics.instructions.pressing
+    expect(() => store().submitCommand('home', { type: 'instructions', instructions: INS }))
+      .toThrow('교체와 외침만')
+    expect(store().engine!.home.tactics.instructions.pressing).toBe(before)
+  })
+
+  it('감독 타임에서 formation 명령은 거부된다(확장 필드 포함)', () => {
+    toManagerTime()
+    const t = store().engine!.home.tactics
+    expect(() => store().submitCommand('home', { type: 'formation', tactics: { ...t, formation: '5-4-1' } }))
+      .toThrow()
+    expect(() => store().submitCommand('home', { type: 'formation', tactics: { ...t, mentality: 'very-attacking' } }))
+      .toThrow()
+    expect(store().engine!.home.tactics.formation).toBe(t.formation)
+  })
+
+  it('감독 타임에서도 교체(sub)는 허용된다 — 감독이 무력해지면 안 된다', () => {
+    toManagerTime()
+    const out = store().engine!.home.tactics.lineup[10].playerId
+    store().submitCommand('home', { type: 'sub', out, in: benchId() })
+    expect(store().engine!.home.subsUsed).toBe(1)
+  })
+
+  it('하이드레이션·하프타임에서는 세 명령 모두 허용된다', () => {
+    store().startMatch(a, b, 42)
+    store().kickoff()
+    store().advanceMinute()
+    pauseAtBreak()
+    store().submitCommand('home', { type: 'instructions', instructions: INS })
+    expect(store().engine!.home.tactics.instructions.pressing).toBe(88)
+    const t = store().engine!.home.tactics
+    store().submitCommand('home', { type: 'formation', tactics: { ...t, formation: '5-4-1' } })
+    expect(store().engine!.home.tactics.formation).toBe('5-4-1')
+    const out = store().engine!.home.tactics.lineup[10].playerId
+    store().submitCommand('home', { type: 'sub', out, in: benchId() })
+    expect(store().engine!.home.subsUsed).toBe(1)
+  })
+
+  it('다음 브레이크 분: 지난 시점은 건너뛰고, 남은 게 없으면 null', () => {
+    const sched = { firstHydration: 22, secondHydration: 67 }
+    expect(nextBreakMinute(10, sched)).toBe(22)
+    expect(nextBreakMinute(30, sched)).toBe(45)
+    expect(nextBreakMinute(50, sched)).toBe(67)
+    expect(nextBreakMinute(70, sched)).toBeNull()
+  })
+
+  it('터치라인 안내에 다음 브레이크 분이 들어가고, 없으면 그 사실을 알린다', () => {
+    const sched = { firstHydration: 22, secondHydration: 67 }
+    expect(touchlineNotice(50, sched)).toContain('다음 브레이크(67분)')
+    expect(touchlineNotice(50, sched)).toContain('교체와 외침만')
+    expect(touchlineNotice(80, sched)).toContain('남은 브레이크가 없습니다')
   })
 })

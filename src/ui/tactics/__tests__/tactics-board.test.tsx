@@ -10,7 +10,7 @@ const away = makeTestTeam('esp', 88)
 const store = () => useMatchStore.getState()
 
 // 작전판을 특정 정지 phase에 놓고 렌더한다. 엔진은 kickoff 후 1분 전진시켜 준비.
-function mountAt(phase: 'paused-user' | 'halftime') {
+function mountAt(phase: 'paused-user' | 'paused-break' | 'halftime') {
   store().reset()
   store().startMatch(home, away, 20260724)
   act(() => { store().kickoff() })
@@ -18,7 +18,9 @@ function mountAt(phase: 'paused-user' | 'halftime') {
   act(() => {
     useMatchStore.setState({
       phase,
-      pauseReason: phase === 'halftime' ? { kind: 'halftime' } : { kind: 'user' },
+      pauseReason: phase === 'halftime' ? { kind: 'halftime' }
+        : phase === 'paused-break' ? { kind: 'hydration1' as const }
+        : { kind: 'user' as const },
     })
   })
   return render(<TacticsBoard />)
@@ -32,7 +34,7 @@ const homeCxs = (c: HTMLElement) =>
 
 describe('TacticsBoard — 실시간 보드 반영(포메이션 변경)', () => {
   it('포메이션 셀렉터 변경 → 엔진 formation 갱신 + 보드 도트 좌표 변화', () => {
-    const { getByRole, container } = mountAt('paused-user')
+    const { getByRole, container } = mountAt('paused-break')
     // 기본 4-3-3 (테스트팀 preferredFormations[0]).
     expect(store().engine!.home.tactics.formation).toBe('4-3-3')
     const before = homeCxs(container as HTMLElement)
@@ -48,7 +50,7 @@ describe('TacticsBoard — 실시간 보드 반영(포메이션 변경)', () => 
   })
 
   it('같은 포메이션 재클릭은 무변경(no-op)', () => {
-    const { getByRole, container } = mountAt('paused-user')
+    const { getByRole, container } = mountAt('paused-break')
     const before = homeCxs(container as HTMLElement)
     fireEvent.click(getByRole('button', { name: '4-3-3' }))
     expect(store().engine!.home.tactics.formation).toBe('4-3-3')
@@ -58,14 +60,14 @@ describe('TacticsBoard — 실시간 보드 반영(포메이션 변경)', () => 
 
 describe('TacticsBoard — 확장 전술 지시(Task 5)', () => {
   it('멘탈리티 5버튼 + 클릭 시 엔진 tactics.mentality 갱신', () => {
-    const { getByRole } = mountAt('paused-user')
+    const { getByRole } = mountAt('paused-break')
     expect(store().engine!.home.tactics.mentality ?? 'balanced').toBe('balanced')
     fireEvent.click(getByRole('button', { name: '공격적', pressed: false }))
     expect(store().engine!.home.tactics.mentality).toBe('attacking')
   })
 
   it('그룹 적극성: 공격 라인 [적극] → groupIntensity.attack=1', () => {
-    const { getByRole } = mountAt('paused-user')
+    const { getByRole } = mountAt('paused-break')
     const grp = getByRole('group', { name: '공격 적극성' })
     fireEvent.click(within(grp).getByRole('button', { name: '적극' }))
     expect(store().engine!.home.tactics.groupIntensity!.attack).toBe(1)
@@ -73,20 +75,20 @@ describe('TacticsBoard — 확장 전술 지시(Task 5)', () => {
   })
 
   it('공격 패턴 4택: [중거리] 선택 → attackPattern=longshot', () => {
-    const { getByRole } = mountAt('paused-user')
+    const { getByRole } = mountAt('paused-break')
     fireEvent.click(getByRole('button', { name: '중거리' }))
     expect(store().engine!.home.tactics.attackPattern).toBe('longshot')
   })
 
   it('GK 파워플레이: 조건 미충족(1분·비지는중)엔 잠금+사유', () => {
-    const { getByRole, getByText } = mountAt('paused-user')
+    const { getByRole, getByText } = mountAt('paused-break')
     const btn = getByRole('button', { name: 'GK 전진' }) as HTMLButtonElement
     expect(btn.disabled).toBe(true)
     expect(getByText(/85' 이후에만 가능/)).toBeTruthy()
   })
 
   it('GK 파워플레이: 85\'+ & 지는 중이면 해제 → 토글 반영', () => {
-    const { getByRole } = mountAt('paused-user')
+    const { getByRole } = mountAt('paused-break')
     act(() => {
       const eng = structuredClone(store().engine!)
       eng.minute = 87; eng.score = [0, 1] // 홈 지는 중
@@ -99,13 +101,13 @@ describe('TacticsBoard — 확장 전술 지시(Task 5)', () => {
   })
 
   it('페이즈 포메이션: 공격 시 3-5-2 선택 → phaseFormations.attack', () => {
-    const { getByLabelText } = mountAt('paused-user')
+    const { getByLabelText } = mountAt('paused-break')
     fireEvent.change(getByLabelText('공격 시 포메이션'), { target: { value: '3-5-2' } })
     expect(store().engine!.home.tactics.phaseFormations!.attack).toBe('3-5-2')
   })
 
   it('압박 슬라이더 옆 체력 소모 트레이드오프(⚡) 표시', () => {
-    const { getByText } = mountAt('paused-user')
+    const { getByText } = mountAt('paused-break')
     expect(getByText(/체력 소모 \+40%/)).toBeTruthy()
     expect(getByText(/뒷공간 노출/)).toBeTruthy()
   })
@@ -130,7 +132,7 @@ describe('TacticsBoard — 코치 회의 (근거가 있는 코치만 등장)', (
   }
 
   it('근거가 없으면(킥오프 직후·전 스탯 0) 카드 대신 "특별히 드릴 말씀 없습니다" 한 줄만 나온다', () => {
-    const { container } = mountAt('paused-user')
+    const { container } = mountAt('paused-break')
     expect(container.querySelectorAll('.tb-coach__card').length).toBe(0)
     expect(container.querySelector('.tb-coach__quiet')!.textContent).toContain('특별히 드릴 말씀 없습니다')
   })
@@ -164,7 +166,7 @@ describe('TacticsBoard — 코치 회의 (근거가 있는 코치만 등장)', (
   })
 
   it('[감독 판단대로 간다] → 카드 접힘', () => {
-    const r = mountAt('paused-user')
+    const r = mountAt('paused-break')
     seedCoachData()
     expect(r.container.querySelectorAll('.tb-coach__card').length).toBeGreaterThan(0)
     fireEvent.click(r.getByRole('button', { name: '감독 판단대로 간다' }))
@@ -174,7 +176,7 @@ describe('TacticsBoard — 코치 회의 (근거가 있는 코치만 등장)', (
 
 describe('TacticsBoard — 보드 하이라이트·팝오버 (Task 7)', () => {
   it('보드 도트 클릭 → 발광 링 + PlayerCard 팝오버', () => {
-    const { container } = mountAt('paused-user')
+    const { container } = mountAt('paused-break')
     expect(container.querySelector('.pv-ring')).toBeNull()
     expect(container.querySelector('.tb-pop')).toBeNull()
     const dot = container.querySelector('.pv-dotg--click') as HTMLElement
@@ -187,7 +189,7 @@ describe('TacticsBoard — 보드 하이라이트·팝오버 (Task 7)', () => {
   })
 
   it('팝오버 닫기 버튼 → 카드·링 제거', () => {
-    const { container, getByLabelText } = mountAt('paused-user')
+    const { container, getByLabelText } = mountAt('paused-break')
     fireEvent.click(container.querySelector('.pv-dotg--click') as HTMLElement)
     fireEvent.click(getByLabelText('카드 닫기'))
     expect(container.querySelector('.tb-pop')).toBeNull()
@@ -201,7 +203,7 @@ describe('TacticsBoard — 교체 미리보기 → 확정 (Task 7)', () => {
   }
 
   it('아웃 선택 → 보드 링 강조(고스트 없음)', () => {
-    const c = mountAt('paused-user')
+    const c = mountAt('paused-break')
     openSub(c)
     const outCard = c.container.querySelector('.cs-sub__lineup .cs-card') as HTMLElement
     fireEvent.click(outCard)
@@ -210,7 +212,7 @@ describe('TacticsBoard — 교체 미리보기 → 확정 (Task 7)', () => {
   })
 
   it('아웃+인 선택 → 고스트 도트 미리보기 + 두 카드 비교', () => {
-    const c = mountAt('paused-user')
+    const c = mountAt('paused-break')
     openSub(c)
     fireEvent.click(c.container.querySelector('.cs-sub__lineup .cs-card') as HTMLElement)
     fireEvent.click(c.container.querySelector('.cs-sub__bench .cs-card') as HTMLElement)
@@ -223,7 +225,7 @@ describe('TacticsBoard — 교체 미리보기 → 확정 (Task 7)', () => {
   })
 
   it('[교체 확정] → submitCommand(sub) 호출 + subsUsed 증가 + 상태 리셋', () => {
-    const c = mountAt('paused-user')
+    const c = mountAt('paused-break')
     openSub(c)
     const before = store().engine!.home.subsUsed
     fireEvent.click(c.container.querySelector('.cs-sub__lineup .cs-card') as HTMLElement)
@@ -254,14 +256,14 @@ describe('TacticsBoard — 하프타임 팀토크 + 사유', () => {
 
 describe('TacticsBoard — 플랜 대비(킥오프 계획 vs 현재)', () => {
   it('킥오프 직후엔 차이가 없어 "계획대로 가는 중"을 표시한다', () => {
-    const { container } = mountAt('paused-user')
+    const { container } = mountAt('paused-break')
     const plan = container.querySelector('.tb-plan')!
     expect(plan).toBeTruthy()
     expect(plan.textContent).toContain('플랜대로 가는 중')
   })
 
   it('지시를 바꾸면 "계획: 압박 N → 현재 M" 행이 나타난다', () => {
-    const { container } = mountAt('paused-user')
+    const { container } = mountAt('paused-break')
     const before = store().engine!.home.tactics.instructions
     act(() => {
       store().submitCommand('home', {
@@ -274,8 +276,43 @@ describe('TacticsBoard — 플랜 대비(킥오프 계획 vs 현재)', () => {
   })
 
   it('포메이션을 바꾸면 구조 변경 행이 나타난다', () => {
-    const { getByRole, container } = mountAt('paused-user')
+    const { getByRole, container } = mountAt('paused-break')
     fireEvent.click(getByRole('button', { name: '5-4-1' }))
     expect(container.querySelector('.tb-plan')!.textContent).toContain('계획: 포메이션 4-3-3 → 현재 5-4-1')
+  })
+})
+
+describe('TacticsBoard — 개입 권한 2등급', () => {
+  it('감독 타임: 포메이션 버튼이 잠기고, 잠긴 이유와 다음 브레이크 분을 알린다', () => {
+    const { container, getByRole } = mountAt('paused-user')
+    const notice = container.querySelector('.tb-touchline')!
+    expect(notice.textContent).toContain('교체와 외침만 가능합니다')
+    // 스케줄의 다음 브레이크 분이 문구에 그대로 들어간다(1분 시점 → 첫 하이드레이션).
+    expect(notice.textContent).toContain(`${store().schedule!.firstHydration}분`)
+    expect((getByRole('button', { name: '5-4-1' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('감독 타임: 교체 탭이 먼저 열리고 교체는 가능하다', () => {
+    const { getByRole } = mountAt('paused-user')
+    expect(getByRole('tab', { name: '교체' }).getAttribute('aria-selected')).toBe('true')
+    const home = store().engine!.home
+    const out = home.tactics.lineup[10].playerId
+    const inId = home.team.squad.find(p => !home.tactics.lineup.some(l => l.playerId === p.id))!.id
+    act(() => { store().submitCommand('home', { type: 'sub', out, in: inId }) })
+    expect(store().engine!.home.subsUsed).toBe(1)
+  })
+
+  it('감독 타임: 전술 탭은 잠금 안내를 띄우고 멘탈리티 버튼이 비활성이다', () => {
+    const { getByRole, container } = mountAt('paused-user')
+    fireEvent.click(getByRole('tab', { name: /전술/ }))
+    expect(container.querySelector('.tb-locked')!.textContent).toContain('교체와 외침만 가능합니다')
+    expect((getByRole('button', { name: '매우 공격적' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('하이드레이션 브레이크: 안내가 없고 포메이션 버튼이 열린다', () => {
+    const { container, getByRole } = mountAt('paused-break')
+    expect(container.querySelector('.tb-touchline')).toBeNull()
+    expect((getByRole('button', { name: '5-4-1' }) as HTMLButtonElement).disabled).toBe(false)
+    expect((getByRole('button', { name: '매우 공격적' }) as HTMLButtonElement).disabled).toBe(false)
   })
 })

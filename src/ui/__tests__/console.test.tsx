@@ -30,7 +30,7 @@ describe('ConsolePanel (지시 4축)', () => {
     const { getByRole, getByText } = render(<ConsolePanel side="home" />)
     const btn = getByRole('button', { name: '지시 적용' }) as HTMLButtonElement
     expect(btn.disabled).toBe(true)
-    expect(getByText('다음 개입 창까지 잠김')).toBeTruthy()
+    expect(getByText('다음 브레이크까지 잠김')).toBeTruthy()
   })
 
   it("(a2) 킥오프 전('pre')은 슬라이더 조작이 버튼 없이 즉시 반영된다", () => {
