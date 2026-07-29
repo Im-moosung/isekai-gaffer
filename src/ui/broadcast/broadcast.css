@@ -214,6 +214,31 @@
   color: var(--bc-text-dim);
 }
 
+/* 해설위원 라인 — 캐스터와 눈으로도 갈리게. 소리(pitch 0.75)만으로 나누면
+   음소거·해설 OFF에서 두 사람이 한 사람으로 합쳐진다. 배지 + 이탤릭 + 낮은 채도. */
+.bc-ticker__who {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 6px;
+  border: 1px solid currentcolor;
+  border-radius: 4px;
+  opacity: 0.75;
+  font-size: 10px;
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: 0.06em;
+  vertical-align: 1px;
+}
+
+.bc-ticker__line--analyst {
+  font-style: italic;
+  color: var(--bc-text-dim);
+}
+
+.bc-ticker__line--analyst.bc-ticker__line--current {
+  color: color-mix(in srgb, var(--bc-text) 78%, var(--bc-accent));
+}
+
 .bc-ticker__line--prev {
   color: var(--bc-text-dim);
   opacity: 0;

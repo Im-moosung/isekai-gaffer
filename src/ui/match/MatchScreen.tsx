@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, lazy, Suspense, Component, type R
 import type { Team, TacticState, MatchEvent, DecisionEntry } from '../../engine/types'
 import { useMatchStore } from '../../game/matchStore'
 import type { MomentKind } from '../../game/matchSession'
-import { commentateAll, commentateAt } from '../../game/commentary'
+import { commentateAt, commentateTimeline, flowLineAt, type CommentaryCtx } from '../../game/commentary'
 import * as ctts from '../../audio/commentary-tts'
 import { Scorebug } from '../broadcast/Scorebug'
 import { Ticker } from '../broadcast/Ticker'
@@ -142,6 +142,8 @@ export function MatchScreen({
   const dismissMoment = useMatchStore(s => s.dismissMoment)
   const logShootoutSetup = useMatchStore(s => s.logShootoutSetup)
   const reset = useMatchStore(s => s.reset)
+  // 감독 개입 기록 — 해설위원이 "압박을 올린 뒤로 ~"를 말할 근거(§3.5). 읽기만 한다.
+  const decisionLog = useMatchStore(s => s.decisionLog)
 
   const [shootoutOpen, setShootoutOpen] = useState(false)
   const [speed, setSpeed] = useState<PlaybackSpeed>(1)
@@ -170,6 +172,13 @@ export function MatchScreen({
     })
   }, [home, away, seed, startMatch, initialTactics, firstHalfScript, staminaOverride])
 
+  // 중계 컨텍스트 — 해설위원이 감독의 지시를 알아보는 재료(§3.5).
+  // decisionLog는 개입이 있을 때만 참조가 바뀌므로 매 분 재계산되지 않는다.
+  const commentaryCtx: CommentaryCtx = useMemo(
+    () => ({ decisions: decisionLog, managedTeamId: home.id }),
+    [decisionLog, home.id],
+  )
+
   // 재생 중 = playing. 시간 정지(카운트다운 없음)는 phase가 playing이 아닐 때.
   const replaying = phase === 'playing'
   const paused = phase === 'paused-break' || phase === 'paused-user' || phase === 'paused-moment'
@@ -195,8 +204,12 @@ export function MatchScreen({
       const clutch = m >= 80 && diff <= 1
       // 블로우아웃(3골차+) 가속 — 승부 갈린 뒤 늘어짐 방지.
       // 해설이 들리는 상태면 주인공 이벤트 발화 길이를 dwell 하한으로 쓴다(말 잘림 방지).
+      // 화자가 둘이 되면 한 분의 총 발화가 길어진다 — allEvents·seed·ctx를 넘겨야
+      // 실제로 발화될 문장(캐스터 + 해설)과 같은 기준으로 체류 하한이 잡힌다.
       const dwell = minuteDwellWithSpeech(
         m, eventsAtMinute, home, away, speed, clutch, diff, ctts.willSpeak(),
+        eng.events.filter(e => e.minute <= m), seed,
+        { decisions: st.decisionLog, managedTeamId: home.id },
       )
       timer = setTimeout(() => {
         if (cancelled) return
@@ -207,7 +220,7 @@ export function MatchScreen({
     schedule()
     return () => { cancelled = true; clearTimeout(timer) }
     // ttsOn: 해설 토글이 dwell 하한(발화 길이 보정)을 켜고 끄므로 의존에 포함한다.
-  }, [phase, speed, advanceMinute, home, away, ttsOn])
+  }, [phase, speed, advanceMinute, home, away, seed, ttsOn])
 
   // ── 모드 전환 연출: 작전판 마운트/이탈 ──────────────────────────────
   // tacticsMode 진입 시 즉시 마운트(entrance 애니메이션은 CSS가 담당),
@@ -283,12 +296,20 @@ export function MatchScreen({
     spokenMinuteRef.current = m
     const all = engine.events.filter(e => e.minute <= m)
     const spoken = pickDramaEvent(all.filter(e => e.minute === m))
-    if (!spoken) return
+    if (!spoken) {
+      // 무사건 분 — 소강 구간이면 흐름 라인 하나로 침묵을 메운다(§3.4).
+      // speakAside는 선점하지 않으므로 앞 분의 발화가 남아 있으면 조용히 넘어간다.
+      const flow = flowLineAt(all, m, home, away, seed)
+      if (flow) ctts.speakAside(flow.speech, { speed, role: flow.speaker === 'analyst' ? 'analyst' : 'normal' })
+      return
+    }
     // 히스토리를 넘겨야 streak·골 종류·변형 억제가 산다(맥락 없는 단발 호출은 로봇 신호).
-    const line = commentateAt(all, eventIndex(all, spoken), home, away, seed)
+    const line = commentateAt(all, eventIndex(all, spoken), home, away, seed, commentaryCtx)
     // speed를 함께 넘긴다 — 빨리감기 중계는 발화도 빨라져야 체류 시간과 맞는다.
-    ctts.speak(line.speech, { important: isImportantEvent(spoken), speed })
-  }, [phase, engine, home, away, speed, seed])
+    ctts.speak(line.speech, { important: isImportantEvent(spoken), intensity: line.intensity, speed })
+    // 해설위원은 **받아서** 말한다 — speakAside가 큐에 이어 붙여 캐스터 뒤에 나온다(§5.6).
+    if (line.follow) ctts.speakAside(line.follow.speech, { speed })
+  }, [phase, engine, home, away, speed, seed, commentaryCtx])
 
   // 작전판 진입·pause 시 진행 중 발화를 취소한다(작전 지시 중 해설이 새지 않게).
   useEffect(() => {
@@ -365,8 +386,10 @@ export function MatchScreen({
   // 일치하지만, Ticker/PitchView와 동일 필터로 골 이벤트에서 표시 스코어를 파생한다.
   const shown = engine.events.filter(e => e.minute <= displayMinute)
   // 라인은 배열 단위로 만든다 — 접두 안정성이 있어 매 분 다시 계산해도 앞 줄이 바뀌지 않는다.
-  const commentaryLines = commentateAll(shown, home, away, seed)
-  const tickerLines = commentaryLines.map(l => ({ minute: l.minute, text: l.text }))
+  // 타임라인은 캐스터 + 해설 + 소강 라인을 시간순으로 펼친 것이다(티커가 화자를 표시한다).
+  // displayMinute를 넘겨야 마지막 이벤트 이후의 정적에도 소강 라인이 들어간다.
+  const commentaryLines = commentateTimeline(shown, home, away, seed, commentaryCtx, displayMinute)
+  const tickerLines = commentaryLines.map(l => ({ minute: l.minute, text: l.text, speaker: l.speaker }))
   const lastEvent = shown[shown.length - 1]
   const shownScore: [number, number] = [0, 0]
   for (const e of shown) {
@@ -383,6 +406,7 @@ export function MatchScreen({
   // 분 전환보다 늦게 끝나거나 일찍 끝나 정적이 생긴다).
   const seqDwell = minuteDwellWithSpeech(
     displayMinute, minuteEvents, home, away, speed, clutchNow, diffNow, ctts.willSpeak(), shown, seed,
+    commentaryCtx,
   )
   const playSequence = replaying && !!highlight
   // 골 드라마: 이번 분 득점. 상대 골이면 실점 연출로 차별화.

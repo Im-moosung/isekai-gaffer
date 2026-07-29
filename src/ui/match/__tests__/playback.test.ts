@@ -17,7 +17,7 @@ import {
 import { createMatch, simulateSegment } from '../../../engine/simulate'
 import { makeTestTeam } from '../../../engine/fixtures/testTeams'
 import { commentateAt } from '../../../game/commentary'
-import { estimateSpeechMs } from '../../../audio/commentary-tts'
+import { casterRole, estimatePairMs, estimateSpeechMs } from '../../../audio/commentary-tts'
 import { buildSequence } from '../../pitch/choreography'
 
 // 테스트용 이벤트(분/타입만 유효하면 됨).
@@ -342,8 +342,20 @@ describe('minuteSpeechMs / minuteDwellWithSpeech', () => {
     const events = [ev('foul', 40), ev('save', 40), ev('corner', 40)]
     const drama = pickDramaEvent(events)!
     expect(drama.type).toBe('save')
+    // Phase C 4단계: 한 이벤트의 발화는 캐스터 + (있으면) 해설위원 둘이다.
+    const line = commentateAt(events, events.indexOf(drama), h, a)
     expect(minuteSpeechMs(events, h, a))
-      .toBe(estimateSpeechMs(commentateAt(events, events.indexOf(drama), h, a).speech, true))
+      .toBe(estimatePairMs(line.speech, casterRole(true, line.intensity), line.follow?.speech))
+  })
+
+  it('해설이 붙은 이벤트는 캐스터만 있을 때보다 체류 하한이 길다(화자 2인 보정)', () => {
+    // 골은 해설이 항상 붙는다 — 두 화자의 발화를 합쳐야 말이 잘리지 않는다.
+    const events = [ev('goal', 40)]
+    const line = commentateAt(events, 0, h, a)
+    expect(line.follow).toBeDefined()
+    const pair = minuteSpeechMs(events, h, a)
+    const casterOnly = estimateSpeechMs(line.speech, casterRole(true, line.intensity))
+    expect(pair).toBeGreaterThan(casterOnly)
   })
 
   it('speechEnabled=false면 보정하지 않는다(해설 OFF에서 화면만 느려지면 안 된다)', () => {

@@ -18,7 +18,17 @@
 //
 // 세이프가드: 리서치가 수집한 실제 중계 어록 중 특정 선수·팀 조롱 비유는 의도적으로 전부 배제했다.
 // 1인칭 편파 표현(`우리`, `대~한민국`)도 쓰지 않는다 — 상대 폄하로 읽힐 여지를 원천 차단한다.
-import type { MatchEvent, MatchEventType, Team } from '../engine/types'
+//
+// ★ Phase C 4~5단계
+//  6) 해설위원(analyst) — 캐스터는 **무슨 일이 일어났는지**, 해설위원은 **왜 그런지**를
+//     말한다(§1.1). 이벤트의 30~40%에만 붙인다 — 매번 붙으면 수다스럽다(§1.3 적용 규칙).
+//     캐스터 라인의 `follow` 슬롯에 담아 1:1 배열 계약(commentateAll)을 깨지 않는다.
+//  7) 소강 구간 라인 — 이벤트 없는 분이 이어지면 침묵이 흐른다. 흐름(flow) 상태를
+//     판정해 코멘트를 넣되, 조용한 구간도 중계의 일부이므로 빈도를 엄격히 제한한다(§3.4).
+//  8) 전술 반영 해설 — 감독의 지시(decisionLog)를 해설이 알아본다(§3.5). ★ 인과를
+//     단정하지 않는다. 엔진은 "그 지시 때문에" 그렇게 됐는지 모른다. 전부 시간 서술
+//     ("압박을 올린 뒤로 ~")로만 쓴다 — 사실 서술은 틀릴 수 없다.
+import type { DecisionEntry, MatchEvent, MatchEventType, Team } from '../engine/types'
 
 // ── 조사 자동 선택 (§5.5) ────────────────────────────────────
 // 왜 필요한가: 선수 이름이 데이터 주도라 `${player}가`는 `손흥민가`를 만든다.
@@ -86,10 +96,10 @@ export function fnv1a(s: string): number {
 
 // ── 라인 타입 ────────────────────────────────────────────────
 
-/** 화자. 현재는 캐스터만 생성한다. 4단계(해설위원)가 'analyst'를 추가로 낼 자리다. */
+/** 화자. 캐스터(사실)와 해설위원(해석). 둘은 TTS pitch로도 갈린다(§5.7). */
 export type Speaker = 'caster' | 'analyst'
 
-/** 라인 강도 0~3. 3이 피크(골·퇴장). 향후 발화 우선순위·pitch 분기에 쓸 수 있다(§5.8). */
+/** 라인 강도 0~3. 3이 피크(골·퇴장). 발화 우선순위·pitch 분기에 쓴다(§5.8). */
 export type Intensity = 0 | 1 | 2 | 3
 
 export interface Line {
@@ -105,6 +115,32 @@ export interface Line {
   intensity: Intensity
   /** 문장 안에 분이 들어갔는가(회귀 테스트가 비율을 잰다). */
   hasMinutePrefix: boolean
+  /**
+   * 이 캐스터 라인을 **받아서** 이어지는 해설위원 라인(§1.1 "해설은 절대 먼저 말하지 않는다").
+   * ★ 왜 배열이 아니라 중첩인가: `commentateAll`은 이벤트와 1:1이라는 계약(접두 안정성·
+   *   `commentateAt` 일치·playback의 eventIndex)을 갖는다. 해설을 같은 배열에 끼워 넣으면
+   *   그 계약이 전부 깨진다. 화면·발화가 필요할 때는 `flattenLines()`로 펼친다.
+   */
+  follow?: Line
+}
+
+/** 중계 컨텍스트. 이벤트만으로는 알 수 없는 재료(감독의 지시 기록)를 넣는다.
+ *  ★ 전부 선택적이다 — 넘기지 않으면 4단계 이전과 동일한 결과가 나온다(회귀 안전). */
+export interface CommentaryCtx {
+  /** `matchStore.decisionLog` — 감독 개입 기록. **읽기 전용으로만 쓴다.** */
+  decisions?: readonly DecisionEntry[]
+  /** 해설이 인정할 화자(감독)의 팀 id. 기본값은 홈. */
+  managedTeamId?: string
+}
+
+/** `Line`과 그 `follow`를 한 줄씩 펼친다(티커·발화·테스트 공용). */
+export function flattenLines(lines: readonly Line[]): Line[] {
+  const out: Line[] = []
+  for (const l of lines) {
+    out.push(l)
+    if (l.follow) out.push(l.follow)
+  }
+  return out
 }
 
 // ── 골 종류 (§3.1) ───────────────────────────────────────────
@@ -431,6 +467,281 @@ const CHANT_CAP = 3
 /** 문장 안에 분을 항상 넣는 이벤트 — 골·카드·전후반 경계. */
 const ALWAYS_MINUTE: ReadonlySet<MatchEventType> = new Set(['goal', 'yellow', 'red', 'halftime', 'fulltime'])
 
+// ── 해설위원 (§1) ────────────────────────────────────────────
+// 캐스터가 사실을 던지고, 해설이 그 사실에 해석을 붙인다. 표준 시퀀스 3박자 중
+// [캐스터 사실] → [해설 해석] 두 박자만 쓴다(§1.3).
+//
+// ★ 문장 설계 원칙(세이프가드 연장선):
+//   - 경기 화면이 보여주지 않은 미시 사실을 지어내지 않는다. "수비수 두 명이 공만 보고
+//     있었다" 같은 문장은 엔진이 모르는 사실이라 화면과 어긋날 수 있다. 대신 **언제나
+//     참인 판단**(경기 양상·남은 시간·심리·다음 국면)으로 쓴다.
+//   - 1인칭 편파(`우리`)는 쓰지 않는다. 1인칭 **판단**(`제가 보기엔`)은 해설의 문법이므로 쓴다.
+//   - 30음절 이내(§5.8 — Chrome 15초 유터런스 절단 여유).
+
+/** 해설이 **항상** 개입하는 이벤트 — 골과 퇴장은 방송에서도 예외 없이 해설이 받는다. */
+const ANALYST_ALWAYS: ReadonlySet<MatchEventType> = new Set(['goal', 'red', 'halftime', 'fulltime'])
+
+/**
+ * 그 외 이벤트에 해설이 붙을 확률(%). 목표는 **전체 이벤트의 30~40%**(§1.3).
+ * 실경기 이벤트 분포(파울·코너·슛이 다수, 골·카드는 소수)에 맞춰 큰 사건일수록 높였다.
+ * 목록에 없는 타입(kickoff·chance)엔 해설이 붙지 않는다 — 아직 아무 일도 안 일어났다.
+ */
+const ANALYST_PCT: Partial<Record<MatchEventType, number>> = {
+  sub: 100, save: 64, miss: 46, yellow: 40, shot: 18, corner: 12,
+}
+// ★ `foul`이 빠진 이유: 파울은 해설이 가장 할 말이 없는 장면인데(체감상 "네, 위험한
+//   위치는 아닙니다" 한 줄), 파울 분의 리듬 dwell은 2.7초로 짧아 해설을 붙이면 체류가
+//   두 배로 늘어난다. 가치 대비 비용이 가장 나쁜 조합이라 통째로 뺐다.
+//   반대로 `sub`은 100%다 — 교체는 감독의 결정이라 해설이 반드시 짚어야 하고,
+//   교체 이벤트는 주인공 이벤트가 아니라(playback.DRAMA_PRIORITY 밖) 체류를 늘리지 않는다.
+
+/** 해설 개입 최소 간격(라인 수). 직전 이벤트에 해설이 붙었으면 확률 개입은 건너뛴다 —
+ *  해설이 두 이벤트 연속으로 말하면 캐스터가 사라진 것처럼 들린다. */
+const ANALYST_GAP = 2
+
+/** 해설 라인은 캐스터보다 한 단계 낮은 강도로 말한다(탄식·완서 — §1.1 감정 열). */
+function analystIntensity(base: Intensity): Intensity {
+  return Math.max(0, base - 1) as Intensity
+}
+
+// 골 종류별 해설. 캐스터가 "무엇"을 외친 직후 "그래서 이 골이 무슨 의미인가"를 붙인다.
+const AN_GOAL: Partial<Record<GoalKind, Tpl[]>> = {
+  opener: pool('an.goal.opener', 2, [
+    () => '네, 선제골의 무게가 큽니다. 이제 상대가 나와야 하죠.',
+    () => '먼저 넣은 쪽이 경기를 끌고 갑니다.',
+    () => '이 한 골로 경기 운영이 편해집니다.',
+  ]),
+  equalizer: pool('an.goal.equalizer', 2, [
+    () => '이건 완전히 새 경기입니다. 따라잡힌 쪽이 흔들리거든요.',
+    () => '네, 이 시점의 동점골은 넣은 쪽에 힘이 확 실립니다.',
+    () => '앞서 있던 팀엔 뼈아프죠. 다시 만들어야 합니다.',
+  ]),
+  comeback: pool('an.goal.comeback', 2, [
+    () => '역전은 다릅니다. 앞섰던 팀 라인이 내려가거든요.',
+    () => '네, 이 골 하나로 두 팀의 계획이 통째로 바뀝니다.',
+    v => `${v.opp}, 이제 나올 수밖에 없습니다. 공간이 생기죠.`,
+  ]),
+  clincher: pool('an.goal.clincher', 1, [
+    () => '남은 시간을 생각하면 뒤집기가 쉽지 않습니다.',
+    () => '네, 사실상 여기서 갈렸다고 봅니다.',
+    () => '이제 벤치는 다음 경기를 생각할 겁니다.',
+  ]),
+  chase: pool('an.goal.chase', 2, [
+    () => '한 골 차가 되면 지키는 쪽이 훨씬 불편해집니다.',
+    () => '네, 아직 시간이 있습니다. 다음 십 분이 중요해요.',
+  ]),
+  consolation: pool('an.goal.consolation', 1, [
+    () => '늦었지만 다음 경기 분위기를 만드는 골입니다.',
+    () => '네, 끝까지 포기하지 않은 결과죠.',
+  ]),
+}
+
+// 종류 판정이 없거나 전용 풀이 없는 골(restore·extra)의 기본 해설.
+const AN_GOAL_ANY: Tpl[] = pool('an.goal.any', 2, [
+  () => '네, 마무리가 침착했습니다. 서두르면 안 들어가거든요.',
+  () => '이 골 하나로 경기 양상이 또 바뀝니다.',
+  () => '점수 차가 벌어지면 뒤진 쪽이 라인을 올려야 하죠.',
+])
+
+// 이벤트 타입별 해설. 골은 위 전용 풀이 우선한다.
+const AN_BASE: Partial<Record<MatchEventType, Tpl[]>> = {
+  // ★ save·miss·yellow·shot은 **짧게** 간다. 실제 방송에서도 흔한 장면의 해설은
+  //   한 마디로 끝난다 — 길게 붙이면 다음 장면을 캐스터가 못 받는다(체류 시간 압박).
+  //   긴 2~3문장은 골·퇴장·하프타임처럼 경기가 멈춘 순간에만 쓴다(§1.1 문장 길이 열).
+  save: pool('an.save', 1, [
+    () => '네, 이런 선방이 승점을 지킵니다.',
+    v => `${v.player}, 자리 선정이 좋았습니다.`,
+    () => '각을 좁힌 게 컸어요.',
+    () => '이런 장면 하나가 수비를 편하게 하죠.',
+  ]),
+  miss: pool('an.miss', 1, [
+    () => '조금만 더 눕혀 찼으면 좋았을 텐데요.',
+    () => '네, 슛 선택은 맞았습니다.',
+    () => '이런 게 쌓이면 후회로 남습니다.',
+    () => '급했습니다. 한 박자만 참았으면요.',
+  ]),
+  yellow: pool('an.yellow', 1, [
+    () => '경고를 안고 뛰면 발이 안 나갑니다.',
+    () => '네, 발이 먼저 들어갔습니다.',
+    () => '벤치가 교체를 고민하게 되죠.',
+  ]),
+  red: pool('an.red', 2, [
+    () => '수적 열세는 체력에서 먼저 옵니다.',
+    v => `${v.team}, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.`,
+    () => '네, 경기 계획을 통째로 다시 짜야 하는 상황입니다.',
+  ]),
+  sub: pool('an.sub', 0, [
+    () => '벤치가 흐름을 바꿔 보겠다는 겁니다.',
+    () => '다리가 무거워진 자리를 먼저 정리합니다.',
+    () => '네, 이 시점의 교체는 늦기 전에 하는 게 맞죠.',
+  ]),
+  shot: pool('an.shot', 1, [
+    () => '이렇게 두드리다 보면 하나는 들어갑니다.',
+    () => '네, 슛을 아끼지 않는 게 좋죠.',
+  ]),
+  corner: pool('an.corner', 0, [
+    () => '세트피스 하나가 경기를 가릅니다.',
+    () => '네, 두 번째 볼 싸움을 봐야죠.',
+  ]),
+  foul: pool('an.foul', 0, [
+    () => '흐름을 끊는 것도 경기 운영이죠.',
+    () => '네, 위험한 위치는 아닙니다.',
+  ]),
+  halftime: pool('an.halftime', 1, [
+    () => '네, 후반 십오 분이 분수령이 될 겁니다.',
+    () => '라커룸에서 어떤 이야기가 나오느냐가 후반을 가릅니다.',
+    () => '전반에 아낀 체력을 후반 어디에 쓸지 정해야 합니다.',
+  ]),
+  fulltime: pool('an.fulltime', 1, [
+    () => '네, 두 팀 다 준비한 걸 꺼낸 경기였습니다.',
+    () => '결정적인 순간을 누가 잡았느냐로 갈렸습니다.',
+    () => '제가 보기엔 후반 중반의 십 분이 승부처였습니다.',
+  ]),
+}
+
+// ── 전술 반영 해설 (§3.5) ────────────────────────────────────
+// ★ 인과 단정 금지. 엔진은 "그 지시 **때문에**" 이 장면이 나왔는지 알 수 없다.
+//   그래서 전부 **시간 서술**("~한 뒤로", "~하고 나서")로 쓴다. 시간 서술은 관찰이라
+//   틀릴 수 없고, 듣는 사람은 그걸 인과로 읽는다 — 거짓말 없이 같은 효과를 낸다.
+
+/** 감독 지시 1건을 해설이 알아볼 수 있는 형태로 정규화한 것. */
+export type TacticKind =
+  | 'pressUp' | 'pressDown'
+  | 'lineUp' | 'lineDown'
+  | 'tempoUp' | 'tempoDown'
+  | 'focusWing' | 'focusCenter'
+  | 'backThree' | 'backFour' | 'formation'
+  | 'sub'
+
+export interface TacticalNote { minute: number; kind: TacticKind }
+
+/** `matchStore`가 `detail.changed`에 넣는 `"압박 55→90"` 형식. 라벨은 matchStore와 동기. */
+const CHANGED_RE = /^(라인|압박|템포|공격)\s(.+)→(.+)$/
+
+/** 스리백 계열 포메이션(첫 숫자가 3 또는 5). */
+function isBackThree(f: string): boolean {
+  return f.startsWith('3') || f.startsWith('5')
+}
+
+/**
+ * 감독 개입 기록을 해설이 쓸 수 있는 노트로 바꾼다(순수·읽기 전용).
+ * 파싱 실패·해석 불가 항목은 조용히 버린다 — 해설이 없는 게 틀린 해설보다 낫다.
+ */
+export function readTacticalNotes(decisions: readonly DecisionEntry[]): TacticalNote[] {
+  const out: TacticalNote[] = []
+  for (const d of decisions) {
+    if (d.kind === 'sub') {
+      out.push({ minute: d.minute, kind: 'sub' })
+      continue
+    }
+    if (d.kind !== 'instructions') continue
+    const detail = d.detail ?? {}
+    const changed = detail.changed
+    if (Array.isArray(changed)) {
+      for (const raw of changed) {
+        const m = CHANGED_RE.exec(String(raw))
+        if (!m) continue
+        const [, axis, before, after] = m
+        if (axis === '공격') {
+          if (after === '좌' || after === '우') out.push({ minute: d.minute, kind: 'focusWing' })
+          else if (after === '중앙') out.push({ minute: d.minute, kind: 'focusCenter' })
+          continue
+        }
+        const b = Number(before), a = Number(after)
+        if (!Number.isFinite(b) || !Number.isFinite(a) || a === b) continue
+        const up = a > b
+        if (axis === '라인') out.push({ minute: d.minute, kind: up ? 'lineUp' : 'lineDown' })
+        else if (axis === '압박') out.push({ minute: d.minute, kind: up ? 'pressUp' : 'pressDown' })
+        else out.push({ minute: d.minute, kind: up ? 'tempoUp' : 'tempoDown' })
+      }
+      continue
+    }
+    const before = detail.before, after = detail.after
+    if (typeof before === 'string' && typeof after === 'string' && before !== after) {
+      const kind: TacticKind = isBackThree(after) && !isBackThree(before)
+        ? 'backThree'
+        : !isBackThree(after) && isBackThree(before) ? 'backFour' : 'formation'
+      out.push({ minute: d.minute, kind })
+    }
+  }
+  return out
+}
+
+/** 지시가 해설에 언급될 수 있는 유효 기간(분). 이보다 오래되면 더는 "그 지시 뒤"가 아니다. */
+const TACTIC_WINDOW = 10
+/** 지시 직후 몇 분은 건너뛴다 — 지시하자마자 효과를 말하면 거짓말처럼 들린다. */
+const TACTIC_DELAY = 1
+/** 전술 해설이 붙을 수 있는 이벤트(장면이 있어야 "그 뒤로 이렇게 됐다"를 말할 수 있다). */
+const TACTIC_TRIGGERS: ReadonlySet<MatchEventType> = new Set(['goal', 'shot', 'chance', 'save', 'corner', 'miss'])
+
+/**
+ * 전술 해설 문장. `mine`은 이벤트 주체가 **감독의 팀**인지 — 같은 지시라도
+ * 우리가 만든 장면인지 상대가 만든 장면인지에 따라 할 말이 정반대다.
+ * 모든 문장이 시간 서술이다("~한 뒤로"), 인과 단정이 없다.
+ */
+export const TACTIC_LINES: Record<TacticKind, { mine: readonly string[]; theirs: readonly string[] }> = {
+  pressUp: {
+    mine: [
+      '압박을 올린 뒤로 높은 위치에서 공을 끊는 장면이 나옵니다.',
+      '네, 압박 강도를 올리고 나서 상대가 후방에서 공을 못 돌리고 있습니다.',
+    ],
+    theirs: [
+      '압박을 올린 만큼 뒷공간이 비어 있습니다. 위험 부담은 감수하겠다는 거죠.',
+      '압박을 올린 뒤로 이런 뒷공간 장면이 늘었습니다.',
+    ],
+  },
+  pressDown: {
+    mine: ['압박을 낮춘 뒤로 공을 끊고 나가는 거리가 길어졌습니다.'],
+    theirs: ['압박을 낮추고 나서 상대에게 시간을 주고 있습니다.'],
+  },
+  lineUp: {
+    mine: ['라인을 올린 뒤로 상대 진영에서 경기가 이어집니다.'],
+    theirs: ['라인을 올린 뒤에 나온 뒷공간 장면입니다. 이게 이 선택의 값이죠.'],
+  },
+  lineDown: {
+    mine: [
+      '라인을 내린 뒤에 나온 역습입니다. 이걸 노린 거죠.',
+      '네, 내려서서 공간을 벌어 두고 한 번에 나갔습니다.',
+    ],
+    theirs: ['라인을 내렸는데도 상대가 계속 두드립니다. 버티는 시간이 길어지네요.'],
+  },
+  tempoUp: {
+    mine: ['템포를 올린 뒤로 전개가 눈에 띄게 빨라졌습니다.'],
+    theirs: ['템포를 올린 뒤로 실수도 같이 나오고 있습니다. 급할 때 나오는 장면이죠.'],
+  },
+  tempoDown: {
+    mine: ['속도를 줄이고 나서 볼을 오래 소유합니다. 시간을 관리하는 거죠.'],
+    theirs: ['속도를 줄인 사이에 상대가 자리를 잡았습니다.'],
+  },
+  focusWing: {
+    mine: ['측면으로 붙이기 시작한 뒤로 계속 저쪽에서 장면이 나옵니다.'],
+    theirs: ['측면에 무게를 실은 만큼 중앙이 비어 있습니다.'],
+  },
+  focusCenter: {
+    mine: ['중앙으로 좁힌 뒤로 짧은 패스가 늘었습니다.'],
+    theirs: ['중앙에 모인 사이 측면이 열려 있습니다.'],
+  },
+  backThree: {
+    mine: ['스리백으로 바꾼 뒤로 윙백 두 명이 사실상 윙어처럼 올라옵니다.'],
+    theirs: ['스리백으로 바꾼 뒤 중앙이 넓어져 있습니다.'],
+  },
+  backFour: {
+    mine: ['포백으로 돌아온 뒤로 뒤가 정리됐습니다.'],
+    theirs: ['포백으로 돌아왔는데 측면 뒤가 계속 노출됩니다.'],
+  },
+  formation: {
+    mine: ['포메이션을 바꾼 뒤로 서는 위치가 달라졌습니다.'],
+    theirs: ['포메이션을 바꾼 직후라 아직 자리가 덜 잡혔습니다.'],
+  },
+  sub: {
+    mine: [
+      '교체 카드를 쓰고 나서 곧바로 장면이 나옵니다.',
+      '네, 들어온 선수가 다리가 살아 있으니 확실히 다릅니다.',
+    ],
+    theirs: ['교체 직후엔 자리가 한 번 흔들립니다. 지금이 그 시간이죠.'],
+  },
+}
+
 // ── speech 정규화 (§5.2) ─────────────────────────────────────
 
 /**
@@ -471,6 +782,12 @@ interface FoldState {
   /** 직전에 쓴 필러 — 같은 필러 연달아 쓰지 않는다. */
   prevFiller: string
   chantsUsed: number
+  /** 해설위원 변형 억제 링버퍼(캐스터와 별도 — 풀이 다르므로 섞으면 서로를 굶긴다). */
+  recentAnIds: string[]
+  /** 마지막으로 해설이 붙은 라인 인덱스. ANALYST_GAP 간격 판정용. -1 = 아직 없음. */
+  lastAnalystIndex: number
+  /** 이미 해설이 언급한 지시 노트(중복 언급 금지 — 같은 지시를 두 번 말하면 우습다). */
+  usedNotes: Set<number>
 }
 
 /** 이벤트 주체 팀·선수(name.ko). 선수 미지정·미발견이면 팀명으로 대체한다. */
@@ -500,8 +817,80 @@ function goalPool(kind: GoalKind, scored: number, minute: number): Tpl[] {
   return GOAL_POOLS[kind] ?? BASE.goal
 }
 
+/** 해설 라인 1개를 만든다(문장은 이미 결정된 상태 — 포장만 한다). */
+function makeAnalystLine(id: string, minute: number, text: string, intensity: Intensity): Line {
+  return {
+    id, speaker: 'analyst', minute, text,
+    speech: sanitizeSpeech(text), intensity, hasMinutePrefix: false,
+  }
+}
+
+/**
+ * 이 이벤트에 붙일 **전술 해설**을 찾는다. 없으면 null.
+ * 조건: 감독의 지시가 TACTIC_DELAY~TACTIC_WINDOW분 전에 있었고, 아직 언급하지 않았고,
+ * 지금 이벤트가 "그 뒤로 이렇게 됐다"를 말할 수 있는 장면일 것.
+ */
+function tacticalFollow(
+  e: MatchEvent, notes: readonly TacticalNote[], managedTeamId: string, h: number, st: FoldState,
+): Line | null {
+  if (!TACTIC_TRIGGERS.has(e.type)) return null
+  // 가장 최근의 미언급 노트부터 본다 — 감독이 방금 내린 지시가 가장 궁금하다.
+  for (let i = notes.length - 1; i >= 0; i--) {
+    if (st.usedNotes.has(i)) continue
+    const gap = e.minute - notes[i].minute
+    if (gap < TACTIC_DELAY || gap > TACTIC_WINDOW) continue
+    // ★ 관점은 **공격한 쪽** 기준이다. `save`의 teamId는 막은 팀이므로 뒤집는다 —
+    //   안 뒤집으면 "우리 골키퍼 선방"에 "템포를 올린 뒤 전개가 빨라졌다"가 붙는다.
+    const attackerIsManaged = e.type === 'save' ? e.teamId !== managedTeamId : e.teamId === managedTeamId
+    const mine = attackerIsManaged
+    const set = TACTIC_LINES[notes[i].kind]
+    const items = mine ? set.mine : set.theirs
+    if (items.length === 0) continue
+    st.usedNotes.add(i)
+    const text = items[h % items.length]
+    return makeAnalystLine(`an.tactic.${notes[i].kind}.${mine ? 'mine' : 'theirs'}`, e.minute, text, 1)
+  }
+  return null
+}
+
+/** 이벤트 종류에 맞는 해설 풀. 없으면 null(= 해설을 붙일 말이 없다). */
+function analystPool(e: MatchEvent, goalKind: GoalKind | null): Tpl[] | null {
+  if (e.type === 'goal') return (goalKind && AN_GOAL[goalKind]) ?? AN_GOAL_ANY
+  return AN_BASE[e.type] ?? null
+}
+
+/**
+ * 캐스터 라인에 이어 붙일 해설위원 라인을 정한다(§1.3 "모든 이벤트에 붙이지 말 것").
+ * 우선순위: 전술 해설 > 항상 개입(골·퇴장·경계) > 확률 개입.
+ */
+function analystFollow(
+  e: MatchEvent, index: number, v: Vars, goalKind: GoalKind | null,
+  notes: readonly TacticalNote[], managedTeamId: string, casterIntensity: Intensity,
+  h: number, st: FoldState,
+): Line | null {
+  const tactic = tacticalFollow(e, notes, managedTeamId, h >>> 3, st)
+  if (tactic) return tactic
+
+  const always = ANALYST_ALWAYS.has(e.type)
+  if (!always) {
+    // 확률 개입은 간격 제한을 지킨다(피크 이벤트는 위에서 이미 통과).
+    if (index - st.lastAnalystIndex < ANALYST_GAP) return null
+    const pct = ANALYST_PCT[e.type] ?? 0
+    if (pct === 0 || (h >>> 24) % 100 >= pct) return null
+  }
+  const items = analystPool(e, goalKind)
+  if (!items) return null
+  const tpl = pickVariant(items, `an|${index}|${e.minute}|${e.type}`, st.recentAnIds)
+  st.recentAnIds.push(tpl.id)
+  if (st.recentAnIds.length > RECENT_RING) st.recentAnIds.shift()
+  return makeAnalystLine(tpl.id, e.minute, tpl.t(v), analystIntensity(casterIntensity))
+}
+
 /** 한 이벤트의 라인을 만들고 fold 상태를 갱신한다. */
-function step(e: MatchEvent, index: number, prior: MatchEvent[], home: Team, away: Team, seed: number, st: FoldState): Line {
+function step(
+  e: MatchEvent, index: number, prior: MatchEvent[], home: Team, away: Team, seed: number,
+  st: FoldState, notes: readonly TacticalNote[], managedTeamId: string,
+): Line {
   const { team, opp, player } = resolve(e, home, away)
   const isHome = e.teamId === home.id
   const streak = detectStreak(e, prior)
@@ -564,9 +953,17 @@ function step(e: MatchEvent, index: number, prior: MatchEvent[], home: Team, awa
     speech += ` ${tail}`
   }
 
+  // 해설위원 — 캐스터 문장을 **받아서** 말한다(§1.1 "해설은 절대 먼저 말하지 않는다").
+  // ★ 여기서 먼저 정하는 이유: 해설이 붙으면 연호를 생략해야 한다(바로 아래).
+  const follow = analystFollow(e, index, v, goalKind, notes, managedTeamId, tpl.intensity, h, st)
+  if (follow) st.lastAnalystIndex = index
+
   // 연호 — 골 피크에서만, 경기당 CHANT_CAP회 상한.
   // (문장이 이미 `{선수}!`로 끝나면 붙이지 않는다 — 이름이 세 번 반복되면 우스워진다)
-  if (goalKind && st.chantsUsed < CHANT_CAP && player !== team
+  // ★ 해설이 뒤에 붙는 골에는 연호를 생략한다. 브라우저 실측에서 피크 골 라인이 6.9초까지
+  //   늘어 해설이 다음 분에 잘렸다(interrupted). 이름 반복보다 해설 한 문장이 더 값지고,
+  //   생략하면 골 순간의 총 발화가 체류 상한(MAX_DWELL_MS) 안에 들어온다.
+  if (goalKind && !follow && st.chantsUsed < CHANT_CAP && player !== team
       && !text.endsWith(`${player}!`) && h % 100 < 45) {
     st.chantsUsed += 1
     text += ` ${player}! ${player}!`
@@ -609,6 +1006,144 @@ function step(e: MatchEvent, index: number, prior: MatchEvent[], home: Team, awa
     speech: sanitizeSpeech(speech),
     intensity,
     hasMinutePrefix,
+    ...(follow ? { follow } : {}),
+  }
+}
+
+// ── 경기 흐름 · 소강 구간 (§3.4) ─────────────────────────────
+// "아무 이벤트 없는 90초를 침묵으로 두면 게임이 죽는다." 다만 반대도 참이다 —
+// 조용한 구간은 중계의 일부다. 그래서 **가뭄이 확실할 때만, 드물게** 말한다.
+
+/** 흐름 상태. `dominant`/`lowBlock`은 주체 팀이 있다. */
+export type FlowKind = 'dominant' | 'lull' | 'endToEnd' | 'lowBlock' | 'even'
+
+/** 흐름 판정에 쓰는 "공격 장면" 이벤트. */
+const ATTACKING: ReadonlySet<MatchEventType> = new Set(['shot', 'chance', 'corner', 'goal', 'save', 'miss'])
+
+/** 흐름 판정 창(분). 이 구간의 공격 장면 분포로 양상을 읽는다. */
+const FLOW_WINDOW = 12
+/** 이만큼 연속으로 이벤트가 없어야 흐름 라인을 낸다.
+ *  근거(실측 8경기): 무사건 분이 전체의 42.8%이고 연속 무사건 런의 분포는
+ *  1분 93 / 2분 36 / 3분 21 / 4분+ 18 이다. 1x 재생에서 무사건 분은 1.8초이므로
+ *  3분 연속 = 약 5초의 완전한 정적 — 여기가 중계가 비어 들리기 시작하는 지점이다.
+ *  3으로 잡으면 경기당 4~5회 발동한다(캐스터 라인 100여 개 대비 5% 미만). */
+const LULL_GAP = 3
+/** 정적이 이어져도 이 간격(분)으로만 다시 말한다 — 같은 소강에 계속 말 걸지 않는다. */
+const LULL_EVERY = 4
+/** 흐름 라인을 내지 않는 구간 — 초반은 아직 판단할 재료가 없고, 종료 직전은 캐스터의 시간이다. */
+const FLOW_MIN_MINUTE = 6
+const FLOW_MAX_MINUTE = 88
+
+/** 그 시점까지의 이벤트로 경기 흐름을 판정한다(순수·결정론).
+ *  `side`는 그 양상의 주체(dominant=몰아붙이는 쪽, lowBlock=내려선 쪽). 없으면 null. */
+export function flowStateAt(
+  events: readonly MatchEvent[], minute: number, homeId: string,
+): { kind: FlowKind; side: 'home' | 'away' | null } {
+  let homeAtk = 0, awayAtk = 0
+  let homeGoals = 0, awayGoals = 0
+  for (const e of events) {
+    if (e.type === 'goal') {
+      if (e.teamId === homeId) homeGoals++
+      else awayGoals++
+    }
+    if (e.minute > minute || e.minute <= minute - FLOW_WINDOW) continue
+    if (!ATTACKING.has(e.type)) continue
+    // `save`는 막은 팀의 이벤트지만 **공격한 쪽**은 반대다 — 흐름은 공격 주체로 센다.
+    const attacker = e.type === 'save' ? (e.teamId === homeId ? 'away' : 'home') : (e.teamId === homeId ? 'home' : 'away')
+    if (attacker === 'home') homeAtk++
+    else awayAtk++
+  }
+  const total = homeAtk + awayAtk
+  if (total <= 1) return { kind: 'lull', side: null }
+  if (homeAtk >= 3 && awayAtk >= 3) return { kind: 'endToEnd', side: null }
+  const lead: 'home' | 'away' = homeAtk >= awayAtk ? 'home' : 'away'
+  const other: 'home' | 'away' = lead === 'home' ? 'away' : 'home'
+  const leadN = Math.max(homeAtk, awayAtk), otherN = Math.min(homeAtk, awayAtk)
+  if (leadN >= 4 && otherN <= 1) {
+    // 몰아붙이는 쪽이 **지고 있으면** 상대가 잠근 것이다 — 같은 분포, 다른 이야기.
+    const leadGoals = lead === 'home' ? homeGoals : awayGoals
+    const otherGoals = lead === 'home' ? awayGoals : homeGoals
+    if (leadGoals < otherGoals) return { kind: 'lowBlock', side: other }
+    return { kind: 'dominant', side: lead }
+  }
+  return { kind: 'even', side: null }
+}
+
+/** 흐름 라인 풀. 화자를 템플릿마다 명시한다 — "잠잠하네요"는 캐스터의 말이지만
+ *  "한 골은 시간문제"는 해설의 판단이다. */
+interface FlowTpl { id: string; speaker: Speaker; intensity: Intensity; t: (team: string) => string }
+function flowPool(name: string, items: Array<[Speaker, (team: string) => string]>): FlowTpl[] {
+  return items.map(([speaker, t], i) => ({ id: `${name}.${i}`, speaker, intensity: 0 as Intensity, t }))
+}
+
+const FLOW_POOLS: Record<FlowKind, FlowTpl[]> = {
+  lull: flowPool('flow.lull', [
+    ['caster', () => '잠시 소강 상태입니다.'],
+    ['caster', () => '양 팀 다 숨을 고르고 있습니다.'],
+    ['caster', () => '중원에서 공방이 이어집니다.'],
+    ['caster', () => '특별한 장면 없이 시간이 흐릅니다.'],
+    ['caster', () => '경기가 다소 잠잠해졌습니다.'],
+    ['analyst', () => '네, 이럴 때 한 번의 전환이 경기를 가릅니다.'],
+    ['analyst', () => '탐색전이 길어지고 있습니다. 먼저 움직이는 쪽이 위험을 안죠.'],
+  ]),
+  dominant: flowPool('flow.dominant', [
+    ['caster', t => `${josaIGa(t)} 계속 몰아붙입니다.`],
+    ['caster', t => `${josaEunNeun(t)} 상대 진영에서만 경기를 하고 있습니다.`],
+    ['analyst', () => '네, 이 흐름이면 한 골은 시간문제로 보입니다.'],
+    ['analyst', t => `${josaEunNeun(t)} 숨 쉴 틈을 안 주고 있습니다.`],
+  ]),
+  endToEnd: flowPool('flow.endToEnd', [
+    ['caster', () => '정신없이 오갑니다.'],
+    ['caster', () => '완전히 난타전입니다.'],
+    ['analyst', () => '이거 몇 골이 날지 모르겠는데요.'],
+  ]),
+  lowBlock: flowPool('flow.lowBlock', [
+    ['caster', t => `${josaEunNeun(t)} 완전히 내려섰습니다.`],
+    ['caster', () => '열 명이 다 자기 진영에 서 있습니다.'],
+    ['analyst', t => `${josaEunNeun(t)} 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.`],
+  ]),
+  even: flowPool('flow.even', [
+    ['caster', () => '중원 싸움이 팽팽합니다.'],
+    ['caster', () => '양 팀 모두 쉽게 내주지 않습니다.'],
+    ['analyst', () => '네, 한 번의 실수가 경기를 가를 분위기입니다.'],
+  ]),
+}
+
+/**
+ * 그 분에 낼 흐름 라인(없으면 null). **무사건 분에만** 나온다.
+ *
+ * 빈도 근거: 마지막 이벤트로부터 4분이 지나야 첫 라인이 나오고, 그 뒤로는 5분마다
+ * 한 번만 더 나온다. 실경기 이벤트 밀도(90분에 25~40개)에서 4분 이상 가뭄은
+ * 경기당 5~9회 정도이므로 대략 **10분에 한 번**꼴이다 — 침묵을 없애되 수다스럽지 않다.
+ *
+ * 무상태 결정론: 상태를 들고 다니지 않고 `minute - 마지막 이벤트 분`만 본다.
+ * 덕분에 `commentateAll`처럼 접두 안정성이 자동으로 성립한다.
+ */
+export function flowLineAt(
+  events: readonly MatchEvent[], minute: number, home: Team, away: Team, seed = 0,
+): Line | null {
+  if (minute < FLOW_MIN_MINUTE || minute > FLOW_MAX_MINUTE) return null
+  let lastMinute = -1
+  for (const e of events) {
+    if (e.minute <= minute && e.minute > lastMinute) lastMinute = e.minute
+  }
+  if (lastMinute < 0) return null // 킥오프도 안 했다
+  const gap = minute - lastMinute
+  if (gap < LULL_GAP || (gap - LULL_GAP) % LULL_EVERY !== 0) return null
+
+  const { kind, side } = flowStateAt(events, minute, home.id)
+  const team = side === null ? '' : side === 'home' ? home.name.ko : away.name.ko
+  const items = FLOW_POOLS[kind]
+  const tpl = items[fnv1a(`${seed}|flow|${minute}|${kind}`) % items.length]
+  const text = tpl.t(team)
+  return {
+    id: tpl.id,
+    speaker: tpl.speaker,
+    minute,
+    text,
+    speech: sanitizeSpeech(text),
+    intensity: tpl.intensity,
+    hasMinutePrefix: false,
   }
 }
 
@@ -624,7 +1159,9 @@ function step(e: MatchEvent, index: number, prior: MatchEvent[], home: Team, awa
  *
  * @param seed 경기 시드. 같은 시드·같은 이벤트면 항상 같은 문장(결정론 계약).
  */
-export function commentateAll(events: readonly MatchEvent[], home: Team, away: Team, seed = 0): Line[] {
+export function commentateAll(
+  events: readonly MatchEvent[], home: Team, away: Team, seed = 0, ctx: CommentaryCtx = {},
+): Line[] {
   const st: FoldState = {
     score: [0, 0],
     wasBehind: {},
@@ -633,11 +1170,16 @@ export function commentateAll(events: readonly MatchEvent[], home: Team, away: T
     prevHadFiller: false,
     prevFiller: '',
     chantsUsed: 0,
+    recentAnIds: [],
+    lastAnalystIndex: -ANALYST_GAP,
+    usedNotes: new Set<number>(),
   }
+  const notes = ctx.decisions ? readTacticalNotes(ctx.decisions) : []
+  const managedTeamId = ctx.managedTeamId ?? home.id
   const out: Line[] = []
   const prior: MatchEvent[] = []
   for (let i = 0; i < events.length; i++) {
-    out.push(step(events[i], i, prior, home, away, seed, st))
+    out.push(step(events[i], i, prior, home, away, seed, st, notes, managedTeamId))
     prior.push(events[i])
   }
   return out
@@ -647,9 +1189,44 @@ export function commentateAll(events: readonly MatchEvent[], home: Team, away: T
  * 배열 중 한 이벤트의 라인. 앞선 이벤트들이 맥락(스코어·streak·억제 링버퍼)을 만든다.
  * 접두 안정성 덕분에 `commentateAll(events)[index]`와 항상 같다.
  */
-export function commentateAt(events: readonly MatchEvent[], index: number, home: Team, away: Team, seed = 0): Line {
-  const lines = commentateAll(events.slice(0, index + 1), home, away, seed)
+export function commentateAt(
+  events: readonly MatchEvent[], index: number, home: Team, away: Team, seed = 0, ctx: CommentaryCtx = {},
+): Line {
+  const lines = commentateAll(events.slice(0, index + 1), home, away, seed, ctx)
   return lines[lines.length - 1]
+}
+
+/**
+ * 화면(티커)에 흘릴 **완성된 중계 타임라인** — 캐스터 라인 + 해설 라인 + 소강 구간 라인을
+ * 시간순으로 펼친 배열. 이벤트와 1:1이 아니므로 인덱스 계약이 없다(그 계약은
+ * `commentateAll`이 지킨다). 재생 중 매 분 다시 불러도 앞부분이 바뀌지 않는다.
+ *
+ * @param untilMinute 여기까지의 분을 훑으며 소강 라인을 채운다. 생략 시 마지막 이벤트 분.
+ *   ★ 재생 중에는 표시 분을 넘겨야 한다 — 마지막 이벤트 이후의 정적이 곧 소강 구간이다.
+ */
+export function commentateTimeline(
+  events: readonly MatchEvent[], home: Team, away: Team, seed = 0,
+  ctx: CommentaryCtx = {}, untilMinute?: number,
+): Line[] {
+  const base = commentateAll(events, home, away, seed, ctx)
+  const last = untilMinute ?? (events.length > 0 ? events[events.length - 1].minute : 0)
+  const out: Line[] = []
+  let i = 0
+  for (let m = 0; m <= last; m++) {
+    while (i < base.length && base[i].minute <= m) {
+      out.push(base[i])
+      if (base[i].follow) out.push(base[i].follow!)
+      i++
+    }
+    const flow = flowLineAt(events, m, home, away, seed)
+    if (flow) out.push(flow)
+  }
+  // 남은 라인(untilMinute보다 뒤의 이벤트)은 그대로 이어 붙인다.
+  for (; i < base.length; i++) {
+    out.push(base[i])
+    if (base[i].follow) out.push(base[i].follow!)
+  }
+  return out
 }
 
 /**

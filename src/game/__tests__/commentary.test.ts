@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
-  commentate, commentateAll, commentateAt,
+  commentate, commentateAll, commentateAt, commentateTimeline,
   classifyGoal, hasBatchim, josaIGa, josaEunNeun, josaEulReul, josaEuRo,
   scoreKo, ordKo, minuteLabel, sanitizeSpeech, fnv1a,
+  flattenLines, flowLineAt, flowStateAt, readTacticalNotes, TACTIC_LINES,
 } from '../commentary'
 import { safeguardFilter, DEROGATORY_WORDS } from '../../ai/safeguard'
 import { makeTestTeam } from '../../engine/fixtures/testTeams'
@@ -371,10 +372,301 @@ describe('데이터 검증 (§5.4)', () => {
   })
 })
 
-describe('4단계 확장 여지', () => {
-  it('Line에 speaker 필드가 있고 현재는 캐스터만 낸다(해설위원 추가 자리)', () => {
-    const { lines } = realMatchLines(2026)
+// ─────────────────────────────────────────────────────────────
+// Phase C 4~5단계
+// ─────────────────────────────────────────────────────────────
+
+describe('해설위원 (§1)', () => {
+  it('commentateAll의 배열은 여전히 이벤트와 1:1 캐스터 라인이다(계약 불변)', () => {
+    const { events, lines } = realMatchLines(2026)
+    expect(lines.length).toBe(events.length)
     expect(new Set(lines.map(l => l.speaker))).toEqual(new Set(['caster']))
     expect(lines.every(l => l.intensity >= 0 && l.intensity <= 3)).toBe(true)
+  })
+
+  it('해설은 캐스터 라인의 follow로만 달린다 — 화자가 정확히 analyst다', () => {
+    for (const seed of [2026, 7, 99]) {
+      const { lines } = realMatchLines(seed)
+      for (const l of lines) {
+        if (!l.follow) continue
+        expect(l.follow.speaker).toBe('analyst')
+        expect(l.follow.minute).toBe(l.minute)
+        expect(l.follow.hasMinutePrefix).toBe(false)
+        // 해설은 받아서 말한다 — 캐스터보다 강도가 높을 수 없다.
+        expect(l.follow.intensity).toBeLessThanOrEqual(l.intensity)
+      }
+    }
+  })
+
+  it('해설 개입은 이벤트의 25~45%다 — 매번 붙으면 수다스럽다(§1.3)', () => {
+    for (const seed of [2026, 7, 99, 1234, 1003]) {
+      const { lines } = realMatchLines(seed)
+      const pct = lines.filter(l => l.follow).length / lines.length
+      expect(pct, `seed=${seed} → ${(pct * 100).toFixed(1)}%`).toBeGreaterThan(0.25)
+      expect(pct, `seed=${seed} → ${(pct * 100).toFixed(1)}%`).toBeLessThan(0.45)
+    }
+  })
+
+  it('골과 퇴장에는 해설이 반드시 붙는다(방송에서 예외가 없는 두 장면)', () => {
+    for (const seed of [2026, 7, 99, 1234]) {
+      const { events, lines } = realMatchLines(seed)
+      lines.forEach((l, i) => {
+        if (events[i].type === 'goal' || events[i].type === 'red') {
+          expect(l.follow, `${events[i].type}@${events[i].minute} seed=${seed}`).toBeDefined()
+        }
+      })
+    }
+  })
+
+  it('해설이 두 이벤트 연달아 말하지 않는다(피크·전술 제외) — 캐스터가 사라지면 안 된다', () => {
+    for (const seed of [2026, 7, 99, 1234]) {
+      const { events, lines } = realMatchLines(seed)
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].follow || !lines[i - 1].follow) continue
+        // 연속이 허용되는 경우: 이번이 항상 개입 대상이거나, 전술 해설이거나.
+        const always = ['goal', 'red', 'halftime', 'fulltime'].includes(events[i].type)
+        const tactic = lines[i].follow!.id.startsWith('an.tactic.')
+        expect(always || tactic, `연속 해설: "${lines[i - 1].follow!.text}" → "${lines[i].follow!.text}"`).toBe(true)
+      }
+    }
+  })
+
+  it('해설 문장도 세이프가드를 통과하고 1인칭 편파를 쓰지 않는다', () => {
+    for (const seed of [2026, 7, 99, 1234]) {
+      const { lines } = realMatchLines(seed)
+      for (const l of flattenLines(lines)) {
+        expect(safeguardFilter(l.text), l.text).toBe(true)
+        expect(l.text, l.text).not.toMatch(/우리|대~한민국/)
+        for (const w of DEROGATORY_WORDS) expect(l.text).not.toContain(w)
+      }
+    }
+  })
+
+  it('해설 speech도 TTS 규칙을 지킨다(라틴 문자·말줄임·숫자 금지)', () => {
+    for (const seed of [2026, 7, 99, 1234]) {
+      for (const l of flattenLines(realMatchLines(seed).lines)) {
+        if (l.speaker !== 'analyst') continue
+        expect(l.speech, l.speech).not.toMatch(/[A-Za-z]/)
+        expect(l.speech, l.speech).not.toMatch(/…|\.{3}/)
+        expect(l.speech, l.speech).not.toMatch(/!{2}/)
+        for (const m of l.speech.matchAll(/\d+(.?)/g)) expect(m[1], `"${l.speech}"`).toBe('분')
+      }
+    }
+  })
+
+  it('해설 문장은 30음절 이내다 (§5.8 — 긴 유터런스 절단 회피)', () => {
+    for (const seed of [2026, 7, 99, 1234]) {
+      for (const l of flattenLines(realMatchLines(seed).lines)) {
+        if (l.speaker !== 'analyst') continue
+        const syllables = [...l.speech].filter(c => c >= '가' && c <= '힣').length
+        expect(syllables, l.speech).toBeLessThanOrEqual(30)
+      }
+    }
+  })
+
+  it('해설 변형도 반복되지 않는다(전용 링버퍼)', () => {
+    const { lines } = realMatchLines(2026)
+    const an = flattenLines(lines).filter(l => l.speaker === 'analyst')
+    expect(an.length).toBeGreaterThan(15)
+    for (let i = 1; i < an.length; i++) expect(an[i].id).not.toBe(an[i - 1].id)
+    expect(new Set(an.map(l => l.text)).size / an.length).toBeGreaterThan(0.6)
+  })
+
+  it('결정론: 해설까지 포함해 같은 시드면 같은 결과', () => {
+    const { events } = realMatchLines(2026)
+    const h = loadTeam('kor'), a = loadTeam('esp')
+    expect(commentateAll(events, h, a, 7)).toEqual(commentateAll(events, h, a, 7))
+  })
+})
+
+describe('소강 구간 라인 (§3.4)', () => {
+  const h = loadTeam('kor'), a = loadTeam('esp')
+
+  it('flowStateAt: 한쪽만 두드리면 dominant, 양쪽이면 endToEnd, 비면 lull', () => {
+    const atk = (minute: number, teamId: string): MatchEvent => ({ minute, type: 'shot', teamId })
+    expect(flowStateAt([], 30, h.id).kind).toBe('lull')
+    expect(flowStateAt([atk(28, h.id)], 30, h.id).kind).toBe('lull') // 1개는 아직 흐름이 아니다
+    const dom = flowStateAt([25, 26, 27, 28].map(m => atk(m, h.id)), 30, h.id)
+    expect(dom.kind).toBe('dominant')
+    expect(dom.side).toBe('home')
+    const e2e = flowStateAt(
+      [atk(24, h.id), atk(25, h.id), atk(26, h.id), atk(27, a.id), atk(28, a.id), atk(29, a.id)], 30, h.id,
+    )
+    expect(e2e.kind).toBe('endToEnd')
+  })
+
+  it('flowStateAt: 몰아붙이는 쪽이 지고 있으면 상대가 잠근 것(lowBlock)', () => {
+    const events: MatchEvent[] = [
+      { minute: 10, type: 'goal', teamId: a.id },
+      ...[25, 26, 27, 28].map(m => ({ minute: m, type: 'shot' as const, teamId: h.id })),
+    ]
+    const flow = flowStateAt(events, 30, h.id)
+    expect(flow.kind).toBe('lowBlock')
+    expect(flow.side).toBe('away') // 내려선 쪽 = 이기고 있는 원정팀
+  })
+
+  it('이벤트가 있는 분에는 흐름 라인이 나오지 않는다', () => {
+    const events: MatchEvent[] = [{ minute: 20, type: 'shot', teamId: h.id }]
+    expect(flowLineAt(events, 20, h, a, 1)).toBeNull()
+    expect(flowLineAt(events, 21, h, a, 1)).toBeNull() // 1분 정적은 정적이 아니다
+    expect(flowLineAt(events, 22, h, a, 1)).toBeNull()
+  })
+
+  it('3분 이상 정적이 이어져야 나오고, 그 뒤로는 4분 간격으로만 나온다', () => {
+    const events: MatchEvent[] = [{ minute: 20, type: 'shot', teamId: h.id }]
+    const fired = []
+    for (let m = 21; m <= 40; m++) if (flowLineAt(events, m, h, a, 1)) fired.push(m)
+    expect(fired).toEqual([23, 27, 31, 35, 39])
+  })
+
+  it('초반·종료 직전에는 나오지 않는다(판단 재료 없음 / 캐스터의 시간)', () => {
+    const events: MatchEvent[] = [{ minute: 1, type: 'kickoff', teamId: h.id }]
+    expect(flowLineAt(events, 4, h, a, 1)).toBeNull() // 6분 이전
+    const late: MatchEvent[] = [{ minute: 80, type: 'shot', teamId: h.id }]
+    expect(flowLineAt(late, 83, h, a, 1)).not.toBeNull()
+    expect(flowLineAt(late, 91, h, a, 1)).toBeNull() // 88분 이후
+  })
+
+  it('실경기 빈도: 경기당 1~8회 — 침묵을 메우되 수다스럽지 않다', () => {
+    for (const seed of [2026, 7, 99, 1234, 1003]) {
+      const { events } = realMatchLines(seed)
+      let n = 0
+      for (let m = 1; m <= 90; m++) if (flowLineAt(events, m, h, a, seed)) n++
+      expect(n, `seed=${seed} → ${n}회`).toBeGreaterThanOrEqual(1)
+      expect(n, `seed=${seed} → ${n}회`).toBeLessThanOrEqual(8)
+    }
+  })
+
+  it('흐름 라인도 세이프가드·TTS 규칙을 지킨다', () => {
+    for (const seed of [2026, 7, 99, 1234]) {
+      const { events } = realMatchLines(seed)
+      for (let m = 1; m <= 90; m++) {
+        const l = flowLineAt(events, m, h, a, seed)
+        if (!l) continue
+        expect(safeguardFilter(l.text), l.text).toBe(true)
+        expect(l.text, l.text).not.toMatch(/우리|대~한민국/)
+        expect(l.speech, l.speech).not.toMatch(/[A-Za-z]/)
+        expect(['caster', 'analyst']).toContain(l.speaker)
+      }
+    }
+  })
+
+  it('commentateTimeline: 캐스터·해설·흐름이 시간순으로 한 배열이 된다', () => {
+    const { events } = realMatchLines(2026)
+    const tl = commentateTimeline(events, h, a, 2026, {}, 90)
+    // 시간순 정렬
+    for (let i = 1; i < tl.length; i++) expect(tl[i].minute).toBeGreaterThanOrEqual(tl[i - 1].minute)
+    // 세 종류가 모두 들어 있다
+    expect(tl.some(l => l.id.startsWith('flow.'))).toBe(true)
+    expect(tl.some(l => l.speaker === 'analyst')).toBe(true)
+    expect(tl.filter(l => l.speaker === 'caster').length).toBeGreaterThan(events.length / 2)
+    // 접두 안정성 — 재생 중 매 분 다시 계산해도 앞부분이 바뀌지 않는다.
+    for (const until of [20, 45, 70]) {
+      const partial = commentateTimeline(events.filter(e => e.minute <= until), h, a, 2026, {}, until)
+      expect(tl.slice(0, partial.length)).toEqual(partial)
+    }
+  })
+})
+
+describe('전술 반영 해설 (§3.5)', () => {
+  const h = loadTeam('kor'), a = loadTeam('esp')
+
+  it('readTacticalNotes: decisionLog의 실제 형식을 읽는다', () => {
+    const notes = readTacticalNotes([
+      { minute: 20, kind: 'instructions', summary: '', detail: { changed: ['압박 55→85', '라인 65→35'] } },
+      { minute: 30, kind: 'instructions', summary: '', detail: { changed: ['템포 70→40', '공격 균형→좌'] } },
+      { minute: 45, kind: 'instructions', summary: '', detail: { before: '4-3-3', after: '3-5-2' } },
+      { minute: 60, kind: 'instructions', summary: '', detail: { before: '3-5-2', after: '4-2-3-1' } },
+      { minute: 70, kind: 'sub', summary: '', detail: { in: 'x', out: 'y' } },
+      { minute: 75, kind: 'teamtalk', summary: '외침' },       // 전술이 아니다 — 버린다
+      { minute: 80, kind: 'instructions', summary: '', detail: { changed: ['알 수 없는 축 1→2'] } },
+    ])
+    expect(notes).toEqual([
+      { minute: 20, kind: 'pressUp' }, { minute: 20, kind: 'lineDown' },
+      { minute: 30, kind: 'tempoDown' }, { minute: 30, kind: 'focusWing' },
+      { minute: 45, kind: 'backThree' }, { minute: 60, kind: 'backFour' },
+      { minute: 70, kind: 'sub' },
+    ])
+  })
+
+  it('지시 뒤 장면에 해설이 그 지시를 언급한다', () => {
+    const events: MatchEvent[] = [
+      { minute: 30, type: 'shot', teamId: h.id, playerId: h.squad[9].id },
+      { minute: 33, type: 'chance', teamId: h.id, playerId: h.squad[10].id },
+    ]
+    const ctx = {
+      decisions: [{ minute: 31, kind: 'instructions' as const, summary: '', detail: { changed: ['압박 50→85'] } }],
+    }
+    const lines = commentateAll(events, h, a, 1, ctx)
+    expect(lines[0].follow?.id ?? '').not.toContain('tactic') // 지시 전 장면엔 붙지 않는다
+    expect(lines[1].follow?.id).toBe('an.tactic.pressUp.mine')
+    expect(lines[1].follow?.text).toMatch(/압박(을 올린| 강도를 올리고)/)
+  })
+
+  it('같은 지시를 두 번 말하지 않는다', () => {
+    const events: MatchEvent[] = [32, 34, 36].map(minute => ({
+      minute, type: 'shot' as const, teamId: h.id, playerId: h.squad[9].id,
+    }))
+    const ctx = {
+      decisions: [{ minute: 31, kind: 'instructions' as const, summary: '', detail: { changed: ['압박 50→85'] } }],
+    }
+    const tactical = commentateAll(events, h, a, 1, ctx).filter(l => l.follow?.id.startsWith('an.tactic.'))
+    expect(tactical.length).toBe(1)
+  })
+
+  it('유효 기간(10분)을 넘긴 지시는 언급하지 않는다 — "그 뒤로"가 성립하지 않는다', () => {
+    const events: MatchEvent[] = [{ minute: 45, type: 'shot', teamId: h.id, playerId: h.squad[9].id }]
+    const ctx = {
+      decisions: [{ minute: 31, kind: 'instructions' as const, summary: '', detail: { changed: ['압박 50→85'] } }],
+    }
+    expect(commentateAll(events, h, a, 1, ctx)[0].follow?.id ?? '').not.toContain('tactic')
+  })
+
+  it('내 장면인지 상대 장면인지에 따라 문장이 갈린다', () => {
+    const ctx = {
+      decisions: [{ minute: 31, kind: 'instructions' as const, summary: '', detail: { changed: ['라인 65→35'] } }],
+    }
+    const mine = commentateAll([{ minute: 34, type: 'shot', teamId: h.id, playerId: h.squad[9].id }], h, a, 1, ctx)
+    const theirs = commentateAll([{ minute: 34, type: 'shot', teamId: a.id, playerId: a.squad[9].id }], h, a, 1, ctx)
+    expect(mine[0].follow?.id).toBe('an.tactic.lineDown.mine')
+    expect(theirs[0].follow?.id).toBe('an.tactic.lineDown.theirs')
+    expect(mine[0].follow?.text).not.toBe(theirs[0].follow?.text)
+  })
+
+  it('세이브는 **공격한 쪽** 관점으로 본다 — 우리 선방에 "전개가 빨라졌다"가 붙으면 안 된다', () => {
+    const ctx = {
+      decisions: [{ minute: 31, kind: 'instructions' as const, summary: '', detail: { changed: ['템포 40→80'] } }],
+    }
+    // 홈 골키퍼의 선방 = 상대가 공격한 장면.
+    const save = commentateAll([{ minute: 34, type: 'save', teamId: h.id, playerId: h.squad[0].id }], h, a, 1, ctx)
+    expect(save[0].follow?.id).toBe('an.tactic.tempoUp.theirs')
+  })
+
+  it('인과를 단정하지 않는다 — 모든 전술 문장이 시간 서술이다', () => {
+    // "때문에"·"덕분에"·"효과입니다" 같은 인과 단정은 엔진이 보증할 수 없다.
+    for (const set of Object.values(TACTIC_LINES)) {
+      for (const s of [...set.mine, ...set.theirs]) {
+        expect(s, s).not.toMatch(/때문|덕분|효과입니다|적중/)
+      }
+    }
+  })
+
+  it('전술 해설도 세이프가드를 통과한다', () => {
+    const { events } = realMatchLines(2026)
+    const ctx = {
+      decisions: [
+        { minute: 23, kind: 'instructions' as const, summary: '', detail: { changed: ['압박 55→85'] } },
+        { minute: 45, kind: 'instructions' as const, summary: '', detail: { before: '4-3-3', after: '3-5-2' } },
+        { minute: 58, kind: 'sub' as const, summary: '', detail: { in: 'x', out: 'y' } },
+        { minute: 70, kind: 'instructions' as const, summary: '', detail: { changed: ['라인 65→35', '템포 50→70'] } },
+      ],
+    }
+    const tactical = flattenLines(commentateAll(events, h, a, 2026, ctx))
+      .filter(l => l.id.startsWith('an.tactic.'))
+    expect(tactical.length).toBeGreaterThan(2) // 실제로 발동한다
+    for (const l of tactical) {
+      expect(safeguardFilter(l.text), l.text).toBe(true)
+      expect(l.speech, l.speech).not.toMatch(/[A-Za-z\d]/) // 포메이션 표기(3-5-2)가 새면 TTS가 오독한다
+    }
   })
 })

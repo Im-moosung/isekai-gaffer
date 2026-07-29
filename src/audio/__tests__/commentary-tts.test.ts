@@ -23,19 +23,23 @@ function makeFakeSynth(getVoices: () => FakeVoice[]) {
   const calls = { speak: 0, cancel: 0, spoken: [] as Array<{ text: string; rate: number; pitch: number; lang: string }> }
   const listeners: Record<string, Array<() => void>> = {}
   let speaking = false
+  let pending = false
   const synth = {
     get speaking() { return speaking },
+    // pending = 아직 시작 안 한 발화가 큐에 남았는가(speakAside의 과밀 가드).
+    get pending() { return pending },
     getVoices: () => getVoices(),
     speak(u: { text: string; rate: number; pitch: number; lang: string }) {
       calls.speak++
       calls.spoken.push({ text: u.text, rate: u.rate, pitch: u.pitch, lang: u.lang })
       speaking = true
     },
-    cancel() { calls.cancel++; speaking = false },
+    cancel() { calls.cancel++; speaking = false; pending = false },
     addEventListener(type: string, fn: () => void) { (listeners[type] ??= []).push(fn) },
     // 테스트 편의 훅
     __emit(type: string) { (listeners[type] ?? []).forEach(f => f()) },
     __setSpeaking(v: boolean) { speaking = v },
+    __setPending(v: boolean) { pending = v },
   }
   return { synth, calls }
 }
@@ -109,12 +113,48 @@ describe('commentary-tts 큐 정책 (speechSynthesis mock)', () => {
     expect(calls.spoken[0].lang).toBe('ko-KR')
   })
 
-  it('important 라인은 rate 1.15·pitch 1.15 강조', async () => {
+  // ★ §5.7 재조정: 한국어 중계의 흥분은 "빠름"이 아니라 "높고 길게"다.
+  //   예전(rate 1.15)은 골 순간에 선수 이름을 뭉갰다. 이제 rate를 내리고 pitch를 올린다.
+  it('important 라인은 rate를 올리지 않고 pitch로 강조한다(§5.7)', async () => {
     const { ctts, calls } = await withVoice()
     ctts.speak('골!', { important: true })
     expect(calls.speak).toBe(1)
-    expect(calls.spoken[0].rate).toBeCloseTo(1.15)
-    expect(calls.spoken[0].pitch).toBeCloseTo(1.15)
+    expect(calls.spoken[0].rate).toBeCloseTo(1.0)
+    expect(calls.spoken[0].pitch).toBeCloseTo(1.3)
+  })
+
+  it('피크(강도 3)는 가장 느리고 가장 높다 — 골 순간은 오히려 천천히 내지른다', async () => {
+    const { ctts, calls } = await withVoice()
+    ctts.speak('골! 손흥민!', { important: true, intensity: 3 })
+    expect(calls.spoken[0].rate).toBeCloseTo(0.95)
+    expect(calls.spoken[0].pitch).toBeCloseTo(1.35)
+  })
+
+  it('해설위원은 pitch가 캐스터보다 확실히 낮다 — 보이스 하나로 두 사람을 만든다', async () => {
+    const { ctts, calls } = await withVoice()
+    ctts.speak('캐스터 문장')
+    ctts.speakAside('해설위원 문장')
+    expect(calls.speak).toBe(2)
+    expect(calls.spoken[1].pitch).toBeCloseTo(0.75)
+    // 두 화자의 pitch 간격이 0.2 미만이면 같은 목소리로 들린다.
+    expect(calls.spoken[0].pitch - calls.spoken[1].pitch).toBeGreaterThanOrEqual(0.2)
+  })
+
+  it('speakAside는 캐스터 발화를 선점하지 않고 큐에 이어 붙인다(§5.6 체이닝)', async () => {
+    const { ctts, calls } = await withVoice()
+    ctts.speak('캐스터 문장') // speaking = true
+    ctts.speakAside('해설이 받는 문장')
+    expect(calls.cancel).toBe(0) // 캐스터를 자르지 않는다
+    expect(calls.speak).toBe(2) // 드롭도 하지 않는다 — 뒤에 붙는다
+    expect(calls.spoken[1].text).toBe('해설이 받는 문장')
+  })
+
+  it('이미 큐가 밀려 있으면(pending) 곁들임 발화를 얹지 않는다', async () => {
+    const { ctts, synth, calls } = await withVoice()
+    ctts.speak('캐스터 문장')
+    synth.__setPending(true)
+    ctts.speakAside('버려질 해설')
+    expect(calls.speak).toBe(1)
   })
 
   it('발화 중이면 일반 라인은 스킵(드롭) — cancel 없음', async () => {
@@ -236,10 +276,24 @@ describe('estimateSpeechMs — 발화 소요 시간 추정', () => {
     expect(long).toBeGreaterThan(short)
   })
 
-  it('important(rate 상향)는 같은 문장을 더 짧게 읽는다', async () => {
+  // ★ §5.7 이후: important는 rate를 **낮춘다**(높고 길게). 그래서 더 오래 걸린다 —
+  //   체류 시간(dwell)이 그만큼 늘어야 골 순간의 선수 이름이 잘리지 않는다.
+  it('important(rate 하향)는 같은 문장을 더 길게 읽는다', async () => {
     const { estimateSpeechMs } = await loadFresh({})
     const line = "72' 손흥민, 골망을 흔듭니다!"
-    expect(estimateSpeechMs(line, true)).toBeLessThan(estimateSpeechMs(line, false))
+    expect(estimateSpeechMs(line, true)).toBeGreaterThan(estimateSpeechMs(line, false))
+    expect(estimateSpeechMs(line, 'peak')).toBeGreaterThan(estimateSpeechMs(line, 'important'))
+  })
+
+  it('estimatePairMs: 해설이 붙으면 총 발화가 길어지되 체이닝 할인만큼 줄어든다', async () => {
+    const { estimatePairMs, estimateSpeechMs, PAIR_CHAIN_DISCOUNT_MS } = await loadFresh({})
+    const caster = '골! 손흥민!'
+    const analyst = '네, 선제골의 무게가 큽니다.'
+    const only = estimatePairMs(caster, 'peak', undefined)
+    const pair = estimatePairMs(caster, 'peak', analyst)
+    expect(only).toBe(estimateSpeechMs(caster, 'peak'))
+    expect(pair).toBe(only + estimateSpeechMs(analyst, 'analyst') - PAIR_CHAIN_DISCOUNT_MS)
+    expect(pair).toBeGreaterThan(only)
   })
 
   it('실문장 추정치가 상식 범위(1~4초)에 있다 — 실측 계수 회귀 고정', async () => {

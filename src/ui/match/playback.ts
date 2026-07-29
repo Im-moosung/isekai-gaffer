@@ -5,8 +5,8 @@
 // 계산해 다음 스텝을 예약한다. 사건이 큰 분(골·슛)은 오래 머물러 연출하고,
 // 무사건 분은 빠르게 넘겨(빨리감기) 지루함을 줄인다. 랜덤·시간 의존 없음(결정론).
 import type { MatchEvent, MatchEventType, Team } from '../../engine/types'
-import { commentateAt } from '../../game/commentary'
-import { estimateSpeechMs } from '../../audio/commentary-tts'
+import { commentateAt, flowLineAt, type CommentaryCtx } from '../../game/commentary'
+import { casterRole, estimatePairMs, estimateSpeechMs } from '../../audio/commentary-tts'
 
 /** 재생 속도 배율. UI 토글 1x / 1.5x / 2x. */
 export type PlaybackSpeed = 1 | 1.5 | 2
@@ -35,7 +35,13 @@ export const BLOWOUT_DIFF = 3
 /** 블로우아웃 dwell 배수 — 전체 dwell을 이 비율로 압축(빠른 소화). */
 export const BLOWOUT_MULTIPLIER = 0.6
 
-/** dwell 상한(ms, 속도 적용 후). 발화 길이 보정이 무한정 늘어나지 않게 막는다. */
+/** dwell 상한(ms, 속도 적용 후). 발화 길이 보정이 무한정 늘어나지 않게 막는다.
+ *
+ *  ★ Phase C 4단계에서도 9000을 유지한다. 화자가 둘이 되어 골 순간의 요구 발화가
+ *  늘었지만(피크 캐스터 + 해설), 상한을 내리면 **골의 해설 문장이 다음 분에 잘린다**
+ *  (브라우저 실측: 상한 7000에서 골 해설 2건이 전부 interrupted). 대신 길이를 콘텐츠
+ *  쪽에서 줄였다 — 해설이 붙는 골에는 연호(`{선수}! {선수}!`)를 생략한다(commentary.ts).
+ *  그 결과 골 한 분의 총 발화가 약 9초로 상한 안에 들어온다. */
 export const MAX_DWELL_MS = 9000
 
 // ── 주인공 이벤트 선택자(단일 진실원) ─────────────────────────
@@ -93,11 +99,21 @@ export function minuteSpeechMs(
   speed: PlaybackSpeed = 1,
   allEvents: readonly MatchEvent[] = eventsAtMinute,
   seed = 0,
+  ctx: CommentaryCtx = {},
+  minute?: number,
 ): number {
   const drama = pickDramaEvent(eventsAtMinute)
-  if (!drama) return 0
-  const line = commentateAt(allEvents, eventIndex(allEvents, drama), home, away, seed)
-  return estimateSpeechMs(line.speech, isImportantEvent(drama), speed)
+  if (!drama) {
+    // 무사건 분 — 소강 구간 라인이 나올 수 있다. 짧지만 이것도 잘리면 안 된다.
+    if (minute === undefined) return 0
+    const flow = flowLineAt(allEvents, minute, home, away, seed)
+    return flow ? estimateSpeechMs(flow.speech, flow.speaker === 'analyst' ? 'analyst' : 'normal', speed) : 0
+  }
+  const line = commentateAt(allEvents, eventIndex(allEvents, drama), home, away, seed, ctx)
+  // ★ 화자가 둘이면 총 발화가 길어진다 — 캐스터 + 해설을 합쳐서 하한을 잡아야
+  //   해설이 다음 분에 잘리지 않는다(B-1 체류 보정의 화자 2인 확장).
+  const role = casterRole(isImportantEvent(drama), line.intensity)
+  return estimatePairMs(line.speech, role, line.follow?.speech, speed)
 }
 
 /** allEvents 안에서 이벤트의 위치. 참조가 다를 수 있으므로(스토어가 상태를 복제한다)
@@ -169,7 +185,10 @@ export function minuteDwellWithSpeech(
   speechEnabled: boolean,
   allEvents: readonly MatchEvent[] = eventsAtMinute,
   seed = 0,
+  ctx: CommentaryCtx = {},
 ): number {
-  const speechMs = speechEnabled ? minuteSpeechMs(eventsAtMinute, home, away, speed, allEvents, seed) : 0
+  const speechMs = speechEnabled
+    ? minuteSpeechMs(eventsAtMinute, home, away, speed, allEvents, seed, ctx, minute)
+    : 0
   return minuteDwellMs(minute, eventsAtMinute, speed, clutch, scoreDiff, speechMs)
 }

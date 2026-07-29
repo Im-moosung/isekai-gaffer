@@ -9,12 +9,40 @@
 //  4) 큐 정책: 발화 중이면 일반 라인은 스킵(드롭), important(골·세이브 등)는 현재 발화를 cancel 후 즉시.
 //  5) pause·모드 전환 시 stopAll()로 진행 중 발화를 취소한다(작전 지시 중 해설이 새지 않게).
 
+//  6) 화자 2인(§5.7) — 캐스터와 해설위원은 **pitch로** 가른다. ko-KR 보이스는 대개
+//     한 개뿐이라(macOS '유나') 보이스 교체로는 구분이 불가능하다. pitch를 벌리면
+//     같은 보이스도 두 사람처럼 들린다 — 투입 대비 효과가 가장 큰 한 줄이다.
+
 const TTS_KEY = 'rematch-tts'
 
-// ── 발화 속도 상수 ────────────────────────────────────────────
-/** utterance.rate 기본값 — important(골·세이브)는 빠르고 높게(흥분), 일반은 살짝만 빠르게. */
-export const RATE_IMPORTANT = 1.15
-export const RATE_NORMAL = 1.05
+// ── 화자·강도별 음성 프로파일 (§5.7) ──────────────────────────
+/**
+ * 발화 역할. 캐스터 3단(일반/중요/피크) + 해설위원 1단.
+ *
+ * ★ 예전엔 important를 `rate 1.15 / pitch 1.15`로 처리했다. 그런데 **한국어 중계의
+ *   흥분은 "빠름"이 아니라 "높고 길게"** 다. rate를 올리면 골 순간의 가장 중요한 정보인
+ *   선수 이름이 뭉개진다. 그래서 중요·피크는 rate를 오히려 **낮추고** pitch를 올린다.
+ */
+export type SpeechRole = 'normal' | 'important' | 'peak' | 'analyst'
+
+/** 역할별 rate(1x 기준). 피크가 가장 느리다 — 골 순간은 천천히 내지른다. */
+export const ROLE_RATE: Record<SpeechRole, number> = {
+  normal: 1.05, important: 1.0, peak: 0.95, analyst: 1.0,
+}
+
+/**
+ * 역할별 pitch. 캐스터(1.0~1.35)와 해설위원(0.75)을 크게 벌린다.
+ * 근거: 리서치 권고는 해설 0.95였지만, 보이스가 하나뿐인 환경에서 1.0 대 0.95는
+ * 사실상 같은 목소리로 들린다(브라우저 실청 확인). 0.75까지 내려야 "다른 사람"이 된다.
+ * Web Speech pitch 범위는 0~2이고 0.5 미만은 보이스가 뭉개지므로 0.75가 하한 근처다.
+ */
+export const ROLE_PITCH: Record<SpeechRole, number> = {
+  normal: 1.0, important: 1.3, peak: 1.35, analyst: 0.75,
+}
+
+// 하위호환 별칭(예전 상수명을 쓰는 호출부·문서용).
+export const RATE_IMPORTANT = ROLE_RATE.important
+export const RATE_NORMAL = ROLE_RATE.normal
 
 /** rate 상한. ★ 재생 속도 토글에 rate를 연동하되(아래 utteranceRate) 여기서 끊는다.
  *  근거(실측): '유나' 보이스는 rate 2.1에서 실효 7.1 음절/초로, 한국어 뉴스 앵커의
@@ -29,9 +57,16 @@ export const MAX_UTTERANCE_RATE = 2.1
  *   말이 잘리거나(예전) 체류를 늘려 2배속이 무의미해진다(발화 하한만 넣었을 때
  *   실측 90분 재생이 127초 → 190초로 부풀었다). rate를 함께 올리면 둘 다 없다.
  */
-export function utteranceRate(important: boolean, speed = 1): number {
-  const base = important ? RATE_IMPORTANT : RATE_NORMAL
-  return Math.min(MAX_UTTERANCE_RATE, base * speed)
+export function utteranceRate(role: SpeechRole | boolean = 'normal', speed = 1): number {
+  // boolean은 예전 시그니처(important) — 호출부를 한 번에 고치지 않아도 되게 받아 준다.
+  const r: SpeechRole = typeof role === 'boolean' ? (role ? 'important' : 'normal') : role
+  return Math.min(MAX_UTTERANCE_RATE, ROLE_RATE[r] * speed)
+}
+
+/** 캐스터 라인의 역할을 강도로 정한다 — 피크(골·퇴장)는 important보다 한 단계 더 낮고 높게. */
+export function casterRole(important: boolean, intensity = 0): SpeechRole {
+  if (intensity >= 3) return 'peak'
+  return important ? 'important' : 'normal'
 }
 
 // ── 모듈 상태 ─────────────────────────────────────────────────
@@ -51,8 +86,8 @@ function getSynth(): SpeechSynthesis | null {
   }
 }
 
-/** ko-KR 보이스로 발화 utterance를 만든다. important는 rate·pitch 상향 강조. */
-function makeUtterance(line: string, important: boolean, speed: number): SpeechSynthesisUtterance | null {
+/** ko-KR 보이스로 발화 utterance를 만든다. 역할이 rate·pitch를 정한다(§5.7). */
+function makeUtterance(line: string, role: SpeechRole, speed: number): SpeechSynthesisUtterance | null {
   try {
     const U = (globalThis as { SpeechSynthesisUtterance?: typeof SpeechSynthesisUtterance })
       .SpeechSynthesisUtterance
@@ -60,10 +95,10 @@ function makeUtterance(line: string, important: boolean, speed: number): SpeechS
     const u = new U(line)
     if (voice) u.voice = voice
     u.lang = 'ko-KR'
-    // important(골·세이브·승부차기): 빠르고 높게(흥분). 일반: 살짝만 빠르게.
-    // 재생 속도 배율을 곱한다(빨리감기 중계는 실제로도 빨라져야 한다).
-    u.rate = utteranceRate(important, speed)
-    u.pitch = important ? 1.15 : 1.0
+    // 재생 속도 배율을 rate에 곱한다(빨리감기 중계는 실제로도 빨라져야 한다).
+    // pitch는 화자 정체성이므로 재생 속도와 무관하게 고정한다.
+    u.rate = utteranceRate(role, speed)
+    u.pitch = ROLE_PITCH[role]
     return u
   } catch {
     return null
@@ -112,7 +147,9 @@ export function initVoice(): void {
  * 한 줄을 음성 중계한다. 미지원·보이스 없음·토글 OFF·빈 문자열이면 조용한 no-op.
  * 큐 정책: 발화 중이면 일반 라인은 드롭, important는 현재 발화를 cancel 후 즉시 발화한다.
  */
-export function speak(line: string, opts: { important?: boolean; speed?: number } = {}): void {
+export function speak(
+  line: string, opts: { important?: boolean; speed?: number; role?: SpeechRole; intensity?: number } = {},
+): void {
   if (!available || !ttsOn || !line) return
   const synth = getSynth()
   if (!synth) return
@@ -122,10 +159,37 @@ export function speak(line: string, opts: { important?: boolean; speed?: number 
       if (!important) return // 발화 중 일반 라인은 스킵(드롭) — 과밀 방지
       synth.cancel() // important는 선점: 현재 발화 취소 후 즉시
     }
-    const u = makeUtterance(line, important, opts.speed ?? 1)
+    const role = opts.role ?? casterRole(important, opts.intensity ?? 0)
+    const u = makeUtterance(line, role, opts.speed ?? 1)
     if (u) synth.speak(u)
   } catch {
     /* no-op — TTS 실패가 경기를 멈추지 않는다 */
+  }
+}
+
+/**
+ * **곁들임 발화** — 해설위원의 받는 말과 소강 구간 라인 전용 채널.
+ *
+ * 큐 정책이 `speak()`와 정반대다:
+ *  - 선점하지 않는다. 캐스터 문장을 잘라먹으면 안 된다(해설은 받아서 말하는 사람이다).
+ *  - 드롭하지도 않는다. `speechSynthesis`는 큐이므로 그대로 `speak`하면 앞 발화가
+ *    끝난 **뒤에** 이어서 나온다 — 이게 §5.6이 말하는 유터런스 체이닝이고,
+ *    캐스터 → 해설의 자연스러운 턴 전환이 공짜로 만들어진다.
+ *  - 다만 이미 두 줄 이상 밀려 있으면(=따라가지 못하는 중) 붙이지 않는다.
+ */
+export function speakAside(
+  line: string, opts: { speed?: number; role?: SpeechRole } = {},
+): void {
+  if (!available || !ttsOn || !line) return
+  const synth = getSynth()
+  if (!synth) return
+  try {
+    // pending = 아직 시작도 못 한 발화가 큐에 남아 있다 → 이미 밀렸다. 더 얹지 않는다.
+    if (synth.pending) return
+    const u = makeUtterance(line, opts.role ?? 'analyst', opts.speed ?? 1)
+    if (u) synth.speak(u)
+  } catch {
+    /* no-op */
   }
 }
 
@@ -226,9 +290,33 @@ export function countSyllables(line: string): number {
  * 이 추정이 최대 0.4초쯤 **과대**하게 나온다. 과대추정은 약간의 여운으로 끝나지만
  * 과소추정은 말이 잘리므로, 상수 하나로 보수적으로 가는 쪽을 택했다.
  */
-export function estimateSpeechMs(line: string, important = false, speed = 1): number {
+export function estimateSpeechMs(line: string, role: SpeechRole | boolean = 'normal', speed = 1): number {
   const syllables = countSyllables(line)
   if (syllables <= 0) return 0
-  const rate = utteranceRate(important, speed)
+  const rate = utteranceRate(role, speed)
   return Math.round((syllables / (SYLLABLES_PER_SEC * rate)) * 1000) + SPEECH_TAIL_MS
 }
+
+/**
+ * 캐스터 라인 + 이어지는 해설 라인의 **총** 발화 시간(ms).
+ * 화자가 둘이 되면 한 이벤트의 발화가 길어진다 — 체류 시간(dwell)이 이만큼 늘지 않으면
+ * 해설이 다음 분에 잘려 나간다. 재생 루프가 쓰는 하한이 바로 이 값이다.
+ *
+ * @param caster [문장, 역할]
+ * @param analyst 이어 붙는 해설 문장(없으면 undefined).
+ */
+export function estimatePairMs(
+  caster: string, role: SpeechRole, analyst: string | undefined, speed = 1,
+): number {
+  const a = estimateSpeechMs(caster, role, speed)
+  if (!analyst) return a
+  // 체이닝 할인: 두 유터런스는 같은 큐에서 연속 재생되므로 **문두 묵음이 한 번만** 든다.
+  // SPEECH_TAIL_MS(650)는 문두 묵음 + 문말 여운 + 분 전환 마진을 합친 값이고,
+  // 이어 붙는 쪽에 필요한 건 문말 여운뿐이다. 절반보다 조금 적은 400을 뺀다
+  // (250이 남으므로 문말 하강조는 그대로 확보된다).
+  const chained = Math.max(0, estimateSpeechMs(analyst, 'analyst', speed) - PAIR_CHAIN_DISCOUNT_MS)
+  return a + chained
+}
+
+/** 이어 붙는 유터런스의 문두 묵음 절감분(ms). estimatePairMs 참조. */
+export const PAIR_CHAIN_DISCOUNT_MS = 400
