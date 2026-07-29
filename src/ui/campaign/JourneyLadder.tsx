@@ -108,11 +108,19 @@ export function JourneyLadder({
       const line = `실제 역사 ${real[0]}-${real[1]} ${OUTCOME_KO[realOc]}`
       let verdict: string | null = null
       let verdictKind = 'same'
-      if (oc) {
+      if (oc && rec) {
         const d = OUTCOME_RANK[oc] - OUTCOME_RANK[realOc]
         if (d > 0) { verdict = '역사를 넘었다'; verdictKind = 'over' }
         else if (d < 0) { verdict = '역사에 미치지 못했다'; verdictKind = 'under' }
-        else { verdict = '역사와 같은 결과'; verdictKind = 'same' }
+        else {
+          // 승패가 같아도 점수차는 다를 수 있다. 실제 2-1 승을 3-0으로 이겼다면
+          // "같은 결과"는 심심하게 읽힌다. 단 반대 방향으로는 강등하지 않는다 —
+          // 이긴 경기에 "미치지 못했다"가 붙으면 승리가 부정당하는 것처럼 읽힌다.
+          const gd = rec.score[0] - rec.score[1]
+          const realGd = real[0] - real[1]
+          if (gd > realGd) { verdict = '역사보다 나은 결과'; verdictKind = 'over' }
+          else { verdict = '역사와 같은 결과'; verdictKind = 'same' }
+        }
       }
       hist = { line, verdict, verdictKind }
     }

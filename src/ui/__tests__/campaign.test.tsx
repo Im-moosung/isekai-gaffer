@@ -55,16 +55,26 @@ describe('여정 사다리(JourneyLadder)', () => {
 
   it('조별 2경기 후: 지나온 칸에 스코어와 실제 역사 대비 판정이 남는다', () => {
     store().startCampaign(7)
-    win(3, 0)            // 실제 역사 2-1 승 → 같은 결과(승)
+    win(3, 0)            // 실제 역사 2-1 승 → 승패는 같고 점수차가 크다
     store().recordResult([2, 0], {}) // 실제 역사 0-1 패 → 역사를 넘었다
     const { container } = render(<HubScreen onProceed={() => {}} />)
     const rows = container.querySelectorAll('.jl-row')
     expect(rows[0].className).toContain('jl-row--w')
     expect(rows[0].querySelector('.jl-row__score')!.textContent).toBe('3-0')
-    expect(rows[0].querySelector('.jl-row__verdict')!.textContent).toBe('역사와 같은 결과')
+    expect(rows[0].querySelector('.jl-row__verdict')!.textContent).toBe('역사보다 나은 결과')
     expect(rows[1].querySelector('.jl-row__verdict')!.textContent).toBe('역사를 넘었다')
     // 3차전이 현재 칸
     expect(rows[2].className).toContain('jl-row--current')
+  })
+
+  it('승패가 같고 점수차가 나쁘면 강등하지 않는다 — 판정은 올리기만 한다', () => {
+    store().startCampaign(7)
+    win(3, 0)
+    store().recordResult([0, 2], {}) // 실제 역사 0-1 패보다 더 크게 졌다
+    const { container } = render(<HubScreen onProceed={() => {}} />)
+    const rows = container.querySelectorAll('.jl-row')
+    // 같은 패배에 "미치지 못했다"를 또 붙이면 이중으로 나무라는 셈이다
+    expect(rows[1].querySelector('.jl-row__verdict')!.textContent).toBe('역사와 같은 결과')
   })
 
   it('토너먼트 진출 후: 관문이 통과로 바뀌고 32강이 현재 칸이 된다', () => {
