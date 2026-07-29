@@ -10,6 +10,25 @@ import { pickBestXI } from '../../engine/lineup'
 import { runAbBatch } from '../../engine/balance'
 import { flankStrength, weakestFlank } from '../../engine/simulate'
 import { attackFocusEffects, trapFactor } from '../../engine/tactics'
+import { positionFitness } from '../../engine/fitness'
+// 워룸 [추천 적용]은 recommendPlan(게임 로직) + autoFill(UI 편집 로직)의 합성이다.
+// 추천만 따로 재면 "권한 포메이션에 세울 XI가 실제로 나오는가"를 영영 못 잰다 —
+// 실제로 그 구멍에서 3-5-2 추천이 풀백을 ST에 세우는 버그가 살아남았다.
+// 그래서 이 파일은 그 합성 경로를 그대로 재현해 잰다.
+import { autoFill } from '../../ui/lineup/swap'
+import type { TacticState } from '../../engine/types'
+
+const KOR = loadTeam('kor')
+
+/** 워룸 [추천 적용] 버튼이 실제로 커밋하는 전술 patch (TacticsCenter.applyRecommendation과 동일 순서).
+ *  포메이션이 바뀌면 현재 선발을 preferIds로 넘겨 autoFill로 재배치한다. */
+function appliedPlan(opp: TeamId): Partial<TacticState> {
+  const cur = pickBestXI(KOR) // 워룸 진입 시점의 XI (엔진 초기값과 같은 규칙)
+  const patch = recommendPlan(KOR, loadTeam(opp)).patch
+  const f = patch.formation ?? cur.formation
+  if (f === cur.formation) return patch
+  return { ...patch, lineup: autoFill(KOR, f, cur.lineup.map(l => l.playerId)) }
+}
 
 describe('recommendPlan', () => {
   it('점유 강팀(스페인) 상대로는 라인을 내리고 수비적 멘탈리티를 권한다', () => {
@@ -133,6 +152,37 @@ describe('recommendPlan', () => {
   })
 })
 
+// 회귀: 킥오프 전 [추천 적용]이 4-2-3-1 → 3-5-2로 바꾸면서, 3-5-2에서 남아도는 우측 풀백
+// (김문환)을 ST 슬롯에 세우던 문제. 리스크 카드가 "⚠ 김문환 ST 적합도 낮음"으로 정직하게
+// 경고했지만, 코치가 권한 플랜이 풀백을 최전방에 세우는 건 고장으로 읽힌다.
+//
+// 이 블록은 R3("추천한 포메이션으로 쓸 만한 XI가 실제로 나오는가")의 전제를 테스트로 고정한다.
+// recommendPlan에 포메이션 재고(veto) 로직을 넣지 **않은** 근거이기도 하다 — 12팀 × 6포메이션
+// 전수 실측에서 최소 적합도가 0.85 미만인 조합이 하나도 없어(vetoed 케이스 0건) 그 코드는
+// 영원히 죽은 가지가 된다. 대신 그 전제가 깨지면(스쿼드 편집 등) 여기서 즉시 터진다.
+describe('[추천 적용] 결과 XI — 포지션 미스매치가 없다', () => {
+  const OPPS = TEAM_IDS.filter(t => t !== 'kor')
+  const stamina = Object.fromEntries(KOR.squad.map(p => [p.id, 100]))
+
+  it.each(OPPS)('vs %s — 모든 슬롯 적합도 ≥ 0.7', opp => {
+    const plan = appliedPlan(opp)
+    const cur = pickBestXI(KOR)
+    const lineup = plan.lineup ?? cur.lineup
+    for (const l of lineup) {
+      const p = KOR.squad.find(q => q.id === l.playerId)!
+      expect(positionFitness(p, l.slot)).toBeGreaterThanOrEqual(0.7)
+    }
+  })
+
+  it.each(OPPS)('vs %s — 리스크 카드에 적합도 경고가 없다', opp => {
+    const plan = appliedPlan(opp)
+    const cur = pickBestXI(KOR)
+    const tactics: TacticState = { ...cur, ...plan, instructions: { ...cur.instructions, ...(plan.instructions ?? {}) } }
+    const risks = planRisks(KOR, tactics, stamina)
+    expect(risks.filter(r => r.text.includes('적합도'))).toEqual([])
+  })
+})
+
 // 추천이 "그럴듯한 조언"에 그치지 않고 실제로 승률을 올리는지 시뮬레이션으로 고정한다.
 // 코치가 손해 보는 조언을 하면(Δ<0) 전술 센터의 존재 이유가 사라지므로 회귀로 막는다.
 // n=400은 결정론(고정 시드)이라 값이 흔들리지 않는다. 이 값이 바뀌면 엔진 밸런스가 바뀐 것이다.
@@ -140,6 +190,11 @@ describe('recommendPlan', () => {
 // **11개 상대 전부**를 건다. 이전엔 조별 3팀 + 스페인만 걸려 있어서, 정작 캠페인의 본 게임인
 // 토너먼트 구간(잉글랜드·아르헨티나·모로코·프랑스)이 사실상 무효(+1.0~+3.3pp)인 채로
 // 회귀를 통과했다. 그 구멍을 막는 게 이 블록의 존재 이유다.
+//
+// 측정 대상은 patch가 아니라 **워룸이 실제로 커밋하는 전술**(appliedPlan)이다. 이전엔 patch만
+// 넘겨서, 포메이션은 3-5-2인데 XI 슬롯은 4-2-3-1 것인 "존재할 수 없는 전술"을 재고 있었다.
+// XI를 함께 재면 포지션 적합도가 승률에 미치는 영향이 그대로 잡힌다 — 버그가 있던 XI로 재면
+// 같은 patch가 vs mex −21.8pp / vs cze −21.3pp로 **손해**였다(수리 후 +8.8 / +13.7).
 describe('recommendPlan — 기본 지시(50/50/50) 대비 승률 개선 실측', () => {
   // ⚠ N=900의 근거(2026-07-30, 세트피스·주발·퇴장 배선 중 실측):
   // 기존 주석은 "n=400은 결정론(고정 시드)이라 값이 흔들리지 않는다"고 했으나, 고정 시드는
@@ -156,7 +211,7 @@ describe('recommendPlan — 기본 지시(50/50/50) 대비 승률 개선 실측'
   const measured: Record<string, number> = {}
   const delta = (opp: TeamId) => {
     if (measured[opp] === undefined) {
-      measured[opp] = runAbBatch('kor', opp, recommendPlan(loadTeam('kor'), loadTeam(opp)).patch, N).deltaPp
+      measured[opp] = runAbBatch('kor', opp, appliedPlan(opp), N).deltaPp
     }
     return measured[opp]
   }

@@ -85,11 +85,13 @@ export function TacticsBoard() {
   const byId = (id: string | null): Player | undefined =>
     id ? home.team.squad.find(p => p.id === id) : undefined
 
-  // 포메이션 변경 — 현재 선발을 우선 유지(preferIds)하며 새 슬롯에 그리디 재배치.
+  // 포메이션 변경 — 경기 중이므로 **현재 선발 11인 안에서만** 재배치한다('starters-only').
+  // 여기서 벤치 선수를 자동 투입하면 감독이 쓰지도 않은 교체 카드를 몰래 소모하는 셈이다
+  // (킥오프 전 워룸은 반대로 스쿼드 전체를 후보로 본다 — swap.AutoFillScope 참고).
   const changeFormation = (f: FormationId) => {
     if (f === formation) return
     const preferIds = home.tactics.lineup.map(l => l.playerId)
-    const lineup = autoFill(home.team, f, preferIds)
+    const lineup = autoFill(home.team, f, preferIds, 'starters-only')
     submitCommand(SIDE, { type: 'formation', tactics: { ...home.tactics, formation: f, lineup } })
   }
 

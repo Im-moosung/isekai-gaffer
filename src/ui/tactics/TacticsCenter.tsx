@@ -46,9 +46,11 @@ export function TacticsCenter({ onKickoff, referenceScore }: {
     submitCommand(SIDE, { type: 'formation', tactics: next })
   }
 
-  // 추천은 현재 전술 위에 덮어쓰는 patch다. 감독이 고른 11인은 유지하고, 포메이션이
-  // 바뀌면 그 11인을 새 슬롯에 적합도순으로 재배치한다(①선발 탭의 포메이션 버튼과 동일 규칙) —
-  // 추천이 XI 자체를 갈아엎으면 되돌릴 수 없는 버튼이 된다.
+  // 추천은 현재 전술 위에 덮어쓰는 patch다. 포메이션이 바뀌면 새 슬롯에 재배치한다
+  // (①선발 탭의 포메이션 버튼과 동일 규칙 — 기본 scope 'squad').
+  // 킥오프 전이므로 후보는 스쿼드 전체다. 이전엔 현재 선발을 무조건 우선해 3-5-2 추천이
+  // 남아도는 풀백을 ST에 세웠다(김문환 RB@ST 적합도 0.40). 감독의 11인은 **적합도가 같을 때**
+  // 유지된다 — 되돌릴 수 없는 버튼이 되지 않도록 선발 탭에서 언제든 되돌릴 수 있다.
   const applyRecommendation = () => {
     const rec = recommendPlan(home.team, away.team)
     const formation = rec.patch.formation ?? home.tactics.formation

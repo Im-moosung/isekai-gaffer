@@ -50,7 +50,9 @@ export function LineupEditor({ team, tactics, onChange, embedded, staminaByPlaye
   const setLineup = (next: LineupSlot[]) => onChange({ ...tactics, lineup: next })
 
   function changeFormation(f: FormationId) {
-    // 현재 선발 11인을 우선 유지한 채 새 포메이션 슬롯에 적합도순 재배치.
+    // 라인업 편집기는 킥오프 전에만 열린다(워룸 ①선발 탭 / 레거시 단독 화면) —
+    // 벤치 투입이 자유로운 시점이므로 후보는 스쿼드 전체다(기본 scope 'squad').
+    // 현재 선발은 적합도가 같을 때만 유지된다. 경기 중 작전판은 'starters-only'를 쓴다.
     onChange({ ...tactics, formation: f, lineup: autoFill(team, f, lineup.map(l => l.playerId)) })
     setSelected(null)
   }

@@ -5,7 +5,8 @@ import { pickBestXI } from '../lineup'
 import { XI_SLOTS, mapFormation } from '../formations'
 import { makeTestTeam } from '../fixtures/testTeams'
 import { createMatch } from '../simulate'
-import { loadTeam } from '../../data/loader'
+import { loadTeam, TEAM_IDS } from '../../data/loader'
+import { positionFitness } from '../fitness'
 import type { FormationId } from '../types'
 
 const FORMATIONS = Object.keys(XI_SLOTS) as FormationId[]
@@ -26,6 +27,23 @@ describe('pickBestXI — 포메이션 프로필 반영', () => {
       expect(t.lineup).toHaveLength(11)
       expect(t.lineup.map(s => s.slot)).toEqual(XI_SLOTS[f])
       expect(new Set(t.lineup.map(s => s.playerId)).size).toBe(11)
+    }
+  })
+
+  // pickBestXI는 슬롯 순서 그리디라, 앞 슬롯이 뒤 슬롯의 유일한 적임자를 선점하면
+  // 최전방에 풀백이 서는 식의 배치가 나올 수 있다(UI autoFill에서 실제로 났던 버그).
+  // 12팀 전수 실측에서는 최소 적합도 0.85(대체 포지션) 미만이 하나도 없어 엔진 쪽은
+  // 그리디를 그대로 둔다 — 그 전제를 여기서 고정한다. 깨지면 autoFill과 같은
+  // (희소 슬롯 우선 + 2-opt 수리) 처방을 엔진에도 옮겨야 한다는 신호다.
+  it('12팀 × 6포메이션 전수 — 적합도 0.85 미만 배치가 없다', () => {
+    for (const id of TEAM_IDS) {
+      const team = loadTeam(id)
+      for (const f of FORMATIONS) {
+        for (const l of pickBestXI(team, f).lineup) {
+          const p = team.squad.find(q => q.id === l.playerId)!
+          expect(positionFitness(p, l.slot)).toBeGreaterThanOrEqual(0.85)
+        }
+      }
     }
   })
 

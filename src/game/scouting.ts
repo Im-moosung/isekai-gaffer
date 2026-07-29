@@ -256,6 +256,15 @@ export function recommendPlan(me: Team, opp: Team): PlanRecommendation {
     if (e > bestEdge) { bestEdge = e; best = f }
   }
   // 우위가 없어도(최댓값 ≤ 0) argmax는 제시한다 — "고를 수 있는 최선"이 곧 추천이다.
+  //
+  // **XI 실현 가능성으로 포메이션을 재고(veto)하지 않는 이유** (2026-07-30, 풀백-ST 버그 수정 중 검토):
+  // "3-5-2를 권했는데 세울 ST가 없다"는 사고는 실제로 났었다. 그러나 원인은 포메이션 선택이
+  // 아니라 XI 배치기였다 — 배치기가 현재 선발을 적합도보다 우선해 남아도는 풀백을 ST에 꽂았다
+  // (ui/lineup/swap.autoFill 참고). 12팀 × 6포메이션 전수 실측에서 스쿼드로 세울 수 없는
+  // 조합은 0건이고(최소 적합도 0.85 = 대체 포지션), 수리 후 kor는 11개 상대 전부 전 슬롯 1.00이다.
+  // 즉 veto 분기는 영원히 실행되지 않는 죽은 가지이면서, 이 함수의 설계 원칙("축 하나에
+  // 판별자 하나, 전부 엔진 판별자에서 파생")에 세 번째 숨은 기준을 끼워 넣는다.
+  // 전제가 깨지면 테스트가 먼저 터지게 해 뒀다(scouting.test.ts '[추천 적용] 결과 XI').
   patch.formation = best
   reasons.push({
     field: 'formation',
