@@ -14,6 +14,7 @@
 import type { MatchState, SideState } from '../../engine/types'
 import type { ChoreoStep } from './choreography'
 import { slotCoords } from './formations'
+import { tacticalCoords } from './shape'
 
 const clamp = (v: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v))
 
@@ -42,9 +43,11 @@ const FLOW_PATTERNS: { label: string; roles: [number, number][] }[] = [
 /** 패스 체인 키프레임 시각 — 마지막 ≤ 0.8(안무와 같은 계약). */
 const CHAIN_T = [0, 0.22, 0.46, 0.7]
 
-/** 역할 원형에 가장 가까운 XI를 겹치지 않게 뽑는다(GK 포함 — 후방 빌드업 때문). */
+/** 역할 원형에 가장 가까운 XI를 겹치지 않게 뽑는다(GK 포함 — 후방 빌드업 때문).
+ *  ★ 선발(누가 그 역할인가)은 포메이션 원형 좌표로, 반환 좌표(공이 놓일 자리)는 전술 변환을
+ *  거친 실제 도트 좌표로 한다 — 안 그러면 라인을 올렸을 때 공이 도트에서 떨어져 보인다. */
 function pickChain(side: SideState, roles: [number, number][]): { id: string; x: number; y: number }[] {
-  const { formation, lineup } = side.tactics
+  const { formation, lineup, instructions } = side.tactics
   const sentOff = new Set(side.sentOff)
   const taken = new Set<string>()
   const out: { id: string; x: number; y: number }[] = []
@@ -56,7 +59,11 @@ function pickChain(side: SideState, roles: [number, number][]): { id: string; x:
       if (taken.has(id) || sentOff.has(id)) continue
       const c = slotCoords(formation, i, 'home')
       const d = (c.x - rx) ** 2 + (c.y - ry) ** 2
-      if (d <= bestD) { bestD = d; best = { id, x: c.x, y: c.y } }
+      if (d <= bestD) {
+        bestD = d
+        const t = tacticalCoords(formation, i, 'home', instructions)
+        best = { id, x: t.x, y: t.y }
+      }
     }
     if (!best) break
     out.push(best)

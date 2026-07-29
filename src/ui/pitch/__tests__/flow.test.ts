@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import { makeTestTeam } from '../../../engine/fixtures/testTeams'
 import { createMatch } from '../../../engine/simulate'
-import { slotCoords } from '../formations'
+import { tacticalCoords } from '../shape'
 import { buildFlowSequence, possessingSide } from '../flow'
 
 const home = makeTestTeam('kor', 82)
@@ -20,13 +20,32 @@ describe('buildFlowSequence', () => {
     }
   })
 
+  // ★ 도트 좌표는 전술 변환(shape.tacticalCoords)을 거친다 — 공이 발밑에 있는지 재려면
+  //   포메이션 원형이 아니라 화면에 실제로 그려지는 좌표와 비교해야 한다.
   it('★ 공은 언제나 실제 선수의 발밑에 있다(리사주 금지)', () => {
     for (let m = 1; m <= 90; m++) {
       const { seq, side } = buildFlowSequence(base, m, 42)
       const st = side === 'home' ? base.home : base.away
-      const slots = st.tactics.lineup.map((_, i) => slotCoords(st.tactics.formation, i, side))
+      const slots = st.tactics.lineup.map((_, i) =>
+        tacticalCoords(st.tactics.formation, i, side, st.tactics.instructions))
       for (const step of seq) {
         // 공에서 가장 가까운 라인업 좌표까지 5(0~100 단위) 이내 = 발 앞.
+        const d = Math.min(...slots.map(c => Math.hypot(c.x - step.ball.x, c.y - step.ball.y)))
+        expect(d, `${m}분`).toBeLessThan(11)
+      }
+    }
+  })
+
+  it('★ 라인을 극단으로 올려도 공은 도트를 따라간다(마커만 뜨는 일 금지)', () => {
+    const st = createMatch(home, away, { seed: 42 })
+    st.home.tactics.instructions = { ...st.home.tactics.instructions, lineHeight: 95, pressing: 90 }
+    st.away.tactics.instructions = { ...st.away.tactics.instructions, lineHeight: 95, pressing: 90 }
+    for (let m = 1; m <= 90; m++) {
+      const { seq, side } = buildFlowSequence(st, m, 42)
+      const s = side === 'home' ? st.home : st.away
+      const slots = s.tactics.lineup.map((_, i) =>
+        tacticalCoords(s.tactics.formation, i, side, s.tactics.instructions))
+      for (const step of seq) {
         const d = Math.min(...slots.map(c => Math.hypot(c.x - step.ball.x, c.y - step.ball.y)))
         expect(d, `${m}분`).toBeLessThan(11)
       }

@@ -9,6 +9,7 @@
 //   내려가고, 압박을 올리면 존이 넓어지고, 공격 패턴을 바꾸면 화살표가 바뀐다.
 //   지금까지 전술은 슬라이더 위의 숫자로만 존재했다.
 import type { AttackPattern, Instructions, MatchState, SideState } from '../../engine/types'
+import { lineDepth, pressReach } from './shape'
 
 // PitchView와 동일한 viewBox(105×68) 좌표계.
 const W = 105
@@ -16,15 +17,9 @@ const H = 68
 const sx = (x: number) => (x / 100) * W
 const sy = (y: number) => (y / 100) * H
 
-/** 라인 높이 0~100 → home-프레임 x(0~100). 최저 8(자기 박스 앞) ~ 최고 42(하프라인 앞). */
-export function lineDepth(lineHeight: number): number {
-  return 8 + Math.max(0, Math.min(100, lineHeight)) * 0.34
-}
-
-/** 압박 강도 0~100 → 라인 앞으로 뻗는 압박 존 깊이(0~100 좌표). */
-export function pressReach(pressing: number): number {
-  return 10 + Math.max(0, Math.min(100, pressing)) * 0.35
-}
+// 라인·압박 매핑의 정본은 shape.ts다 — **선(여기)과 도트(PitchView)가 같은 함수에서 나와야**
+// 마커와 선수가 어긋나지 않는다. 기존 import 경로 호환을 위해 여기서 재수출한다.
+export { lineDepth, pressReach }
 
 /** 공격 패턴별 패스 레인(home-프레임 0~100 좌표의 꺾은선). */
 const PASS_LANES: Record<AttackPattern, { pts: [number, number][]; dashed?: boolean }[]> = {

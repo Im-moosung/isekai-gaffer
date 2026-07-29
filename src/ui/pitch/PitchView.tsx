@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import type { MatchState, MatchEvent, SideState } from '../../engine/types'
-import { slotCoords } from './formations'
+import { tacticalCoords } from './shape'
 import type { ChoreoStep } from './choreography'
 import { AnalysisLayer } from './AnalysisLayer'
 import './pitch.css'
@@ -99,7 +99,7 @@ function ChoreoLayer({ sequence, dwellMs, side }: { sequence: ChoreoStep[]; dwel
 
 /** 교체 고스트 도트 — 아웃 선수 슬롯 위치에 반투명 도트+투입 선수 번호. */
 function GhostDot({ side, slotIndex, number }: { side: SideState; slotIndex: number; number?: number }) {
-  const c = slotCoords(side.tactics.formation, slotIndex, 'home')
+  const c = tacticalCoords(side.tactics.formation, slotIndex, 'home', side.tactics.instructions)
   const cx = sx(c.x)
   const cy = sy(c.y)
   return (
@@ -141,13 +141,15 @@ function SideDots({ side, which, nameLabels = false, highlightId, onDotClick }: 
   side: SideState; which: 'home' | 'away'; nameLabels?: boolean
   highlightId?: string | null; onDotClick?: (playerId: string) => void
 }) {
-  const { formation, lineup } = side.tactics
+  // ★ 도트 좌표는 포메이션 원형이 아니라 **전술 변환을 거친 좌표**다 — 라인을 내리면
+  //   수비진이 실제로 내려가고, 압박을 올리면 블록이 앞으로 기울고 좁아진다(shape.ts).
+  const { formation, lineup, instructions } = side.tactics
   const numberById = new Map(side.team.squad.map(p => [p.id, p.number]))
   const nameById = new Map(side.team.squad.map(p => [p.id, p.name.ko]))
   return (
     <g>
       {lineup.map((slot, i) => {
-        const c = slotCoords(formation, i, which)
+        const c = tacticalCoords(formation, i, which, instructions)
         const cx = sx(c.x)
         const cy = sy(c.y)
         const num = numberById.get(slot.playerId)
