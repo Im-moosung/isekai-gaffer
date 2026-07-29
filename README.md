@@ -1,32 +1,90 @@
-# React + TypeScript + Vite
+# 현실에서 축덕인 내가, 이세계에선 국대 감독?
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+**실제 대회 데이터 기반 월드컵 감독 캠페인 시뮬레이션**
 
-Currently, two official plugins are available:
+2026년 6월, 대한민국은 1승 2패로 조별리그를 마쳤습니다. 이 서비스는 그 지점에서 갈라지는 다른 세계선을 다룹니다. 당신은 대표팀 감독석에 앉아 조별리그 3경기부터 결승까지 여덟 경기를 지휘합니다.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+축구를 아는 사람은 많지만 결정하는 자리에 서는 사람은 없습니다. 포메이션도 알고 교체 타이밍에도 의견이 있지만 권한이 없죠. 이 서비스는 그 간극을 뒤집습니다 — 지식은 이미 있으니, 권한을 드립니다.
 
-## React Compiler
+## 플레이
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+**▶ https://rematch-korea-2026.vercel.app**
 
-## Expanding the Oxlint configuration
+브라우저에서 바로 실행되며 설치·회원가입·결제가 필요 없습니다.
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## 무엇을 하는 서비스인가
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+- **킥오프 전** — 상대 리포트를 읽고 선발 11인을 드래그로 배치하고, 포메이션·멘탈리티·라인·압박·템포·공격 패턴을 설계합니다. 상대 데이터에 근거한 전술 추천이 수치와 함께 제시되며, 받아들이든 무시하든 자유입니다.
+- **경기 중** — 90분이 재생되는 동안 개입 권한이 층으로 나뉩니다. 선수를 전원 소집하는 하이드레이션 브레이크와 하프타임에만 팀 구조를 바꿀 수 있고, 경기가 흐르는 중에는 교체와 터치라인 외침뿐입니다. 교체는 IFAB Law 3 그대로 5명·기회 3회이며 하프타임은 예외입니다.
+- **경기 후** — 모든 개입이 결정 로그로 남고, 그 기록에서 기자회견 질문이 만들어집니다. 답변의 톤이 다음 날 신문 1면 헤드라인으로 이어집니다.
+- **캠페인 전체** — 도달 라운드·승점·득실차·업셋·무실점을 합산해 리더보드에 등록합니다.
+
+경기 결과는 시드 기반 결정론으로 계산합니다. 같은 전술과 같은 시드는 언제나 같은 결과를 냅니다. 생성형 AI는 결과 계산에 관여하지 않으며 서사 계층에만 쓰입니다.
+
+## 실행 방법
+
+Node.js 20 이상이 필요합니다.
+
+```bash
+npm install     # 의존성 설치
+npm run dev     # 개발 서버 (http://localhost:5173)
+npm run build   # 타입체크 + 프로덕션 빌드 → dist/
+npm run preview # 빌드 결과 로컬 확인
+npm test        # 테스트 실행
+npm run lint    # 린트
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+`npm run dev`는 정적 프론트엔드만 서빙합니다. AI 내레이션 프록시(`api/narrate.ts`)는 배포 환경에서만 동작하며, 로컬에서는 자동으로 사전 작성 문안으로 대체됩니다.
+
+## 사용 기술
+
+| 영역 | 사용 |
+|---|---|
+| 프레임워크 | React 19, TypeScript, Vite |
+| 상태 관리 | Zustand |
+| 인터랙션 | dnd kit (선수 드래그 배치) |
+| 렌더링 | PixiJS (경기 장면), Three.js (랜딩 3D 배경) |
+| 오디오 | Web Audio API (효과음), Web Speech API (한국어 음성 중계) |
+| 백엔드 | Vercel 서버리스 함수 (AI 프록시), Supabase (리더보드) |
+| 테스트·품질 | Vitest, Testing Library, jsdom, Oxlint |
+
+## 프로젝트 구조
+
+계층 간 의존 방향을 한쪽으로 고정해 두었습니다. `ui`는 `game`을 통해 상태를 다루고, `game`은 `engine`을 호출하며, `engine`은 위쪽을 되돌아보지 않습니다.
+
+| 디렉터리 | 역할 |
+|---|---|
+| `src/engine` | 경기 시뮬레이션 코어. 전력 계산·전술 효과·체력·라인업 산정·승부차기. 시드 RNG만 쓰는 순수 함수 계층으로, `Date`와 `Math.random`을 사용하지 않습니다 |
+| `src/game` | 게임 진행 상태. 매치 세션(브레이크 스케줄·결정 순간 감지), 캠페인 여정, 코치 조언, 중계 멘트, 상대 AI, 기자회견 |
+| `src/ui` | 화면. 랜딩 · 캠페인 허브 · 전술 센터 · 중계 화면 · 작전판 · 기자회견/신문 · 피치 렌더러 |
+| `src/data` | 12개국 팀·선수 데이터 로더와 조별리그 대진. JSON 원본은 `data/teams/`에 있으며 로더는 검증만 하고 변형하지 않습니다 |
+| `src/ai` | 서사 생성 클라이언트, 프롬프트, 요청 검증·레이트리밋, 안전장치 필터 |
+| `src/online` | 리더보드 점수 계산·제출·조회, 닉네임 정제 |
+| `src/audio` | 효과음과 한국어 TTS 중계 |
+| `api` | Vercel 서버리스 함수. AI 프로바이더 프록시 |
+
+## 환경 변수
+
+**모든 환경 변수는 선택 사항입니다.** 하나도 설정하지 않아도 서비스는 전 기능이 동작합니다. 설정 예시는 `.env.example`을 참고하세요.
+
+| 변수 | 용도 | 없을 때 |
+|---|---|---|
+| `AI_PROVIDER` | `gemini`(기본) 또는 `anthropic` | `gemini`로 간주 |
+| `GEMINI_API_KEY` | `AI_PROVIDER=gemini`일 때의 키 | AI 서술 생략, 사전 작성 문안 사용 |
+| `ANTHROPIC_API_KEY` | `AI_PROVIDER=anthropic`일 때의 키 | 위와 같음 |
+| `VITE_SUPABASE_URL` | 리더보드 저장소 | 브라우저 localStorage에 기록 |
+| `VITE_SUPABASE_ANON_KEY` | 리더보드 익명 키 | 위와 같음 |
+
+AI 키가 없으면 기자회견 질문·헤드라인·엔딩 서술이 사전 작성 문안으로 대체됩니다. 키가 있더라도 호출 실패·타임아웃·안전장치 위반 시 같은 문안으로 조용히 되돌아가므로, AI 때문에 서비스가 멈추는 경우는 없습니다. 리더보드도 마찬가지로 Supabase 설정이 없거나 네트워크가 실패하면 localStorage로 폴백합니다.
+
+## 데이터와 고지
+
+12개국 312명의 선수 이름·포지션·등번호를 공개 자료로 교차 검증해 구성했습니다. 능력치는 공개된 경기 기록과 평가를 근거로 6축(슈팅·패스·드리블·수비·피지컬·스피드)으로 환산했고, 골키퍼는 별도 지표를 사용합니다. 팀 성향은 실제 대회의 점유율·패스 성공률·슈팅·파울 지표를 시뮬레이션 검증 목표로 삼아 조정했습니다.
+
+이 서비스는 실제 2026 월드컵을 모티브로 한 **대체역사 픽션**입니다. 등장하는 경기 결과와 서사는 창작이며 실제 사실이 아닙니다. 팀 로고·유니폼 디자인·대회 공식 엠블럼은 사용하지 않고, 경기장 광고판 등은 가상 브랜드로 구성했습니다. 특정 선수·팀·국가를 비하하는 표현은 생성 단계에서 차단합니다.
+
+사운드 등 외부 에셋의 출처와 라이선스는 [`docs/assets-licenses.md`](docs/assets-licenses.md)에 원장으로 기록해 두었습니다.
+
+---
+
+데이커 월간 해커톤 「내가 축구 감독이라면 — 월드컵 전술 웹서비스 챌린지」 참가작입니다.
