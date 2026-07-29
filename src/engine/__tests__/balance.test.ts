@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { runAxisSweep, runAbBatch, runMentalitySweep, invertPlan, type AxisKey } from '../balance'
+import { runAxisSweep, runAbBatch, runMentalitySweep, runFormationSweep, invertPlan, type AxisKey } from '../balance'
 import { runBatch } from '../calibrate'
 import { recommendPlan } from '../../game/scouting'
 import { loadTeam, TEAM_IDS, type TeamId } from '../../data/loader'
@@ -93,17 +93,33 @@ describe('멘탈리티 축 비단조성 — 최적 태세가 상대에 따라 �
 // 추천 플랜을 뒤집은 플랜(invertPlan)이 기본 지시보다 나은 상대가 하나라도 있으면
 // 그 상대에겐 감독의 오판이 처벌받지 않는다는 뜻이다.
 //
-// n=800·임계 0의 근거: 착수 시 목표는 상대별 −2pp였으나, 그 임계는 n=400에서 측정 불가다
-// (승률 차의 표준오차 ≈ 3.5pp > 2pp). n을 800으로 올려 오차를 ≈2.5pp로 줄이고, 상대별로는
-// **부호**만(오판이 보상받지 않는다) 요구하되 크기는 11팀 평균으로 건다.
-// 착수 후 실측(n=800): rsa −17.5 · cze −13.6 · can −12.4 · esp −11.6 · ecu −8.3 · mar −7.5 ·
-// eng −5.1 · nor −2.6 · fra −2.0 · arg −1.4 · mex −1.0 (평균 −7.6).
+// 임계 0의 근거: 착수 시 목표는 상대별 −2pp였으나, 그 임계는 n=400에서 측정 불가다
+// (승률 차의 표준오차 ≈ 3.5pp > 2pp). 상대별로는 **부호**만(오판이 보상받지 않는다) 요구하고
+// 크기는 11팀 평균으로 건다.
+//
+// ⚠ n=1600의 근거(2026-07-30, 계측 하네스 구멍 수리 중 실측). 이전 판은 n=800이었는데,
+// 그때 balance.batch()가 patch.formation만 덮어쓰고 XI 슬롯은 팀 기본 포메이션(4-2-3-1)
+// 것을 그대로 뒀다 — 유저가 만들 수 없는 전술을 재고 있었다(워룸은 포메이션을 바꾸면 XI를
+// 재배치한다). invertPlan은 11개 상대 **전부**에서 포메이션을 바꾸므로(4-4-2 ×9 · 5-4-1 ×2)
+// 이 구멍은 뒤집은 플랜 arm에만, 기준선 arm에는 걸리지 않아 **대칭이 아니었다**.
+// 수리 전후(n=800, Δpp): cze −14.5→−12.7 · mex −4.0→−1.4 · rsa −16.2→−15.3 · ecu −9.2→−8.4 ·
+// eng −6.4→−3.4 · nor −4.7→−3.8 · arg −1.5→−2.6 · esp −15.0→−13.4 · can −12.2→−10.8 ·
+// mar −10.2→−8.7 · **fra −2.9→+0.3** (평균 −8.8→−7.3). 즉 게이트는 vs 프랑스에서
+// "존재할 수 없는 XI가 만든 페널티" 덕에 통과하고 있었고, 제대로 재면 부호가 뒤집혔다.
+// n=800의 표준오차(≈2.5pp)로는 프랑스(참값 ≈−1pp)를 판정할 수 없어 n=1600(≈1.75pp)으로 올린다.
+// 수리 후 실측(n=1600): rsa −15.7 · cze −13.2 · esp −12.8 · can −10.9 · ecu −9.4 · mar −6.7 ·
+// eng −4.6 · nor −3.2 · mex −2.1 · arg −2.1 · fra −0.3 (평균 −7.4).
+// (fra는 n=3200에서 −1.0으로, n=800의 +0.3은 노이즈였음이 확인됐다.)
+//
 // 전력이 대등한 매치업(mex edge 1.045 · arg 0.955)에서 폭이 작은 것은 구조적이다 —
-// 그 구간에선 어느 쪽으로 틀어도 중립 지시와 큰 차이가 없고, 대신 추천과 오판의 **간격**
-// (mex 7.3pp · arg 7.9pp)이 유저가 실제로 체감하는 레버다.
+// 그 구간에선 어느 쪽으로 틀어도 중립 지시와 큰 차이가 없고, 대신 추천과 오판의 **간격**이
+// 유저가 실제로 체감하는 레버다. 프랑스가 유독 얇은 건 별개 이유다: 뒤집은 포메이션(4-4-2)이
+// 상성상 최악이면서도 우리 스쿼드엔 기본 4-2-3-1보다 잘 맞아, 형태 교체만으로 상대와 무관하게
+// +2.2~2.5pp가 되돌아온다(n=3200: fra A −1.0 vs 포메이션 미변경 B −3.2 · eng −5.1/−7.6 ·
+// mex −3.1/−5.3). 아래 '포메이션 축 지배 방지' 게이트가 그 상대 무관 이득의 크기를 감시한다.
 describe('나쁜 판단 페널티 — 뒤집은 플랜은 모든 상대에서 기본 지시보다 나빠야 한다', () => {
   const kor = loadTeam('kor')
-  const N_BAD = 800
+  const N_BAD = 1600
   const measured: Record<string, number> = {}
   const badDelta = (opp: TeamId) => {
     if (measured[opp] === undefined) {
@@ -116,14 +132,27 @@ describe('나쁜 판단 페널티 — 뒤집은 플랜은 모든 상대에서 �
   for (const opp of TEAM_IDS.filter(t => t !== 'kor')) {
     it(`vs ${opp}: 뒤집은 플랜이 기본 지시보다 낫지 않다`, () => {
       expect(badDelta(opp)).toBeLessThanOrEqual(0)
-    }, 300_000)
+    }, 600_000)
   }
 
   it('11팀 평균 −5pp 이하 — 오판의 대가가 측정 가능한 크기여야 한다', () => {
     const opps = TEAM_IDS.filter(t => t !== 'kor')
     const avg = opps.reduce((s, o) => s + badDelta(o), 0) / opps.length
     expect(avg).toBeLessThanOrEqual(-5)
-  }, 600_000)
+  }, 900_000)
+})
+
+// 포메이션 축에는 지금까지 아무 게이트도 없었다 — 지시 3축과 멘탈리티는 지배 전략을 막고 있는데
+// 정작 유저가 가장 먼저 만지는 축이 무감시였다. 위 페널티 게이트에서 드러난 사실이 계기다:
+// 뒤집은 플랜이 고른 4-4-2는 상성상 최악인데도 상대와 무관하게 +2.2~2.5pp를 돌려준다.
+// 실측(n=400, 중립 지시, 승점): 4-4-2·3-5-2가 mex·rsa·esp 세 상대 전부에서 상위 둘이고
+// 승점 폭은 mex 0.137 · rsa 0.058 · esp 0.185다. 다른 축과 같은 임계(0.30) 아래라 지금은
+// 통과하지만, 형태가 상대 무관 정답을 갖게 되면 여기서 먼저 터진다.
+describe('포메이션 축 지배 방지 — 어느 형태도 압도하면 안 된다', () => {
+  it('중간 전력(멕시코)에서 6종 승점 폭이 0.30 미만', () => {
+    const pts = runFormationSweep('kor', 'mex', N).map(c => c.points)
+    expect(Math.max(...pts) - Math.min(...pts)).toBeLessThan(0.30)
+  }, 300_000)
 })
 
 describe('유저 개입 레버리지', () => {
