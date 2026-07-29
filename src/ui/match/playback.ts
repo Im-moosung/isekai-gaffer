@@ -80,6 +80,24 @@ export function pickDramaEvent(events: MatchEvent[]): MatchEvent | null {
   return best
 }
 
+/**
+ * **3D 하이라이트로 보여줄** 이벤트 타입. 나머지(코너·파울·경고·찬스)와 무사건 분은
+ * 2D 작전판이 받는다.
+ *
+ * 왜 전부를 3D로 보내지 않나: 경기당 유의미 이벤트가 20~30건인데 장면 라이브러리는
+ * 유한하다. 전부 3D로 돌리면 같은 장면이 금방 눈에 띈다. "하이라이트"의 뜻이 그거다 —
+ * 중요한 것만 보여준다. 코너·파울은 결과가 아니라 국면이라 전술 보드에서 더 잘 읽힌다.
+ *
+ * ★ 반드시 DRAMA_PRIORITY의 부분집합이어야 한다(안무가 있는 타입만) — choreography와
+ *   playback 테스트가 양방향으로 고정한다.
+ */
+export const HIGHLIGHT_TYPES: readonly MatchEventType[] = ['goal', 'save', 'miss', 'shot', 'red']
+
+/** 이 이벤트를 3D 하이라이트로 재생하는가(false면 2D 작전판이 그 분을 받는다). */
+export function isHighlightEvent(e: MatchEvent): boolean {
+  return HIGHLIGHT_TYPES.includes(e.type)
+}
+
 /** 주인공 이벤트가 강조 발화(rate·pitch 상향 + 발화 중 선점) 대상인가. */
 export function isImportantEvent(e: MatchEvent): boolean {
   return e.type === 'goal' || e.type === 'save'

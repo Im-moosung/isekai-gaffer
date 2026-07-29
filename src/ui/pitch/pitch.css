@@ -116,3 +116,65 @@
     transition: none;
   }
 }
+
+/* ── 전술 시각화 레이어(2D 작전판) ─────────────────────────────
+   하이라이트 사이 구간에서 3D가 못 그리는 것을 그린다: 수비 라인은 선으로,
+   압박은 존으로, 패스 루트는 화살표로. 전부 유저가 만진 숫자에서 나온다. */
+.pv-root--analysis { background: var(--bc-board, #0e1622); }
+/* 작전판 라인 색은 tactics.css의 --tb-board-line에 기대지 않는다 — 그 변수는
+   TacticsBoard 루트 스코프에만 있어서, 경기 화면에 얹으면 마킹이 통째로 사라진다.
+   선택자를 --tactics와 함께 써서 특이성으로 이긴다(tactics.css가 나중에 로드된다). */
+.pv-root--analysis.pv-root--tactics .pv-line,
+.pv-root--analysis .pv-line { stroke: rgba(127, 212, 255, 0.32); }
+.pv-root--analysis.pv-root--tactics .pv-stripe,
+.pv-root--analysis .pv-stripe { fill: rgba(127, 212, 255, 0.035); }
+
+/* 압박 범위 존 — 수비 라인 앞으로 뻗는 밴드. 폭 = 압박 수치. */
+.an-press {
+  fill: color-mix(in srgb, var(--bc-accent) 10%, transparent);
+  stroke: color-mix(in srgb, var(--bc-accent) 26%, transparent);
+  stroke-width: 0.25;
+  transition: x 0.6s ease, width 0.6s ease;
+}
+.an-team--away .an-press { fill: color-mix(in srgb, var(--bc-away) 9%, transparent); stroke: none; }
+
+/* 수비 라인 — 라인 높이를 내리면 자기 골문 쪽으로 내려간다. */
+.an-line {
+  stroke: var(--bc-accent);
+  stroke-width: 0.55;
+  stroke-dasharray: 2.4 1.4;
+  opacity: 0.85;
+  transition: x1 0.6s ease, x2 0.6s ease;
+}
+.an-team--away .an-line { stroke: var(--bc-away); opacity: 0.6; }
+.an-line__tag {
+  fill: var(--bc-accent);
+  font-size: 2.2px;
+  font-weight: 700;
+  text-anchor: middle;
+  opacity: 0.85;
+  transition: x 0.6s ease;
+}
+.an-team--away .an-line__tag { fill: var(--bc-away); opacity: 0.6; }
+
+/* 공격 집중 밴드(좌/중앙/우). */
+.an-focus { fill: color-mix(in srgb, var(--bc-home) 7%, transparent); transition: y 0.6s ease, height 0.6s ease; }
+
+/* 패스 레인 화살표 — 공격 패턴 4택이 곧 이 모양이다. */
+.an-lane {
+  fill: none;
+  stroke: var(--bc-home);
+  stroke-width: 0.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.75;
+}
+.an-lane--dashed { stroke-dasharray: 1.8 1.4; }
+.an-arrow__head { fill: var(--bc-home); }
+
+@media (prefers-reduced-motion: reduce) {
+  .an-press,
+  .an-line,
+  .an-line__tag,
+  .an-focus { transition: none; }
+}

@@ -7,7 +7,9 @@ import * as ctts from '../../audio/commentary-tts'
 import { Scorebug } from '../broadcast/Scorebug'
 import { Ticker } from '../broadcast/Ticker'
 import { PitchView } from '../pitch/PitchView'
-import { buildSequence } from '../pitch/choreography'
+import { buildSequence, sceneKeyFor } from '../pitch/choreography'
+import { buildFlowSequence } from '../pitch/flow'
+import { AnalysisBoard } from './AnalysisBoard'
 import { TacticsBoard } from '../tactics/TacticsBoard'
 import { TacticsCenter } from '../tactics/TacticsCenter'
 import { PlanBadge } from '../tactics/PlanBadge'
@@ -16,7 +18,7 @@ import { ShootoutPanel } from './ShootoutPanel'
 import { StatsTable } from './StatsTable'
 import { ShoutBar } from './ShoutBar'
 import {
-  minuteDwellWithSpeech, pickDramaEvent, isImportantEvent, eventIndex, type PlaybackSpeed,
+  minuteDwellWithSpeech, pickDramaEvent, isImportantEvent, isHighlightEvent, eventIndex, type PlaybackSpeed,
 } from './playback'
 import * as sfx from '../../audio/sfx'
 import './match.css'
@@ -85,6 +87,14 @@ const MOMENT_PHRASE: Record<MomentKind, string> = {
   scored: '득점 직후 — 더 몰아칠까요?',
   clutch: '승부의 시간입니다',
   fatigue: '주력 선수 체력이 바닥납니다',
+}
+
+/** 2D 작전판 캡션용 이벤트 한국어 라벨(3D로 가지 않는 국면들). */
+const EVENT_KO: Partial<Record<MatchEvent['type'], string>> = {
+  corner: '코너킥',
+  foul: '파울',
+  yellow: '경고',
+  chance: '찬스',
 }
 
 interface MatchScreenProps {
@@ -257,8 +267,17 @@ export function MatchScreen({
     const seq = buildSequence(drama, engine.home, engine.away)
     if (seq.length === 0) return null
     const side: 'home' | 'away' = drama.teamId === engine.home.team.id ? 'home' : 'away'
-    return { seq, side }
+    return { seq, side, event: drama }
   }, [engine])
+
+  // ── 하이라이트가 없는 분: 점유 흐름(2D 작전판이 재생) ────────────────
+  // ★ 예전엔 이 분들에 3D의 idleBall이 리사주 곡선을 돌렸다 — 공이 사람과 무관하게
+  //   8자를 그리니 "혼자 떠다닌다"로 보였다. 지금은 실제 라인업 좌표를 잇는 패스 체인이며,
+  //   2D 보드에서 **점유 흐름**으로 읽힌다(같은 움직임이 3D에서는 엉성한 애니메이션이 된다).
+  const flow = useMemo(() => {
+    if (!engine || highlight) return null
+    return buildFlowSequence(engine, engine.minute, seed)
+  }, [engine, highlight, seed])
 
   // ── 사운드 배선(매치데이 2.0) — 모두 sfx는 미지원 환경 no-op ──────────
   // 휘슬: phase 전이 1회. 하프 2회·풀타임 3회(+관중 정지)·브레이크 짧게. 킥오프는 버튼 핸들러(제스처).
@@ -411,7 +430,21 @@ export function MatchScreen({
     displayMinute, minuteEvents, home, away, speed, clutchNow, diffNow, ctts.willSpeak(), shown, seed,
     commentaryCtx,
   )
-  const playSequence = replaying && !!highlight
+  // ── 3D 하이라이트 ↔ 2D 작전판 전환 ────────────────────────────────
+  // 3D는 **중요한 이벤트에서만** 돈다(HIGHLIGHT_TYPES = 골·세이브·미스·슛·퇴장).
+  // 코너·파울·경고·찬스와 무사건 분은 2D 작전판이 받는다 — 그게 "하이라이트"의 뜻이고,
+  // 유한한 장면 라이브러리를 모든 이벤트에 돌리면 반복이 금방 눈에 띈다.
+  const live3d = replaying && !!highlight && isHighlightEvent(highlight.event)
+  const analysisOn = replaying && !live3d
+  // 재생 중에는 항상 시퀀스가 있다: 하이라이트 안무 아니면 점유 흐름(리사주 없음).
+  const activeSeq = highlight?.seq ?? flow?.seq
+  const activeSide: 'home' | 'away' = highlight?.side ?? flow?.side ?? 'home'
+  const playSequence = replaying && !!activeSeq && activeSeq.length > 0
+  // 2D 보드 캡션 — 지금 무엇을 보고 있는지 한 줄.
+  const possTeam = activeSide === 'home' ? home : away
+  const analysisCaption = highlight
+    ? `${displayMinute}' ${EVENT_KO[highlight.event.type] ?? '전개'} — 세트피스·국면 정리`
+    : `${possTeam.name.ko} 점유 — ${flow?.label ?? '전개'}`
   // 골 드라마: 이번 분 득점. 상대 골이면 실점 연출로 차별화.
   const goalEvent = minuteEvents.find(e => e.type === 'goal')
   const goalDrama = replaying && !!goalEvent
@@ -440,9 +473,9 @@ export function MatchScreen({
   const pitchProps = {
     state: engine,
     lastEvent,
-    sequence: playSequence ? highlight!.seq : undefined,
+    sequence: playSequence ? activeSeq : undefined,
     dwellMs: seqDwell,
-    sequenceSide: highlight?.side,
+    sequenceSide: activeSide,
   }
   const pitchSvg = <PitchView {...pitchProps} />
   const pitch2d = (
@@ -528,15 +561,40 @@ export function MatchScreen({
             각 단계는 청크 로드 실패를 PitchBoundary가, 런타임 미지원(WebGL 불가·
             컨텍스트 로스)을 컴포넌트 내부 폴백이 받아 다음 단계로 넘긴다.
             토글로 3D를 끄면 2D 체인만 남는다(key로 바운더리 상태까지 리셋). ── */}
-        <div className="ms-pitch-wrap">
+        {/* data-mode/data-scene: 지금 무엇을 재생 중인지 DOM에 남긴다. 렌더에는 영향이
+            없고, 브라우저 QA(패턴별 스크린샷·반복 측정)와 회귀 테스트가 이걸로 조준한다. */}
+        <div
+          className="ms-pitch-wrap"
+          data-mode={live3d ? '3d' : '2d'}
+          data-scene={highlight ? (sceneKeyFor(highlight.event, engine.home, engine.away) ?? 'none') : 'flow'}
+        >
           {render3d ? (
             <PitchBoundary key="chain-3d" fallback={pitch2d}>
               <Suspense fallback={pitchSvg}>
-                <Match3D {...pitchProps} fallback={pitch2d} />
+                {/* event: 하이라이트가 아닌 분엔 null — movement가 그 분의 코너·파울을
+                    역추적해 엉뚱한 궤적·카메라를 붙이지 않게 명시적으로 끊는다. */}
+                <Match3D {...pitchProps} event={live3d ? highlight!.event : null} fallback={pitch2d} />
               </Suspense>
             </PitchBoundary>
           ) : (
             pitch2d
+          )}
+          {/* ── 2D 작전판: 라이브 위에 겹쳐 두고 opacity로 오간다. ──
+              전환 방향이 비대칭이다(match.css):
+               · 라이브 → 분석: 0.26s 디졸브. 분석 화면은 "다른 카메라"가 아니라 다른
+                 매체라 컷으로 바꾸면 렌더러 고장처럼 읽힌다. 실중계도 여기서 디졸브한다.
+               · 분석 → 라이브: **하드 컷**. 사건은 이미 시작됐고, 디졸브 0.26s는 슛 모션의
+                 앞부분을 먹는다. 컷 자체가 "지금 무슨 일이 난다"는 신호다.
+              3D는 언마운트하지 않는다 — WebGL 컨텍스트 재생성이 매번 히치를 만든다. */}
+          {replaying && (
+            <AnalysisBoard
+              state={engine}
+              sequence={playSequence ? activeSeq : undefined}
+              dwellMs={seqDwell}
+              sequenceSide={activeSide}
+              caption={analysisCaption}
+              visible={analysisOn}
+            />
           )}
         </div>
 

@@ -821,3 +821,81 @@
   font-weight: 700;
   color: var(--bc-text);
 }
+
+/* ── 3D 하이라이트 ↔ 2D 작전판 전환 ─────────────────────────────
+   작전판은 라이브 위에 **겹쳐** 두고 opacity로 오간다(3D 언마운트 금지 —
+   WebGL 컨텍스트 재생성이 매 하이라이트마다 히치를 만든다).
+
+   전환 방향이 비대칭인 것이 핵심이다:
+    · 라이브 → 분석(--on 부여): 0.26s 디졸브. 분석 보드는 "다른 카메라"가 아니라
+      다른 매체라, 컷으로 바꾸면 화면이 고장 난 것처럼 읽힌다. 실제 중계도
+      전술 분석 화면으로는 디졸브/와이프로 넘어간다.
+    · 분석 → 라이브(--on 제거): 하드 컷(transition 0s). 사건은 이미 시작됐고
+      디졸브 0.26s는 슛 모션의 앞부분을 먹는다. 컷 자체가 "지금 무슨 일이 난다"는
+      방송 신호다 — 리플레이에서 라이브로 돌아올 때 아무도 디졸브를 쓰지 않는다. */
+.ms-pitch-wrap { position: relative; }
+.ab-root {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px 4px;
+  border-radius: 8px;
+  background: var(--bc-board, #0e1622);
+  opacity: 0;
+  pointer-events: none;
+  /* 분석 → 라이브: 컷. */
+  transition: opacity 0s;
+}
+.ab-root--on {
+  opacity: 1;
+  /* 라이브 → 분석: 디졸브. */
+  transition: opacity 0.26s ease-out;
+}
+/* 보드는 남는 높이를 다 쓰고 105:68을 지킨다. width:100%로 두면 가로가 남을 때
+   viewBox가 좌우로 레터박스되어 도트가 화면 가운데로 몰린다. */
+.ab-root > .pv-root {
+  flex: 1 1 0;
+  min-height: 0;
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+  aspect-ratio: 105 / 68;
+  margin: 0 auto;
+}
+
+/* 정보 바는 **아래**에 둔다 — 위는 스코어버그·플랜 배지가 이미 쓰고 있어 겹친다. */
+.ab-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--bc-text-dim, #93a4bd);
+}
+.ab-tag {
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--bc-accent);
+}
+.ab-pattern { font-weight: 700; color: var(--bc-text, #e7eefc); }
+.ab-chips { display: flex; gap: 4px; }
+.ab-chip {
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--bc-accent) 35%, transparent);
+  background: color-mix(in srgb, var(--bc-accent) 10%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+.ab-stats { margin-left: auto; font-variant-numeric: tabular-nums; }
+.ab-caption {
+  font-size: 11px;
+  color: var(--bc-text-dim, #93a4bd);
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ab-root,
+  .ab-root--on { transition: none; }
+}

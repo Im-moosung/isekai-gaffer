@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import type { MatchState, MatchEvent, SideState } from '../../engine/types'
 import { slotCoords } from './formations'
 import type { ChoreoStep } from './choreography'
+import { AnalysisLayer } from './AnalysisLayer'
 import './pitch.css'
 
 // 피치 실측 비율(m) — viewBox 0 0 105 68.
@@ -31,6 +32,8 @@ interface PitchViewProps {
   dwellMs?: number
   /** 시퀀스를 재생하는 공격 팀(공·무버 색). 미지정 시 'home'. */
   sequenceSide?: 'home' | 'away'
+  /** 전술 시각화 레이어(수비 라인·압박 존·패스 레인) — 하이라이트 사이 2D 작전판 전용. */
+  analysis?: boolean
 }
 
 /** SVG 105×68 피치 뷰.
@@ -38,17 +41,19 @@ interface PitchViewProps {
  *  엔진 호출 없이 전달받은 state만 그린다(컴포넌트는 엔진 타입 import만).
  *  variant='tactics'면 다크 보드 클래스(pv-root--tactics)를 붙여 작전판 톤으로 렌더하고,
  *  도트 좌표에 transition을 걸어(포메이션 변경 시) 새 위치로 부드럽게 이동한다(tactics.css). */
-export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels = false, highlightId, ghost, onDotClick, sequence, dwellMs, sequenceSide = 'home' }: PitchViewProps) {
+export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels = false, highlightId, ghost, onDotClick, sequence, dwellMs, sequenceSide = 'home', analysis = false }: PitchViewProps) {
   const playing = !!sequence && sequence.length > 0
   return (
     <svg
-      className={`pv-root${variant === 'tactics' ? ' pv-root--tactics' : ''}`}
+      className={`pv-root${variant === 'tactics' ? ' pv-root--tactics' : ''}${analysis ? ' pv-root--analysis' : ''}`}
       viewBox={`0 0 ${W} ${H}`}
       role="img"
       aria-label="경기 피치 포메이션"
       preserveAspectRatio="xMidYMid meet"
     >
       <PitchMarkings />
+      {/* 전술 레이어는 마킹 위·도트 아래 — 선수를 가리지 않는다. */}
+      {analysis && <AnalysisLayer state={state} />}
       <SideDots side={state.home} which="home" nameLabels={nameLabels} highlightId={highlightId} onDotClick={onDotClick} />
       <SideDots side={state.away} which="away" />
       {ghost && <GhostDot side={state.home} slotIndex={ghost.slotIndex} number={ghost.number} />}
