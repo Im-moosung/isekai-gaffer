@@ -25,19 +25,21 @@ function toHalftime() {
 
 describe('TeamTalk 컴포넌트', () => {
   it('4톤 문장형 버튼(톤 라벨 + 상황별 문장)을 렌더한다', () => {
-    store().startMatch(a, b, 42) // 0-0 → drawing
+    // 시드 37: 전반 0-0(=drawing). 세트피스·퇴장 배선으로 기존 시드 42의 전반이 0-0이 아니게 되어
+    // **상황이 drawing인 시드**로 갈아끼운다. 테스트 의도(상황별 문장·보정치)는 그대로다.
+    store().startMatch(a, b, 37) // 0-0 → drawing
     toHalftime()
     const { getByRole } = render(<TeamTalk side="home" />)
     for (const label of ['격노', '격려', '침착', '신뢰']) {
       expect(getByRole('button', { name: new RegExp(label) })).toBeTruthy()
     }
     // 상황(비기는 중)에 맞는 문장이 노출된다.
-    const rageLine = getLine('rage', 'drawing', 42)
+    const rageLine = getLine('rage', 'drawing', 37)
     expect((getByRole('button', { name: new RegExp('격노') }).textContent ?? '')).toContain(rageLine)
   })
 
   it('사기 게이지 사전 정보를 노출한다', () => {
-    store().startMatch(a, b, 42)
+    store().startMatch(a, b, 37)
     toHalftime()
     const { container } = render(<TeamTalk side="home" />)
     expect(container.querySelector('.tt-morale')).toBeTruthy()
@@ -46,7 +48,7 @@ describe('TeamTalk 컴포넌트', () => {
 
   it('선택 시 즉시 효과 배너(+/사기 상승)와 선수 반응 아이콘을 크게 표시', () => {
     // 비기는 중(0-0) → 침착 +4(even)
-    store().startMatch(a, b, 42)
+    store().startMatch(a, b, 37)
     toHalftime()
     const { getByRole, container } = render(<TeamTalk side="home" />)
     fireEvent.click(getByRole('button', { name: new RegExp('침착') }))
@@ -66,7 +68,7 @@ describe('TeamTalk 컴포넌트', () => {
 
   it('역효과(이기는 중 격노) → 저하 배너(-)', () => {
     // 이기는 중(1-0) → 격노 -4(even)
-    store().startMatch(a, b, 42, { firstHalfScript: { events: [{ minute: 20, type: 'goal', teamId: a.id }], score: [1, 0] } })
+    store().startMatch(a, b, 37, { firstHalfScript: { events: [{ minute: 20, type: 'goal', teamId: a.id }], score: [1, 0] } })
     toHalftime()
     const { getByRole, container } = render(<TeamTalk side="home" />)
     fireEvent.click(getByRole('button', { name: new RegExp('격노') }))
@@ -78,7 +80,7 @@ describe('TeamTalk 컴포넌트', () => {
 
   it('코치 추천 뱃지가 최대 보정 톤 버튼에 붙는다', () => {
     // 지는 중(0-1, even) → 추천 격노(+8)
-    store().startMatch(a, b, 42, { firstHalfScript: { events: [{ minute: 20, type: 'goal', teamId: b.id }], score: [0, 1] } })
+    store().startMatch(a, b, 37, { firstHalfScript: { events: [{ minute: 20, type: 'goal', teamId: b.id }], score: [0, 1] } })
     toHalftime()
     const { getByRole, container } = render(<TeamTalk side="home" />)
     const badges = container.querySelectorAll('.tt-btn__badge')
@@ -88,7 +90,7 @@ describe('TeamTalk 컴포넌트', () => {
 
   it('반복 감쇠: 지난 경기와 같은 톤이면 효과 반감 + 안내 문구', () => {
     useCampaignStore.getState().setLastTeamTalkTone('calm')
-    store().startMatch(a, b, 42) // drawing, calm even = 4
+    store().startMatch(a, b, 37) // drawing, calm even = 4
     toHalftime()
     const { getByRole, container } = render(<TeamTalk side="home" />)
     fireEvent.click(getByRole('button', { name: new RegExp('침착') }))

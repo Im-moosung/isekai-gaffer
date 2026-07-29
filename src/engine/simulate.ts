@@ -1,7 +1,7 @@
 // src/engine/simulate.ts
 import { createRng, type Rng } from './rng'
 import { zoneStrength } from './strength'
-import { instructionEffects, formationEdge, mentalityEffects, attackPatternEffects, groupIntensityStaminaFactor, attackFocusEffects, type MatchupContext } from './tactics'
+import { instructionEffects, formationEdge, mentalityEffects, attackPatternEffects, groupIntensityStaminaFactor, attackFocusEffects, footEffects, groupIntensityZoneFactor, setPieceEffects, markingFactor, type MatchupContext } from './tactics'
 import { effectiveStats } from './fitness'
 import { pickBestXI } from './lineup'
 import type { Instructions, MatchEvent, MatchState, Player, Position, SideState, SideStats, TacticState, Team } from './types'
@@ -313,7 +313,18 @@ function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
     st.events.push({ minute: st.minute, type: 'foul', teamId: def.team.id, playerId: fouler })
     // 지친 압박은 경고로 이어진다: 기본 0.12, 압박 70+ & 저체력이면 ×1.5.
     const tired = def.tactics.instructions.pressing >= 70 && avgStamina(def) < 55
-    if (rng.chance(tired ? 0.18 : 0.12)) st.events.push({ minute: st.minute, type: 'yellow', teamId: def.team.id, playerId: fouler })
+    // 이미 경고를 받은 선수는 두 번째 경고를 훨씬 덜 받는다(BOOKED_CAUTION). 근거는 상수 주석.
+    const booked = countYellows(st, fouler) >= 1
+    if (rng.chance((tired ? 0.18 : 0.12) * (booked ? BOOKED_CAUTION : 1))) {
+      st.events.push({ minute: st.minute, type: 'yellow', teamId: def.team.id, playerId: fouler })
+      // 2옐로 → 레드. 누적은 **이벤트 로그에서 센다** — SideState에 카드 카운터를 두면
+      // 스크립트 전반 적용·하이드레이션 복원 경로에서 상태와 로그가 어긋날 수 있다.
+      if (countYellows(st, fouler) >= 2) sendOff(st, def, fouler)
+    } else if (rng.chance(DIRECT_RED_P)) {
+      // 직접 레드(심각한 파울). 실제 비율 근거는 DIRECT_RED_P 주석 참조.
+      // 경고가 나온 파울에는 굴리지 않는다 — 같은 파울이 경고이면서 퇴장일 수는 없다.
+      sendOff(st, def, fouler)
+    }
   }
 
   // 3) 찬스 롤 (공격 측): 공격 전력(공격 페이즈) vs 수비 전력(수비 페이즈) + 템포 + 모멘텀 + 공격 패턴
@@ -324,7 +335,7 @@ function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
   const momentumBoost = atkIdx === 0 ? 1 + st.momentum * 0.15 : 1 - st.momentum * 0.15
   // 수비 측의 suppression(하이라인·하이프레스로 상대 전개를 끊는 항)이 공격 측 찬스를 억제한다.
   const chanceP = clamp(
-    (atk.team.statBaseline.shotsPerGame / (90 * participation)) * Math.pow(atkZone / Math.max(30, defZone), STRENGTH_SENSITIVITY) * fx[atkIdx].chanceRate * ap.chanceRate * fx[defIdx].counterVulnerability * fx[defIdx].suppression * momentumBoost,
+    (atk.team.statBaseline.shotsPerGame * openPlayShotFactor(atk.team) / (90 * participation)) * Math.pow(atkZone / Math.max(30, defZone), STRENGTH_SENSITIVITY) * fx[atkIdx].chanceRate * ap.chanceRate * fx[defIdx].counterVulnerability * fx[defIdx].suppression * momentumBoost,
     0.02, 0.45,
   )
   if (rng.chance(chanceP)) resolveChance(st, atkIdx, defIdx, fx, rng, atkZone / Math.max(30, defZone))
@@ -338,6 +349,45 @@ function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
       side.staminaByPlayer[playerId] = Math.max(0, side.staminaByPlayer[playerId] - drain * (100 / Math.max(40, p.stamina)))
     }
   }
+}
+
+// ── 퇴장(레드카드) ──────────────────────────────────────────────
+// `sentOff` 소비 로직(zoneStrength 수적 열세, 슈터·파울러·측면 전력 제외)은 완비돼 있었으나
+// `red` 이벤트 **생성처가 0건**이라 게임에서 퇴장이 한 번도 일어나지 않았다(감사 §12).
+//
+// 직접 레드 확률 근거 — 월드컵 본선 레드카드 비율:
+//   2010 남아공 17/64=0.27 · 2014 브라질 10/64=0.16 · 2018 러시아 4/64=0.06 · 2022 카타르 4/64=0.06.
+//   최근 두 대회는 VAR 이후 급감했고, 5대 리그(EPL 2022-23 51/380=0.13)가 중간값이다.
+//   → 경기당 합계 0.10~0.15회를 목표로 잡는다(양 팀 합).
+// 그 중 2옐로:직접 레드 비율은 대략 45:55다(EPL 다년 평균). 2옐로 경로는 파울·경고
+//   확률에서 자동으로 정해지므로(실측 아래), 남은 몫을 직접 레드에 배분한 값이 이 상수다.
+// 파울은 경기당 25회(양 팀) 발생하고 그 88%가 경고 없이 지나가므로,
+//   0.0035 × 25 × 0.88 ≈ 0.077회/경기가 직접 레드로 나온다.
+const DIRECT_RED_P = 0.0035
+/** 이미 경고를 받은 선수가 두 번째 경고를 받을 확률 배수.
+ *  경고 없이 그대로 두면 2옐로 퇴장이 경기당 0.24회로 실제(약 0.06회)의 4배가 된다 —
+ *  우리 파울러 추첨이 5개 슬롯(CB·DM·LB·RB·CM)에 가중 3을 몰아주기 때문이다.
+ *  실제 축구에서 경고받은 선수는 (1) 스스로 태클을 자제하고 (2) 심판이 두 번째 카드를 아끼며
+ *  (3) 감독이 우선 교체 대상으로 삼는다. 세 효과를 한 계수로 묶었다.
+ *  0.3에서 2옐로 퇴장이 경기당 ≈0.07회 — 직접 레드와 합쳐 실제 월드컵 비율에 든다. */
+const BOOKED_CAUTION = 0.3
+
+/** 이 선수가 지금까지 받은 경고 수(이번 파울 포함). */
+function countYellows(st: MatchState, playerId: string): number {
+  let n = 0
+  for (const e of st.events) if (e.type === 'yellow' && e.playerId === playerId) n++
+  return n
+}
+
+/** 퇴장 처리. GK는 대상에서 제외한다 — 엔진에 교체 GK 투입 경로가 없어
+ *  (`resolveChance`가 라인업의 GK 슬롯을 그대로 읽는다) 골문이 무주공산이 되는 게 아니라
+ *  퇴장당한 GK가 계속 선방하는 모순이 생긴다. 필드 플레이어만 퇴장시킨다. */
+function sendOff(st: MatchState, side: SideState, playerId: string) {
+  const slot = side.tactics.lineup.find(l => l.playerId === playerId)
+  if (!slot || slot.slot === 'GK') return
+  if (side.sentOff.includes(playerId)) return
+  side.sentOff.push(playerId)
+  st.events.push({ minute: st.minute, type: 'red', teamId: side.team.id, playerId })
 }
 
 /** 주전(라인업, 퇴장 제외) 평균 체력. 지속 압박 저체력 판정용. */
@@ -358,7 +408,7 @@ function gkPowerplayActive(st: MatchState, idx: 0 | 1): boolean {
 // 동급(비율 1)이면 정확히 1.0이라 동급 캘리브레이션 계약에 무영향.
 const XG_STRENGTH = 0.75
 
-function resolveChance(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: ReturnType<typeof instructionEffects>[], rng: Rng, strengthRatio = 1) {
+function resolveChance(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: ReturnType<typeof instructionEffects>[], rng: Rng, strengthRatio = 1, spDepth = 0) {
   const atk = atkIdx === 0 ? st.home : st.away
   const def = defIdx === 0 ? st.home : st.away
   const ap = attackPatternEffects(atk.tactics.attackPattern)
@@ -392,7 +442,10 @@ function resolveChance(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: ReturnT
   )
   // E1: 수비 측이 공격적 태세로 나와 있으면 내주는 찬스의 '질'이 오른다(역습은 좋은 자리에서 잡힌다).
   // 기본(balanced)은 concedeQuality=1 → 회귀 불변.
-  const xg = clamp((es.shooting / 100) * 0.35 * fx[atkIdx].chanceQuality * ap.chanceQuality * qualityBoost * af.chanceQuality * fx[defIdx].concedeQuality * Math.pow(strengthRatio, XG_STRENGTH), 0.02, 0.65)
+  // 주발: 슈터가 윙어일 때만 발동. 역측(인버티드)은 컷인 각으로 퀄↑·코너↓, 정측은 반대.
+  // 윙어가 아니거나 양발이면 전 축 1.0 → 회귀 불변.
+  const ft = footEffects(shooterSlot.slot, shooter.foot, atk.tactics.attackPattern)
+  const xg = clamp((es.shooting / 100) * 0.35 * fx[atkIdx].chanceQuality * ap.chanceQuality * qualityBoost * af.chanceQuality * ft.chanceQuality * fx[defIdx].concedeQuality * Math.pow(strengthRatio, XG_STRENGTH), 0.02, 0.65)
   st.stats[atkIdx].xg = round2(st.stats[atkIdx].xg + xg)
 
   // cross는 유효슛 확률 소폭↓(컷인↓·크로스 위주). balanced는 onTargetBias=1 → 불변.
@@ -400,7 +453,7 @@ function resolveChance(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: ReturnT
   if (!rng.chance(onTargetP)) {
     st.events.push({ minute: st.minute, type: 'miss', teamId: atk.team.id, playerId: shooter.id, xg })
     // cross는 코너 획득 확률↑(cornerBias). balanced는 1 → 불변.
-    if (rng.chance(clamp(0.35 * ap.cornerBias, 0, 0.9))) { st.stats[atkIdx].corners++; st.events.push({ minute: st.minute, type: 'corner', teamId: atk.team.id }) }
+    if (rng.chance(clamp(0.35 * ap.cornerBias * ft.cornerBias, 0, 0.9))) awardCorner(st, atkIdx, defIdx, fx, rng, spDepth)
     return
   }
   st.stats[atkIdx].shotsOnTarget++
@@ -412,8 +465,162 @@ function resolveChance(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: ReturnT
     st.momentum = clamp(st.momentum + (atkIdx === 0 ? 0.35 : -0.35), -1, 1)
   } else {
     st.events.push({ minute: st.minute, type: 'save', teamId: def.team.id, playerId: gk.id, xg })
-    if (rng.chance(clamp(0.45 * ap.cornerBias, 0, 0.9))) { st.stats[atkIdx].corners++; st.events.push({ minute: st.minute, type: 'corner', teamId: atk.team.id }) }
+    if (rng.chance(clamp(0.45 * ap.cornerBias * ft.cornerBias, 0, 0.9))) awardCorner(st, atkIdx, defIdx, fx, rng, spDepth)
   }
+}
+
+// ── 세트피스(코너) ──────────────────────────────────────────────
+// `Player.setPiece`는 312명 검수 데이터인데 엔진 참조가 0건이었다(감사 §12).
+// 코너를 "스탯 한 줄"에서 "실제 득점 경로"로 바꾼다.
+//
+// ★ 캘리브레이션 계약 유지 방식 — 세트피스 슛은 **공짜로 얹지 않는다**.
+//   코너 하나당 SP_ATTEMPT_BASE 확률로 슛이 하나 추가되므로, 그만큼 오픈플레이 찬스
+//   베이스라인을 팀별로 미리 깎는다(openPlayShotFactor). 팀의 자기 코너/슛 베이스라인
+//   비율로 계산하므로 팀마다 정확한 몫이 빠진다 → 총 슛 수가 실측 베이스라인에 그대로 남는다.
+//   세트피스 골도 stats.shots·xg에 함께 계상된다(game-design-plan §5 요구).
+
+/** 코너당 슛(=박스 안에서 유효한 시도)이 만들어질 기준 확률.
+ *  실제 축구에서 코너의 약 1/3이 슛으로 이어진다(Opta 계열 공개 집계 30~35%).
+ *  키커 능력으로 ±30% 변동한다. */
+const SP_ATTEMPT_BASE = 0.38
+/** 세트피스 슛의 기준 xG. 키커 setPiece 70 · 박스 위협 62 · GK aerial 62에서 이 값이다.
+ *  코너 전환율(코너당 골) 목표 4~7%에 맞춰 실측으로 정한 값 — 아래 보고 참조. */
+const SP_XG_BASE = 0.135
+/** 세트피스가 골로 끝나지 않았을 때 상대 역습이 열릴 기준 확률(루트·박스 인원 배수 적용 전).
+ *  표준 지시(far/normal)에서도 걸리므로 낮게 잡는다. heavy+near면 ×1.375. */
+const SP_COUNTER_BASE = 0.05
+/** 세트피스가 골로 끝나지 않았을 때 또 다른 코너로 이어질 확률(연속 코너).
+ *  이 항이 없으면 openPlayShotFactor로 깎인 오픈플레이 찬스만큼 코너가 통째로 사라져
+ *  경기당 코너가 9.61 → 8.21로 내려앉는다(실측). 0.45에서 9.26으로 복원된다. */
+const SP_REPEAT_CORNER_P = 0.45
+
+/** 오픈플레이 찬스 베이스라인 감쇠 계수 — 세트피스가 가져갈 슛 몫을 미리 뺀다.
+ *  SP_ATTEMPT_BASE(0.38)보다 높게 잡은 이유: 세트피스는 연속 코너(SP_REPEAT_CORNER_P)로
+ *  스스로 코너를 재생산하고, 코너를 베이스라인보다 많이 만드는 팀(esp 실측 +16%)에서는
+ *  베이스라인 기반 보정이 실제 추가분을 다 걷어내지 못한다.
+ *  실측(12팀 전 조합 1,056경기)으로 이 값을 고른 근거:
+ *    - 실팀 캘리브레이션 ±25% 게이트의 최악 셀(esp 홈 슛)이 HEAD 24.6% → 22.4%로 **여유가 늘었다**
+ *      (0.38이면 24.9%로 한계선에 붙는다)
+ *    - 경기당 총 득점이 2.614(도입 전) → 2.623으로 사실상 동일
+ *    - 경기당 코너 9.61 → 9.26, 총 슛 27.52 → 26.22
+ *  하한 0.7은 코너 베이스라인이 비정상적으로 높은 팀에서 오픈플레이가 붕괴하지 않게 하는 안전장치. */
+const SP_SHOT_COMPENSATION = 0.45
+function openPlayShotFactor(team: Team): number {
+  const { shotsPerGame, cornersPerGame } = team.statBaseline
+  if (shotsPerGame <= 0) return 1
+  return clamp(1 - SP_SHOT_COMPENSATION * (cornersPerGame / shotsPerGame), 0.7, 1)
+}
+
+/** 한 번의 오픈플레이 찬스에서 파생될 수 있는 세트피스 연쇄의 최대 깊이.
+ *  코너 → (클리어가 다시 라인 밖) → 코너 → … 는 실제로도 일어나지만, 무한 재귀를 막고
+ *  한 분에 몰리는 이벤트 수를 제한하기 위해 2단으로 끊는다. */
+const MAX_SP_CHAIN = 2
+
+/** 코너 부여 + 세트피스 해결. `spDepth`가 상한에 닿으면 세트피스를 해결하지 않는다
+ *  (연쇄·재귀 가드). 세트피스 역습이 얻은 코너도 같은 카운터를 물려받는다. */
+function awardCorner(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: ReturnType<typeof instructionEffects>[], rng: Rng, spDepth: number) {
+  st.stats[atkIdx].corners++
+  st.events.push({ minute: st.minute, type: 'corner', teamId: (atkIdx === 0 ? st.home : st.away).team.id })
+  if (spDepth < MAX_SP_CHAIN) resolveSetPiece(st, atkIdx, defIdx, fx, rng, spDepth + 1)
+}
+
+/** 박스 공중 위협 — 필드 플레이어 상위 4명의 (physical 0.6 + shooting 0.4) 평균.
+ *  헤더 득점력은 제공권(physical)이 주도하되 마무리(shooting)가 거든다. 체력 반영.
+ *  공격 라인 적극성은 존 전력과 **같은 배수**로 반영한다 — 앞으로 나가 있는 팀이
+ *  코너에서도 더 좋은 자리를 잡는다. 전부 0이면 1.0이라 기본 동작 불변. */
+function boxThreat(side: SideState): { value: number; target: Player | null } {
+  const rows = side.tactics.lineup
+    .filter(l => !side.sentOff.includes(l.playerId) && l.slot !== 'GK')
+    .map(l => {
+      const p = side.team.squad.find(q => q.id === l.playerId)!
+      const es = effectiveStats(p, l.slot, side.staminaByPlayer[l.playerId])
+      return { p, v: es.physical * 0.6 + es.shooting * 0.4 }
+    })
+    // 동점이면 id 사전순으로 끊어 결정론을 지킨다.
+    .sort((a, b) => b.v - a.v || a.p.id.localeCompare(b.p.id))
+  const top4 = rows.slice(0, 4)
+  const avg = top4.length ? top4.reduce((s, r) => s + r.v, 0) / top4.length : 50
+  return {
+    value: avg * groupIntensityZoneFactor(side.tactics.groupIntensity, 'attack'),
+    // 마무리하는 사람은 키커가 아니라 박스 안 최고 위협이다. RNG를 쓰지 않고
+    // 결정론적으로 고른다 — 추첨을 넣으면 난수 스트림이 바뀌어 시드 회귀가 깨진다.
+    target: rows[0]?.p ?? null,
+  }
+}
+
+/** 코너 키커 — 출전 중 최고 setPiece. 동점이면 id 사전순(결정론). */
+function setPieceTaker(side: SideState): Player | null {
+  const cands = side.tactics.lineup
+    .filter(l => !side.sentOff.includes(l.playerId) && l.slot !== 'GK')
+    .map(l => side.team.squad.find(p => p.id === l.playerId)!)
+    .sort((a, b) => b.setPiece - a.setPiece || a.id.localeCompare(b.id))
+  return cands[0] ?? null
+}
+
+function resolveSetPiece(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: ReturnType<typeof instructionEffects>[], rng: Rng, spDepth: number) {
+  const atk = atkIdx === 0 ? st.home : st.away
+  const def = defIdx === 0 ? st.home : st.away
+  const taker = setPieceTaker(atk)
+  if (!taker) return
+  const sp = setPieceEffects(atk.tactics)
+
+  // 1) 시도 성립: 키커 능력이 기준(70)에서 ±30% 변동시킨다. 배송이 나쁘면 첫 수비수에 걸린다.
+  const attemptP = clamp(SP_ATTEMPT_BASE * (0.7 + 0.3 * (taker.setPiece / 70)), 0.12, 0.65)
+  if (!rng.chance(attemptP)) return
+
+  const { value: threat, target } = boxThreat(atk)
+  // 헤더를 마무리하는 선수(없으면 키커 자신). 키커가 곧 타깃이면 어시스트는 남기지 않는다.
+  const scorer = target ?? taker
+  const assist = scorer.id === taker.id ? undefined : { assistId: taker.id }
+  const gkSlot = def.tactics.lineup.find(l => l.slot === 'GK')!
+  const gk = def.team.squad.find(p => p.id === gkSlot.playerId)!
+  const gkAerial = gk.gkStats?.aerial ?? 25
+  const gkSave = (gk.gkStats?.saving ?? 20) * (0.75 + 0.25 * def.staminaByPlayer[gk.id] / 100)
+  // GK 제공권: 62 기준 1.0, 92면 0.90, 32면 1.10. 나오는 골키퍼가 코너를 지운다.
+  const gkFactor = clamp(1 - (gkAerial - 62) / 300, 0.85, 1.15)
+  // 수적 열세는 박스에 넣을 몸이 줄어든다는 뜻이다 — 퇴장 1명당 −6%(zoneStrength와 같은 계수).
+  const shortage = 1 - atk.sentOff.length * 0.06
+  const mark = markingFactor(def.tactics.setPiece?.marking, clamp((threat - 55) / 25, 0, 1))
+
+  const xg = clamp(
+    SP_XG_BASE * (taker.setPiece / 70) * (threat / 62) * gkFactor * shortage * sp.conversion * mark,
+    0.02, 0.35,
+  )
+  st.stats[atkIdx].shots++
+  st.stats[atkIdx].xg = round2(st.stats[atkIdx].xg + xg)
+
+  // 헤더는 오픈플레이보다 유효슛 비율이 낮다(각이 좁고 몸싸움 중이다) — 0.52 고정.
+  const goalP = clamp(xg * (1.6 - gkSave / 100), 0.02, 0.45)
+  if (rng.chance(goalP)) {
+    st.stats[atkIdx].shotsOnTarget++
+    st.score[atkIdx]++
+    // detail로 세트피스 골임을 표시한다 — 중계·통계가 오픈플레이와 구분할 수 있게.
+    st.events.push({ minute: st.minute, type: 'goal', teamId: atk.team.id, playerId: scorer.id, xg, detail: 'setpiece', ...assist })
+    // 세트피스 골의 모멘텀 반동은 오픈플레이(0.35)보다 작게 잡는다(0.20).
+    // 흐름을 뚫어낸 골이 아니라 정지 상황의 한 방이라 경기 흐름을 덜 바꾸고,
+    // 모멘텀은 다음 분의 찬스 확률에 곱해져 복리로 쌓이므로 대량 득점 꼬리를 만든다
+    // (0.35로 두면 esp-arg 100경기에서 한 팀 9골 경기가 나와 현실성 게이트를 깼다).
+    st.momentum = clamp(st.momentum + (atkIdx === 0 ? 0.20 : -0.20), -1, 1)
+    return
+  }
+  if (rng.chance(0.52)) {
+    st.stats[atkIdx].shotsOnTarget++
+    st.events.push({ minute: st.minute, type: 'save', teamId: def.team.id, playerId: gk.id, xg, detail: 'setpiece' })
+  } else {
+    // 빗나간 헤더에는 assistId를 붙이지 않는다 — playerStats가 이벤트 타입과 무관하게
+    // assistId를 어시스트로 세므로 붙이면 '실패한 어시스트'가 기록된다.
+    st.events.push({ minute: st.minute, type: 'miss', teamId: atk.team.id, playerId: scorer.id, xg, detail: 'setpiece' })
+  }
+  // 2) 역습 노출: 박스에 사람을 밀어넣은 대가. 표준 지시에서도 소폭 걸리고,
+  //    heavy·near를 고르면 커진다. 이 역습이 얻는 코너는 다시 세트피스를 부르지 않는다(재귀 가드).
+  if (rng.chance(clamp(SP_COUNTER_BASE * sp.counterRisk, 0, 0.2))) {
+    const zsAtk = zoneStrength(def, 'attack').attack
+    const zsDef = zoneStrength(atk, 'defense').defense
+    resolveChance(st, defIdx, atkIdx, fx, rng, zsAtk / Math.max(30, zsDef), MAX_SP_CHAIN)
+    return
+  }
+  // 3) 클리어가 다시 라인 밖으로 — 연속 코너(근거는 SP_REPEAT_CORNER_P 주석).
+  if (rng.chance(SP_REPEAT_CORNER_P)) awardCorner(st, atkIdx, defIdx, fx, rng, spDepth)
 }
 
 function randomLineupPlayer(side: SideState, rng: Rng, prefer: string[]): string {
@@ -429,6 +636,8 @@ export function applyCommand(state: MatchState, sideKey: 'home' | 'away', cmd: M
     if (side.subsUsed >= MAX_SUBS) throw new Error(`교체 한도(${MAX_SUBS}회) 초과`)
     const slot = side.tactics.lineup.find(l => l.playerId === cmd.out)
     if (!slot) throw new Error('교체 대상이 라인업에 없음')
+    // 퇴장당한 선수는 교체로 메울 수 없다 — 그러면 수적 열세가 무효가 된다(실제 규정도 동일).
+    if (side.sentOff.includes(cmd.out)) throw new Error('퇴장당한 선수는 교체할 수 없음')
     if (side.tactics.lineup.some(l => l.playerId === cmd.in)) throw new Error('이미 출전 중인 선수')
     // 교체 기회 판정 — 인원 상한과 별개의 규정 축이다. 상태 변경 전에 막아야
     // "기회는 초과했는데 선수는 이미 바뀐" 반쪽 상태가 남지 않는다.

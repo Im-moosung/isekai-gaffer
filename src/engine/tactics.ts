@@ -1,4 +1,4 @@
-import type { AttackPattern, FormationId, GroupIntensity, Instructions, Mentality, PhaseFormations } from './types'
+import type { AttackPattern, BoxLoad, FormationId, Foot, GroupIntensity, Instructions, Mentality, PhaseFormations, Position, SetPiecePlan, SetPieceRoute, TacticState } from './types'
 
 // 상삼각만 정의, 반대칭으로 자동 완성. 근거: docs/research/tactics-modern-football.md §3
 const EDGES: Partial<Record<FormationId, Partial<Record<FormationId, number>>>> = {
@@ -178,6 +178,93 @@ const ATTACK_PATTERN_FX: Record<AttackPattern, { chanceRate: number; chanceQuali
   'longshot': { chanceRate: 1.14, chanceQuality: 0.80, cornerBias: 1.15, onTargetBias: 1.0 },
 }
 export function attackPatternEffects(p: AttackPattern = 'balanced') { return ATTACK_PATTERN_FX[p] }
+
+// ── 주발(foot) — 인버티드 윙어 ───────────────────────────────────
+// `Player.foot`은 선언·픽스처·PlayerCard 표시에만 있고 엔진 로직이 0건이었다(감사 §12).
+// 개인 역할(playerRoles)은 아직 없으므로 **역할 없이 성립하는 사실 하나만** 배선한다:
+//   왼발잡이가 오른쪽 윙에(또는 오른발잡이가 왼쪽 윙에) 서면 = 역측(인버티드).
+//   안쪽으로 접어 들어가는 컷인 각이 열려 슛의 질이 오르는 대신, 라인을 타고 넘기는
+//   크로스가 죽어 코너 획득이 줄어든다. 정측(내추럴)은 정확히 그 반대다.
+// cross 패턴에서는 **찬스 퀄의 부호만** 뒤집힌다 — 크로스로 득점하려는 팀에겐 정측 윙어가 옳다.
+// 코너 획득은 물리적 사실(라인 돌파 → 수비 굴절)이라 패턴과 무관하게 정측이 유리하다.
+//
+// 효과 크기 근거: 선수 개인 스탯이 주도권을 유지해야 한다는 원칙(§3.8 "역할 배수는 작게").
+// 윙어가 슈터로 뽑히는 비율이 4-3-3에서 약 48%이므로, 퀄 ±5%는 팀 xG 기준 ±2.4%다.
+// 실측(11개 상대 × n=400): 역측 배치 vs 정측 배치 승률 차 아래 보고 참조.
+const FOOT_QUALITY_K = 0.05
+const FOOT_CORNER_K = 0.10
+const FOOT_NEUTRAL = { chanceQuality: 1.0, cornerBias: 1.0 }
+
+/** 윙어 주발 적합도. 윙(LW/RW)이 아니거나 양발('B')·미상(null)이면 정확히 1.0(회귀 불변). */
+export function footEffects(
+  slot: Position, foot: Foot | null, pattern: AttackPattern = 'balanced',
+): { chanceQuality: number; cornerBias: number } {
+  if (slot !== 'LW' && slot !== 'RW') return FOOT_NEUTRAL
+  if (foot === null || foot === 'B') return FOOT_NEUTRAL
+  const inverted = (slot === 'RW' && foot === 'L') || (slot === 'LW' && foot === 'R')
+  // s = +1 역측(컷인), −1 정측(크로스)
+  const s = inverted ? 1 : -1
+  // cross 패턴은 컷인 이점을 무효화하고 정측을 보상한다.
+  const k = pattern === 'cross' ? -1 : 1
+  return { chanceQuality: 1 + FOOT_QUALITY_K * s * k, cornerBias: 1 - FOOT_CORNER_K * s }
+}
+
+// ── 세트피스(코너) 지시 ─────────────────────────────────────────
+// 전 축의 표준값이 정확히 1.0이라, TacticState.setPiece 미지정 시 세트피스 계산은
+// 순수하게 선수 능력치(setPiece·physical·shooting·GK aerial)만으로 결정된다.
+export const SET_PIECE_ROUTES: readonly SetPieceRoute[] = ['near', 'far', 'short']
+export const BOX_LOADS: readonly BoxLoad[] = ['light', 'normal', 'heavy']
+
+// 루트 배수 근거: game-design-plan §5 표 그대로.
+//  니어 = 골문 앞 혼전(전환↑) + 클리어가 짧게 떨어져 역습 노출↑
+//  숏   = 점유를 유지하는 안전한 선택(전환↓·역습 노출↓)
+const ROUTE_FX: Record<SetPieceRoute, { conversion: number; counterRisk: number }> = {
+  near:  { conversion: 1.15, counterRisk: 1.10 },
+  far:   { conversion: 1.00, counterRisk: 1.00 },
+  short: { conversion: 0.75, counterRisk: 0.80 },
+}
+// 박스 인원: heavy는 GK 파워플레이의 축소판(이미 검증된 트레이드오프 패턴 재사용).
+const BOX_FX: Record<BoxLoad, { conversion: number; counterRisk: number }> = {
+  light:  { conversion: 0.85, counterRisk: 0.80 },
+  normal: { conversion: 1.00, counterRisk: 1.00 },
+  heavy:  { conversion: 1.20, counterRisk: 1.25 },
+}
+
+// 태세 → 박스 투입 성향(-1 최소 … +1 최대). boxLoad 지시가 없을 때 여기서 파생한다.
+// ★ 이 커플링이 필요한 이유(실측): 세트피스 골은 선수 능력치만으로 결정되면 **감독의 플랜과
+//   무관한 득점**이 되어 추천 플랜의 승률 이득(runAbBatch Δ)을 통째로 희석한다.
+//   실측에서 kor의 중립 지시 승률이 vs mex 42.7% → 45.7%로 올라 Δ가 3.7pp → 2.1pp로 눌렸다.
+//   실제 축구에서도 코너에 몇 명을 올려보낼지는 태세의 문제다 — 그 사실을 배선해 되돌린다.
+const MENTALITY_BOX: Record<Mentality, number> = {
+  'very-defensive': -1, 'defensive': -0.5, 'balanced': 0, 'attacking': 0.5, 'very-attacking': 1,
+}
+// 폭 근거: heavy/light 지시(±0.20 전환 / ±0.25 역습)와 같은 스케일로 맞춘다 —
+// 태세로 파생된 투입 성향이 명시 지시보다 세면 UI가 붙었을 때 지시가 무의미해진다.
+const K_BOX_CONV = 0.22, K_BOX_RISK = 0.25
+
+/** 공격 측 세트피스의 전환·역습노출 배수.
+ *  boxLoad를 명시하면 그 값이 태세 파생을 덮어쓴다(감독의 직접 지시가 우선).
+ *  둘 다 기본(balanced 태세·지시 없음)이면 전 축 정확히 1.0. */
+export function setPieceEffects(t: Pick<TacticState, 'setPiece' | 'mentality' | 'groupIntensity'>): { conversion: number; counterRisk: number } {
+  const r = ROUTE_FX[t.setPiece?.route ?? 'far']
+  const load = t.setPiece?.boxLoad
+  let b: { conversion: number; counterRisk: number }
+  if (load) b = BOX_FX[load]
+  else {
+    // 공격 라인 적극성은 태세의 절반 무게. 두 축이 같은 방향이면 heavy 지시와 같은 크기에 닿는다.
+    const s = clamp(MENTALITY_BOX[t.mentality ?? 'balanced'] + (t.groupIntensity?.attack ?? 0) * 0.5, -1, 1)
+    b = { conversion: 1 + K_BOX_CONV * s, counterRisk: 1 + K_BOX_RISK * s }
+  }
+  return { conversion: r.conversion * b.conversion, counterRisk: r.counterRisk * b.counterRisk }
+}
+
+/** 수비 측 마킹의 전환 억제 배수. 상대 박스 공중 위협이 높을수록 맨마킹이 유리하고,
+ *  낮으면 존이 유리하다 — 맨마킹은 볼을 보지 못해 세컨볼을 내주기 때문이다.
+ *  `threatNorm`은 0(무위협)~1(최대 위협). 존은 항상 1.0이라 미지정 시 회귀 불변. */
+export function markingFactor(marking: SetPiecePlan['marking'], threatNorm: number): number {
+  if (marking !== 'man') return 1.0
+  return 1 - 0.08 * (2 * clamp(threatNorm, 0, 1) - 1)
+}
 
 // ── 그룹(라인) 적극성 ───────────────────────────────────────────
 // 각 라인 -1|0|1. **무게중심 이동**이지 공짜 부스트가 아니다.

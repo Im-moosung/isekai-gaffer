@@ -141,7 +141,15 @@ describe('recommendPlan', () => {
 // 토너먼트 구간(잉글랜드·아르헨티나·모로코·프랑스)이 사실상 무효(+1.0~+3.3pp)인 채로
 // 회귀를 통과했다. 그 구멍을 막는 게 이 블록의 존재 이유다.
 describe('recommendPlan — 기본 지시(50/50/50) 대비 승률 개선 실측', () => {
-  const N = 400
+  // ⚠ N=900의 근거(2026-07-30, 세트피스·주발·퇴장 배선 중 실측):
+  // 기존 주석은 "n=400은 결정론(고정 시드)이라 값이 흔들리지 않는다"고 했으나, 고정 시드는
+  // **재현성**을 보장할 뿐 **정밀도**를 보장하지 않는다. 같은 플랜·같은 엔진으로 시드 대역만
+  // 바꿔 재면(seedBase 2000/7000/12000/17000, n=600) vs mex Δ가 2.7~6.2pp로 흩어진다.
+  // 즉 n=400 한 셀은 표준오차 ±3pp대의 단일 표본이고, 엔진 상수를 하나만 건드려도
+  // 어느 상대가 임계 3pp 아래로 떨어지는지가 매번 바뀐다(실측: mex 5.4→3.2, arg 4.7→2.5).
+  // n=1200에서 11팀 전부 Δ ≥ 4.7pp로 안정되므로, 게이트가 노이즈가 아니라 밸런스를 재도록
+  // 표본을 900으로 올린다. 임계값(3/6/8pp)은 그대로 둔다.
+  const N = 900
   const OPPS = TEAM_IDS.filter(t => t !== 'kor')
   // 캠페인 32강~결승에서 만나는 상대. 여기가 본 게임이라 더 높은 기준을 요구한다.
   const KNOCKOUT: TeamId[] = ['eng', 'arg', 'mar', 'fra', 'esp']
@@ -155,16 +163,16 @@ describe('recommendPlan — 기본 지시(50/50/50) 대비 승률 개선 실측'
 
   it.each(OPPS)('vs %s — Δ ≥ +3pp', opp => {
     expect(delta(opp)).toBeGreaterThanOrEqual(3)
-  }, 120_000)
+  }, 300_000)
 
   it('토너먼트 상대 5팀 평균 Δ ≥ +6pp — 캠페인 본 구간에서 레버가 실제로 크다', () => {
     const avg = KNOCKOUT.reduce((s, o) => s + delta(o), 0) / KNOCKOUT.length
     expect(avg).toBeGreaterThanOrEqual(6)
-  }, 120_000)
+  }, 300_000)
 
   it('최소 한 상대에선 Δ ≥ +8pp — 레버가 실제로 크다', () => {
     expect(Math.max(...OPPS.map(delta))).toBeGreaterThanOrEqual(8)
-  }, 120_000)
+  }, 300_000)
 })
 
 describe('planRisks', () => {

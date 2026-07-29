@@ -40,6 +40,17 @@ export interface GroupIntensity { attack: -1 | 0 | 1; midfield: -1 | 0 | 1; defe
 /** 페이즈별 포메이션(공격 시/수비 시 존 가중 이동). 미지정이 중립(기존 동작). */
 export interface PhaseFormations { attack?: FormationId; defense?: FormationId }
 
+/** 코너 루트. 니어=고위험 고수익, 파=표준, 숏=안전. 미지정 시 'far'(표준, 전 배수 1.0). */
+export type SetPieceRoute = 'near' | 'far' | 'short'
+/** 박스 투입 인원. 미지정 시 'normal'(전 배수 1.0). */
+export type BoxLoad = 'light' | 'normal' | 'heavy'
+/** 세트피스 수비 마킹. 미지정 시 'zonal'(배수 1.0). */
+export type SetPieceMarking = 'zonal' | 'man'
+/** 세트피스 지시. **전 필드가 선택적이며 미지정이면 표준값**이라 UI가 붙기 전까지
+ *  엔진은 기본 루트(far)·기본 인원(normal)·존 마킹으로 동작한다.
+ *  UI(전술 센터 세트피스 탭)가 붙을 자리를 여기 열어둔다. */
+export interface SetPiecePlan { route?: SetPieceRoute; boxLoad?: BoxLoad; marking?: SetPieceMarking }
+
 /** 전술 상태. 확장 필드(mentality/phaseFormations/groupIntensity/attackPattern/gkPowerplay)는
  *  모두 선택적이며, 미지정(=기본값)이면 엔진 동작이 기존과 완전히 동일하다(시드 회귀 불변). */
 export interface TacticState {
@@ -54,6 +65,8 @@ export interface TacticState {
   attackPattern?: AttackPattern
   /** 미지정/false면 비활성. 85'+ & 지는 중에만 실효(엔진에서 판정). */
   gkPowerplay?: boolean
+  /** 미지정 시 { route:'far', boxLoad:'normal', marking:'zonal' }로 취급(전 배수 1.0). */
+  setPiece?: SetPiecePlan
 }
 /** 감독의 개입 1건 기록 — AI 기자회견/헤드라인의 근거가 된다. summary는 한국어 서술. */
 export interface DecisionEntry { minute: number; kind: 'instructions'|'sub'|'teamtalk'|'shootout-setup'; summary: string; detail?: Record<string, unknown> }
