@@ -13,6 +13,13 @@
   color: var(--bc-text);
   font-family: var(--bc-font);
 }
+/* 대형 화면에서 사다리가 가로로 늘어지지 않게 본문 폭을 묶는다. */
+.hub-head,
+.hub-body {
+  width: 100%;
+  max-width: 1120px;
+  margin-inline: auto;
+}
 .hub-head {
   display: flex;
   align-items: baseline;
@@ -24,96 +31,240 @@
   font-weight: 800;
   letter-spacing: -0.01em;
 }
+.hub-head__meta {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bc-text-dim);
+  font-variant-numeric: tabular-nums;
+}
 
-/* 진행 바 */
-.hub-progress {
+/* 본문: 여정 사다리 + 다음 상대 */
+.hub-body {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 6px;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+.hub-section__title {
+  margin: 0 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--bc-line);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--bc-text-dim);
+}
+.hub-next { min-width: 0; }
+
+/* ── 여정 사다리 ───────────────────────────────────────── */
+/* 컬러 띠·회색 카드 없이 헤어라인 레일과 타이포 위계만으로 구획한다. */
+.jl { min-width: 0; }
+.jl__head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--bc-line);
+}
+.jl__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--bc-text-dim);
+}
+.jl__sub {
+  margin: 0;
+  font-size: 12px;
+  color: var(--bc-text-dim);
+  opacity: 0.75;
+}
+.jl__list {
   list-style: none;
   margin: 0;
   padding: 0;
 }
-.hub-step {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 10px 8px;
-  border: 1px solid var(--bc-line);
-  border-radius: 8px;
-  background: var(--bc-panel);
+
+.jl-row,
+.jl-gate {
+  display: grid;
+  grid-template-columns: 14px minmax(66px, max-content) minmax(0, 1fr) max-content;
+  align-items: baseline;
+  column-gap: 12px;
+  padding: 9px 0;
   min-width: 0;
 }
-.hub-step__label {
+.jl--compact .jl-row,
+.jl--compact .jl-gate { padding: 7px 0; }
+
+/* 레일: 세로 헤어라인 + 노드 도트 */
+.jl-row__rail {
+  grid-row: 1 / -1;
+  position: relative;
+  align-self: stretch;
+  width: 14px;
+}
+.jl-row__rail::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: -9px;
+  bottom: -9px;
+  width: 1px;
+  background: var(--bc-line);
+}
+.jl-row__rail::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid var(--bc-line);
+  background: var(--bc-bg);
+  box-sizing: border-box;
+}
+.jl__list > li:first-child .jl-row__rail::before { top: 8px; }
+.jl__list > li:last-child .jl-row__rail::before { bottom: calc(100% - 9px); }
+
+.jl-row__stage {
   font-size: 12px;
   font-weight: 700;
   color: var(--bc-text-dim);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
-.hub-step__result {
-  font-size: 13px;
+.jl-row__opp {
+  font-size: 15px;
   font-weight: 700;
   color: var(--bc-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
-.hub-step--current {
-  border-color: var(--bc-accent);
-  background: var(--bc-panel-2);
+.jl-row__opp--tbd {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--bc-text-dim);
+  opacity: 0.7;
 }
-.hub-step--current .hub-step__label { color: var(--bc-accent); }
-.hub-step--done .hub-step__label { color: var(--bc-text); }
-.hub-step--w .hub-step__result { color: var(--bc-accent); }
-.hub-step--d .hub-step__result { color: var(--bc-text-dim); }
-.hub-step--l .hub-step__result { color: var(--bc-danger); }
+.jl-row__result {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  white-space: nowrap;
+}
+.jl-row__score {
+  font-size: 15px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.jl-row__mark {
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--bc-text-dim);
+}
+.jl-row__pending {
+  font-size: 12px;
+  color: var(--bc-text-dim);
+  opacity: 0.55;
+}
+.jl-row__now {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--bc-accent);
+}
+/* 역사 기준선 캡션 — 2행 3~4열 */
+.jl-row__hist {
+  grid-column: 3 / -1;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--bc-text-dim);
+  opacity: 0.8;
+}
+.jl-row__verdict { font-weight: 800; }
+.jl-row__verdict--over { color: var(--bc-accent); opacity: 1; }
+.jl-row__verdict--under { color: var(--bc-danger); }
+.jl-row__verdict--same { color: var(--bc-text-dim); }
 
-/* 본문: 지난 결과 + 다음 상대 */
-.hub-body {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(280px, 1.4fr);
-  gap: 16px;
-  align-items: start;
+/* 상태 */
+.jl-row--done .jl-row__rail::after { background: var(--bc-text-dim); border-color: var(--bc-text-dim); }
+.jl-row--w .jl-row__score { color: var(--bc-accent); }
+.jl-row--w .jl-row__rail::after { background: var(--bc-accent); border-color: var(--bc-accent); }
+.jl-row--l .jl-row__score { color: var(--bc-danger); }
+.jl-row--l .jl-row__rail::after { background: var(--bc-danger); border-color: var(--bc-danger); }
+
+.jl-row--current .jl-row__stage { color: var(--bc-accent); }
+.jl-row--current .jl-row__opp { font-size: 17px; font-weight: 800; }
+.jl-row--current .jl-row__rail::after {
+  border-color: var(--bc-accent);
+  box-shadow: 0 0 0 3px rgba(200, 245, 66, 0.16);
 }
-.hub-section__title {
-  margin: 0 0 10px;
-  font-size: 14px;
+
+/* 탈락 이후: 사다리는 이어지되 점선으로 비워 둔다 */
+.jl-row--cut .jl-row__rail::before {
+  background: none;
+  border-left: 1px dashed var(--bc-line);
+  opacity: 0.6;
+}
+.jl-row--cut .jl-row__rail::after { opacity: 0.35; }
+.jl-row--cut .jl-row__stage,
+.jl-row--cut .jl-row__opp { color: var(--bc-text-dim); opacity: 0.45; }
+.jl-row--cut .jl-row__hist { opacity: 0.4; }
+
+.jl-row--champion .jl-row__stage { color: var(--bc-accent); }
+
+/* 진출 관문 */
+.jl-gate {
+  margin: 2px 0;
+  padding: 8px 0;
+  border-top: 1px dashed var(--bc-line);
+  border-bottom: 1px dashed var(--bc-line);
+}
+.jl-gate .jl-row__rail::after {
+  width: 5px;
+  height: 5px;
+  left: 3px;
+  top: 6px;
+  background: var(--bc-bg);
+}
+.jl-gate__label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--bc-text-dim);
+  white-space: nowrap;
+}
+.jl-gate__text {
+  grid-column: 3 / -1;
+  font-size: 12px;
   font-weight: 700;
   color: var(--bc-text-dim);
 }
-.hub-records,
-.hub-next {
-  background: var(--bc-panel);
-  border: 1px solid var(--bc-line);
-  border-radius: 10px;
-  padding: 14px;
-}
-.hub-records__empty {
-  margin: 0;
+.jl-gate--pass .jl-gate__text { color: var(--bc-accent); }
+.jl-gate--fail .jl-gate__text { color: var(--bc-danger); }
+
+.jl__cutnote {
+  margin: 12px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--bc-line);
+  font-size: 12px;
+  line-height: 1.6;
   color: var(--bc-text-dim);
-  font-size: 13px;
 }
-.hub-records__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.jl__cutnote--champion { color: var(--bc-accent); }
+
+/* 좁은 화면: 1열로 접고 사다리를 먼저 보여준다 */
+@media (max-width: 860px) {
+  .hub-body { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .jl-row,
+  .jl-gate { column-gap: 8px; grid-template-columns: 14px minmax(58px, max-content) minmax(0, 1fr) max-content; }
+  .jl-row__opp { font-size: 14px; }
+  .jl-row--current .jl-row__opp { font-size: 15px; }
 }
-.hub-record {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: var(--bc-panel-2);
-  font-size: 14px;
-}
-.hub-record__opp { font-weight: 600; }
-.hub-record__result { font-weight: 700; }
-.hub-record--w .hub-record__result { color: var(--bc-accent); }
-.hub-record--d .hub-record__result { color: var(--bc-text-dim); }
-.hub-record--l .hub-record__result { color: var(--bc-danger); }
 
 /* 다음 상대 카드 */
 .hub-oppcard__head {
@@ -155,7 +306,7 @@
 }
 
 .hub-foot {
-  margin-top: auto;
+  margin-top: 22px;
   display: flex;
   justify-content: flex-end;
 }
@@ -247,6 +398,11 @@
   margin: 0;
   font-size: 18px;
   font-weight: 800;
+}
+/* 엔딩 안의 최종 여정 — 카드가 가운데 정렬이라 좌측 정렬로 되돌린다. */
+.end-journey {
+  margin: 24px 0 0;
+  text-align: left;
 }
 .end-restart {
   margin-top: 24px;

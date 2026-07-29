@@ -6,6 +6,7 @@ import { computeScore, submitScore, topScores } from '../../online/leaderboard'
 import type { LeaderboardMode, LeaderboardRow, ScoreBreakdown } from '../../online/leaderboard'
 import { sanitizeNickname } from '../../online/nickname'
 import { buildEpilogue } from '../../game/pressconf'
+import { JourneyLadder } from './JourneyLadder'
 import './campaign.css'
 
 const STAGE_LABEL: Record<CampaignStage, string> = {
@@ -90,6 +91,7 @@ function fmtPts(n: number): string {
 export function EndingScreen({ onRestart }: { onRestart(): void }) {
   const ending = useCampaignStore(s => s.ending)
   const records = useCampaignStore(s => s.records)
+  const groupRank = useCampaignStore(s => s.groupRank)
 
   const [nickname, setNickname] = useState('')
   const [busy, setBusy] = useState(false)
@@ -145,6 +147,17 @@ export function EndingScreen({ onRestart }: { onRestart(): void }) {
             <dd>{t.gf}득점 {t.ga}실점 ({diffLabel})</dd>
           </div>
         </dl>
+
+        {/* 최종 여정 — 어디서 멈췄는지가 남는다. 허브와 같은 컴포넌트라 표기가 어긋나지 않는다. */}
+        <div className="end-journey">
+          <JourneyLadder
+            stage="ended"
+            records={records}
+            groupRank={groupRank}
+            ending={ending}
+            compact
+          />
+        </div>
 
         <table className="end-score" aria-label="점수 상세">
           <tbody>

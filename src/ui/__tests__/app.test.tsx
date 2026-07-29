@@ -75,7 +75,7 @@ describe('App 랜딩 스모크', () => {
     const { getByRole, container } = render(<App />)
     fireEvent.click(getByRole('button', { name: '캠페인 시작' }))
 
-    expect(container.querySelectorAll('.hub-step')).toHaveLength(8)
+    expect(container.querySelectorAll('.jl-row')).toHaveLength(8)
     expect(container.querySelector('.hub-oppcard__name')!.textContent).toBe('체코')
     expect(useCampaignStore.getState().stage).toBe('group1')
   })
