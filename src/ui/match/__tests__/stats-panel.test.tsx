@@ -2,7 +2,7 @@
 // F4: 워룸·작전판 공용 팀 경기 스탯 패널.
 // 고정하는 계약은 두 가지 정직성이다:
 //  (1) 진행 전에는 0을 늘어놓지 않고 "경기 전"이라고 말한다
-//  (2) 엔진이 추적하지 않는 패스 성공률을 경기 기록인 척하지 않는다(각주로 출처를 밝힌다)
+//  (2) 패스 성공률은 엔진이 실제로 집계한 경기 기록이다 — 시즌 평균 폴백도 각주도 없다
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { render, cleanup, act } from '@testing-library/react'
 import { useMatchStore } from '../../../game/matchStore'
@@ -38,22 +38,24 @@ describe('MatchStatsPanel', () => {
     expect(container.querySelector('.mst__empty')).toBeNull()
     expect(container.querySelector('.mst__minute')!.textContent).toBe("10'")
     const labels = [...container.querySelectorAll('.mst__label')].map(e => e.textContent)
-    expect(labels).toEqual(['점유율', '패스 성공률*', '슛', '유효슛', 'xG', '코너', '파울'])
+    expect(labels).toEqual(['점유율', '패스 성공률', '슛', '유효슛', 'xG', '코너', '파울'])
   })
 
-  it('패스 성공률이 0이면 팀 시즌 평균으로 채우고 각주로 출처를 밝힌다', () => {
-    // 엔진은 경기 중 패스를 추적하지 않으므로 시뮬 경기에서 passAccuracy는 0으로 남는다.
+  it('패스 성공률은 엔진 집계값을 그대로 쓴다 — 시즌 평균 폴백도 각주도 없다', () => {
     store().startMatch(home, away, 20260726)
     act(() => { store().kickoff() })
-    act(() => { store().advanceMinute() })
-    expect(useMatchStore.getState().engine!.stats[0].passAccuracy).toBe(0)
+    for (let i = 0; i < 30; i++) act(() => { store().advanceMinute() })
+    const engine = useMatchStore.getState().engine!
+    // 엔진이 실제로 패스를 굴렸다: 시도 수가 쌓이고 성공률이 0이 아니다.
+    expect(engine.stats[0].passesAttempted).toBeGreaterThan(0)
+    expect(engine.stats[0].passAccuracy).toBeGreaterThan(0)
     const { container } = render(<MatchStatsPanel />)
     const pass = [...container.querySelectorAll('.mst__row')].find(r => r.textContent!.includes('패스 성공률'))!
     const vals = [...pass.querySelectorAll('.mst__val')].map(e => e.textContent)
     expect(vals).toEqual([
-      `${Math.round(home.statBaseline.passAccuracy)}%`,
-      `${Math.round(away.statBaseline.passAccuracy)}%`,
+      `${Math.round(engine.stats[0].passAccuracy)}%`,
+      `${Math.round(engine.stats[1].passAccuracy)}%`,
     ])
-    expect(container.querySelector('.mst__note')!.textContent).toContain('팀 시즌 평균')
+    expect(container.querySelector('.mst__note')).toBeNull()
   })
 })

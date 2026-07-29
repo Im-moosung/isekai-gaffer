@@ -72,7 +72,19 @@ export interface TacticState {
 export interface DecisionEntry { minute: number; kind: 'instructions'|'sub'|'teamtalk'|'shootout-setup'; summary: string; detail?: Record<string, unknown> }
 export type MatchEventType = 'kickoff'|'chance'|'shot'|'goal'|'save'|'miss'|'foul'|'yellow'|'red'|'corner'|'sub'|'halftime'|'fulltime'
 export interface MatchEvent { minute: number; type: MatchEventType; teamId: string; playerId?: string; assistId?: string; detail?: string; xg?: number }
-export interface SideStats { possession: number; passAccuracy: number; shots: number; shotsOnTarget: number; fouls: number; corners: number; xg: number }
+export interface SideStats {
+  possession: number
+  /** 패스 성공률 %(0~100). 엔진이 분마다 간이 패스 시행을 굴려 누적한다. */
+  passAccuracy: number
+  /** 누적 패스 시도 수 — passAccuracy의 분모. 표시용 원자료. */
+  passesAttempted: number
+  /** 누적 패스 성공 수 — passAccuracy의 분자. */
+  passesCompleted: number
+  shots: number; shotsOnTarget: number; fouls: number; corners: number
+  /** 기대 득점(xG). **모델 자신의 P(골|슛)** 을 누적한 값이라 정의상 경기당 xG ≈ 기대 득점이다.
+   *  찬스 '퀄리티'(득점 확률의 내부 입력)와는 스케일이 다르다 — resolveChance 주석 참조. */
+  xg: number
+}
 export interface SideState {
   team: Team; tactics: TacticState
   staminaByPlayer: Record<string, number>   // 0~100

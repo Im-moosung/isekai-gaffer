@@ -56,7 +56,9 @@ export function createMatch(home: Team, away: Team, opts: { seed: number; homeTa
   }
 }
 
-function emptyStats() { return { possession: 50, passAccuracy: 0, shots: 0, shotsOnTarget: 0, fouls: 0, corners: 0, xg: 0 } }
+function emptyStats(): SideStats {
+  return { possession: 50, passAccuracy: 0, passesAttempted: 0, passesCompleted: 0, shots: 0, shotsOnTarget: 0, fouls: 0, corners: 0, xg: 0 }
+}
 
 function defaultTactics(team: Team): TacticState {
   // pickBestXI가 team.profile.preferredFormations[0]을 FormationId로 매핑해 XI·formation을 정한다
@@ -118,9 +120,13 @@ function applyFirstHalfScript(st: MatchState) {
   const half = (v: number) => Math.round(v * 0.5)
   const bl = [st.home.team.statBaseline, st.away.team.statBaseline]
   const possTotal = bl[0].possession + bl[1].possession
+  // 전반 45분치 패스 시도 근사 — 분당 (점유 8 + 비점유 3)/2를 45분 누적한 값.
+  const scriptAttempts = Math.round(45 * (PASS_ATTEMPTS_ON_BALL + PASS_ATTEMPTS_OFF_BALL) / 2)
   st.stats = ([0, 1] as const).map(i => ({
     possession: round1(possTotal > 0 ? (bl[i].possession / possTotal) * 100 : 50),
     passAccuracy: bl[i].passAccuracy,
+    passesAttempted: scriptAttempts,
+    passesCompleted: Math.round(scriptAttempts * bl[i].passAccuracy / 100),
     shots: half(bl[i].shotsPerGame),
     shotsOnTarget: half(bl[i].shotsOnTargetPerGame),
     fouls: half(bl[i].foulsPerGame),
@@ -299,6 +305,8 @@ function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
   st.stats[atkIdx].possession = round1((st.stats[atkIdx].possession * (st.minute - 1) + 100) / st.minute)
   st.stats[defIdx].possession = round1(100 - st.stats[atkIdx].possession)
 
+  trackPasses(st, sides, atkIdx)
+
   // 참여 빈도 보정: 찬스·파울 롤은 매 분 한 팀만(공격/수비 각 1팀) 굴린다. statBaseline은
   // 팀당 90분 기준이므로 90으로 나누면 롤이 실제 발생하는 '참여 분'(≈45분)의 절반만 반영돼
   // 실측의 ~50%로 과소집계된다. 참여 분(=90×참여빈도)으로 정규화해야 베이스라인에 수렴한다.
@@ -348,6 +356,70 @@ function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
       const p = side.team.squad.find(q => q.id === playerId)!
       side.staminaByPlayer[playerId] = Math.max(0, side.staminaByPlayer[playerId] - drain * (100 / Math.max(40, p.stamina)))
     }
+  }
+}
+
+// ── 패스 추적 ───────────────────────────────────────────────────
+// `SideStats.passAccuracy`는 폐기된 전반 스크립트에서만 채워져 실전에선 항상 0이었고,
+// UI가 팀 시즌 평균으로 대신 채우며 각주로 사과하고 있었다. 엔진이 직접 센다.
+//
+// ★ 이 계층은 경기 결과에 **아무 것도 되먹이지 않는다**(순수 계측). 게다가 아래 RNG는
+//   본 스트림과 분리된 별도 시드라 찬스·파울·득점 난수 순서가 한 톨도 바뀌지 않는다.
+//   → 밸런스 게이트 24개와 캘리브레이션 계약은 정의상 불변이다.
+//   (되먹임을 넣으려면 지시 축 비단조성·나쁜 판단 페널티 게이트를 전부 다시 뚫어야 한다.
+//    패스 성공률은 지금 UI 표시 지표일 뿐이므로 그 비용을 지불할 이유가 없다.)
+
+/** 볼을 가진 쪽의 분당 패스 시도. */
+const PASS_ATTEMPTS_ON_BALL = 8
+/** 볼이 없는 쪽의 분당 패스 시도(끊어내고 나가는 짧은 전개). */
+const PASS_ATTEMPTS_OFF_BALL = 3
+// 합계 근거: 90분 동안 팀당 45×8 + 45×3 = 495회, 양 팀 990회.
+// 실제 월드컵 경기 총 패스가 800~1,200회(팀당 400~600)라 그 한가운데다.
+// 분배가 점유에 따라 갈리므로 점유율 60%인 팀은 자연히 팀당 ~570회로 올라간다.
+
+/** 소금값 — 본 스트림 시드(seed*10007 + minute)와 절대 충돌하지 않도록 큰 소수를 더한다.
+ *  10007 간격 안에서 minute(1~90)만 쓰이므로 이 오프셋은 어떤 (seed, minute) 조합에서도
+ *  다른 분의 본 스트림 시드와 겹치지 않는다. */
+const PASS_RNG_SALT = 5279
+
+/** 템포를 팀 기본보다 100점 올렸을 때의 패스 성공률 상대 감소폭.
+ *  실제로 조정 가능한 폭은 ±50점이라 최대 ±9%p 상당(85% → 77%)이다.
+ *  빠른 템포는 더 어려운 전진 패스를 고른다는 뜻이고, 실측에서도 다이렉트 플레이 팀의
+ *  패스 성공률이 점유 팀보다 8~12%p 낮다(예: 2022 잉글랜드 87% vs 모로코 76%). */
+const PASS_TEMPO_COST = 0.18
+/** 상대가 팀 기본보다 100점 높게 압박했을 때의 상대 감소폭. 압박이 템포보다 조금 더 아프다 —
+ *  템포는 내 선택이라 선수들이 준비돼 있지만 압박은 상대가 강요하는 것이다. */
+const PASS_PRESS_COST = 0.22
+
+/** 이 분의 패스 성공 확률.
+ *  ★ 기준점은 **팀 자신의 프로필 스타일**이다. statBaseline.passAccuracy는 그 팀이
+ *    자기 스타일(profile.style.tempo/pressing)로 뛰었을 때의 실측치이므로, 지시가
+ *    기본값이면 편차가 정확히 0이 되어 베이스라인에 그대로 수렴한다(캘리브레이션 계약).
+ *    전역 중립 50을 기준으로 삼으면 스페인처럼 저템포 팀이 기본 지시만으로도
+ *    베이스라인을 넘어서 버려 계약이 깨진다.
+ *  ★ 체력 항은 일부러 넣지 않았다. 실측 패스 성공률은 이미 90분 내내의 피로를 포함한
+ *    경기 평균이라, 체력 감쇠를 또 곱하면 모든 경기가 베이스라인 아래로 치우친다. */
+function passSuccessP(side: SideState, opp: SideState): number {
+  const base = side.team.statBaseline.passAccuracy / 100
+  const dTempo = (side.tactics.instructions.tempo - side.team.profile.style.tempo) / 100
+  const dPress = (opp.tactics.instructions.pressing - opp.team.profile.style.pressing) / 100
+  return clamp(base * (1 - PASS_TEMPO_COST * dTempo - PASS_PRESS_COST * dPress), 0.35, 0.98)
+}
+
+/** 이 분의 패스 시행을 굴려 누적한다. 베르누이 시행을 실제로 굴리는 이유:
+ *  기댓값만 더하면 경기 간 편차가 0이 되어 모든 경기가 소수점까지 같은 값이 된다.
+ *  시행 수(팀당 ~495)의 이항 분산이 곧 실제 경기별 산포(±1.6%p)와 같은 크기다. */
+function trackPasses(st: MatchState, sides: readonly [SideState, SideState], atkIdx: 0 | 1) {
+  const rng = createRng(st.seed * 10007 + st.minute + PASS_RNG_SALT)
+  for (const i of [0, 1] as const) {
+    const attempts = i === atkIdx ? PASS_ATTEMPTS_ON_BALL : PASS_ATTEMPTS_OFF_BALL
+    const p = passSuccessP(sides[i], sides[(1 - i) as 0 | 1])
+    let ok = 0
+    for (let k = 0; k < attempts; k++) if (rng.chance(p)) ok++
+    const s = st.stats[i]
+    s.passesAttempted += attempts
+    s.passesCompleted += ok
+    s.passAccuracy = round1((s.passesCompleted / s.passesAttempted) * 100)
   }
 }
 
@@ -408,6 +480,40 @@ function gkPowerplayActive(st: MatchState, idx: 0 | 1): boolean {
 // 동급(비율 1)이면 정확히 1.0이라 동급 캘리브레이션 계약에 무영향.
 const XG_STRENGTH = 0.75
 
+// ── 표시용 xG ───────────────────────────────────────────────────
+// 문제: 예전에는 `chanceQuality`(득점 확률 사슬의 내부 입력)를 그대로 stats.xg에 누적했다.
+// 그 값은 엘리트 슈터 기준 0.30이라 **슛당 xG가 0.23~0.25**로 실제 축구(0.10~0.12)의 2배였고,
+// 한국이 스페인 상대로 경기당 3.2 xG를 만드는 표가 나왔다. 축구를 아는 사람에겐 바로 보인다.
+//
+// 해법: 상수배로 눌러 맞추지 않는다. **xG의 정의 그대로**, 우리 모델 자신이 계산한
+//   P(골 | 이 슛) = P(유효슛) × P(골 | 유효슛)
+// 를 표시값으로 쓴다. 득점 확률 사슬(chanceQuality → goalP)은 한 줄도 바꾸지 않으므로
+// 밸런스 게이트 24개와 캘리브레이션 계약은 정의상 불변이고, 표시값만 갈아끼운다.
+//
+// 왜 단순 상수배가 답이 아닌가 — 세 가지 이유:
+//  (1) 상수배는 **경기당 xG와 득점의 관계를 보장하지 못한다.** 슛당 상수 k를 곱하면
+//      경기당 xG = k × 슛수인데, 득점은 슛수 × 유효슛률 × 전환율이라 유효슛률·GK가
+//      바뀌는 매치업마다 xG−득점 괴리가 제멋대로 벌어진다. 정의대로 P(골|슛)을 쓰면
+//      경기당 xG는 **기대 득점 그 자체**라 실제 득점과 표본오차 안에서 일치한다.
+//  (2) 상수배는 GK를 xG에 반영하지 못한다. 실제 xG는 슛 시점 정보만 쓰므로 GK 의존이
+//      약하지만, 우리 모델엔 슛 위치가 없어 '기회의 질'을 대신 실어줄 축이 GK·마무리뿐이다.
+//  (3) 상수배는 분포를 그대로 눌러 **큰 찬스가 사라진다.** P(골|슛)은 유효슛률(슈터 능력에
+//      비례)을 한 번 더 곱하므로 슈터 품질에 대해 2차식이 되어 꼬리가 살아난다
+//      (하위 슈터 0.03 ↔ 엘리트 0.25).
+//
+// ⚠ 한계(정직하게 남긴다): 실제 xG의 분산은 **슛 위치**가 8할을 지배한다(페널티 0.76,
+//   박스 밖 중거리 0.03). 우리는 위치 모델이 없다. 여기서 위치를 흉내 내려고 난수를
+//   한 겹 더 얹는 선택지도 있었지만 채택하지 않았다:
+//     - 득점 판정과 독립인 난수를 xG에만 곱하면 "xG 0.5짜리 결정적 찬스"라고 표시된 슛의
+//       실제 득점 확률이 그대로여서, 중계·코치 조언(DANGER_XG, XG_GAP_ALERT)이 거짓말을 한다.
+//     - 득점 판정에도 같이 물리면 밸런스 게이트를 다시 뚫어야 한다.
+//   그래서 **표시 xG는 모델이 실제로 믿는 확률과 항상 일치**시키고, 대신 분포가 실제보다
+//   좁다는 점(대부분 0.05~0.20, 페널티급 0.7 없음)을 한계로 받아들였다. 총량은 맞고
+//   슛별 서열도 맞으며, 다만 극단값이 없다.
+const DISPLAY_XG_MIN = 0.01
+const DISPLAY_XG_MAX = 0.95
+const displayXg = (goalProbability: number) => clamp(goalProbability, DISPLAY_XG_MIN, DISPLAY_XG_MAX)
+
 function resolveChance(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: ReturnType<typeof instructionEffects>[], rng: Rng, strengthRatio = 1, spDepth = 0) {
   const atk = atkIdx === 0 ? st.home : st.away
   const def = defIdx === 0 ? st.home : st.away
@@ -445,11 +551,18 @@ function resolveChance(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: ReturnT
   // 주발: 슈터가 윙어일 때만 발동. 역측(인버티드)은 컷인 각으로 퀄↑·코너↓, 정측은 반대.
   // 윙어가 아니거나 양발이면 전 축 1.0 → 회귀 불변.
   const ft = footEffects(shooterSlot.slot, shooter.foot, atk.tactics.attackPattern)
-  const xg = clamp((es.shooting / 100) * 0.35 * fx[atkIdx].chanceQuality * ap.chanceQuality * qualityBoost * af.chanceQuality * ft.chanceQuality * fx[defIdx].concedeQuality * Math.pow(strengthRatio, XG_STRENGTH), 0.02, 0.65)
-  st.stats[atkIdx].xg = round2(st.stats[atkIdx].xg + xg)
+  // ★ chanceQuality는 **표시용 xG가 아니다** — 득점 확률 사슬의 내부 입력(찬스의 질 지수)이다.
+  //   스케일(엘리트 슈터 기준 0.30)은 밸런스 게이트·캘리브레이션이 얹혀 있으므로 건드리지 않는다.
+  const chanceQuality = clamp((es.shooting / 100) * 0.35 * fx[atkIdx].chanceQuality * ap.chanceQuality * qualityBoost * af.chanceQuality * ft.chanceQuality * fx[defIdx].concedeQuality * Math.pow(strengthRatio, XG_STRENGTH), 0.02, 0.65)
 
   // cross는 유효슛 확률 소폭↓(컷인↓·크로스 위주). balanced는 onTargetBias=1 → 불변.
   const onTargetP = clamp((es.shooting / 140) * ap.onTargetBias, 0.25, 0.75)
+  // GK 파워플레이 수비 측 활성 시 빈 골문 → 득점 확률 ×3(goalMult). 상한도 그에 맞춰 완화.
+  const goalP = clamp(chanceQuality * (1.6 - gkSave / 100) * goalMult, 0.04, goalMult > 1 ? 0.95 : 0.55)
+  // 표시용 xG = 이 슛이 골이 될 확률 = P(유효슛) × P(골|유효슛). 근거는 DISPLAY_XG 주석.
+  const xg = displayXg(onTargetP * goalP)
+  st.stats[atkIdx].xg = round2(st.stats[atkIdx].xg + xg)
+
   if (!rng.chance(onTargetP)) {
     st.events.push({ minute: st.minute, type: 'miss', teamId: atk.team.id, playerId: shooter.id, xg })
     // cross는 코너 획득 확률↑(cornerBias). balanced는 1 → 불변.
@@ -457,8 +570,6 @@ function resolveChance(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: ReturnT
     return
   }
   st.stats[atkIdx].shotsOnTarget++
-  // GK 파워플레이 수비 측 활성 시 빈 골문 → 득점 확률 ×3(goalMult). 상한도 그에 맞춰 완화.
-  const goalP = clamp(xg * (1.6 - gkSave / 100) * goalMult, 0.04, goalMult > 1 ? 0.95 : 0.55)
   if (rng.chance(goalP)) {
     st.score[atkIdx]++
     st.events.push({ minute: st.minute, type: 'goal', teamId: atk.team.id, playerId: shooter.id, xg })
@@ -582,15 +693,19 @@ function resolveSetPiece(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: Retur
   const shortage = 1 - atk.sentOff.length * 0.06
   const mark = markingFactor(def.tactics.setPiece?.marking, clamp((threat - 55) / 25, 0, 1))
 
-  const xg = clamp(
+  // 오픈플레이와 같은 구조: chanceQuality는 내부 입력, 표시 xG는 P(골|슛)이다.
+  const chanceQuality = clamp(
     SP_XG_BASE * (taker.setPiece / 70) * (threat / 62) * gkFactor * shortage * sp.conversion * mark,
     0.02, 0.35,
   )
+  const goalP = clamp(chanceQuality * (1.6 - gkSave / 100), 0.02, 0.45)
+  // 세트피스에는 유효슛 관문이 없다(골 판정을 먼저 굴린다) → goalP가 곧 P(골|슛)이다.
+  // 실제 코너 슛 평균 xG 0.10~0.12와 같은 구간(기본값 0.135 × 0.85 ≈ 0.115)에 떨어진다.
+  const xg = displayXg(goalP)
   st.stats[atkIdx].shots++
   st.stats[atkIdx].xg = round2(st.stats[atkIdx].xg + xg)
 
   // 헤더는 오픈플레이보다 유효슛 비율이 낮다(각이 좁고 몸싸움 중이다) — 0.52 고정.
-  const goalP = clamp(xg * (1.6 - gkSave / 100), 0.02, 0.45)
   if (rng.chance(goalP)) {
     st.stats[atkIdx].shotsOnTarget++
     st.score[atkIdx]++

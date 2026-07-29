@@ -71,13 +71,7 @@
   background: var(--bc-away);
   overflow: hidden;
 }
-/* 각주 — 출처가 다른 수치(패스 성공률)를 같은 표에 섞은 것을 숨기지 않는다. */
-.mst__note {
-  margin: 2px 0 0;
-  font-size: 9px;
-  line-height: 1.3;
-  color: var(--bc-text-dim);
-}
+/* .mst__note(각주)는 제거했다 — 패스 성공률이 엔진 집계값이 되어 출처를 밝힐 이유가 없다. */
 .mst__bar-home {
   display: block;
   height: 100%;

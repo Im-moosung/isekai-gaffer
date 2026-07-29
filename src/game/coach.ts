@@ -95,8 +95,10 @@ const DEF_RECENT_ON_TARGET = 2
 const DEF_ON_TARGET_GAP = 2
 /** 실점 직후 판정 창(분). */
 const CONCEDE_WINDOW = 10
-/** 공격 코치 xG 열세 판정. 0.6은 결정적 찬스 1개분 차이에 해당한다. */
-const XG_GAP_ALERT = 0.6
+/** 공격 코치 xG 열세 판정.
+ *  엔진 xG가 실제 P(골|슛) 스케일로 재정의되면서(경기당 팀 xG 3.2 → 1.4) 0.6 → 0.25로 내렸다.
+ *  새 스케일에서 좋은 찬스 하나가 약 0.13이므로 0.25는 여전히 "결정적 찬스 2개분" 차이다. */
+const XG_GAP_ALERT = 0.25
 /** 세트피스 코치 발동선(현행 유지). */
 const CORNER_ALERT = 4
 /** 종반엔 세트피스가 마지막 카드라 문턱을 낮춘다. */

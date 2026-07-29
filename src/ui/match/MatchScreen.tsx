@@ -66,8 +66,11 @@ class PitchBoundary extends Component<{ fallback: ReactNode; children: ReactNode
   }
 }
 
-/** 위험 순간 강조 xG 임계(찬스 큰 세이브·유효 미스). */
-const DANGER_XG = 0.25
+/** 위험 순간 강조 xG 임계(찬스 큰 세이브·유효 미스).
+ *  엔진의 xG가 '찬스 퀄 지수'(슛당 평균 0.23)에서 **실제 P(골|슛)**(슛당 평균 0.10)으로
+ *  재정의되면서 0.25 → 0.12로 내렸다. 실측 분포(kor-esp 6,825슛)의 p75 부근이라
+ *  예전과 같은 빈도(상위권 찬스)로 발동한다. */
+const DANGER_XG = 0.12
 
 // 방송 모드↔작전판 모드 전환 연출 지속(ms). 작전판 이탈 시 역연출을 위해
 // 이 시간만큼 마운트를 유지한다(CSS transition/animation 길이와 일치).
