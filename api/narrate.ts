@@ -33,6 +33,12 @@ function json(body: unknown, status: number): Response {
   })
 }
 
+// Vercel 런타임 선언 — 이 핸들러는 Web Request/Response 시그니처를 쓴다.
+// 선언이 없으면 Vercel이 Node 런타임 (req, res) 규약으로 호출해 req.json()에서
+// 즉시 크래시한다(FUNCTION_INVOCATION_FAILED). Edge는 fetch·AbortController·
+// process.env를 모두 지원하므로 이 파일에 필요한 것이 전부 있다.
+export const config = { runtime: 'edge' }
+
 export default async function handler(req: Request): Promise<Response> {
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405)
 
