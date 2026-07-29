@@ -19,6 +19,14 @@ function step(times: number) {
   }
 }
 
+// 킥오프 = [킥오프] → 입장 연출 → [건너뛰기]. 유저가 타는 경로 그대로다.
+// 연출을 건너뛰어야 phase가 'playing'이 되므로 재생을 보는 테스트는 전부 이걸 쓴다.
+// (연출 자체의 계약은 entrance.test.ts·entrance-overlay.jsdom.test.tsx가 검증한다.)
+function kickoffNow(getByRole: (role: string, opts: { name: string }) => HTMLElement) {
+  fireEvent.click(getByRole('button', { name: '킥오프' }))
+  fireEvent.click(getByRole('button', { name: '입장 연출 건너뛰고 바로 킥오프' }))
+}
+
 // 목표 phase까지 재생 — 도중 자동 정지(브레이크·하프타임)는 confirmTactics로 재개.
 function replayTo(target: string) {
   for (let i = 0; i < 400 && store().phase !== target; i++) {
@@ -45,14 +53,26 @@ describe('MatchScreen 조립 — 오버레이 폐지(피치 상시 노출)', () 
   it('(b) 킥오프 → 재생 진행 → Scorebug 분 표기 증가', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
     expect(clock(container as HTMLElement)).toBe(0)
-    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    kickoffNow(getByRole)
     step(10)
     expect(clock(container as HTMLElement)).toBeGreaterThan(0)
   })
 
-  it('(c) 크래시 없이 halftime 도달 → 작전판(tactics) 모드: 팀토크 카드 + [후반 시작] + 사유', () => {
+  it('(b2) [킥오프] → 입장 연출이 뜨고 경기는 아직 시작되지 않는다', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
     fireEvent.click(getByRole('button', { name: '킥오프' }))
+    // 연출 중에는 phase가 'pre' 그대로다 — 선수가 자리를 잡기 전에 시계가 돌면 안 된다.
+    expect(store().phase).toBe('pre')
+    expect(container.querySelector('.ent')).toBeTruthy()
+    // 건너뛰면 비로소 킥오프.
+    fireEvent.click(getByRole('button', { name: '입장 연출 건너뛰고 바로 킥오프' }))
+    expect(store().phase).toBe('playing')
+    expect(container.querySelector('.ent')).toBeNull()
+  })
+
+  it('(c) 크래시 없이 halftime 도달 → 작전판(tactics) 모드: 팀토크 카드 + [후반 시작] + 사유', () => {
+    const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
+    kickoffNow(getByRole)
     replayTo('halftime')
     expect(store().phase).toBe('halftime')
     // 하프타임 = 작전판 진입(다크 보드).
@@ -70,7 +90,7 @@ describe('MatchScreen 조립 — 오버레이 폐지(피치 상시 노출)', () 
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
     const live = () => container.querySelector('.bc-scorebug__live')
     expect(live()).toBeNull()
-    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    kickoffNow(getByRole)
     step(3)
     expect(live()).not.toBeNull()
     expect(live()!.textContent).toContain('LIVE')
@@ -78,7 +98,7 @@ describe('MatchScreen 조립 — 오버레이 폐지(피치 상시 노출)', () 
 
   it('(d) 재생 전 스코어 스포일러 방지 — 킥오프 직후 minute=0이면 0:0', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={6} />)
-    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    kickoffNow(getByRole)
     const nums = container.querySelectorAll('.bc-scorebug__num')
     expect(nums[0].textContent).toBe('0')
     expect(nums[1].textContent).toBe('0')
@@ -88,7 +108,7 @@ describe('MatchScreen 조립 — 오버레이 폐지(피치 상시 노출)', () 
 describe('MatchScreen 개입 허브 — 브레이크·순간 제안·풀타임', () => {
   it('(h) paused-break → 작전판: 다크 보드 pitch + [전술 확정] + 사유(하이드레이션)', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
-    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    kickoffNow(getByRole)
     replayTo('paused-break')
     expect(store().phase).toBe('paused-break')
     // 작전판 다크 보드.
@@ -102,7 +122,7 @@ describe('MatchScreen 개입 허브 — 브레이크·순간 제안·풀타임',
 
   it('(i) momentPrompt 배너: [사용]→paused-moment, [흘려보낸다]→playing 유지', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
-    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    kickoffNow(getByRole)
     step(2)
     expect(store().phase).toBe('playing')
     // 재생 중 순간 제안을 세팅(레이아웃 스모크: 배너 액션 배선 확인).
@@ -140,7 +160,7 @@ describe('MatchScreen 개입 허브 — 브레이크·순간 제안·풀타임',
 describe('MatchScreen 재생 루프 — 정지·재개·속도', () => {
   it('(f) 재생 중 pause → 체인 정지(시간 흘려도 분 불변) → confirmTactics 재개', () => {
     const { getByRole } = render(<MatchScreen home={home} away={away} seed={20260724} />)
-    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    kickoffNow(getByRole)
     step(4)
     expect(store().phase).toBe('playing')
     const before = store().engine!.minute
@@ -163,7 +183,7 @@ describe('MatchScreen 재생 루프 — 정지·재개·속도', () => {
     function minutesInBudget(setTo2x: boolean, budgetMs: number): number {
       store().reset()
       const { getByRole } = render(<MatchScreen home={home} away={away} seed={20260724} />)
-      fireEvent.click(getByRole('button', { name: '킥오프' }))
+      kickoffNow(getByRole)
       if (setTo2x) {
         const btn = getByRole('button', { name: '2x' })
         fireEvent.click(btn)
@@ -191,7 +211,7 @@ describe('MatchScreen 연출 — 골 드라마·안무·위험 순간', () => {
 
   it('(m) 홈 득점 분 → GOAL! 타이포 + 득점자 배너 + 안무 공(.pv-ball) + 스코어버그 펄스', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
-    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    kickoffNow(getByRole)
     step(3)
     expect(store().phase).toBe('playing')
     const eng = store().engine!
@@ -208,7 +228,7 @@ describe('MatchScreen 연출 — 골 드라마·안무·위험 순간', () => {
 
   it('(n) 상대 득점(실점) → concede 연출로 차별화(어두운 톤·실점 태그)', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
-    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    kickoffNow(getByRole)
     step(3)
     const eng = store().engine!
     inject([{ minute: eng.minute, type: 'goal', teamId: away.id }])
@@ -218,7 +238,7 @@ describe('MatchScreen 연출 — 골 드라마·안무·위험 순간', () => {
 
   it('(o) 위험 순간(xG 0.25+ 세이브) → 비네팅 + 티커 위험 강조', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
-    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    kickoffNow(getByRole)
     step(3)
     const eng = store().engine!
     inject([{ minute: eng.minute, type: 'save', teamId: home.id, xg: 0.4 }])
@@ -234,7 +254,7 @@ describe('MatchScreen 모드 분리 — 방송 관전 ↔ 작전 지시', () => 
     expect(container.querySelector('.tb-root')).toBeNull()
     expect(container.querySelector('.cs-panel')).toBeNull()
     // 재생 중에도 작전판·콘솔 부재.
-    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    kickoffNow(getByRole)
     step(3)
     expect(store().phase).toBe('playing')
     expect(container.querySelector('.tb-root')).toBeNull()
@@ -243,7 +263,7 @@ describe('MatchScreen 모드 분리 — 방송 관전 ↔ 작전 지시', () => 
 
   it('(l) pause → 작전판(콘솔 포함) 렌더 / confirm → 방송 복귀(작전판 언마운트)', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
-    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    kickoffNow(getByRole)
     replayTo('paused-break')
     // 작전판 진입 — 보드 + 콘솔이 작전판 안으로 이관됨.
     expect(container.querySelector('.tb-root')).toBeTruthy()
@@ -263,7 +283,7 @@ describe('MatchScreen — 플랜 배지(PlanBadge)', () => {
   it('킥오프 전엔 배지가 없고, 킥오프 후 "플랜 유지"로 나타난다', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
     expect(badge(container as HTMLElement)).toBeNull()
-    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    kickoffNow(getByRole)
     step(3)
     const b = badge(container as HTMLElement)!
     expect(b).toBeTruthy()
@@ -274,7 +294,7 @@ describe('MatchScreen — 플랜 배지(PlanBadge)', () => {
 
   it('구조(포메이션)를 바꾸면 "플랜 이탈 N축"으로 전환된다', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
-    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    kickoffNow(getByRole)
     replayTo('paused-break')
     fireEvent.click(getByRole('button', { name: '5-4-1' }))
     const b = badge(container as HTMLElement)!
@@ -285,7 +305,7 @@ describe('MatchScreen — 플랜 배지(PlanBadge)', () => {
 
   it('지시 미세 조정만으로는 배지가 "플랜 유지"를 유지한다(구조 기준)', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
-    fireEvent.click(getByRole('button', { name: '킥오프' }))
+    kickoffNow(getByRole)
     replayTo('paused-break')
     const before = store().engine!.home.tactics.instructions
     act(() => {

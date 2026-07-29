@@ -15,6 +15,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { MatchEvent, MatchState } from '../../../engine/types'
 import type { ChoreoStep } from '../choreography'
 import { createCameraRig } from './camera'
+import { entranceFrame, entrancePhaseAt, type EntranceCast } from './entrance'
 import { FLASH_CONCEDED, FLASH_SCORED, createBall, flashQuad, goalBurst, type GoalBurst } from './fx3d'
 import { computeFrame } from './movement'
 import { createRenderScaler, readStoredScale, writeStoredScale } from './perf'
@@ -40,6 +41,17 @@ interface Match3DProps {
   event?: MatchEvent | null
   /** 3D를 쓸 수 없을 때 대신 렌더할 노드(렌더러 체인의 다음 단계 = PixiPitch). */
   fallback?: ReactNode
+  /**
+   * 입장 연출 캐스트. null이 아니면 **경기 프레임 대신 입장 연출을 렌더한다**
+   * (킥오프 전 한정). 연출의 시계는 DOM 오버레이가 소유한다 — 3D는 읽기만 한다.
+   */
+  entrance?: EntranceCast | null
+  /**
+   * 입장 연출 경과 ms를 담은 가변 ref. **prop이 아니라 ref인 이유**: 오버레이는 60fps로
+   * 진행하는데 이걸 state로 올리면 초당 60회 React 리렌더가 발생한다(3D 루프는 이미
+   * rAF로 돌고 있으므로 리렌더가 얻는 것이 하나도 없다).
+   */
+  entranceClock?: { current: number }
 }
 
 const HOME_FALLBACK = 0xe63946
@@ -58,11 +70,20 @@ const CROWD_FULL = 4200
 /** 피치 텍스처 해상도(px/m). */
 const PX_PER_M = 20
 
-/** 골 순간 골대 뒤 로우 앵글을 유지하는 시간(s). 이후 세리머니 오빗으로 넘어간다. */
+/** 골 순간 골대 뒤 로우 앵글을 유지하는 시간(s). 이후 리액션 컷으로 넘어간다. */
 const GOAL_CAM_S = 0.9
 /**
- * 골 연출(goal-cam + celebrate) 총 길이(s). **분 경계와 무관하게** 흐른다 —
+ * 리액션 컷(득점자 로우앵글 클로즈)이 끝나는 시각(s, 골 기준).
+ *
+ * 실제 중계의 골 편집 문법은 "골 → 골대 뒤 → 득점자 리액션 → 와이드 세리머니"다.
+ * 골대 뒤에서 곧장 오빗으로 넘어가면 득점자를 한 번도 크게 못 보고 카메라만 돈다.
+ * 0.9~2.2s의 1.3초 창은 리그의 0.6초 전환을 빼고도 0.7초가 남아 컷이 인지된다.
+ */
+const REACTION_END_S = 2.2
+/**
+ * 골 연출(goal-cam + reaction + celebrate) 총 길이(s). **분 경계와 무관하게** 흐른다 —
  * 골 키프레임은 dwell의 끝자락(t≈0.7~0.85)이라 분에 묶어두면 세리머니가 1초 만에 잘린다.
+ * 리액션 컷을 끼워도 총 체류 시간은 그대로 유지한다(뒤 연출을 밀어내지 않는다).
  */
 const CELEBRATE_TOTAL_S = 4.5
 /** 골 뒤 관중이 뛰는 시간(s) — 이 창 밖에서는 crowdWave를 호출하지 않는다. */
@@ -71,6 +92,10 @@ const CROWD_WINDOW_S = 4
 const GOAL_IMPULSE = 0.35
 /** 교체·퇴장으로 새 선수가 등장해도 리그 수는 여기서 멈춘다(무한 증식 방지). */
 const MAX_RIGS = 40
+
+/** 심판 킷(입장 연출 전용) — 어느 팀 색과도 겹치지 않는 차콜. 액센트는 심판 노랑. */
+const REF_KIT = 0x1a1d24
+const REF_ACCENT = 0xf2c94c
 
 const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi : v)
 
@@ -207,6 +232,19 @@ export function Match3D(props: Match3DProps) {
         scene.add(rig.root)
         return rig
       }
+      /**
+       * 심판 리그 — 입장 연출에서만 쓰므로 **연출이 실제로 재생될 때** 만든다.
+       * (건너뛴 유저에게 리그 하나를 만들어 줄 이유가 없다.)
+       */
+      let refRig: PlayerRig | null = null
+      const ensureRefRig = (): PlayerRig => {
+        if (!refRig) {
+          refRig = createPlayer(THREE, { kit: REF_KIT, accent: REF_ACCENT, number: 0, isGk: false })
+          scene.add(refRig.root)
+        }
+        return refRig
+      }
+
       // 선발 22명은 첫 프레임 전에 만들어 둔다(루프 안에서 22개 생성 = 렌더 히치).
       for (const side of ['home', 'away'] as const) {
         const st = propsRef.current.state[side]
@@ -295,6 +333,42 @@ export function Match3D(props: Match3DProps) {
           bundle.setEmissiveBoost(1)
         }
 
+        // ── 입장 연출: 킥오프 전에는 경기 프레임 대신 이 타임라인을 그린다 ──
+        // 연출의 시계는 DOM 오버레이가 소유한다(3D가 없어도 연출이 진행돼야 하므로).
+        // 여기서는 그 시각을 읽어 같은 순간의 포즈를 그릴 뿐이다.
+        const cast = p.entrance ?? null
+        if (cast) {
+          const ems = p.entranceClock?.current ?? 0
+          const ef = entranceFrame(cast, ems)
+          const gkH = p.state.home.tactics.lineup[0]?.playerId
+          const gkA = p.state.away.tactics.lineup[0]?.playerId
+          seen.clear()
+          for (const pose of ef.players) {
+            const rig = ensureRig(pose.id, pose.side, pose.number, pose.id === gkH || pose.id === gkA)
+            if (!rig) continue
+            rig.root.visible = true
+            rig.apply(pose, elapsed)
+            seen.add(pose.id)
+          }
+          for (const [id, rig] of rigs) if (!seen.has(id)) rig.root.visible = false
+          const ref = ensureRefRig()
+          ref.root.visible = true
+          ref.apply(ef.referee, elapsed)
+          ball.update(ef.ball, dt)
+          // 방송 문법: 행진은 와이드 사이드라인 앵글, 정렬·소개는 터치라인 클로즈업.
+          const ph = entrancePhaseAt(ems)
+          camRig.setMode(ph === 'lineup' || ph === 'intro' ? 'reaction' : 'broadcast')
+          camRig.update({ focus: ef.focus, t: elapsed, dt, camera })
+          post.render(dt)
+          // 연출이 끝나면 킥오프 배치부터 새로 시작한다 — 입장 마지막 자세를 prev로
+          // 물려주면 1분 첫 프레임에서 22명이 이상한 보간을 탄다.
+          prevFrame = null
+          lastMinute = -1
+          return
+        }
+        // 연출이 끝났거나 건너뛴 뒤: 심판은 화면에서 사라진다(경기 중 심판은 안 그린다).
+        if (refRig) refRig.root.visible = false
+
         // ── 분 내 진행도 t: 분(또는 시퀀스)이 바뀌면 클럭을 리셋한다 ──
         const minute = p.state.minute
         if (minute !== lastMinute || p.sequence !== lastSeq) {
@@ -365,9 +439,14 @@ export function Match3D(props: Match3DProps) {
         }
         // 골 연출 창은 분 경계를 넘어 이어진다(득점 후 다음 분에도 세리머니가 계속 보인다).
         const goalAge = goalAt >= 0 ? elapsed - goalAt : Infinity
+        // 중계 문법: 골 → 골대 뒤 → 득점자 리액션 → 와이드 세리머니 →
+        //           (세트피스는 전용 하이 대각 / 슈팅·세이브는 근접 / 그 외 방송 앵글)
         if (goalAge < GOAL_CAM_S) camRig.setMode('goal-cam')
+        else if (goalAge < REACTION_END_S) camRig.setMode('reaction')
         else if (goalAge < CELEBRATE_TOTAL_S) camRig.setMode('celebrate')
-        else if (ev === 'shot' || ev === 'save' || ev === 'corner') camRig.setMode('highlight')
+        // 코너·프리킥은 "무슨 상황인지"부터 읽혀야 한다 — 근접 컷 대신 박스 전체를 담는다.
+        else if (ev === 'corner' || ev === 'foul') camRig.setMode('set-piece')
+        else if (ev === 'shot' || ev === 'save') camRig.setMode('highlight')
         else camRig.setMode('broadcast')
 
         // 파티클 진행(수명 종료 시 즉시 해제).
@@ -422,6 +501,8 @@ export function Match3D(props: Match3DProps) {
         // 리그를 먼저 떼어내야 bundle.dispose()의 트리 순회가 공유 캐시를 건드리지 않는다.
         for (const rig of rigs.values()) rig.dispose()
         rigs.clear()
+        refRig?.dispose()
+        refRig = null
         bundle.dispose()
         disposePlayerCaches()
         renderer.dispose()

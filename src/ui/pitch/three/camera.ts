@@ -7,16 +7,33 @@
 //    주입받아 갱신한다 → 엔트리 번들에 three가 새지 않고, 테스트도 three 없이 돈다.
 //  - **Math.random·Date 금지**: 오퍼레이터 호흡·오빗 위상·셰이크까지 전부 시드 해시(hash01).
 //    같은 (mode, focus, t, seed) → 완전히 같은 샷.
-//  - **불변식**: 카메라는 절대 피치 아래(y>3)나 관중석 뒤(|z|<80)로 빠지지 않는다.
-//    모든 샷은 {@link clampShot}를 통과한다.
+//  - **불변식**: 카메라는 피치 아래로 꺼지지도, 관중석 슬래브 **안**에 박히지도, 조명탑
+//    마스트를 뚫지도 않는다. 모든 샷은 {@link clampShot}를 통과하며
+//    `__tests__/camera-bounds.test.ts`가 전 모드 × 피치 전역 그리드로 이를 전수 검사한다.
 //  - **reduced-motion**: 셰이크 진폭 0이면 정확히 0을 돌려준다(리그는 amp를 0으로 강제).
 //
 // 시간 t는 three Clock의 경과 초(표시 전용). 모드 전환 보간은 {@link createCameraRig}가 맡는다.
 import { hash01 } from './textures'
 import { PITCH_H, PITCH_W, type Vec3 } from './types'
 
-/** 카메라 연출 모드. */
-export type CameraMode = 'broadcast' | 'highlight' | 'goal-cam' | 'celebrate'
+/**
+ * 카메라 연출 모드.
+ *
+ * 중계 문법상의 역할:
+ *  - `broadcast` 기본 사이드 하이앵글(빌드업은 넓게, 박스 근처는 좁게)
+ *  - `highlight`  슈팅·세이브 근접 컷
+ *  - `set-piece`  코너·프리킥 — 박스 전체가 들어오는 높은 대각선
+ *  - `goal-cam`   골 직후 골대 뒤 로우앵글
+ *  - `reaction`   골대 뒤 다음에 끼우는 득점자 리액션 클로즈
+ *  - `celebrate`  와이드 세리머니 오빗
+ */
+export type CameraMode =
+  | 'broadcast'
+  | 'highlight'
+  | 'goal-cam'
+  | 'celebrate'
+  | 'reaction'
+  | 'set-piece'
 
 /** 한 프레임의 카메라 상태(순수 값). */
 export interface CameraShot {
@@ -31,40 +48,111 @@ export interface Focus {
   z: number
 }
 
+// ── 경기장 지오메트리(scene.ts 실측 미러) ─────────────────────────
+// camera.ts는 three를 import하지 않으므로 scene.ts에서 값을 가져올 수 없다(코드 스플릿 계약).
+// 그래서 여기 **복제**해 두고, `__tests__/camera-bounds.test.ts`가 두 파일의 값이 어긋나지
+// 않는지 상수로 못 박는다. scene.ts의 스타디움 치수를 바꾸면 여기도 같이 고쳐야 한다.
+/** 터치라인 밖 러너프(잔디) 폭 — scene.ts `APRON`. */
+const APRON = 7
+/** 관중석 경사(rad) — scene.ts `RAKE`. */
+const STAND_RAKE = 0.5
+const STAND_RAKE_TAN = Math.tan(STAND_RAKE)
+/** 관중석 첫 열 높이(m) — scene.ts `STAND_H0`. */
+const STAND_H0 = 2.4
+/** 관중석 수평 깊이(m) — scene.ts `STAND_DEPTH`. */
+const STAND_DEPTH = 26
+/** 롱사이드 관중석 안쪽 경계 |z| — scene.ts `SIDE_INNER`(41). */
+export const SIDE_STAND_INNER_Z = PITCH_H / 2 + APRON
+/**
+ * 골 뒤 관중석 안쪽 경계 |x| — scene.ts `END_INNER`(59.5).
+ * **골 뒤 카메라는 이 선을 넘으면 안 된다** — 넘는 순간 관중 인스턴스 사이에 박혀
+ * 화면 절반이 거대한 색 상자로 덮인다.
+ */
+export const END_STAND_INNER_X = PITCH_W / 2 + APRON
+/**
+ * 스탠드 풋프린트 안에 들어갈 때 좌석 표면 위로 확보해야 할 최소 여유(m).
+ * 관중 박스(높이 ≈0.9+@)와 그 위 시야까지 감안한 값 — 이보다 낮으면 관중 머리가 렌즈를 덮는다.
+ */
+export const STAND_CLEARANCE = 6
+/** 슬래브 끝의 뒷벽(inner+DEPTH+0.8, 두께 1.6) 앞에서 멈추기 위한 침투 상한. */
+const STAND_MAX_PENETRATION = STAND_DEPTH - 2
+/** 조명탑 마스트 중심 |x| — scene.ts `END_INNER + STAND_DEPTH*0.85`(81.6). */
+export const MAST_X = END_STAND_INNER_X + STAND_DEPTH * 0.85
+/** 조명탑 마스트 중심 |z| — scene.ts `SIDE_INNER + STAND_DEPTH*0.85`(63.1). */
+export const MAST_Z = SIDE_STAND_INNER_Z + STAND_DEPTH * 0.85
+/** 마스트(반경 ≤0.9, 높이 0~44) 회피 반경(m). */
+export const MAST_CLEAR_R = 3
+
 // ── 불변식(피치 밖·아래 이탈 금지) ────────────────────────────────
 /** 카메라 최소 높이(m) — 잔디 아래로 내려가지 않는다. */
 export const CAM_MIN_Y = 4
-/** 카메라 |z| 한계(m) — 관중석 뒤로 빠지지 않는다. */
-export const CAM_MAX_Z = 78
-/** 카메라 |x| 한계(m). */
-export const CAM_MAX_X = 118
+/**
+ * 카메라 |z| 한계(m).
+ *
+ * 78이던 시절엔 사이드 스탠드(41~67)를 관통해 뒷벽 밖 허공까지 나갈 수 있었다.
+ * 58이면 관중석 안이라도 좌석 표면에서 한참 위이고(높이 제약은 {@link clampShot}가 따로 건다),
+ * 무엇보다 조명탑 마스트(|z|=63.1)와 {@link MAST_CLEAR_R}의 곱절 가까이 떨어져
+ * **마스트 충돌이 구조적으로 불가능**해진다.
+ */
+export const CAM_MAX_Z = 58
+/** 카메라 |x| 한계(m) — 엔드 스탠드 슬래브(59.5~85.5) 중간에서 끊는다(118 → 76). */
+export const CAM_MAX_X = 76
+
+// ── 위험도(중계 문법의 축) ────────────────────────────────────────
+// "빌드업은 넓게, 마무리는 좁게". 카메라 파라미터를 focus의 위험도(가까운 골문까지의 거리)로
+// **연속 보간**한다 — 이벤트 플래그로 확 바꾸면 컷처럼 튀어서 중계가 아니라 게임 UI가 된다.
+/** 이 거리(m) 이상이면 위험도 0(완전 와이드). */
+export const DANGER_FAR = 46
+/** 이 거리(m) 이하이면 위험도 1(완전 타이트). 페널티 박스 대각 폭 근처. */
+export const DANGER_NEAR = 16
 
 // ── broadcast(기본 방송 앵글) ─────────────────────────────────────
-/** 사이드라인 상단 카메라의 z(터치라인 바깥 -z 쪽). */
+/** 사이드라인 상단 카메라의 z(터치라인 바깥 -z 쪽) — 빌드업(위험도 0). */
 export const BROADCAST_Z = -55
-/** 사이드라인 상단 카메라의 높이(m). */
+/** 위험도 1에서의 z — 6m 앞으로 나와 붙는다. */
+export const BROADCAST_Z_TIGHT = -49
+/** 사이드라인 상단 카메라의 높이(m) — 빌드업. */
 export const BROADCAST_Y = 28
+/** 위험도 1에서의 높이 — 낮춰서 골문을 정면에 가깝게 본다. */
+export const BROADCAST_Y_TIGHT = 21
 export const BROADCAST_FOV = 34
+/** 위험도 1에서의 FOV — 박스 안 상황을 크게 잡는다. */
+export const BROADCAST_FOV_TIGHT = 25
 /** focus.x 추종 게인(<1 = 공간적 스무딩 — 카메라는 공보다 덜 움직인다). */
 export const BROADCAST_FOLLOW = 0.62
+/** 위험도 1에서의 추종 게인 — 마무리 국면에선 더 바짝 따라간다. */
+export const BROADCAST_FOLLOW_TIGHT = 0.78
 /** 좌우 팬 한계(m) — 카메라 카트의 레일 길이. */
 export const BROADCAST_MAX_PAN = 26
 /** 오퍼레이터 호흡(수동 카메라 느낌) 진폭(m). */
 const BROADCAST_DRIFT = 0.35
 
 // ── highlight(액션 존 근접) ───────────────────────────────────────
-export const HIGHLIGHT_Y = 14
-export const HIGHLIGHT_DIST = 35
-export const HIGHLIGHT_FOV = 30
+/** 빌드업(위험도 0)에서의 높이·거리·화각 — 넓게 본다. */
+export const HIGHLIGHT_Y = 17
+export const HIGHLIGHT_DIST = 40
+export const HIGHLIGHT_FOV = 34
+/** 마무리(위험도 1)에서의 높이·거리·화각 — 붙어서 좁게 본다. */
+export const HIGHLIGHT_Y_TIGHT = 11
+export const HIGHLIGHT_DIST_TIGHT = 24
+export const HIGHLIGHT_FOV_TIGHT = 24
+
+// ── set-piece(코너·프리킥 전용 하이 대각) ─────────────────────────
+/** 박스 전체를 담기 위한 높이(m) — 롱사이드 스탠드 상단보다 훨씬 위. */
+export const SET_PIECE_Y = 30
+/** 프레이밍 타깃까지의 수평 거리(m). */
+export const SET_PIECE_DIST = 44
+export const SET_PIECE_FOV = 32
+
+// ── reaction(골 → 골대 뒤 다음의 득점자 리액션 클로즈) ────────────
+/** 리액션 컷의 수평 거리(m) — 상반신이 크게 잡히는 거리. */
+export const REACTION_DIST = 13
+/** 로우앵글 높이(m) — 득점자를 올려다보듯 잡는다. */
+export const REACTION_Y = 5
+export const REACTION_FOV = 30
 
 // ── goal-cam(골대 뒤 로우 앵글) ───────────────────────────────────
 export const GOAL_CAM_Y = 5.5
-/**
- * 골 뒤 관중석 안쪽 경계까지의 x 거리(m) = 골라인(52.5) + 러너프(7).
- * scene.ts의 `END_INNER`와 같은 값이며, **골 뒤 카메라는 이 선을 넘으면 안 된다** —
- * 넘는 순간 카메라가 관중 인스턴스 사이에 박혀 화면 절반이 거대한 색 상자로 덮인다.
- */
-export const END_STAND_INNER_X = 59.5
 /**
  * 골라인에서 뒤로 물러난 거리(m).
  *
@@ -79,8 +167,16 @@ export const GOAL_CAM_FOV = 38
 const GOAL_CAM_MAX_Z = 9
 
 // ── celebrate(득점팀 주위 오빗) ───────────────────────────────────
-export const CELEBRATE_RADIUS = 22
-export const CELEBRATE_Y = 9
+/**
+ * 오빗 반경(m). 22였을 때 코너 근처 득점이면 카메라가 x=80.5·z=60까지 나가
+ * 관중석 슬래브 **안**을 지나갔다(높이 9m, 그 지점 좌석 표면 13.9m).
+ * 20 + 피벗 끌어당김({@link CELEBRATE_PIVOT_X}·{@link CELEBRATE_PIVOT_Z})으로 볼 안쪽에 가둔다.
+ */
+export const CELEBRATE_RADIUS = 20
+/** 오빗 중심을 focus에서 피치 중앙 쪽으로 당기는 비율(x·z). */
+export const CELEBRATE_PIVOT_X = 0.7
+export const CELEBRATE_PIVOT_Z = 0.45
+export const CELEBRATE_Y = 10
 export const CELEBRATE_FOV = 36
 /** 기본 오빗 각속도(rad/s). 시드로 ±15% 변주된다. */
 export const CELEBRATE_OMEGA = 0.42
@@ -113,19 +209,54 @@ function unit(seed: number, salt: number): number {
 }
 
 /**
- * 모든 샷이 통과하는 안전 클램프 — 카메라가 잔디 아래(y<{@link CAM_MIN_Y})나
- * 관중석 뒤(|z|>{@link CAM_MAX_Z})로 빠지는 것을 막는다. 셰이크·보간 결과에도 적용된다.
+ * (x,z)에서 관중석 좌석 슬래브의 표면 높이(m). 스탠드 풋프린트 밖이면 0.
+ * 네 면을 각각 검사하지 않고 두 축의 침투량 중 큰 값을 쓴다 — 코너에서 두 스탠드가
+ * 겹치므로 이쪽이 항상 보수적(더 높은 표면)이다.
+ */
+export function standSurfaceY(x: number, z: number): number {
+  const pen = Math.max(Math.abs(x) - END_STAND_INNER_X, Math.abs(z) - SIDE_STAND_INNER_Z)
+  if (pen <= 0) return 0
+  return STAND_H0 + Math.min(pen, STAND_DEPTH) * STAND_RAKE_TAN
+}
+
+/**
+ * 주어진 높이에서 관중석 안으로 들어가도 좋은 최대 침투 깊이(m).
+ * 좌석 표면 + {@link STAND_CLEARANCE} 아래로는 절대 못 들어가고, 슬래브 끝(뒷벽) 앞에서 멈춘다.
+ */
+function maxPenetration(y: number): number {
+  return clamp((y - STAND_H0 - STAND_CLEARANCE) / STAND_RAKE_TAN, 0, STAND_MAX_PENETRATION)
+}
+
+/**
+ * 모든 샷이 통과하는 안전 클램프 — 카메라가 잔디 아래로 꺼지거나(y<{@link CAM_MIN_Y})
+ * **관중석 안에 박히는 것**을 막는다. 셰이크·보간 결과에도 적용된다.
+ *
+ * 핵심은 높이에 따라 수평 한계가 달라진다는 점이다: 낮게 나는 샷은 스탠드 안쪽 경계
+ * (|x|≤59.5, |z|≤41)를 아예 못 넘고, 높이 올라갈수록 경사면 위 공중을 그만큼 더 쓸 수 있다.
+ * 예전처럼 |z|≤78·|x|≤118 같은 고정 박스로는 highlight·celebrate가 관중 사이를 통과했다.
  */
 export function clampShot(shot: CameraShot): CameraShot {
+  const y = shot.pos.y < CAM_MIN_Y ? CAM_MIN_Y : shot.pos.y
+  const pen = maxPenetration(y)
+  const limX = Math.min(CAM_MAX_X, END_STAND_INNER_X + pen)
+  const limZ = Math.min(CAM_MAX_Z, SIDE_STAND_INNER_Z + pen)
   return {
-    pos: {
-      x: clamp(shot.pos.x, -CAM_MAX_X, CAM_MAX_X),
-      y: shot.pos.y < CAM_MIN_Y ? CAM_MIN_Y : shot.pos.y,
-      z: clamp(shot.pos.z, -CAM_MAX_Z, CAM_MAX_Z),
-    },
+    pos: { x: clamp(shot.pos.x, -limX, limX), y, z: clamp(shot.pos.z, -limZ, limZ) },
     lookAt: { ...shot.lookAt },
     fov: clamp(shot.fov, 18, 70),
   }
+}
+
+/**
+ * focus의 "위험도" 0~1 — 가까운 골문까지의 거리로 계산하는 연속·단조 함수(smoothstep).
+ * {@link DANGER_FAR} 밖이면 0(빌드업), {@link DANGER_NEAR} 안이면 1(마무리).
+ * x=0에서도 좌우 골문까지 거리가 같아 값이 튀지 않는다.
+ */
+export function danger(fx: number, fz: number): number {
+  const gx = fx >= 0 ? HALF_W : -HALF_W
+  const d = Math.hypot(gx - fx, fz)
+  const u = clamp((DANGER_FAR - d) / (DANGER_FAR - DANGER_NEAR), 0, 1)
+  return u * u * (3 - 2 * u)
 }
 
 /**
@@ -147,40 +278,104 @@ export function cameraFor(mode: CameraMode, focus: Focus, t: number, seed: numbe
       return clampShot(goalCamShot(fx, fz, t, seed))
     case 'celebrate':
       return clampShot(celebrateShot(fx, fz, t, seed))
+    case 'reaction':
+      return clampShot(reactionShot(fx, fz, t, seed))
+    case 'set-piece':
+      return clampShot(setPieceShot(fx, fz, t, seed))
     default:
       return clampShot(broadcastShot(fx, fz, t, seed))
   }
 }
 
-/** 사이드라인 상단 방송 카메라 — 레일 위에서 focus.x를 부분 추종한다. */
+/**
+ * 사이드라인 상단 방송 카메라 — 레일 위에서 focus.x를 부분 추종한다.
+ * 위험도({@link danger})가 오르면 앞으로 나오고·낮아지고·화각이 좁아지고·더 바짝 따라간다.
+ */
 function broadcastShot(fx: number, fz: number, t: number, seed: number): CameraShot {
-  const pan = clamp(fx * BROADCAST_FOLLOW, -BROADCAST_MAX_PAN, BROADCAST_MAX_PAN)
+  const g = danger(fx, fz)
+  const follow = lerp(BROADCAST_FOLLOW, BROADCAST_FOLLOW_TIGHT, g)
+  const pan = clamp(fx * follow, -BROADCAST_MAX_PAN, BROADCAST_MAX_PAN)
   // 수동 카메라의 미세한 호흡(결정론) — 완전 고정된 CG 느낌을 없앤다.
   const driftX = BROADCAST_DRIFT * Math.sin(t * 0.23 + phase(seed, 1))
   const driftY = 0.25 * Math.sin(t * 0.17 + phase(seed, 2))
   return {
-    pos: { x: pan + driftX, y: BROADCAST_Y + driftY, z: BROADCAST_Z },
+    pos: {
+      x: pan + driftX,
+      y: lerp(BROADCAST_Y, BROADCAST_Y_TIGHT, g) + driftY,
+      z: lerp(BROADCAST_Z, BROADCAST_Z_TIGHT, g),
+    },
     // 카메라는 덜 움직여도 시선은 공을 정확히 문다.
     lookAt: { x: fx, y: 1.2, z: fz * 0.55 },
-    fov: BROADCAST_FOV,
+    fov: lerp(BROADCAST_FOV, BROADCAST_FOV_TIGHT, g),
   }
 }
 
-/** 액션 존 근접 컷 — focus를 중심으로 사이드라인 쪽 35m 지점까지 내려온다. */
+/**
+ * 액션 존 근접 컷 — focus 기준 사이드라인 쪽에 선다.
+ * 위험도에 따라 거리 40→24m, 높이 17→11m, 화각 34→24°로 **연속** 변한다.
+ */
 function highlightShot(fx: number, fz: number, t: number, seed: number): CameraShot {
+  const g = danger(fx, fz)
+  const dist = lerp(HIGHLIGHT_DIST, HIGHLIGHT_DIST_TIGHT, g)
   // 공이 골문 쪽일수록 대각선으로 붙어 "공격 방향"이 화면에 담긴다.
   const bias = clamp(fx / HALF_W, -1, 1) * 0.42
-  // 각도만 흔들어 focus와의 거리는 정확히 유지한다.
+  // 각도만 흔들어 focus와의 방향각만 미세하게 살아 있게 한다.
   const wobble = 0.05 * Math.sin(t * 0.5 + phase(seed, 3))
   const az = -Math.PI / 2 - bias + wobble
   return {
     pos: {
-      x: fx + Math.cos(az) * HIGHLIGHT_DIST,
-      y: HIGHLIGHT_Y,
-      z: fz + Math.sin(az) * HIGHLIGHT_DIST,
+      x: fx + Math.cos(az) * dist,
+      y: lerp(HIGHLIGHT_Y, HIGHLIGHT_Y_TIGHT, g),
+      z: fz + Math.sin(az) * dist,
     },
     lookAt: { x: fx, y: 1.4, z: fz },
-    fov: HIGHLIGHT_FOV,
+    fov: lerp(HIGHLIGHT_FOV, HIGHLIGHT_FOV_TIGHT, g),
+  }
+}
+
+/**
+ * 세트피스(코너·프리킥) 전용 하이 대각 — 키커와 박스 안 인원이 한 프레임에 들어와야
+ * "무슨 상황인지"가 읽힌다. 그래서 focus 자체가 아니라 **가까운 골문 앞 박스 중심**을
+ * 프레이밍 타깃으로 잡고, 골라인 쪽에서 비스듬히 내려다본다.
+ */
+function setPieceShot(fx: number, fz: number, t: number, seed: number): CameraShot {
+  const side = fx >= 0 ? 1 : -1
+  // 박스 중심(골라인에서 11m 안쪽)과 focus의 중간 — 키커가 프레임 밖으로 나가지 않게 섞는다.
+  const tx = lerp(fx, side * (HALF_W - 11), 0.55)
+  const tz = fz * 0.45
+  // 흔들림도 side를 곱해 좌우 코너가 정확히 거울상이 되게 한다(한쪽만 어색해지는 걸 막는다).
+  const sway = 0.04 * Math.sin(t * 0.31 + phase(seed, 9))
+  const az = -Math.PI / 2 - side * (0.62 + sway)
+  return {
+    pos: {
+      x: tx + Math.cos(az) * SET_PIECE_DIST,
+      y: SET_PIECE_Y,
+      z: tz + Math.sin(az) * SET_PIECE_DIST,
+    },
+    lookAt: { x: tx, y: 1.6, z: tz },
+    fov: SET_PIECE_FOV,
+  }
+}
+
+/**
+ * 골 리액션 클로즈 — 실제 중계 문법의 "골 → 골대 뒤 → 득점자 → 와이드" 중 세 번째 컷.
+ * 득점 지점을 13m 앞에서 낮게 올려다본다. 코너 근처 득점이면 {@link clampShot}가 카메라를
+ * 볼 안쪽으로 밀어 넣는데, 이 방향의 클램프는 **더 가까워지는 쪽**이라 클로즈 컷의 성격이
+ * 깨지지 않는다(멀어지는 클램프였다면 앵글이 아니라 사고가 된다).
+ */
+function reactionShot(fx: number, fz: number, t: number, seed: number): CameraShot {
+  const side = fx >= 0 ? 1 : -1
+  const sway = 0.08 * Math.sin(t * 0.45 + phase(seed, 7))
+  // 득점자가 카메라를 향해 달려오도록 공격 방향 앞쪽·사이드라인 쪽에 선다.
+  const ang = -Math.PI / 2 + side * (0.55 + sway)
+  return {
+    pos: {
+      x: fx + Math.cos(ang) * REACTION_DIST,
+      y: REACTION_Y + 0.3 * Math.sin(t * 0.7 + phase(seed, 8)),
+      z: fz + Math.sin(ang) * REACTION_DIST,
+    },
+    lookAt: { x: fx, y: 1.7, z: fz },
+    fov: REACTION_FOV,
   }
 }
 
@@ -199,15 +394,20 @@ function goalCamShot(fx: number, fz: number, t: number, seed: number): CameraSho
   }
 }
 
-/** 세리머니 오빗 — 득점 지점 주위를 결정론 각속도로 완만히 돈다. */
+/**
+ * 세리머니 오빗 — 득점 지점 주위를 결정론 각속도로 완만히 돈다.
+ * 오빗 중심은 focus를 피치 중앙 쪽으로 당긴 피벗이다(코너 득점에서도 원이 볼 안에 남는다).
+ */
 function celebrateShot(fx: number, fz: number, t: number, seed: number): CameraShot {
   const omega = CELEBRATE_OMEGA * (0.85 + unit(seed, 5) * 0.3)
   const ang = phase(seed, 6) + t * omega
+  const px = fx * CELEBRATE_PIVOT_X
+  const pz = fz * CELEBRATE_PIVOT_Z
   return {
     pos: {
-      x: fx + Math.cos(ang) * CELEBRATE_RADIUS,
+      x: px + Math.cos(ang) * CELEBRATE_RADIUS,
       y: CELEBRATE_Y + 1.2 * Math.sin(ang * 0.5),
-      z: fz + Math.sin(ang) * CELEBRATE_RADIUS,
+      z: pz + Math.sin(ang) * CELEBRATE_RADIUS,
     },
     lookAt: { x: fx, y: 1.6, z: fz },
     fov: CELEBRATE_FOV,

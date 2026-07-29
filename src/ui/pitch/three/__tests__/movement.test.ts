@@ -4,6 +4,7 @@ import { createMatch } from '../../../../engine/simulate'
 import { makeTestTeam } from '../../../../engine/fixtures/testTeams'
 import { buildSequence, type ChoreoStep } from '../../choreography'
 import { slotCoords } from '../../formations'
+import { backlineIndices, lineDepth, tacticalCoords } from '../../shape'
 import { strideLength } from '../player3d'
 import { PITCH_H, PITCH_W, toWorld, type FrameState } from '../types'
 import {
@@ -32,7 +33,8 @@ function distToLineupSegments(bx: number, bz: number): number {
   for (const side of ['home', 'away'] as const) {
     const st = base[side]
     st.tactics.lineup.forEach((_, i) => {
-      const c = slotCoords(st.tactics.formation, i, side)
+      // 무사건 분 패스 체인은 **전술 좌표**를 잇는다(3D·2D 동일 정본).
+      const c = tacticalCoords(st.tactics.formation, i, side, st.tactics.instructions)
       pts.push(toWorld(c.x, c.y))
     })
   }
@@ -123,7 +125,7 @@ describe('computeFrame — prev=null 첫 프레임', () => {
     const f = computeFrame(input())
     const tol = BALL_SHIFT + CONVERGE_MAX + 2
     base.home.tactics.lineup.forEach((slot, i) => {
-      const c = slotCoords(base.home.tactics.formation, i, 'home')
+      const c = tacticalCoords(base.home.tactics.formation, i, 'home', base.home.tactics.instructions)
       const anchor = toWorld(c.x, c.y)
       const pose = find(f, slot.playerId)
       expect(Math.hypot(pose.x - anchor.x, pose.z - anchor.z)).toBeLessThanOrEqual(tol)
@@ -266,7 +268,7 @@ describe('computeFrame — 볼 시프트(팀 라인 전후 이동)', () => {
     const f = computeFrame(input({ sequence: pinnedBall(50, 50), sequenceSide: 'home', t: 0.5 }))
     const ball = f.ball
     const dists = base.home.tactics.lineup.map((slot, i) => {
-      const c = slotCoords(base.home.tactics.formation, i, 'home')
+      const c = tacticalCoords(base.home.tactics.formation, i, 'home', base.home.tactics.instructions)
       const a = toWorld(c.x, c.y)
       return {
         anchor: Math.hypot(a.x - ball.x, a.z - ball.z),
@@ -769,6 +771,81 @@ describe('gaitPhase(보폭 위상)', () => {
       prev = f
     }
     expect(moved).toBeGreaterThan(0)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3D 정적 배치 ↔ 2D 작전판 정합 — 같은 정본(tacticalCoords)에서 파생돼야 한다
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('전술 좌표 정합(3D ↔ 2D)', () => {
+  /** lineHeight/pressing만 바꾼 상태(양 팀 동일). 나머지는 base 그대로. */
+  function withInstructions(lineHeight: number, pressing = 50): MatchState {
+    const patch = (st: MatchState['home']) => ({
+      ...st,
+      tactics: { ...st.tactics, instructions: { ...st.tactics.instructions, lineHeight, pressing } },
+    })
+    return { ...base, home: patch(base.home), away: patch(base.away) }
+  }
+
+  /** 정적 배치 프레임(안무 없음·볼 중앙 고정·prev 없음) — 무버 개입 없이 앵커만 본다. */
+  const staticFrame = (state: MatchState) =>
+    computeFrame(input({ state, sequence: pinnedBall(50, 50), sequenceSide: 'home', t: 0.5 }))
+
+  const median = (xs: number[]) => {
+    const s = [...xs].sort((a, b) => a - b)
+    return s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2
+  }
+
+  /** 각 필드 플레이어의 실제 포즈 ↔ 앵커 좌표 거리(m). GK는 박스 로직이라 제외. */
+  function deviations(f: FrameState, state: MatchState, anchor: 'slot' | 'tactical'): number[] {
+    const out: number[] = []
+    for (const side of ['home', 'away'] as const) {
+      const st = state[side]
+      st.tactics.lineup.forEach((slot, i) => {
+        if (i === 0) return
+        const c = anchor === 'slot'
+          ? slotCoords(st.tactics.formation, i, side)
+          : tacticalCoords(st.tactics.formation, i, side, st.tactics.instructions)
+        const w = toWorld(c.x, c.y)
+        const p = find(f, slot.playerId)
+        out.push(Math.hypot(p.x - w.x, p.z - w.z))
+      })
+    }
+    return out
+  }
+
+  // 중앙값을 쓰는 이유: 볼 수렴(CONVERGE_COUNT=3명/팀)이 소수의 선수를 최대 12m 당긴다.
+  // 나머지 대다수는 앵커 + 미세 흔들림(최대 √2·1.1 ≈ 1.56m)만 받으므로 중앙값이
+  // "정적 배치가 어느 좌표계를 쓰는가"를 오염 없이 드러낸다(볼 중앙 → 라인 시프트 0).
+  const WOBBLE_MAX = Math.hypot(1.1, 1.1)
+
+  for (const lineHeight of [10, 90] as const) {
+    it(`극단 lineHeight ${lineHeight}에서 정적 배치가 tacticalCoords를 따른다`, () => {
+      const state = withInstructions(lineHeight)
+      const f = staticFrame(state)
+      expect(median(deviations(f, state, 'tactical'))).toBeLessThanOrEqual(WOBBLE_MAX)
+    })
+
+    it(`극단 lineHeight ${lineHeight}에서 slotCoords 원형과는 유의미하게 어긋난다(회귀 가드)`, () => {
+      const state = withInstructions(lineHeight)
+      const f = staticFrame(state)
+      // 흔들림만으로는 절대 나올 수 없는 이탈 — 예전 slotCoords 배치로 되돌아가면 여기서 걸린다.
+      expect(median(deviations(f, state, 'slot'))).toBeGreaterThan(WOBBLE_MAX * 3)
+    })
+  }
+
+  it('lineHeight를 올리면 3D 백라인도 실제로 전진한다(2D 라인 마커와 같은 방향)', () => {
+    const low = staticFrame(withInstructions(10))
+    const high = staticFrame(withInstructions(90))
+    const backline = backlineIndices(base.home.tactics.formation)
+    const meanX = (f: FrameState) =>
+      backline.reduce((s, i) => s + find(f, homeId(i)).x, 0) / backline.length
+    // 0~100 좌표의 lineDepth 차이를 월드 m로 환산한 값에 근접해야 한다.
+    // 완전 일치가 아닌 이유: 볼 수렴·경계 클램프가 개별 수비수를 몇 m 흔든다(WOBBLE_MAX 이내가
+    // 아니라 수렴 폭까지 열어둔다). slotCoords 시절엔 이 차이가 0에 가까웠다 — 큰 회귀 신호.
+    const expected = ((lineDepth(90) - lineDepth(10)) / 100) * PITCH_W
+    expect(Math.abs(meanX(high) - meanX(low) - expected)).toBeLessThan(2.5)
   })
 })
 

@@ -6,7 +6,8 @@
 //  - three는 **동적 import만**. 이 모듈 자체도 App에서 lazy로 부른다 → 문안·버튼이 먼저 뜬다.
 //  - WebGL2 불가 · 렌더러 생성 실패 · 청크 로드 실패 · 컨텍스트 로스 → **조용히 사라진다**
 //    (아무것도 렌더하지 않음). 랜딩 CSS 그라디언트가 그대로 배경으로 남는다.
-//  - Math.random·Date 금지. 카메라 위상은 상수, 시간은 three Timer.
+//  - Math.random·Date 금지. 카메라 궤적은 `./camera`의 순수 함수(상수 + 삼각함수),
+//    시간은 three Timer. 구도의 근거와 조명탑 회피 계산은 camera.ts 헤더에 있다.
 //  - prefers-reduced-motion → rAF 루프 없이 **1프레임만** 그린다(정지 화면).
 //  - 포스트 프로세싱(블룸·비네트·그레인)을 **경기 화면과 같은 스택**으로 얹는다. 첫인상
 //    화면이라 값이 가장 크고, 조명탑이 halo를 얻는 순간 "절차 생성 티"가 크게 줄어든다.
@@ -16,24 +17,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPostFX } from '../pitch/three/postfx'
 import { EMISSIVE_BOOST, buildScene, type ThreeAPI } from '../pitch/three/scene'
+import { FOV, LOOK_AT_Y, landingCameraAt } from './camera'
 
 /** 랜딩 배경은 경기 화면보다 가벼워야 한다(첫 로드 체감) — 관중 절반, 피치 텍스처 저해상도. */
 const CROWD_COUNT = 2000
 const PX_PER_M = 10
 
-/** 오빗 반경(m) — 스타디움 볼(가장 먼 스탠드 외곽 ≈ 85m) 바깥에서 전체를 잡는 거리. */
-const ORBIT_R = 148
-/** 카메라 높이(m) — 관중석 지붕선 위에서 내려다보는 항공 확립샷. */
-const ORBIT_Y = 62
-/** 각속도(rad/s) — 한 바퀴 ≈ 3분 30초. 멀미 방지를 위해 아주 느리게. */
-const ORBIT_OMEGA = 0.03
-/** 시작 각(rad) — 메인 스탠드 대각선에서 출발해 첫 프레임부터 관중석이 보인다. */
-const ORBIT_PHASE = 0.85
-/** 상하 드리프트 진폭(m)과 각속도 — 손으로 든 카메라 느낌의 미세 호흡. */
-const BOB_AMP = 1.4
-const BOB_OMEGA = 0.11
-/** 시야각. */
-const FOV = 38
 /** 픽셀비 상한 — 배경일 뿐이므로 2까지 올릴 이유가 없다. */
 const MAX_DPR = 1.5
 
@@ -107,13 +96,9 @@ export function StadiumBackdrop() {
       camera.updateProjectionMatrix()
 
       const place = (t: number): void => {
-        const a = ORBIT_PHASE + t * ORBIT_OMEGA
-        camera.position.set(
-          Math.cos(a) * ORBIT_R,
-          ORBIT_Y + Math.sin(t * BOB_OMEGA) * BOB_AMP,
-          Math.sin(a) * ORBIT_R,
-        )
-        camera.lookAt(0, 6, 0)
+        const p = landingCameraAt(t)
+        camera.position.set(p.x, p.y, p.z)
+        camera.lookAt(0, LOOK_AT_Y, 0)
       }
 
       const post = await createPostFX(THREE, renderer, scene, camera, { reducedMotion: reduced })

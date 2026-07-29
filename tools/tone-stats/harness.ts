@@ -22,8 +22,20 @@ import { createPostFX, type PostFX } from '../../src/ui/pitch/three/postfx'
 import { EMISSIVE_BOOST, buildScene, type SceneBundle, type ThreeAPI } from '../../src/ui/pitch/three/scene'
 import { toneStats, type ToneStats } from '../../src/ui/pitch/three/tone'
 
-/** 계측 대상 장면. Match3D·StadiumBackdrop의 대표 순간을 재현한다. */
-export type SceneName = 'landing' | 'broadcast' | 'goal'
+/**
+ * 계측 대상 장면. Match3D·StadiumBackdrop의 대표 순간을 재현한다.
+ * `reaction`·`setpiece`는 goal/broadcast와 같은 프레임을 **카메라 모드만 바꿔** 렌더한다 —
+ * 새 연출 모드의 프레임 비용을 기존 기준선과 같은 조건에서 비교하기 위해서다.
+ */
+export type SceneName = 'landing' | 'broadcast' | 'goal' | 'reaction' | 'setpiece'
+
+/** 장면 → 카메라 연출 모드. */
+const SCENE_CAMERA: Record<Exclude<SceneName, 'landing'>, CameraMode> = {
+  broadcast: 'broadcast',
+  goal: 'goal-cam',
+  reaction: 'reaction',
+  setpiece: 'set-piece',
+}
 
 export interface RunOptions {
   scene: SceneName
@@ -74,8 +86,12 @@ const CAM_T = 12
 const BURST_AGE = 0.28
 const FLASH_AGE = 0.38
 
-/** 랜딩 배경 카메라(StadiumBackdrop 상수와 동일해야 계측이 의미를 갖는다). */
-const LANDING = { orbitR: 148, orbitY: 62, phase: 0.85, fov: 38, crowd: 2000, pxPerMeter: 10 }
+/**
+ * 랜딩 배경 카메라(StadiumBackdrop 상수와 동일해야 계측이 의미를 갖는다).
+ * phase/orbitR/orbitY는 StadiumBackdrop의 landingCameraAt(0) — 즉 호 왕복의 중심이자
+ * prefers-reduced-motion에서 실제로 그려지는 정지 컷이다(달리·보브 항은 t=0에서 0).
+ */
+const LANDING = { orbitR: 110, orbitY: 50, phase: 3.3, lookY: 16, fov: 38, crowd: 2000, pxPerMeter: 10 }
 /** 경기 화면 씬 파라미터(Match3D 상수와 동일). */
 const MATCH = { crowd: 4200, pxPerMeter: 20 }
 
@@ -171,7 +187,7 @@ async function build(opts: RunOptions): Promise<Live> {
       LANDING.orbitY,
       Math.sin(LANDING.phase) * LANDING.orbitR,
     )
-    camera.lookAt(0, 6, 0)
+    camera.lookAt(0, LANDING.lookY, 0)
     camera.updateProjectionMatrix()
   } else {
     const frame = computeFrame({
@@ -206,7 +222,7 @@ async function build(opts: RunOptions): Promise<Live> {
     bundle.scene.add(ball.group)
     extras.push(ball)
 
-    const mode: CameraMode = opts.scene === 'goal' ? 'goal-cam' : 'broadcast'
+    const mode: CameraMode = SCENE_CAMERA[opts.scene as Exclude<SceneName, 'landing'>] ?? 'broadcast'
     const rig = createCameraRig({ seed: SEED, mode })
     rig.update({ focus: frame.focus, t: CAM_T, dt: 1 / 60, camera })
 

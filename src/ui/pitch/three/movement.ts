@@ -14,7 +14,10 @@
 import type { MatchEvent, MatchEventType, MatchState, SideState } from '../../../engine/types'
 import type { BallArc, ChoreoStep } from '../choreography'
 import { possessingSide } from '../flow'
-import { slotCoords } from '../formations'
+// 정적 배치의 정본은 **전술이 반영된** 좌표다. slotCoords(포메이션 원형)를 쓰면
+// 라인 높이를 올린 유저가 라이브(3D)→분석(2D) 디졸브에서 수비진이 최대 15m
+// 미끄러지는 것을 본다 — 3D와 2D 작전판은 같은 숫자에서 파생돼야 한다.
+import { tacticalCoords } from '../shape'
 // 보폭 모델은 표시 계층 전체가 **하나**를 공유한다(player3d가 정본).
 // player3d는 three를 정적 import하지 않으므로 이 import로 번들이 커지지 않는다.
 import { MIN_GAIT_SPEED, strideLength } from './player3d'
@@ -282,7 +285,7 @@ function idleChain(st: SideState, side: 'home' | 'away', minute: number, seed: n
   const pool: { x: number; y: number }[] = []
   for (let i = 1; i < lineup.length; i++) {
     if (sentOff.has(lineup[i].playerId)) continue
-    pool.push(slotCoords(st.tactics.formation, i, side))
+    pool.push(tacticalCoords(st.tactics.formation, i, side, st.tactics.instructions))
   }
   if (pool.length === 0) return pts
   let cur = pool.splice(hash(`idle:${seed}:${minute}`) % pool.length, 1)[0]
@@ -380,7 +383,7 @@ function planSide(
       tx = g.x
       tz = g.z
     } else {
-      const c = slotCoords(st.tactics.formation, index, side)
+      const c = tacticalCoords(st.tactics.formation, index, side, st.tactics.instructions)
       const a = toWorld(c.x, c.y)
       // 시드 해시 기반 미세 흔들림(로봇 대형 방지) — 분 경계에서 연속.
       const ph = unit(`${seed}:${id}`) * TAU

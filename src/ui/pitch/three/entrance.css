@@ -1,0 +1,218 @@
+/* 입장 연출 오버레이 — 방송 그래픽 톤(tokens.css --bc-* 사용, 인라인 스타일 금지). */
+
+.ent {
+  position: absolute;
+  inset: 0;
+  z-index: 40; /* 스코어버그(20)·티커보다 위 — 킥오프 전까지는 이 화면이 주인공이다. */
+  font-family: var(--bc-font);
+  color: var(--bc-text);
+  /* 오버레이는 경기 화면 클릭을 막지 않는다. 건너뛰기 버튼만 예외로 되살린다. */
+  pointer-events: none;
+  user-select: none;
+  overflow: hidden;
+}
+
+/* ── 상단 자막 바 ─────────────────────────────────────────── */
+.ent__bar {
+  position: absolute;
+  top: 22px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 18px 9px 12px;
+  border: 1px solid var(--bc-line);
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(26, 39, 66, 0.94), rgba(11, 18, 32, 0.94));
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+  animation: ent-bar-in 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.ent__accent {
+  width: 4px;
+  align-self: stretch;
+  border-radius: 2px;
+  background: var(--bc-home);
+}
+
+.ent__subtitle {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.ent__formation {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--bc-accent);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 선수 소개 카드 ───────────────────────────────────────── */
+.ent__card {
+  position: absolute;
+  left: 50%;
+  bottom: 108px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  min-width: 320px;
+  border: 1px solid var(--bc-line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--bc-panel-2), var(--bc-panel));
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+  /* 등장 → 유지 → 퇴장을 한 사이클(0.5s 슬롯)에 담는다. 카드는 순번마다 다시 마운트된다. */
+  animation: ent-card-cycle 500ms ease-out both;
+}
+
+.ent__card-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 68px;
+  padding: 0 10px;
+  background: var(--bc-home);
+  color: #fff;
+  font-size: 34px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.ent__card-body {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 12px 20px;
+  flex: 1 1 auto;
+}
+
+.ent__card-name {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.ent__card-pos {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: var(--bc-text-dim);
+}
+
+.ent__card-count {
+  display: flex;
+  align-items: flex-end;
+  padding: 12px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--bc-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 라인업 시트(홈 XI 요약) ──────────────────────────────── */
+.ent__sheet {
+  position: absolute;
+  left: 50%;
+  bottom: 54px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  max-width: min(92%, 900px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  animation: ent-sheet-in 420ms ease-out both;
+}
+
+.ent__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--bc-line);
+  border-radius: 999px;
+  background: rgba(18, 28, 48, 0.82);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--bc-text-dim);
+  transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease;
+}
+
+.ent__chip-num {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+}
+
+.ent__chip--on {
+  border-color: var(--bc-accent);
+  background: rgba(200, 245, 66, 0.14);
+  color: var(--bc-text);
+}
+
+/* ── 건너뛰기 ─────────────────────────────────────────────── */
+.ent__skip {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  pointer-events: auto;
+  padding: 8px 16px;
+  border: 1px solid var(--bc-line);
+  border-radius: 999px;
+  background: rgba(11, 18, 32, 0.88);
+  color: var(--bc-text);
+  font-family: var(--bc-font);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+}
+
+.ent__skip:hover {
+  border-color: var(--bc-accent);
+  color: var(--bc-accent);
+}
+
+.ent__skip:focus-visible {
+  outline: 2px solid var(--bc-accent);
+  outline-offset: 2px;
+}
+
+/* ── 애니메이션 ───────────────────────────────────────────── */
+@keyframes ent-bar-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-14px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes ent-sheet-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* 아래에서 올라왔다(0~24%) 머물고(~78%) 사라진다(~100%). */
+@keyframes ent-card-cycle {
+  0%   { opacity: 0; transform: translateX(-50%) translateY(26px); }
+  24%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+  78%  { opacity: 1; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+}
+
+/* 모션 최소화 — 슬라이드는 전부 끄고 카드만 즉시 교체된다(정보는 그대로 전달). */
+@media (prefers-reduced-motion: reduce) {
+  .ent__bar,
+  .ent__sheet,
+  .ent__card {
+    animation: none;
+  }
+  .ent__chip {
+    transition: none;
+  }
+}

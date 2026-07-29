@@ -17,6 +17,10 @@ import { ShootoutPanel } from './ShootoutPanel'
 // 스탯 표는 워룸·작전판과 공유하기 위해 별도 모듈로 뽑았다(StatsTable.tsx).
 import { StatsTable } from './StatsTable'
 import { ShoutBar } from './ShoutBar'
+// 입장 연출 — three 무의존이라 정적 import여도 3D 청크 분리가 깨지지 않는다.
+// (entrance.ts/EntranceOverlay.tsx 모두 three를 타입으로도 import하지 않는다.)
+import { EntranceOverlay } from '../pitch/three/EntranceOverlay'
+import { buildEntranceCast, type EntranceCast } from '../pitch/three/entrance'
 import {
   minuteDwellWithSpeech, pickDramaEvent, isImportantEvent, isHighlightEvent, eventIndex, type PlaybackSpeed,
 } from './playback'
@@ -171,6 +175,12 @@ export function MatchScreen({
   const firedGoalMinuteRef = useRef(-1)
   const spokenMinuteRef = useRef(-1)
   const prevPhaseRef = useRef<string | null>(null)
+
+  // 입장 연출 — cast가 있는 동안만 재생된다(phase는 아직 'pre').
+  // 클럭의 정본은 오버레이다(자체 rAF). 3D 씬은 이 ref를 읽어 같은 시각을 그리므로
+  // 폴백(Pixi/SVG)에서 3D가 없어도 자막·소개 카드는 그대로 돌아간다.
+  const [entranceCast, setEntranceCast] = useState<EntranceCast | null>(null)
+  const entranceClock = useRef(0)
 
   // 경기 초기화(마운트/픽스처 변경 시). 엔진은 pre 상태로 준비.
   // initialTactics/firstHalfScript/staminaOverride는 매치별로 안정 참조(App에서 memo).
@@ -353,12 +363,24 @@ export function MatchScreen({
     ctts.stopAll()
   }, [])
 
-  // 킥오프: 유저 제스처에서 AudioContext init → 휘슬 1회 + 관중 루프 시작. TTS 보이스 탐색도 여기서.
+  // 킥오프: 유저 제스처에서 AudioContext init → 관중 루프 시작. TTS 보이스 탐색도 여기서.
+  //
+  // 휘슬은 여기서 불지 않는다. 입장 연출(약 13.8초)이 먼저 재생되고, 선수가 흩어져
+  // 자리를 잡은 뒤에야 킥오프 휘슬이 울려야 순서가 맞는다. 실제 중계도 그렇다.
   function handleKickoff() {
     sfx.init()
     ctts.initVoice()
-    sfx.whistle('kickoff')
     sfx.crowdLoop('start', 0.3)
+    // 엔진이 아직 준비 전이면(이론상 도달 불가) 연출을 건너뛰고 바로 시작한다.
+    if (!engine) { sfx.whistle('kickoff'); kickoff(); return }
+    entranceClock.current = 0
+    setEntranceCast(buildEntranceCast(engine))
+  }
+
+  /** 입장 연출 종료(자연 종료·건너뛰기 공통) — 여기서 비로소 경기가 시작된다. */
+  function handleEntranceDone() {
+    setEntranceCast(null)
+    sfx.whistle('kickoff')
     kickoff()
   }
 
@@ -488,7 +510,7 @@ export function MatchScreen({
 
   return (
     <div className={`ms-root ms-root--broadcast${tacticsMounted && !tacticsExiting ? ' ms-root--tactics' : ''}`}>
-      <div className={`ms-stage${tacticsMounted && !tacticsExiting ? ' ms-stage--dim' : ''}${phase === 'pre' ? ' ms-stage--pre' : ''}`}>
+      <div className={`ms-stage${tacticsMounted && !tacticsExiting ? ' ms-stage--dim' : ''}${phase === 'pre' && !entranceCast ? ' ms-stage--pre' : ''}`}>
         <Scorebug
           home={home}
           away={away}
@@ -573,7 +595,13 @@ export function MatchScreen({
               <Suspense fallback={pitchSvg}>
                 {/* event: 하이라이트가 아닌 분엔 null — movement가 그 분의 코너·파울을
                     역추적해 엉뚱한 궤적·카메라를 붙이지 않게 명시적으로 끊는다. */}
-                <Match3D {...pitchProps} event={live3d ? highlight!.event : null} fallback={pitch2d} />
+                <Match3D
+                  {...pitchProps}
+                  event={live3d ? highlight!.event : null}
+                  fallback={pitch2d}
+                  entrance={entranceCast}
+                  entranceClock={entranceClock}
+                />
               </Suspense>
             </PitchBoundary>
           ) : (
@@ -594,6 +622,16 @@ export function MatchScreen({
               sequenceSide={activeSide}
               caption={analysisCaption}
               visible={analysisOn}
+            />
+          )}
+          {/* 입장 연출 오버레이 — 자막·선수 소개 카드·건너뛰기.
+              피치 위에 겹치지만 연출이 끝나면 즉시 사라지므로 "피치 상시 노출" 원칙과
+              충돌하지 않는다(경기는 아직 시작 전이다). */}
+          {entranceCast && (
+            <EntranceOverlay
+              cast={entranceCast}
+              onDone={handleEntranceDone}
+              onProgress={ms => { entranceClock.current = ms }}
             />
           )}
         </div>
@@ -632,7 +670,9 @@ export function MatchScreen({
             방송 스테이지(피치)는 배경으로 남고, 워룸이 그 아래에 붙는다.
             tacticsMode에 'pre'를 넣지 않는 이유: TacticsBoard 오버레이가 전술 센터
             위에 이중으로 뜬다. 'pre'의 지휘 UI는 전술 센터 하나뿐이다. ── */}
-        {phase === 'pre' && (
+        {/* 입장 연출 중에는 워룸을 내린다 — 킥오프를 이미 눌렀으므로 설계는 끝났고,
+            남겨두면 연출이 상단 24vh 띠에서 재생돼 "진짜 경기처럼"이 무너진다. */}
+        {phase === 'pre' && !entranceCast && (
           <div className="ms-precenter">
             <TacticsCenter onKickoff={handleKickoff} referenceScore={referenceScore} />
           </div>

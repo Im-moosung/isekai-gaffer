@@ -4,23 +4,38 @@ import { describe, it, expect } from 'vitest'
 import {
   BROADCAST_FOLLOW,
   BROADCAST_FOV,
+  BROADCAST_FOV_TIGHT,
   BROADCAST_MAX_PAN,
   BROADCAST_Y,
+  BROADCAST_Y_TIGHT,
   BROADCAST_Z,
+  BROADCAST_Z_TIGHT,
   CAM_MAX_X,
   CAM_MAX_Z,
   CAM_MIN_Y,
+  CELEBRATE_PIVOT_X,
+  CELEBRATE_PIVOT_Z,
   CELEBRATE_RADIUS,
   END_STAND_INNER_X,
   HIGHLIGHT_DIST,
+  HIGHLIGHT_DIST_TIGHT,
   HIGHLIGHT_FOV,
+  HIGHLIGHT_FOV_TIGHT,
   HIGHLIGHT_Y,
+  HIGHLIGHT_Y_TIGHT,
+  REACTION_DIST,
+  REACTION_FOV,
+  REACTION_Y,
+  SET_PIECE_FOV,
+  SET_PIECE_Y,
   SHAKE_MAX,
+  SIDE_STAND_INNER_Z,
   TRANSITION_S,
   applyCamera,
   cameraFor,
   clampShot,
   createCameraRig,
+  danger,
   easeInOutCubic,
   lerpShot,
   shake,
@@ -30,7 +45,14 @@ import {
 } from '../camera'
 import { PITCH_W } from '../types'
 
-const MODES: CameraMode[] = ['broadcast', 'highlight', 'goal-cam', 'celebrate']
+const MODES: CameraMode[] = [
+  'broadcast',
+  'highlight',
+  'goal-cam',
+  'celebrate',
+  'reaction',
+  'set-piece',
+]
 
 /** applyCamera 검증용 구조적 카메라 스텁(호출 순서까지 기록). */
 function stubCamera(fov = 40): CameraLike & {
@@ -82,6 +104,32 @@ function expectShotClose(got: CameraShot, want: CameraShot): void {
   expect(got.fov).toBeCloseTo(want.fov, 9)
 }
 
+describe('danger — 중계 문법의 축', () => {
+  it('센터서클은 0, 골문 앞은 1, 그 사이는 단조 증가한다', () => {
+    expect(danger(0, 0)).toBe(0)
+    expect(danger(48, 0)).toBe(1)
+    expect(danger(-48, 0)).toBe(1)
+    let prev = -1
+    for (let x = 0; x <= 52; x += 2) {
+      const g = danger(x, 0)
+      expect(g).toBeGreaterThanOrEqual(prev)
+      prev = g
+    }
+    // 좌우 대칭이고 x=0에서 튀지 않는다(가까운 골문으로 계산하기 때문)
+    expect(danger(30, 7)).toBeCloseTo(danger(-30, -7), 12)
+    expect(danger(0.001, 0)).toBeCloseTo(danger(-0.001, 0), 12)
+  })
+
+  it('연속 함수다(급격한 컷이 생기지 않는다)', () => {
+    let prev = danger(-56, 3)
+    for (let x = -56; x <= 56; x += 0.25) {
+      const g = danger(x, 3)
+      expect(Math.abs(g - prev)).toBeLessThan(0.03)
+      prev = g
+    }
+  })
+})
+
 describe('cameraFor — broadcast', () => {
   it('사이드라인 상단에 서고 FOV는 방송 화각', () => {
     const s = cameraFor('broadcast', { x: 0, z: 0 }, 0, 7)
@@ -93,12 +141,28 @@ describe('cameraFor — broadcast', () => {
     expect(BROADCAST_FOV).toBe(34)
   })
 
+  it('빌드업은 넓게, 박스 근처는 좁게(연속 보간)', () => {
+    const mid = cameraFor('broadcast', { x: 0, z: 0 }, 0, 7)
+    const box = cameraFor('broadcast', { x: 47, z: 4 }, 0, 7)
+    // 마무리 국면: 앞으로 나오고, 낮아지고, 화각이 좁아진다
+    expect(box.pos.z).toBeCloseTo(BROADCAST_Z_TIGHT, 6)
+    expect(box.pos.y).toBeGreaterThan(BROADCAST_Y_TIGHT - 1)
+    expect(box.pos.y).toBeLessThan(BROADCAST_Y_TIGHT + 1)
+    expect(box.fov).toBeCloseTo(BROADCAST_FOV_TIGHT, 6)
+    expect(box.pos.z).toBeGreaterThan(mid.pos.z)
+    expect(box.pos.y).toBeLessThan(mid.pos.y)
+    expect(box.fov).toBeLessThan(mid.fov)
+    // 중간 지점은 양 끝 사이 — 점프가 아니라 램프다
+    const between = cameraFor('broadcast', { x: 24, z: 0 }, 0, 7)
+    expect(between.fov).toBeLessThan(mid.fov)
+    expect(between.fov).toBeGreaterThan(box.fov)
+  })
+
   it('focus.x를 게인만큼 부분 추종하고(스무딩) lookAt은 완전 추종한다', () => {
-    const f = { x: 40, z: 6 }
+    const f = { x: 20, z: 6 } // 중원 — 위험도가 낮아 기본 게인 근처
     const s = cameraFor('broadcast', f, 0, 3)
-    // 카메라는 focus.x * BROADCAST_FOLLOW 근처(호흡 드리프트 ±0.5 이내)
     expect(s.pos.x).toBeGreaterThan(f.x * BROADCAST_FOLLOW - 0.5)
-    expect(s.pos.x).toBeLessThan(f.x * BROADCAST_FOLLOW + 0.5)
+    expect(s.pos.x).toBeLessThan(f.x * (BROADCAST_FOLLOW + 0.1) + 0.5)
     // 완전 추종(=1.0)도 정지(=0)도 아니다
     expect(s.pos.x).toBeLessThan(f.x - 5)
     expect(s.pos.x).toBeGreaterThan(5)
@@ -118,28 +182,91 @@ describe('cameraFor — broadcast', () => {
 })
 
 describe('cameraFor — highlight', () => {
-  it('액션 존으로 하강·근접한다(y≈14, 거리 35, FOV 30)', () => {
+  it('액션 존으로 하강·근접한다(broadcast보다 낮고 가깝다)', () => {
     const f = { x: 12, z: -4 }
     const s = cameraFor('highlight', f, 0, 11)
-    expect(s.pos.y).toBeCloseTo(HIGHLIGHT_Y, 6)
-    expect(HIGHLIGHT_Y).toBe(14)
-    expect(horiz(s, f)).toBeCloseTo(HIGHLIGHT_DIST, 6)
-    expect(HIGHLIGHT_DIST).toBe(35)
-    expect(s.fov).toBe(HIGHLIGHT_FOV)
-    expect(HIGHLIGHT_FOV).toBe(30)
-    // broadcast보다 확실히 낮고 가깝다
+    expect(s.pos.y).toBeLessThanOrEqual(HIGHLIGHT_Y)
+    expect(s.pos.y).toBeGreaterThanOrEqual(HIGHLIGHT_Y_TIGHT)
+    expect(horiz(s, f)).toBeLessThanOrEqual(HIGHLIGHT_DIST + 1e-6)
     const b = cameraFor('broadcast', f, 0, 11)
-    expect(s.pos.y).toBeLessThan(b.pos.y - 10)
+    expect(s.pos.y).toBeLessThan(b.pos.y - 8)
     expect(horiz(s, f)).toBeLessThan(horiz(b, f))
     expect(s.lookAt.x).toBeCloseTo(f.x, 6)
     expect(s.lookAt.z).toBeCloseTo(f.z, 6)
   })
 
-  it('거리는 focus·시간과 무관하게 유지된다(각도만 흔들린다)', () => {
+  it('위험도에 따라 거리·높이·화각이 좁혀진다(빌드업 40m → 마무리 24m)', () => {
+    const wide = { x: 0, z: 0 }
+    const tight = { x: 47, z: 2 }
+    const w = cameraFor('highlight', wide, 0, 2)
+    const g = cameraFor('highlight', tight, 0, 2)
+    expect(horiz(w, wide)).toBeCloseTo(HIGHLIGHT_DIST, 6)
+    expect(w.pos.y).toBeCloseTo(HIGHLIGHT_Y, 6)
+    expect(w.fov).toBeCloseTo(HIGHLIGHT_FOV, 6)
+    expect(horiz(g, tight)).toBeCloseTo(HIGHLIGHT_DIST_TIGHT, 6)
+    expect(g.pos.y).toBeCloseTo(HIGHLIGHT_Y_TIGHT, 6)
+    expect(g.fov).toBeCloseTo(HIGHLIGHT_FOV_TIGHT, 6)
+  })
+
+  it('거리는 같은 위험도라면 시간과 무관하다(각도만 흔들린다)', () => {
     for (const t of [0, 0.7, 4.3, 30]) {
-      for (const f of [{ x: -30, z: 20 }, { x: 44, z: -18 }, { x: 0, z: 0 }]) {
-        expect(horiz(cameraFor('highlight', f, t, 2), f)).toBeCloseTo(HIGHLIGHT_DIST, 6)
+      for (const f of [{ x: -30, z: 20 }, { x: 0, z: 0 }, { x: 20, z: -6 }]) {
+        const d0 = horiz(cameraFor('highlight', f, 0, 2), f)
+        expect(horiz(cameraFor('highlight', f, t, 2), f)).toBeCloseTo(d0, 6)
       }
+    }
+  })
+})
+
+describe('cameraFor — set-piece', () => {
+  it('높은 대각선에서 박스 쪽을 내려다본다', () => {
+    for (const f of [{ x: 50, z: 32 }, { x: -50, z: -32 }, { x: 46, z: -30 }]) {
+      const s = cameraFor('set-piece', f, 0, 3)
+      expect(s.pos.y).toBeCloseTo(SET_PIECE_Y, 6)
+      expect(s.fov).toBeCloseTo(SET_PIECE_FOV, 6)
+      // 시선은 focus와 골문 앞 박스 중심 사이 — focus 쪽 골문 방향이다
+      expect(Math.sign(s.lookAt.x)).toBe(Math.sign(f.x))
+      expect(Math.abs(s.lookAt.x)).toBeLessThan(Math.abs(f.x) + 1)
+      // 카메라는 골라인 쪽이 아니라 피치 중앙 쪽에서 대각으로 잡는다
+      expect(Math.abs(s.pos.x)).toBeLessThan(Math.abs(f.x))
+      // highlight보다 확실히 높고 멀다(박스 전체가 들어와야 한다)
+      const h = cameraFor('highlight', f, 0, 3)
+      expect(s.pos.y).toBeGreaterThan(h.pos.y + 10)
+      expect(horiz(s, f)).toBeGreaterThan(horiz(h, f))
+    }
+  })
+
+  it('코너 좌우가 대칭이다', () => {
+    const a = cameraFor('set-piece', { x: 50, z: 30 }, 0, 3)
+    const b = cameraFor('set-piece', { x: -50, z: 30 }, 0, 3)
+    expect(a.pos.x).toBeCloseTo(-b.pos.x, 6)
+    expect(a.pos.y).toBeCloseTo(b.pos.y, 6)
+  })
+})
+
+describe('cameraFor — reaction', () => {
+  it('득점 지점을 낮게 올려다보는 클로즈 컷', () => {
+    const f = { x: 44, z: 6 }
+    const s = cameraFor('reaction', f, 0, 5)
+    expect(s.pos.y).toBeGreaterThanOrEqual(CAM_MIN_Y)
+    expect(s.pos.y).toBeLessThan(REACTION_Y + 1) // 로우앵글
+    expect(s.lookAt.y).toBeGreaterThan(1.5) // 선수 상반신
+    expect(s.fov).toBeCloseTo(REACTION_FOV, 6)
+    expect(s.lookAt.x).toBeCloseTo(f.x, 6)
+    expect(s.lookAt.z).toBeCloseTo(f.z, 6)
+    // 세리머니 오빗(반경 20m)보다 확실히 가깝다 — 클로즈 → 와이드 순서가 성립한다
+    expect(horiz(s, f)).toBeCloseTo(REACTION_DIST, 6)
+    expect(REACTION_DIST).toBeLessThan(CELEBRATE_RADIUS)
+  })
+
+  it('코너 근처 득점에서도 관중석으로 밀려나지 않고, 클램프는 더 가까워지는 쪽이다', () => {
+    for (const f of [{ x: 52, z: 33 }, { x: -52, z: -33 }, { x: 52, z: -33 }]) {
+      const s = cameraFor('reaction', f, 0.5, 9)
+      expect(Math.abs(s.pos.x)).toBeLessThanOrEqual(END_STAND_INNER_X)
+      expect(Math.abs(s.pos.z)).toBeLessThanOrEqual(SIDE_STAND_INNER_Z)
+      // 클램프가 걸려도 클로즈 컷의 성격(가까움)은 유지된다
+      expect(horiz(s, f)).toBeLessThanOrEqual(REACTION_DIST + 1e-6)
+      expect(horiz(s, f)).toBeGreaterThan(4)
     }
   })
 })
@@ -178,12 +305,24 @@ describe('cameraFor — goal-cam', () => {
 })
 
 describe('cameraFor — celebrate', () => {
-  it('focus 주위를 일정 반경으로 오빗한다', () => {
+  it('득점 지점 피벗 주위를 일정 반경으로 오빗한다', () => {
     const f = { x: 30, z: -8 }
+    // 피벗은 focus를 피치 중앙 쪽으로 당긴 점 — 코너 득점에서도 원이 볼 안에 남는다.
+    const pivot = { x: f.x * CELEBRATE_PIVOT_X, z: f.z * CELEBRATE_PIVOT_Z }
     for (const t of [0, 0.5, 1.7, 6]) {
-      expect(horiz(cameraFor('celebrate', f, t, 6), f)).toBeCloseTo(CELEBRATE_RADIUS, 6)
+      expect(horiz(cameraFor('celebrate', f, t, 6), pivot)).toBeCloseTo(CELEBRATE_RADIUS, 6)
     }
     expect(cameraFor('celebrate', f, 0, 6).lookAt.x).toBeCloseTo(f.x, 6)
+    expect(cameraFor('celebrate', f, 0, 6).lookAt.z).toBeCloseTo(f.z, 6)
+  })
+
+  it('코너 득점에서도 관중석 슬래브를 통과하지 않는다(회귀: 반경 22 → 20 + 피벗)', () => {
+    // 예전엔 focus (58.5, 38) 부근 오빗이 x=80.5·z=60까지 나가 관중 사이를 지나갔다.
+    for (const t of [0, 1.1, 2.7, 4.4]) {
+      const s = cameraFor('celebrate', { x: 58, z: 38 }, t, 6)
+      expect(Math.abs(s.pos.z)).toBeLessThan(41)
+      expect(Math.abs(s.pos.x)).toBeLessThan(63)
+    }
   })
 
   it('각속도가 결정론적이며 실제로 회전한다', () => {
@@ -217,7 +356,6 @@ describe('cameraFor — 공통 불변식', () => {
             expect(Number.isFinite(s.pos.y)).toBe(true)
             expect(Number.isFinite(s.pos.z)).toBe(true)
             expect(s.pos.y).toBeGreaterThan(3)
-            expect(Math.abs(s.pos.z)).toBeLessThan(80)
             expect(Math.abs(s.pos.z)).toBeLessThanOrEqual(CAM_MAX_Z)
             expect(Math.abs(s.pos.x)).toBeLessThanOrEqual(CAM_MAX_X)
             expect(s.fov).toBeGreaterThan(10)
@@ -296,19 +434,34 @@ describe('shake', () => {
 })
 
 describe('clampShot', () => {
-  it('피치 아래·관중석 뒤·비정상 FOV를 안전값으로 끌어온다', () => {
+  it('낮은 샷은 관중석 안쪽 경계를 아예 못 넘는다', () => {
     const s = clampShot({
       pos: { x: 900, y: -12, z: -400 },
       lookAt: { x: 1, y: 2, z: 3 },
       fov: 200,
     })
-    expect(s.pos.y).toBe(CAM_MIN_Y)
-    expect(s.pos.y).toBeGreaterThan(3)
-    expect(s.pos.z).toBe(-CAM_MAX_Z)
-    expect(Math.abs(s.pos.z)).toBeLessThan(80)
-    expect(s.pos.x).toBe(CAM_MAX_X)
+    expect(s.pos.y).toBe(CAM_MIN_Y) // 피치 아래 금지
+    // y=4에서는 좌석 표면(첫 열 2.4m) + 여유 6m를 만족하는 침투가 0이다.
+    expect(s.pos.x).toBe(END_STAND_INNER_X)
+    expect(s.pos.z).toBe(-SIDE_STAND_INNER_Z)
     expect(s.fov).toBeLessThan(80)
     expect(s.lookAt).toEqual({ x: 1, y: 2, z: 3 })
+  })
+
+  it('높은 샷은 경사면 위 공중을 그만큼 더 쓸 수 있다(하드 박스에서 포화)', () => {
+    const high = clampShot({
+      pos: { x: 900, y: 30, z: -400 },
+      lookAt: { x: 0, y: 0, z: 0 },
+      fov: 34,
+    })
+    expect(high.pos.x).toBe(CAM_MAX_X)
+    expect(high.pos.z).toBe(-CAM_MAX_Z)
+    // 중간 높이는 두 극단 사이 — 높이에 따라 연속으로 넓어진다
+    const mid = clampShot({ pos: { x: 900, y: 12, z: -400 }, lookAt: { x: 0, y: 0, z: 0 }, fov: 34 })
+    expect(mid.pos.x).toBeGreaterThan(END_STAND_INNER_X)
+    expect(mid.pos.x).toBeLessThan(CAM_MAX_X)
+    expect(Math.abs(mid.pos.z)).toBeGreaterThan(SIDE_STAND_INNER_Z)
+    expect(Math.abs(mid.pos.z)).toBeLessThan(CAM_MAX_Z)
   })
 
   it('정상 범위 샷은 건드리지 않는다', () => {
