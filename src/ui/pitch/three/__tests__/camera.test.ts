@@ -11,6 +11,7 @@ import {
   CAM_MAX_Z,
   CAM_MIN_Y,
   CELEBRATE_RADIUS,
+  END_STAND_INNER_X,
   HIGHLIGHT_DIST,
   HIGHLIGHT_FOV,
   HIGHLIGHT_Y,
@@ -155,6 +156,17 @@ describe('cameraFor — goal-cam', () => {
     expect(west.pos.x).toBeLessThan(-PITCH_W / 2)
     expect(west.lookAt.x).toBeGreaterThan(west.pos.x)
     expect(west.pos.x).toBeCloseTo(-east.pos.x, 6)
+  })
+
+  it('골 뒤 카메라는 관중석 안으로 들어가지 않는다(러너프 위에 머문다)', () => {
+    // 회귀: GOAL_CAM_BEHIND가 12였을 때 x=±64.5로 END_STAND_INNER_X(59.5)를 넘어
+    // 카메라가 관중 인스턴스 사이에 박혔다 — 골 순간 화면 절반이 거대한 색 상자였다.
+    for (const fx of [-48, -20, 0, 20, 48]) {
+      for (const z of [-30, 0, 30]) {
+        const s = cameraFor('goal-cam', { x: fx, z }, 0.7, 5)
+        expect(Math.abs(s.pos.x)).toBeLessThan(END_STAND_INNER_X)
+      }
+    }
   })
 
   it('골 뒤 카메라는 골대 폭 근처에 머문다(코너로 도망가지 않음)', () => {

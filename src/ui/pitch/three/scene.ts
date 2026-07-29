@@ -9,8 +9,12 @@
 //  - 외부 에셋 0 — 모든 텍스처는 textures.ts의 canvas 절차 생성물. canvas 미지원 환경에서는
 //    null이 오므로 단색 머티리얼로 폴백한다(node/jsdom 테스트에서 크래시 금지).
 //
-// 렌더러는 호출부(Task 5) 소유다. 권장 설정: outputColorSpace=SRGBColorSpace,
-// toneMapping=ACESFilmicToneMapping, toneMappingExposure≈1.05, antialias=true.
+// 렌더러는 호출부 소유다. 권장 설정: outputColorSpace=SRGBColorSpace, antialias=true,
+// toneMapping=NeutralToneMapping, toneMappingExposure≈1.05.
+//   ACESFilmic에서 Neutral로 바꾼 근거(tools/tone-stats/sweep.mjs 실측, 랜딩 장면):
+//   ACES는 토우가 깊어 야간 씬의 25%가 순검정으로 뭉개지고(흑클립 24.65%) 관중석 채도가
+//   0.76→0.38로 무너졌다. Neutral(Khronos PBR Neutral)은 하이라이트만 롤오프하고 암부는
+//   거의 항등이라 흑클립 9.81%, 채도 0.62를 지킨다. 관중 색이 이 씬의 정보량 대부분이다.
 import type * as THREE_NS from 'three'
 import { PITCH_W, PITCH_H } from './types'
 import {
@@ -45,7 +49,37 @@ export interface BuildSceneOptions {
   pxPerMeter?: number
   /** renderer.capabilities.getMaxAnisotropy() 값. 기본 16. */
   maxAnisotropy?: number
+  /**
+   * 발광체(조명탑 리그·LED 광고보드)의 색을 1.0 위로 밀어 올리는 배율. 기본 1(=끄기).
+   *
+   * **포스트 프로세싱(블룸)이 붙을 때만 1보다 크게 준다.** 블룸은 임계값을 넘는 픽셀만
+   * 번지게 하는데, 모든 것이 [0,1]에 눌려 있으면 흰 잔디 라인과 조명탑이 같은 밝기라
+   * "번져야 할 것"을 구분할 수 없다. HalfFloat 렌더 타깃에서는 1.0 초과가 살아남으므로
+   * 발광체만 HDR로 올려 블룸이 그것만 집어내게 한다.
+   * 컴포저가 없을 때(폴백) 이 값을 주면 캔버스 출력에서 그냥 흰색으로 클리핑되므로
+   * 호출부는 포스트FX 활성 여부를 확인하고 넘겨야 한다. 기본값이 1인 이유다.
+   */
+  emissiveBoost?: number
+  /**
+   * 밤하늘(배경·포그) 색 배율. 기본 1.
+   *
+   * **왜 따로 필요한가:** 컴포저 없이 캔버스에 바로 그릴 때 배경 클리어 색은 셰이더를
+   * 거치지 않으므로 **톤매핑을 피해 간다**. 컴포저를 붙이면 배경도 렌더 타깃에 들어가
+   * OutputPass에서 함께 톤매핑되는데, ACES 계열은 토우가 깊어 0.0034(=#080e18) 같은
+   * 값을 사실상 0으로 눌러 버린다 → 남색 밤하늘이 순검정이 되고 스타디움이 허공에 뜬다.
+   * 톤매핑 뒤에도 원래 밤하늘이 남도록 선형 공간에서 미리 밀어 올린다.
+   */
+  skyBoost?: number
 }
+
+/**
+ * 권장 발광 배율. 조명탑은 블룸 임계(0.85)를 확실히 넘겨야 halo가 생긴다.
+ * 스윕 실측: 2.4배는 랜딩 카메라가 조명탑 옆을 지날 때 화면의 1/6이 흰 덩어리가 됐다.
+ * 1.7배가 halo는 남기고 코어 면적은 원래 패널 크기에 머무는 지점이었다.
+ */
+export const EMISSIVE_BOOST = 1.7
+/** LED 광고보드 배율 — 조명탑만큼 세면 피치 주변에 띠 모양 발광이 생겨 촌스럽다. */
+export const AD_BOARD_BOOST = 1.15
 
 export interface SceneBundle {
   scene: THREE_NS.Scene
@@ -70,6 +104,11 @@ export interface SceneBundle {
    * @param intensity 0=평상시 미세 흔들림, 1=골 세리머니 점프(파도타기)
    */
   crowdWave(t: number, intensity: number): void
+  /**
+   * 발광체(조명탑·LED 보드) HDR 배율을 런타임에 교체한다. {@link BuildSceneOptions.emissiveBoost}와
+   * 같은 의미이며, 포스트FX가 **비동기로** 붙는 호출부가 사후에 켤 수 있게 열어 둔다.
+   */
+  setEmissiveBoost(boost: number): void
   dispose(): void
 }
 
@@ -199,11 +238,28 @@ export function buildScene(THREE: ThreeAPI, opts: BuildSceneOptions = {}): Scene
   const awayColor = opts.awayColor ?? 0x2453b8
   const aniso = opts.maxAnisotropy ?? 16
   const targetCrowd = Math.max(0, Math.round(opts.crowdCount ?? 4000))
+  // 1 미만·NaN은 무시한다(발광체를 어둡게 만들 이유가 없다).
+  const sane = (v: number | undefined): number =>
+    typeof v === 'number' && Number.isFinite(v) && v > 1 ? v : 1
+  let boost = sane(opts.emissiveBoost)
+  /** LED 보드 초과분 비율 — 기본 boost 1.7에서 1.15배가 되도록 잡은 값. */
+  const AD_SHARE = (AD_BOARD_BOOST - 1) / (EMISSIVE_BOOST - 1)
+  /**
+   * 발광체 색을 선형 공간에서 HDR로 민다. boost가 1이면 정확히 기존 색 그대로다
+   * (컴포저 없는 폴백 경로에서 흰색으로 클리핑되지 않게).
+   * @param share 조명탑 대비 이 발광체의 초과분 비율(1=조명탑과 같은 세기)
+   */
+  const hdr = (hex: number, share: number): THREE_NS.Color =>
+    new THREE.Color(hex).multiplyScalar(1 + (boost - 1) * share)
 
+  const rawSky = opts.skyBoost
+  const skyBoost = typeof rawSky === 'number' && Number.isFinite(rawSky) && rawSky > 0 ? rawSky : 1
   const scene = new THREE.Scene()
-  scene.background = new THREE.Color(0x080e18)
-  // 원경 관중석만 살짝 잠기는 약한 포그(피치는 영향 없음).
-  scene.fog = new THREE.Fog(0x070c16, 150, 470)
+  scene.background = new THREE.Color(0x080e18).multiplyScalar(skyBoost)
+  // 원경 관중석만 살짝 잠기는 약한 포그(피치는 영향 없음). 포그도 배경과 같은 배율로
+  // 밀어야 지평선에서 색이 갈라지지 않는다.
+  // (getHex()로 넘기면 1.0 초과가 잘려 배율이 무의미해진다 — Color 인스턴스를 그대로 준다.)
+  scene.fog = new THREE.Fog(new THREE.Color(0x070c16).multiplyScalar(skyBoost), 150, 470)
 
   const camera = new THREE.PerspectiveCamera(40, 16 / 9, 0.5, 900)
   camera.position.set(0, 28, 78)
@@ -330,12 +386,12 @@ export function buildScene(THREE: ThreeAPI, opts: BuildSceneOptions = {}): Scene
   const sideBoardGeo = new THREE.BoxGeometry(100, 1.05, 0.3)
   const endBoardGeo = new THREE.BoxGeometry(62, 1.05, 0.3)
   const sideAdMat = new THREE.MeshBasicMaterial({
-    color: adTexSide ? 0xffffff : 0x101828,
+    color: hdr(adTexSide ? 0xffffff : 0x101828, AD_SHARE),
     ...(adTexSide ? { map: adTexSide } : {}),
     toneMapped: false,
   })
   const endAdMat = new THREE.MeshBasicMaterial({
-    color: adTexEnd ? 0xffffff : 0x101828,
+    color: hdr(adTexEnd ? 0xffffff : 0x101828, AD_SHARE),
     ...(adTexEnd ? { map: adTexEnd } : {}),
     toneMapped: false,
   })
@@ -443,7 +499,8 @@ export function buildScene(THREE: ThreeAPI, opts: BuildSceneOptions = {}): Scene
   const mastGeo = new THREE.CylinderGeometry(0.5, 0.9, 44, 8)
   const mastMat = new THREE.MeshLambertMaterial({ color: 0x232830 })
   const rigGeo = new THREE.BoxGeometry(10, 5.2, 1.1)
-  const rigMat = new THREE.MeshBasicMaterial({ color: 0xfff4d6, toneMapped: false })
+  // 조명탑 리그가 블룸의 주 광원이다 — 여기만 확실히 임계 위로 올린다.
+  const rigMat = new THREE.MeshBasicMaterial({ color: hdr(0xfff4d6, 1), toneMapped: false })
   for (const sx of [-1, 1] as const) {
     for (const sz of [-1, 1] as const) {
       const px = sx * (END_INNER + STAND_DEPTH * 0.85)
@@ -469,6 +526,18 @@ export function buildScene(THREE: ThreeAPI, opts: BuildSceneOptions = {}): Scene
   fill.castShadow = false
   const amb = new THREE.AmbientLight(0x6a7c98, 0.6)
   scene.add(hemi, key, fill, amb)
+
+  /**
+   * 발광체 HDR 배율을 런타임에 바꾼다. 포스트FX는 비동기로 붙기 때문에(애드온 청크 로드)
+   * buildScene 시점에는 컴포저가 붙을지 알 수 없다 — 붙은 뒤에 이걸 호출한다.
+   * 성능 가드가 블룸을 끌 때도 1로 되돌려야 발광체가 흰색으로 타지 않는다.
+   */
+  function setEmissiveBoost(next: number): void {
+    boost = sane(next)
+    rigMat.color.copy(hdr(0xfff4d6, 1))
+    sideAdMat.color.copy(hdr(adTexSide ? 0xffffff : 0x101828, AD_SHARE))
+    endAdMat.color.copy(hdr(adTexEnd ? 0xffffff : 0x101828, AD_SHARE))
+  }
 
   // ── 관중 웨이브 ──────────────────────────────────────────────
   const crowdMatrix = crowd ? (crowd.instanceMatrix.array as Float32Array) : null
@@ -504,6 +573,7 @@ export function buildScene(THREE: ThreeAPI, opts: BuildSceneOptions = {}): Scene
     },
     crowdCount,
     crowdWave,
+    setEmissiveBoost,
     dispose,
   }
 }

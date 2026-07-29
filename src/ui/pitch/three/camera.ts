@@ -59,8 +59,21 @@ export const HIGHLIGHT_FOV = 30
 
 // ── goal-cam(골대 뒤 로우 앵글) ───────────────────────────────────
 export const GOAL_CAM_Y = 5.5
-/** 골라인에서 뒤로 물러난 거리(m). */
-export const GOAL_CAM_BEHIND = 12
+/**
+ * 골 뒤 관중석 안쪽 경계까지의 x 거리(m) = 골라인(52.5) + 러너프(7).
+ * scene.ts의 `END_INNER`와 같은 값이며, **골 뒤 카메라는 이 선을 넘으면 안 된다** —
+ * 넘는 순간 카메라가 관중 인스턴스 사이에 박혀 화면 절반이 거대한 색 상자로 덮인다.
+ */
+export const END_STAND_INNER_X = 59.5
+/**
+ * 골라인에서 뒤로 물러난 거리(m).
+ *
+ * 12였을 때 카메라 x가 ±64.5로 {@link END_STAND_INNER_X}를 5m 넘어가 **관중석 안**에
+ * 들어가 있었다(톤 계측 스크린샷에서 발견 — 골 순간 화면의 절반이 관중 박스였다).
+ * 6이면 x=±58.5로 러너프 위, 네트(골라인+2m) 뒤 4m 지점이다. 실제 중계의
+ * "골 뒤 로우 카메라"가 놓이는 자리이기도 하다.
+ */
+export const GOAL_CAM_BEHIND = 6
 export const GOAL_CAM_FOV = 38
 /** 골 뒤 카메라의 좌우 이동 한계(m) — 골대 폭 근처를 벗어나지 않는다. */
 const GOAL_CAM_MAX_Z = 9

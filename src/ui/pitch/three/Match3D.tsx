@@ -17,8 +17,10 @@ import type { ChoreoStep } from '../choreography'
 import { createCameraRig } from './camera'
 import { FLASH_CONCEDED, FLASH_SCORED, createBall, flashQuad, goalBurst, type GoalBurst } from './fx3d'
 import { computeFrame } from './movement'
+import { createRenderScaler, readStoredScale, writeStoredScale } from './perf'
 import { createPlayer, disposePlayerCaches, type PlayerRig } from './player3d'
-import { buildScene, type ThreeAPI } from './scene'
+import { createPostFX } from './postfx'
+import { EMISSIVE_BOOST, buildScene, type ThreeAPI } from './scene'
 import type { FrameState } from './types'
 
 interface Match3DProps {
@@ -40,14 +42,15 @@ const AWAY_FALLBACK = 0x4895ef
 const HOME_ACCENT = 0xf2f5ff
 const AWAY_ACCENT = 0x0b1a33
 
-/** 저사양 강등 기억(다음 마운트부터 낮은 텍스처·관중으로 시작). */
-const LOW_KEY = 'rematch-3d-low'
-/** 평상시 관중 목표 인원 / 강등 시. */
+/**
+ * 관중 목표 인원. **저사양이어도 줄이지 않는다.**
+ * 예전 성능 가드는 여기를 반토막 내고 피치 텍스처를 12px/m로 떨궜는데, 그러면 하필
+ * 심사자의 느린 기기에서만 화면이 초라해진다. 지금은 {@link createRenderScaler}가
+ * 해상도만 거래하고 연출은 손대지 않는다.
+ */
 const CROWD_FULL = 4200
-const CROWD_LOW = 1800
-/** 피치 텍스처 해상도(px/m) — 강등 시 12. */
+/** 피치 텍스처 해상도(px/m). */
 const PX_PER_M = 20
-const PX_PER_M_LOW = 12
 
 /** 골 순간 골대 뒤 로우 앵글을 유지하는 시간(s). 이후 세리머니 오빗으로 넘어간다. */
 const GOAL_CAM_S = 0.9
@@ -60,11 +63,6 @@ const CELEBRATE_TOTAL_S = 4.5
 const CROWD_WINDOW_S = 4
 /** 카메라 셰이크 임펄스(m). */
 const GOAL_IMPULSE = 0.35
-/** 프레임 예산(s) — 이보다 느린 프레임이 연속 30회면 1회 강등. */
-const SLOW_FRAME_S = 1 / 45
-const SLOW_STREAK = 30
-/** 초기 컴파일·업로드 구간은 측정에서 제외한다. */
-const WARMUP_FRAMES = 90
 /** 교체·퇴장으로 새 선수가 등장해도 리그 수는 여기서 멈춘다(무한 증식 방지). */
 const MAX_RIGS = 40
 
@@ -95,27 +93,12 @@ function webgl2Available(): boolean {
   }
 }
 
-/**
- * 직전 세션에서 강등됐는지 읽고 **즉시 지운다**(1회용).
- * 텍스처 해상도·관중 수는 buildScene 시점에만 정할 수 있어 다음 마운트로 기억을 넘기지만,
- * 영구 저장하면 일시적 끊김 한 번으로 화질이 영영 내려간다. 여전히 느리면 런타임 가드가
- * 다시 강등하며 다시 기록하므로, 회복 가능한 상태가 된다.
- */
-function readLowPower(): boolean {
+/** localStorage가 막힌 환경(사파리 프라이빗 등)에서 throw하지 않게 감싼다. */
+function safeStorage(): Storage | null {
   try {
-    const hit = localStorage.getItem(LOW_KEY) === '1'
-    if (hit) localStorage.removeItem(LOW_KEY)
-    return hit
+    return window.localStorage
   } catch {
-    return false
-  }
-}
-
-function writeLowPower(): void {
-  try {
-    localStorage.setItem(LOW_KEY, '1')
-  } catch {
-    /* ignore */
+    return null
   }
 }
 
@@ -159,17 +142,28 @@ export function Match3D(props: Match3DProps) {
         if (!cancelled) setFailed(true)
         return
       }
-      const dpr = Math.min(window.devicePixelRatio || 1, 2)
-      renderer.setPixelRatio(dpr)
       renderer.outputColorSpace = THREE.SRGBColorSpace
-      renderer.toneMapping = THREE.ACESFilmicToneMapping
-      renderer.toneMappingExposure = 1.05
+      // ACESFilmic → Neutral: ACES의 깊은 토우가 야간 씬의 1/4을 순검정으로 뭉개고
+      // 관중석 채도를 절반으로 깎았다(tools/tone-stats 실측). 근거는 scene.ts 헤더 참조.
+      renderer.toneMapping = THREE.NeutralToneMapping
+      // 노출 1.05 → 1.15: Neutral은 0.8 위를 롤오프하므로 같은 노출에서 ACES보다 하이라이트가
+      // 낮게 나온다(p99 192→169). 1.15면 하이라이트를 되찾으면서도 암부는 여전히 안 뭉갠다.
+      renderer.toneMappingExposure = 1.15
       renderer.domElement.className = 'm3d-canvas'
       host.appendChild(renderer.domElement)
 
       const reducedMql = window.matchMedia('(prefers-reduced-motion: reduce)')
       let reduced = reducedMql.matches
-      const lowPower = readLowPower()
+
+      // ── 적응형 해상도 스케일러 ──────────────────────────────────
+      // 장치 기준 픽셀비(=스케일 1.0). 직전 세션이 학습한 스케일에서 출발해
+      // 느린 기기가 매번 처음부터 굴러떨어지는 것을 막는다.
+      const basePixelRatio = Math.min(window.devicePixelRatio || 1, 2)
+      const scaler = createRenderScaler({
+        basePixelRatio,
+        initialScale: readStoredScale(safeStorage()),
+      })
+      renderer.setPixelRatio(scaler.pixelRatio)
 
       const homeColor = cssColor(host, '--bc-home', HOME_FALLBACK)
       const awayColor = cssColor(host, '--bc-away', AWAY_FALLBACK)
@@ -178,8 +172,8 @@ export function Match3D(props: Match3DProps) {
       const bundle = buildScene(THREE, {
         homeColor,
         awayColor,
-        crowdCount: lowPower ? CROWD_LOW : CROWD_FULL,
-        pxPerMeter: lowPower ? PX_PER_M_LOW : PX_PER_M,
+        crowdCount: CROWD_FULL,
+        pxPerMeter: PX_PER_M,
         maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
       })
       const scene = bundle.scene
@@ -216,12 +210,19 @@ export function Match3D(props: Match3DProps) {
         })
       }
 
+      // ── 포스트 프로세싱(비동기 — 실패해도 passthrough가 온다) ────
+      const post = await createPostFX(THREE, renderer, scene, camera, { reducedMotion: reduced })
+      // 컴포저가 실제로 붙었을 때만 발광체를 HDR로 올린다. 폴백 경로에서 올리면
+      // 조명탑이 그냥 흰색으로 타 버린다.
+      if (post.active) bundle.setEmissiveBoost(EMISSIVE_BOOST)
+
       // ── 리사이즈 ─────────────────────────────────────────────────
+      // 픽셀비는 항상 스케일러가 정한 값을 쓴다(성능 가드가 여기 한 곳으로 모인다).
       const resize = (): void => {
         const w = host.clientWidth
         const h = host.clientHeight
         if (w < 2 || h < 2) return
-        renderer.setSize(w, h, false)
+        post.setSize(w, h, scaler.pixelRatio)
         camera.aspect = w / h
         camera.updateProjectionMatrix()
       }
@@ -233,6 +234,8 @@ export function Match3D(props: Match3DProps) {
       const onReducedChange = (): void => {
         reduced = reducedMql.matches
         camRig.setReducedMotion(reduced)
+        // 그레인 애니메이션은 미세하지만 전면 깜빡임이다 — 모션 최소화에서 정지시킨다.
+        post.setReducedMotion(reduced)
       }
       reducedMql.addEventListener?.('change', onReducedChange)
 
@@ -252,25 +255,13 @@ export function Match3D(props: Match3DProps) {
       let goalFired = false
       let goalAt = -1
       let crowdActive = false
-      let slowStreak = 0
-      let frameNo = 0
-      // 직전 세션 강등을 물려받아도 가드는 계속 무장해 둔다 — 여전히 느리면 한 단계 더
-      // 내리고(관중 절반·dpr 1) 다음 마운트에도 기억한다.
-      let degraded = false
-      let particlesOff = lowPower
-
-      /** 저사양 자동 강등 — 1회, 조용히(로그 없음). 다음 마운트에도 기억한다. */
-      const degrade = (): void => {
-        degraded = true
-        particlesOff = true
-        writeLowPower()
-        const crowd = bundle.crowd
-        if (crowd) crowd.count = Math.floor(bundle.crowdCount / 2)
-        for (const b of bursts) b.dispose()
-        bursts.length = 0
-        renderer.setPixelRatio(1)
-        resize()
-      }
+      /**
+       * 최후의 수단(블룸 끄기)을 이미 썼는가. 해상도 하한에서도 계속 느릴 때 **한 번만**
+       * 발동한다. 그래도 관중·파티클 같은 연출은 끝까지 살려 둔다.
+       */
+      let bloomDropped = false
+      /** localStorage에 기록한 스케일(같은 값을 반복해서 쓰지 않기 위한 캐시). */
+      let storedScale = scaler.scale
 
       const tick = (now: number): void => {
         raf = requestAnimationFrame(tick)
@@ -280,15 +271,22 @@ export function Match3D(props: Match3DProps) {
         const elapsed = timer.getElapsed()
         const dt = clamp(rawDt, 0, 0.1)
 
-        // 성능 가드: 워밍업 이후 연속 30프레임이 45fps 미만이면 1회 강등.
-        frameNo++
-        if (!degraded && frameNo > WARMUP_FRAMES) {
-          if (rawDt > SLOW_FRAME_S) {
-            slowStreak++
-            if (slowStreak >= SLOW_STREAK) degrade()
-          } else {
-            slowStreak = 0
+        // ── 성능 가드: 기능이 아니라 **해상도**를 거래한다 ────────
+        const step = scaler.update(rawDt * 1000)
+        if (step.changed) {
+          resize()
+          // 안정된 스케일을 다음 세션에 물려준다. 0.05 미만 변화는 기록하지 않는다 —
+          // 스텝(0.06~0.12)마다 localStorage에 쓰면 느린 기기에서 쓰기가 남발된다.
+          if (Math.abs(step.scale - storedScale) >= 0.05) {
+            storedScale = step.scale
+            writeStoredScale(safeStorage(), step.scale)
           }
+        }
+        if (step.starving && !bloomDropped) {
+          // 해상도 하한에서도 못 버틴다 → 블룸 한 겹만 내려놓는다(관중은 그대로).
+          bloomDropped = true
+          post.setBloomEnabled(false)
+          bundle.setEmissiveBoost(1)
         }
 
         // ── 분 내 진행도 t: 분(또는 시퀀스)이 바뀌면 클럭을 리셋한다 ──
@@ -346,7 +344,7 @@ export function Match3D(props: Match3DProps) {
           camRig.setMode('goal-cam')
           camRig.impulse(GOAL_IMPULSE)
           flash.flash(scoredByHome ? FLASH_SCORED : FLASH_CONCEDED)
-          if (!particlesOff && !reduced) {
+          if (!reduced) {
             const burst = goalBurst(
               THREE,
               scoredByHome ? homeColor : awayColor,
@@ -387,7 +385,7 @@ export function Match3D(props: Match3DProps) {
 
         // ── 카메라 적용 + 렌더 ───────────────────────────────────
         camRig.update({ focus: frame.focus, t: elapsed, dt, camera })
-        renderer.render(scene, camera)
+        post.render(dt)
       }
 
       // ── 컨텍스트 로스 → 즉시 정리 후 폴백 ────────────────────────
@@ -410,6 +408,7 @@ export function Match3D(props: Match3DProps) {
         renderer.domElement.removeEventListener('webglcontextlost', onContextLost)
         for (const b of bursts) b.dispose()
         bursts.length = 0
+        post.dispose()
         flash.dispose()
         ball.dispose()
         // 리그를 먼저 떼어내야 bundle.dispose()의 트리 순회가 공유 캐시를 건드리지 않는다.

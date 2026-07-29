@@ -8,10 +8,14 @@
 //    (아무것도 렌더하지 않음). 랜딩 CSS 그라디언트가 그대로 배경으로 남는다.
 //  - Math.random·Date 금지. 카메라 위상은 상수, 시간은 three Timer.
 //  - prefers-reduced-motion → rAF 루프 없이 **1프레임만** 그린다(정지 화면).
+//  - 포스트 프로세싱(블룸·비네트·그레인)을 **경기 화면과 같은 스택**으로 얹는다. 첫인상
+//    화면이라 값이 가장 크고, 조명탑이 halo를 얻는 순간 "절차 생성 티"가 크게 줄어든다.
+//    실패하면 createPostFX가 passthrough를 주므로 배경은 그대로 뜬다(강등 없음).
 //  - 언마운트 시 bundle.dispose()(disposeTree가 InstancedMesh 분기까지 처리) + renderer.dispose()
 //    + forceContextLoss로 GPU 컨텍스트를 즉시 반납한다.
 import { useEffect, useRef, useState } from 'react'
-import { buildScene, type ThreeAPI } from '../pitch/three/scene'
+import { createPostFX } from '../pitch/three/postfx'
+import { EMISSIVE_BOOST, buildScene, type ThreeAPI } from '../pitch/three/scene'
 
 /** 랜딩 배경은 경기 화면보다 가벼워야 한다(첫 로드 체감) — 관중 절반, 피치 텍스처 저해상도. */
 const CROWD_COUNT = 2000
@@ -83,10 +87,12 @@ export function StadiumBackdrop() {
         if (!cancelled) setFailed(true)
         return
       }
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, MAX_DPR))
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, MAX_DPR)
+      renderer.setPixelRatio(pixelRatio)
       renderer.outputColorSpace = THREE.SRGBColorSpace
-      renderer.toneMapping = THREE.ACESFilmicToneMapping
-      renderer.toneMappingExposure = 1.05
+      // 경기 화면과 같은 톤매퍼를 써야 랜딩→경기 전환에서 색이 튀지 않는다(근거는 scene.ts 헤더).
+      renderer.toneMapping = THREE.NeutralToneMapping
+      renderer.toneMappingExposure = 1.15
       renderer.domElement.className = 'landing-bg__canvas'
       host.appendChild(renderer.domElement)
 
@@ -110,11 +116,14 @@ export function StadiumBackdrop() {
         camera.lookAt(0, 6, 0)
       }
 
+      const post = await createPostFX(THREE, renderer, scene, camera, { reducedMotion: reduced })
+      if (post.active) bundle.setEmissiveBoost(EMISSIVE_BOOST)
+
       const resize = (): void => {
         const w = host.clientWidth
         const h = host.clientHeight
         if (w < 2 || h < 2) return
-        renderer.setSize(w, h, false)
+        post.setSize(w, h, pixelRatio)
         camera.aspect = w / h
         camera.updateProjectionMatrix()
       }
@@ -130,7 +139,7 @@ export function StadiumBackdrop() {
         raf = requestAnimationFrame(tick)
         timer.update(now)
         place(timer.getElapsed())
-        renderer.render(scene, camera)
+        post.render(timer.getDelta())
       }
 
       // 컨텍스트 로스 → 즉시 정리하고 정적 배경으로 되돌린다(랜딩은 깨지지 않는다).
@@ -150,6 +159,7 @@ export function StadiumBackdrop() {
         ro?.disconnect()
         if (!ro) window.removeEventListener('resize', resize)
         renderer.domElement.removeEventListener('webglcontextlost', onContextLost)
+        post.dispose()
         bundle.dispose()
         renderer.dispose()
         renderer.forceContextLoss?.()
@@ -164,7 +174,7 @@ export function StadiumBackdrop() {
       if (reduced) {
         // 모션 최소화 — 카메라를 시작 위치에 세우고 1프레임만 그린다(rAF 없음).
         place(0)
-        renderer.render(scene, camera)
+        post.render(0)
       } else {
         raf = requestAnimationFrame(tick)
       }
