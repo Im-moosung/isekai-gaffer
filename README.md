@@ -8,7 +8,7 @@
 
 ## 플레이
 
-**▶ https://rematch-korea-2026.vercel.app**
+**▶ https://isekai-gaffer.vercel.app**
 
 브라우저에서 바로 실행되며 설치·회원가입·결제가 필요 없습니다.
 
