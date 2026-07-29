@@ -19,6 +19,12 @@
 //    (RotY(θ)는 로컬 +X를 월드 (cosθ,0,-sinθ)로 보내므로 θ=-yaw여야 (cos yaw,0,sin yaw)가 된다)
 import type * as Three from 'three'
 import type { PlayerPose } from './types'
+import {
+  capsuleVSpan,
+  makeKitCanvas,
+  type KitCanvasSpec,
+  type KitPattern,
+} from './textures'
 
 /** 주입되는 three 네임스페이스 타입(정적 import가 아니므로 번들에 포함되지 않는다). */
 type ThreeNS = typeof import('three')
@@ -86,6 +92,78 @@ export function luminance(color: number): number {
 /** 배경색 위에서 가장 잘 읽히는 글자색(흰색 또는 잉크블랙). */
 export function contrastOn(color: number): number {
   return luminance(color) > 0.45 ? 0x14181f : 0xffffff
+}
+
+/** 0xRRGGBB → HSL. h·s·l 모두 0~1. 무채색이면 h=0. */
+export function rgbToHsl(color: number): { h: number; s: number; l: number } {
+  const r = ((color >> 16) & 255) / 255
+  const g = ((color >> 8) & 255) / 255
+  const b = (color & 255) / 255
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const l = (max + min) / 2
+  const d = max - min
+  if (d < 1e-9) return { h: 0, s: 0, l }
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+  let h: number
+  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6
+  else if (max === g) h = ((b - r) / d + 2) / 6
+  else h = ((r - g) / d + 4) / 6
+  return { h, s, l }
+}
+
+/** HSL(0~1) → 0xRRGGBB. */
+export function hslToRgb(h: number, s: number, l: number): number {
+  const hh = ((h % 1) + 1) % 1
+  const ss = clamp01(s)
+  const ll = clamp01(l)
+  const q = ll < 0.5 ? ll * (1 + ss) : ll + ss - ll * ss
+  const p = 2 * ll - q
+  const ch = (t0: number): number => {
+    let t = ((t0 % 1) + 1) % 1
+    let v: number
+    if (t < 1 / 6) v = p + (q - p) * 6 * t
+    else if (t < 1 / 2) v = q
+    else if (t < 2 / 3) v = p + (q - p) * (2 / 3 - t) * 6
+    else v = p
+    return clamp(Math.round(v * 255), 0, 255)
+  }
+  return (ch(hh + 1 / 3) << 16) | (ch(hh) << 8) | ch(hh - 1 / 3)
+}
+
+/**
+ * 팀 주색에서 킷의 **어두운 보조색**(버건디·딥네이비)을 만든다.
+ *
+ * 왜 shade()가 아닌가: 채널 균등 배율은 명도와 함께 채도까지 떨어뜨려 스칼렛을 탁한
+ * 갈색으로, 애저를 청회색으로 만든다. 야간 피치 위에서 그 둘은 서로 수렴한다.
+ * 색상(H)을 고정하고 채도를 바닥에서 끌어올린 뒤 명도만 낮추면 참조 판정 팔레트
+ * (버건디 `#7A1424` / 딥네이비 `#071C4A`)에 가까운 값이 나온다.
+ * L=0.21은 두 목표값(0.28 / 0.16)의 중간이며, 트림 면적이 몸통의 10% 미만이라
+ * 이 정도 편차는 40~52px에서 구분되지 않는다.
+ */
+export function deepKit(color: number): number {
+  const { h, s } = rgbToHsl(color)
+  return hslToRgb(h, Math.max(s, 0.7), 0.21)
+}
+
+/** 등번호를 어두운 잉크로 바꾸는 킷 휘도 임계. */
+const INK_DARK_ABOVE = 0.62
+
+/**
+ * 등번호 색. 어두운 킷에는 흰 계열, 밝은 킷에는 잉크블랙.
+ * 따뜻한 킷(빨강~주황)에는 순백 대신 아이보리 `#FFF1D0`을 쓴다 — 스칼렛 위의 순백은
+ * 야간 조명에서 차갑게 튀어 번호만 도려낸 것처럼 보인다(docs/refs 팔레트 권고).
+ *
+ * **임계가 {@link contrastOn}(0.45)보다 높은 이유:** Rec.709 휘도는 초록에 0.7152를 주므로
+ * 채도 높은 중간 파랑(#4895EF → 0.55)이 "밝은 색"으로 분류돼 **검은 번호**를 받았다.
+ * 실제로는 애저 위의 흰 번호가 정답이고 참조 팔레트도 그렇게 지정한다. 0.62면 GK 형광
+ * 라임(0.91)만 검정을 받고 두 팀 킷은 밝은 글자를 받는다.
+ */
+export function kitInk(color: number): number {
+  if (luminance(color) > INK_DARK_ABOVE) return 0x14181f
+  const { h } = rgbToHsl(color)
+  const warm = h < 0.11 || h > 0.9
+  return warm ? 0xfff1d0 : 0xffffff
 }
 
 // ── 신체 치수(m) ─────────────────────────────────────────────────────────────
@@ -509,7 +587,28 @@ export interface PlayerRig {
 
 const SKIN_TONES = [0xf0c9a4, 0xe0ac7e, 0xc68642, 0xa2673f, 0x7c4a26]
 const HAIR_TONES = [0x141010, 0x2b1d14, 0x0d0d10, 0x4a2f1a, 0x5d4030]
-const GK_NEON = 0xd8ff3c // GK 형광 킷 베이스
+/**
+ * GK 형광 킷 베이스. 팀 색과 섞지 않고 **고정**한다 — 어웨이 액센트(딥네이비)와 섞으면
+ * 올리브로 탁해져 필드 플레이어와의 구분이 무너졌다. 라임은 스칼렛·애저·잔디 어느
+ * 쪽과도 색상과 명도가 동시에 벌어져 40px에서도 "저 사람은 골키퍼"가 즉시 읽힌다.
+ * 소속 팀은 칼라·양말 밴드·반바지의 어두운 보조색이 알려준다.
+ */
+const GK_NEON = 0xd8ff3c
+
+/**
+ * 팀 패턴 — **무지(plain)로 확정**.
+ *
+ * docs/refs 축소 판정은 무지·횡스트라이프·새시 셋 다 44px를 통과시켰지만, 무지가
+ * 팀 색 면적이 가장 크고 인식이 가장 빠르다고 결론냈다. 우리 화면은 참조 시트(단독 셔츠)와
+ * 달리 **어두운 야간 피치 위에 22명이 흩어져 있고 블룸까지 걸린다**. 이 조건에서 어두운
+ * 보조 패턴은 배경과 합쳐져 상체를 잘라먹는 쪽으로 작용한다(참조 문서도 파랑 팀 남색
+ * 밴드 면적을 더 늘리지 말라고 명시한다). 두 팀이 이미 스칼렛/애저로 색상 축에서 벌어져
+ * 있어 패턴이라는 두 번째 구분 축을 살 이유도 없다.
+ *
+ * 'hoops'는 텍스처 생성기에 남겨 둔다 — 팀 색이 서로 가까운 대진(예: 빨강 vs 주황)이
+ * 생기면 그때 한쪽에만 켜는 것이 옳은 사용법이다.
+ */
+const KIT_PATTERN: KitPattern = 'plain'
 
 // 모듈 스코프 공유 캐시 — 22명을 만들어도 지오메트리는 한 번만 생성된다.
 const geoCache = new Map<string, Three.BufferGeometry>()
@@ -579,32 +678,120 @@ function numberTexture(three: ThreeNS, num: number, fg: number, outline: number)
   return tex
 }
 
-/** 발밑 페이크 컨택트 섀도우용 방사형 그라디언트(실시간 그림자맵 대체). */
-function shadowTexture(three: ThreeNS): Three.Texture | null {
-  const hit = texCache.get('shadow')
+/**
+ * canvas 절차 텍스처를 three 텍스처로 감싼다(모듈 캐시 공유).
+ * canvas 미지원 환경(SSR·node 테스트)에서는 **null**을 돌려주고 절대 throw하지 않는다.
+ */
+function canvasTex(
+  three: ThreeNS,
+  key: string,
+  make: () => HTMLCanvasElement | null,
+  srgb = true,
+): Three.Texture | null {
+  const hit = texCache.get(key)
   if (hit !== undefined) return hit
   let tex: Three.Texture | null = null
   try {
-    if (typeof document === 'undefined') throw new Error('no document')
-    const cv = document.createElement('canvas')
-    cv.width = 64
-    cv.height = 64
-    const ctx = cv.getContext('2d')
-    if (!ctx) throw new Error('no 2d context')
-    const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32)
-    g.addColorStop(0, 'rgba(0,0,0,0.55)')
-    g.addColorStop(0.55, 'rgba(0,0,0,0.26)')
-    g.addColorStop(1, 'rgba(0,0,0,0)')
-    ctx.fillStyle = g
-    ctx.fillRect(0, 0, 64, 64)
-    const made = new three.CanvasTexture(cv)
-    made.needsUpdate = true
-    tex = made
+    const cv = make()
+    if (cv) {
+      const made = new three.CanvasTexture(cv)
+      if (srgb) made.colorSpace = three.SRGBColorSpace
+      made.needsUpdate = true
+      tex = made
+    }
   } catch {
     tex = null
   }
-  texCache.set('shadow', tex)
+  texCache.set(key, tex)
   return tex
+}
+
+/**
+ * 킷 텍스처를 입힌 램버트 머티리얼. 텍스처가 없으면 주 팀 색 단색으로 폴백한다
+ * (폴백 3단의 1단 — 텍스처 없음. 나머지는 scene의 단색 머티리얼, SVG 피치다).
+ * map이 붙을 때 color를 흰색으로 두는 이유: 램버트는 map과 color를 곱하므로
+ * 캔버스에 그린 팔레트가 그대로 나와야 참조 판정 색이 보존된다.
+ */
+function kitMat(
+  three: ThreeNS,
+  key: string,
+  fallback: number,
+  make: () => HTMLCanvasElement | null,
+): Three.MeshLambertMaterial {
+  return cachedMat(`kit:${key}`, () => {
+    const tex = canvasTex(three, `kittex:${key}`, make)
+    return new three.MeshLambertMaterial(tex ? { map: tex, color: 0xffffff } : { color: fallback })
+  })
+}
+
+/**
+ * 컨택트 섀도우 블롭의 방사형 감쇠를 **정점 알파에 굽는다**(반지름 1, XZ 평면 원판).
+ *
+ * **왜 텍스처가 아니라 정점 알파인가:** 원래 구현은 방사형 그라디언트 캔버스를 `map`으로
+ * 물린 반투명 평면이었는데, 헤드리스 렌더 실측에서 **화면에 아무것도 남기지 않았다**.
+ * 크기·불투명도를 아무리 올려도 발밑 잔디 휘도가 0.2/255밖에 변하지 않았고, 같은 머티리얼을
+ * 불투명으로 바꾸면 검은 사각형이 정상적으로 나왔다(=RGB는 살고 알파만 죽는다).
+ * 그래서 그동안 **선수 발밑 그림자와 공 그림자가 코드에는 있는데 화면에는 없었다.**
+ * 정점 알파로 바꾼 뒤 같은 프레임의 on/off 픽셀 diff는 최대 142(raw)·86(post)이 됐다.
+ *
+ * 정점 알파는 텍스처 알파 업로드 경로를 통째로 우회하고, 덤으로
+ *  - 텍스처 업로드·샘플링·밉맵이 사라져 더 싸고,
+ *  - 캔버스가 없는 환경(SSR·node 테스트)에서도 **똑같이** 동작하며(폴백 분기 불필요),
+ *  - 순수 수학이라 node 테스트로 감쇠 곡선을 직접 검증할 수 있다.
+ *
+ * @param core 알파가 꺾이는 반지름 비율 — 크면 코어가 넓고 경계가 급하다(접지한 발),
+ *   작으면 넓게 번진다(떠 있는 질량의 앰비언트 오클루전).
+ * @param rings 중심 외 링 수 @param seg 원주 분할
+ */
+export function shadowDiscGeometry(three: ThreeNS, core: number, rings = 3, seg = 14): Three.BufferGeometry {
+  const pos: number[] = []
+  const col: number[] = []
+  const idx: number[] = []
+  // 반지름 비율 → 알파.
+  const alphaAt = (t: number): number => shadowFalloff(t, core)
+  pos.push(0, 0, 0)
+  col.push(0, 0, 0, alphaAt(0))
+  for (let r = 1; r <= rings; r++) {
+    const rad = r / rings
+    for (let s = 0; s < seg; s++) {
+      const a = (s / seg) * TAU
+      pos.push(Math.cos(a) * rad, 0, Math.sin(a) * rad)
+      col.push(0, 0, 0, alphaAt(rad))
+    }
+  }
+  const ringStart = (r: number): number => 1 + (r - 1) * seg
+  for (let s = 0; s < seg; s++) {
+    const n = (s + 1) % seg
+    // 중심 팬
+    idx.push(0, ringStart(1) + n, ringStart(1) + s)
+    // 링 사이 쿼드
+    for (let r = 1; r < rings; r++) {
+      const a0 = ringStart(r) + s
+      const a1 = ringStart(r) + n
+      const b0 = ringStart(r + 1) + s
+      const b1 = ringStart(r + 1) + n
+      idx.push(a0, a1, b1, a0, b1, b0)
+    }
+  }
+  const geo = new three.BufferGeometry()
+  geo.setAttribute('position', new three.Float32BufferAttribute(pos, 3))
+  // itemSize 4 = RGBA 정점 색. three가 USE_COLOR_ALPHA로 컴파일해 알파까지 보간한다.
+  geo.setAttribute('color', new three.Float32BufferAttribute(col, 4))
+  geo.setIndex(idx)
+  return geo
+}
+
+/**
+ * 컨택트 섀도우 감쇠 곡선. t = 중심에서의 반지름 비율(0~1), 반환은 알파 배율(0~1).
+ * 순수 함수 — 곡선이 단조 감소하고 가장자리에서 정확히 0이 되는지 테스트로 못박는다.
+ */
+export function shadowFalloff(t: number, core: number): number {
+  const k = clamp(core, 0.05, 0.95)
+  const u = clamp01(t)
+  const mid = k + (1 - k) * 0.64
+  if (u <= k) return 0.95 + (0.62 - 0.95) * (u / k)
+  if (u <= mid) return 0.62 + (0.16 - 0.62) * ((u - k) / (mid - k))
+  return 0.16 * (1 - (u - mid) / (1 - mid))
 }
 
 /** 관절 원점에서 아래로 뻗는 캡슐 팔다리(피벗 = 관절). */
@@ -625,6 +812,52 @@ function limbMesh(
   return mesh
 }
 
+/**
+ * 힙·무릎 각에서 발목의 힙 로컬 위치를 구한다({@link solveLeg}의 정방향).
+ * 접지 그림자를 **실제 발 위치**에 놓으려면 어떤 액션이든 이 순기구학이 필요하다
+ * (러닝만 footTarget을 알고, 킥·아이들·다이브는 관절각만 있다).
+ * @returns fx = 앞(+X), fy = 아래(힙에서의 낙차)
+ */
+export function ankleFromLeg(hip: number, knee: number): { fx: number; fy: number } {
+  return {
+    fx: THIGH_LEN * Math.sin(hip) + SHIN_LEN * Math.sin(hip + knee),
+    fy: THIGH_LEN * Math.cos(hip) + SHIN_LEN * Math.cos(hip + knee),
+  }
+}
+
+// ── 접지 그림자 계수 ─────────────────────────────────────────────────────────
+// 선택: **발별 블롭**(싼 쪽). 실시간 섀도우맵은 캐스터가 22명×21메시 = 462개라
+// 섀도우 패스에서 씬 전체를 한 번 더 그려야 하는데, 화면상 40~52px에서 얻는 건
+// "발밑이 어둡다" 하나다. B-2에서 발 접지 역기구학이 들어가 발이 실제로 y=0에 붙으므로
+// 블롭을 발마다 하나씩 두면 그 하나를 정확히 얻는다. 실측 비용은 커밋 메시지 참조.
+
+/** 그림자 평면 높이(m) — 피치(y=0) 위, z-파이팅을 피할 만큼만 띄운다. */
+const SHADOW_Y = 0.02
+/**
+ * 발 블롭 기본 반치수(m).
+ *
+ * **왜 부츠보다 훨씬 커야 하는가:** 방송 샷에서 1.8m 선수가 44px이므로 축척은 약 24px/m다.
+ * 부츠(0.25×0.115m)는 6×3px이고, 방사형 그라디언트는 가장자리 알파가 0이라 블롭이
+ * 부츠와 같은 크기면 **보이는 부분이 남지 않는다**(첫 구현이 정확히 이 실수였다 —
+ * 씬 그래프는 맞았는데 화면에서는 잔디 휘도가 0.2/255밖에 안 변했다).
+ * 지름 0.50×0.34m = 약 12×8px이면 부츠 바깥으로 3px 이상 어두운 테두리가 남는다.
+ * (아래 값은 **반지름**이다 — 블롭 원판 지오메트리가 반지름 1로 만들어진다.)
+ */
+const FOOT_SHADOW_X = 0.28
+const FOOT_SHADOW_Z = 0.19
+/** 발이 1m 뜰 때 블롭이 퍼지는 배율. 그림자는 멀어질수록 크고 흐려진다. */
+const FOOT_SPREAD = 2.6
+/** 접지 순간의 발 블롭 불투명도. */
+const FOOT_ALPHA = 0.8
+/** 발 높이에 대한 감쇠 계수 — 1/(1+k·h). h=0.2m에서 약 1/3로 옅어진다. */
+const FOOT_FADE = 10
+/**
+ * 몸통 질량 블롭 반지름(m)과 불투명도 — 발 블롭 둘만 있으면 몸통이 떠 보인다.
+ * 반지름을 어깨너비(≈0.4m)에 맞춰야 알파가 실제로 보이는 영역에 모인다.
+ */
+const BODY_SHADOW_R = 0.5
+const BODY_ALPHA = 0.62
+
 /** 리그의 모든 관절 그룹. */
 interface Joints {
   body: Three.Group
@@ -640,7 +873,46 @@ interface Joints {
   shoulderR: Three.Group
   elbowL: Three.Group
   elbowR: Three.Group
-  shadow: Three.Mesh
+  shadows: Shadows
+}
+
+/**
+ * 접지 그림자 3장. 전부 `root`의 직계 자식이라 요(yaw)만 따라 돌고 몸이 기울어도
+ * 지면에 눕는다. 머티리얼은 **선수마다 개별 인스턴스**다 — 불투명도가 발 높이에 따라
+ * 매 프레임 바뀌므로 공유 캐시를 쓸 수 없다(3장 × 22명 = 66개, 전부 사소한 MeshBasic).
+ */
+interface Shadows {
+  footL: Three.Mesh
+  footR: Three.Mesh
+  body: Three.Mesh
+  matL: Three.MeshBasicMaterial
+  matR: Three.MeshBasicMaterial
+  matBody: Three.MeshBasicMaterial
+}
+
+/** 한쪽 발 블롭을 실제 발목 위치·높이에 맞춘다. */
+function placeFootShadow(
+  mesh: Three.Mesh,
+  mat: Three.MeshBasicMaterial,
+  hip: number,
+  knee: number,
+  legZ: number,
+  p: RigPose,
+  cr: number,
+  sr: number,
+): void {
+  const { fx, fy } = ankleFromLeg(hip, knee)
+  // body 로컬 발목 = (fx, HIP_Y - fy, legZ). body는 position.y = bodyY, rotation.x = bodyRoll.
+  const y0 = HIP_Y - fy
+  const y = p.bodyY + y0 * cr - legZ * sr
+  const z = y0 * sr + legZ * cr
+  // 부츠 바닥이 지면에서 뜬 높이(발목 관절은 접지 시 ANKLE_H에 있다).
+  const h = y - ANKLE_H > 0 ? y - ANKLE_H : 0
+  const s = 1 + FOOT_SPREAD * h
+  mesh.position.set(fx, SHADOW_Y, z)
+  // 지오메트리를 이미 XZ로 눕혀 놓았으므로 스케일도 X·Z 축이다(Y는 두께 = 1 고정).
+  mesh.scale.set(FOOT_SHADOW_X * s, 1, FOOT_SHADOW_Z * s)
+  mat.opacity = FOOT_ALPHA / (1 + FOOT_FADE * h)
 }
 
 /** 한 프레임의 최종 리그 포즈. 매 프레임 전 필드를 덮어써 이전 액션 포즈가 남지 않는다. */
@@ -738,7 +1010,19 @@ function writePose(j: Joints, p: RigPose): void {
   j.elbowR.rotation.z = p.elbowR
   j.head.rotation.z = -p.headPitch
   j.head.rotation.y = p.headYaw
-  j.shadow.scale.setScalar(p.shadowScale)
+
+  // 접지 그림자 — 관절각에서 실제 발 위치를 순기구학으로 풀어 발마다 하나씩 놓는다.
+  const sh = j.shadows
+  const cr = Math.cos(p.bodyRoll)
+  const sr = Math.sin(p.bodyRoll)
+  placeFootShadow(sh.footL, sh.matL, p.hipL, p.kneeL, -LEG_Z, p, cr, sr)
+  placeFootShadow(sh.footR, sh.matR, p.hipR, p.kneeR, LEG_Z, p, cr, sr)
+  // 질량 블롭은 골반 아래. 뜰수록(bodyY>0) 넓게 퍼지고 옅어진다.
+  const hb = p.bodyY > 0 ? p.bodyY : 0
+  const bs = p.shadowScale * (1 + 0.9 * hb)
+  sh.body.position.set(0, SHADOW_Y, HIP_Y * sr)
+  sh.body.scale.set(BODY_SHADOW_R * bs, 1, BODY_SHADOW_R * bs)
+  sh.matBody.opacity = BODY_ALPHA / (1 + 3 * hb)
 }
 
 /**
@@ -746,19 +1030,63 @@ function writePose(j: Joints, p: RigPose): void {
  * 반환된 root를 씬에 추가하고 매 프레임 apply(pose, clockT)를 호출한다.
  */
 export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
-  const shirt = opts.isGk ? mixColor(GK_NEON, opts.accent, 0.28) : opts.kit
-  const shorts = opts.isGk ? shade(shirt, 0.55) : shade(opts.kit, 0.62)
-  const socks = opts.isGk ? shade(opts.accent, 0.85) : opts.accent
-  const ink = contrastOn(shirt)
+  // ── 킷 팔레트 ──
+  // docs/refs 판정: 40~52px에서 읽히는 건 실루엣·색 대비·킷뿐이고, 그중 **주 팀 색의
+  // 면적**이 팀 인식 속도를 지배한다. 그래서
+  //   상의 = 팀 색(면적 최대) / 반바지 = 어두운 보조색 / 양말 = 팀 색 반복
+  // 이라는 세로 리듬을 만든다. 밝음–어두움–밝음이 축소본에서 실루엣을 셋으로 쪼개
+  // 사람 형태로 읽히게 하고, 팀 색이 상·하 두 곳에 있어 측면·후면·가림에서도 남는다.
+  //
+  // 변경 전에는 양말이 `accent`(홈=흰색, 어웨이=남색)였다. 흰 양말은 축소본에서
+  // 발밑의 밝은 점으로 시선을 끌면서 **팀 정보는 전혀 주지 않았고**, 남색 양말은
+  // 어두운 피치에 묻혔다. 참조 판정의 "팀 색을 상의와 양말에 반복" 권고를 따른다.
+  const deep = deepKit(opts.kit)
+  const shirt = opts.isGk ? GK_NEON : opts.kit
+  const shorts = deep
+  const socks = opts.isGk ? GK_NEON : opts.kit
+  const ink = kitInk(shirt)
+
+  /** 몸통 캡슐의 원통 구간 v 범위 — 후프를 어깨·밑단 캡까지 흘리지 않기 위해. */
+  const torsoCyl = capsuleVSpan(0.155, 0.3)
+  /** 킷 텍스처 캐시 키. 팀 색·GK 여부가 같으면 22명이 텍스처 하나를 공유한다. */
+  const kitKey = `${opts.isGk ? 'gk' : 'fp'}:${opts.kit}`
+  const torsoSpec: KitCanvasSpec = {
+    base: hexStr(shirt),
+    deep: hexStr(deep),
+    pattern: KIT_PATTERN,
+    patternSpan: torsoCyl,
+    // 칼라: 캡슐 위쪽 캡의 상단 14%(몸통 표면적의 약 6%). 목 둘레만 감싼다.
+    bands: [{ from: 0.86, to: 1, color: hexStr(deep) }],
+  }
 
   // 개체 변주 시드: 생성 시점엔 id를 모르므로 등번호·킷으로, 첫 apply에서 id 해시로 교체.
   const vary = hash01(`${opts.number}|${opts.kit}|${opts.isGk ? 'gk' : 'fp'}`)
   const skin = SKIN_TONES[Math.floor(vary * SKIN_TONES.length) % SKIN_TONES.length]
   const hair = HAIR_TONES[Math.floor(vary * 977) % HAIR_TONES.length]
 
-  const shirtMat = bodyMat(three, shirt)
+  // 몸통·소매·양말은 절차 킷 텍스처, 나머지는 단색. 소매와 양말을 몸통과 **다른**
+  // 머티리얼로 나눈 이유: 셋 다 캡슐이라 같은 텍스처를 물리면 팔·정강이에 칼라가 찍힌다.
+  const torsoMat = kitMat(three, `torso:${kitKey}`, shirt, () => makeKitCanvas(torsoSpec))
+  const sleeveMat = kitMat(three, `sleeve:${kitKey}`, shirt, () =>
+    // 소매 밑단 트림 — 상완 캡슐의 아래끝(v=0)이 팔꿈치다. 참조가 "약 3px 이상 남는
+    // 소매 끝"을 유효 디테일로 꼽았고, 팔 실루엣의 끝을 어둡게 찍으면 축소본에서
+    // 팔이 몸통과 분리돼 보인다.
+    makeKitCanvas({
+      base: hexStr(shirt),
+      deep: hexStr(deep),
+      bands: [{ from: 0, to: 0.26, color: hexStr(deep) }],
+    }),
+  )
+  const socksMat = kitMat(three, `sock:${kitKey}`, socks, () =>
+    // 양말 밴드 — 정강이 캡슐의 위쪽(무릎 쪽)에 한 줄. 팀 색 면적을 거의 깎지 않으면서
+    // 다리를 무릎에서 한 번 끊어 준다.
+    makeKitCanvas({
+      base: hexStr(socks),
+      deep: hexStr(deep),
+      bands: [{ from: 0.72, to: 0.86, color: hexStr(deep) }],
+    }),
+  )
   const shortsMat = bodyMat(three, shorts)
-  const socksMat = bodyMat(three, socks)
   const skinMat = bodyMat(three, skin)
   const hairMat = bodyMat(three, hair)
   const bootMat = bodyMat(three, 0x14161c)
@@ -768,26 +1096,43 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
   const root = new three.Group()
   root.name = `player-${opts.number}`
 
-  // ── 발밑 컨택트 섀도우(Task 2 의존 없이 자체 생성) ──
-  const shTex = shadowTexture(three)
-  const shadowMat = cachedMat(shTex ? 'shadow:tex' : 'shadow:flat', () =>
-    shTex
-      ? new three.MeshBasicMaterial({ map: shTex, transparent: true, depthWrite: false })
-      : new three.MeshBasicMaterial({
-          color: 0x000000,
-          transparent: true,
-          opacity: 0.26,
-          depthWrite: false,
-        }),
-  )
-  const shadowGeo = shTex
-    ? cachedGeo('shadow:plane', () => new three.PlaneGeometry(1.05, 1.05))
-    : cachedGeo('shadow:circle', () => new three.CircleGeometry(0.42, 18))
-  const shadow = new three.Mesh(shadowGeo, shadowMat)
-  shadow.rotation.x = -Math.PI / 2
-  shadow.position.y = 0.02
-  shadow.renderOrder = 1
-  root.add(shadow)
+  // ── 접지 그림자: 발마다 하나 + 몸통 질량 하나 ──
+  // 발 블롭은 코어가 넓어(0.55) 경계가 급하다 = 접지한 발.
+  // 질량 블롭은 코어가 좁아(0.5) 넓게 번진다 = 몸의 앰비언트 오클루전.
+  const makeBlob = (
+    key: string,
+    core: number,
+    alpha: number,
+  ): { mesh: Three.Mesh; mat: Three.MeshBasicMaterial } => {
+    // 정점 알파(vertexColors + RGBA)로 감쇠를 준다 — 텍스처 알파 경로는 이 조합에서
+    // 화면에 아무것도 남기지 않았다(shadowDiscGeometry 주석의 실측 근거).
+    const mat = new three.MeshBasicMaterial({
+      color: 0xffffff, // 정점 색(검정)과 곱해지므로 흰색이어야 정점 값이 그대로 나온다
+      vertexColors: true,
+      transparent: true,
+      opacity: alpha,
+      depthWrite: false,
+      // 톤매핑을 태우면 그림자가 회색으로 들려 잔디 위에서 얼룩처럼 보인다.
+      toneMapped: false,
+    })
+    const geo = cachedGeo(`blob:${key}`, () => shadowDiscGeometry(three, core))
+    const mesh = new three.Mesh(geo, mat)
+    mesh.position.y = SHADOW_Y
+    mesh.renderOrder = 1
+    root.add(mesh)
+    return { mesh, mat }
+  }
+  const blobL = makeBlob('foot', 0.55, FOOT_ALPHA)
+  const blobR = makeBlob('foot', 0.55, FOOT_ALPHA)
+  const blobBody = makeBlob('body', 0.5, BODY_ALPHA)
+  const shadows: Shadows = {
+    footL: blobL.mesh,
+    footR: blobR.mesh,
+    body: blobBody.mesh,
+    matL: blobL.mat,
+    matR: blobR.mat,
+    matBody: blobBody.mat,
+  }
 
   // ── 몸통 트리 ──
   const body = new three.Group()
@@ -808,14 +1153,17 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
 
   const chest = new three.Mesh(
     cachedGeo('chest', () => new three.CapsuleGeometry(0.155, 0.3, 3, 10)),
-    shirtMat,
+    torsoMat,
   )
   chest.position.y = 0.3
   chest.scale.set(0.78, 1, 1.24) // 앞뒤로 얇고 어깨로 넓은 단면
   torso.add(chest)
 
-  // 등번호 평면(뒤 = -X). 로컬 +X가 월드 +Z를 향하도록 회전해야 글자가 뒤집히지 않는다.
-  const numTex = numberTexture(three, opts.number, ink, ink === 0xffffff ? shade(shirt, 0.45) : 0xf2f5ff)
+  // ── 등번호·가슴번호 ──
+  // 아웃라인은 글자색의 반대편에서 고른다. kitInk가 따뜻한 킷에 아이보리를 주므로
+  // `=== 0xffffff` 비교로는 아이보리 글자에 흰 아웃라인이 붙어 사라진다.
+  const outline = luminance(ink) > 0.5 ? deep : 0xf2f5ff
+  const numTex = numberTexture(three, opts.number, ink, outline)
   const numMat = numTex
     ? cachedMat(
         `num:${opts.number}:${ink}:${shirt}`,
@@ -828,13 +1176,31 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
           }),
       )
     : cachedMat(`numflat:${ink}`, () => new three.MeshBasicMaterial({ color: ink }))
-  const numPlane = new three.Mesh(
-    cachedGeo('numplane', () => new three.PlaneGeometry(0.26, 0.26)),
-    numMat,
-  )
-  numPlane.position.set(-0.125, 0.33, 0)
-  numPlane.rotation.y = -Math.PI / 2
-  torso.add(numPlane)
+  /**
+   * 번호 평면을 몸통 표면 바로 밖에 붙인다.
+   * @param sign +1 = 가슴(정면 +X), -1 = 등(-X)
+   *
+   * 평면 법선은 로컬 +Z이고, rotation.y = sign·π/2가 그것을 ±X로 보낸다. 이때 평면의
+   * 로컬 +X는 ∓Z로 가는데, 그 면을 보는 시점의 화면 오른쪽이 정확히 ∓Z라서 글자가
+   * 좌우 반전되지 않는다(정면·후면 모두 성립).
+   *
+   * 왜 텍스처 아틀라스가 아니라 평면인가: 캡슐 UV에 번호를 그리면 선수마다 몸통 텍스처가
+   * 하나씩 필요해 22장이 된다. 번호만 평면으로 떼면 몸통 텍스처는 팀당 1장(총 3~4장)이고,
+   * 번호 텍스처는 이미 있는 번호별 캐시를 그대로 쓴다.
+   */
+  const addNumber = (sign: 1 | -1, size: number, y: number): void => {
+    const plane = new three.Mesh(
+      cachedGeo(`numplane:${size}`, () => new three.PlaneGeometry(size, size)),
+      numMat,
+    )
+    plane.position.set(sign * 0.125, y, 0)
+    plane.rotation.y = (sign * Math.PI) / 2
+    torso.add(plane)
+  }
+  addNumber(-1, 0.26, 0.33)
+  // 가슴번호는 참조 킷에 있고 우리에겐 없었다. 등번호보다 작게(실제 유니폼 관례) 두고
+  // 조금 위에 놓아 반바지 경계와 겹치지 않게 한다.
+  addNumber(1, 0.19, 0.36)
 
   const neck = new three.Mesh(
     cachedGeo('neck', () => new three.CylinderGeometry(0.045, 0.052, 0.09, 8)),
@@ -869,7 +1235,7 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
     const shoulder = new three.Group()
     shoulder.position.set(0, SHOULDER_Y, sign * ARM_Z)
     torso.add(shoulder)
-    shoulder.add(limbMesh(three, 'upperarm', 0.052, UPPER_ARM, shirtMat))
+    shoulder.add(limbMesh(three, 'upperarm', 0.052, UPPER_ARM, sleeveMat))
     const elbow = new three.Group()
     elbow.position.y = -UPPER_ARM
     shoulder.add(elbow)
@@ -931,7 +1297,7 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
     shoulderR: armR.shoulder,
     elbowL: armL.elbow,
     elbowR: armR.elbow,
-    shadow,
+    shadows,
   }
 
   // ── 애니메이션 상태(전부 결정론) ──
@@ -1240,6 +1606,11 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
     root.clear()
     body.clear()
     torso.clear()
+    // 그림자 머티리얼만은 **이 인스턴스 소유**다(발 높이별 불투명도 때문에 공유 불가).
+    // 공유 캐시에 없으므로 disposePlayerCaches()가 회수해 주지 않는다 — 여기서 해제한다.
+    shadows.matL.dispose()
+    shadows.matR.dispose()
+    shadows.matBody.dispose()
   }
 
   return { root, apply, dispose }

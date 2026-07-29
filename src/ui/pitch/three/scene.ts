@@ -17,6 +17,7 @@
 //   거의 항등이라 흑클립 9.81%, 채도 0.62를 지킨다. 관중 색이 이 씬의 정보량 대부분이다.
 import type * as THREE_NS from 'three'
 import { PITCH_W, PITCH_H } from './types'
+import { shadowDiscGeometry } from './player3d'
 import {
   GOAL_W,
   GOAL_H,
@@ -26,7 +27,6 @@ import {
   makeConcreteCanvas,
   makeNetCanvas,
   makePitchCanvas,
-  makeShadowCanvas,
 } from './textures'
 
 /** 주입되는 three 네임스페이스 전체. */
@@ -211,14 +211,16 @@ function toTexture(
  * @param radius 반지름(m) @param opacity 최대 불투명도
  */
 export function makeContactShadow(THREE: ThreeAPI, radius = 0.62, opacity = 0.62): THREE_NS.Mesh {
-  const geo = new THREE.CircleGeometry(radius, 20)
-  geo.rotateX(-Math.PI / 2)
-  const tex = toTexture(THREE, makeShadowCanvas(64), { srgb: false, aniso: 4 })
+  // 감쇠는 **정점 알파**로 굽는다. 반투명 캔버스를 map으로 물린 예전 구현은 헤드리스 렌더
+  // 실측에서 화면에 아무것도 남기지 않았다 — 그래서 그동안 공 그림자와 선수 발밑 그림자가
+  // 둘 다 코드에는 있는데 화면에는 없었다. 근거는 player3d.shadowDiscGeometry 주석 참조.
+  const geo = shadowDiscGeometry(THREE as unknown as typeof import('three'), 0.45, 3, 20)
+  geo.scale(radius, 1, radius)
   const mat = new THREE.MeshBasicMaterial({
-    color: 0x000000,
-    ...(tex ? { map: tex } : {}),
+    color: 0xffffff, // 정점 색(검정)과 곱해진다
+    vertexColors: true,
     transparent: true,
-    opacity: tex ? opacity : opacity * 0.6,
+    opacity,
     depthWrite: false,
     toneMapped: false,
   })

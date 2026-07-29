@@ -16,13 +16,14 @@ import {
   fnv1a,
   hash01,
   hash2,
+  capsuleVSpan,
   makeAdBoardCanvas,
   makeCanvas,
+  makeKitCanvas,
   makeConcreteCanvas,
   makeNetCanvas,
   makeNoiseCanvas,
   makePitchCanvas,
-  makeShadowCanvas,
   penaltyArcHalfAngle,
   worldToPx,
 } from '../textures'
@@ -39,8 +40,8 @@ describe('canvas 미지원 환경 안전성', () => {
       () => makePitchCanvas(),
       () => makePitchCanvas(4),
       () => makeNetCanvas(),
+      () => makeKitCanvas({ base: '#f00', deep: '#300' }),
       () => makeNoiseCanvas(),
-      () => makeShadowCanvas(),
       () => makeConcreteCanvas(),
       () => makeAdBoardCanvas(),
       () => makeAdBoardCanvas([]),
@@ -159,5 +160,38 @@ describe('광고보드 문구', () => {
     for (const banned of ['FIFA', 'NIKE', 'ADIDAS', 'COCA', 'HYUNDAI']) {
       expect(joined).not.toContain(banned)
     }
+  })
+})
+
+describe('capsuleVSpan — 캡슐 UV의 원통 구간', () => {
+  // 이 값이 틀리면 후프·칼라·양말 밴드가 반구 캡으로 흘러 어깨나 발목에 찍힌다.
+  it('three 0.185 CapsuleGeometry 실측값과 일치한다(r=0.155, len=0.30)', () => {
+    const { from, to } = capsuleVSpan(0.155, 0.3)
+    expect(from).toBeCloseTo(0.3094, 4)
+    expect(to).toBeCloseTo(0.6906, 4)
+  })
+
+  it('항상 0.5를 중심으로 대칭이고 (0,1) 안에 있다', () => {
+    for (const [r, len] of [
+      [0.052, 0.196],
+      [0.062, 0.336],
+      [0.2, 0.05],
+      [0.01, 2],
+    ] as const) {
+      const { from, to } = capsuleVSpan(r, len)
+      expect(from + to).toBeCloseTo(1, 12)
+      expect(from).toBeGreaterThan(0)
+      expect(to).toBeLessThan(1)
+    }
+  })
+
+  it('원통 길이가 0이면 순수 구 — 원통 구간이 사라진다', () => {
+    const { from, to } = capsuleVSpan(0.1, 0)
+    expect(from).toBeCloseTo(0.5, 12)
+    expect(to).toBeCloseTo(0.5, 12)
+  })
+
+  it('반지름이 0이면 전체가 원통이다', () => {
+    expect(capsuleVSpan(0, 1)).toEqual({ from: 0, to: 1 })
   })
 })

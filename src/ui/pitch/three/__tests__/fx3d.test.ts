@@ -275,7 +275,8 @@ describe('createBall — update', () => {
       const { geos, mats, texes } = collectResources(b.group)
       expect(geos.size).toBeGreaterThan(1)
       expect(mats.size).toBeGreaterThan(TRAIL_SEGMENTS) // 세그먼트마다 개별 알파
-      expect(texes.size).toBeGreaterThan(1) // 공 텍스처 + 섀도우 텍스처
+      // 섀도우는 정점 알파로 바뀌어 텍스처를 쓰지 않는다 — 남는 건 공 표면 텍스처뿐이다.
+      expect(texes.size).toBeGreaterThanOrEqual(1)
       const { expected, fired } = countDisposals(b.group)
       b.dispose()
       expect(fired()).toBe(expected)

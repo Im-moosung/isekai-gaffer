@@ -92,6 +92,8 @@ interface Live {
   post: PostFX
   camera: THREE.PerspectiveCamera
   rigs: PlayerRig[]
+  /** rigs와 같은 순서의 팀 소속 — 킷 축소 판정에서 팀별 색을 모을 때 쓴다. */
+  rigSides: Array<'home' | 'away'>
   extras: Array<{ dispose(): void }>
 }
 
@@ -159,6 +161,7 @@ async function build(opts: RunOptions): Promise<Live> {
   const camera = bundle.camera
   camera.aspect = opts.width / opts.height
   const rigs: PlayerRig[] = []
+  const rigSides: Array<'home' | 'away'> = []
   const extras: Array<{ dispose(): void }> = []
 
   if (landing) {
@@ -195,6 +198,7 @@ async function build(opts: RunOptions): Promise<Live> {
       rig.apply(pose, CAM_T)
       bundle.scene.add(rig.root)
       rigs.push(rig)
+      rigSides.push(pose.side)
     }
 
     const ball = createBall(THREE as unknown as ThreeAPI, {})
@@ -252,7 +256,7 @@ async function build(opts: RunOptions): Promise<Live> {
       }
   post.setSize(opts.width, opts.height, 1)
 
-  return { renderer, bundle, post, camera, rigs, extras }
+  return { renderer, bundle, post, camera, rigs, rigSides, extras }
 }
 
 /** 캔버스 픽셀을 RGBA8로 꺼낸다(2D 캔버스 경유 = 화면에 실제로 보이는 sRGB 값). */
@@ -318,13 +322,238 @@ async function run(opts: RunOptions): Promise<RunResult> {
   }
 }
 
+// ── 킷 축소 판정(44/52px) ─────────────────────────────────────────
+// docs/refs/qa의 판정본과 같은 조건을 **실제 렌더 프레임**에서 만든다. 참조 시트는
+// imagegen 산출물을 축소한 것이고, 이건 우리 셰이더·톤매핑·블룸을 통과한 픽셀이다.
+// 둘이 같은 결론을 내야 킷 구현이 참조를 따라간 것이다.
+
+/** docs/refs/qa 판정본과 동일한 야간 피치 배경색. */
+const QA_BG = '#254F2F'
+/** 판정 크기(선수 높이 px). */
+const QA_SIZES = [44, 52] as const
+
+export interface KitSheetResult {
+  /** 대비 시트 PNG(data URL). */
+  dataUrl: string
+  /** 실제 브로드캐스트 프레임에서 각 선수가 차지한 세로 픽셀. */
+  screenPx: { min: number; max: number; mean: number; count: number }
+  /** 팀별 평균 색(sRGB 0~255)과 CIELAB 분리도. */
+  separation: {
+    home: [number, number, number]
+    away: [number, number, number]
+    /** 두 팀 평균색의 ΔE(CIE76). 클수록 잘 갈린다. */
+    deltaE: number
+    /** 팀 **내부** 산포의 평균 ΔE. deltaE가 이보다 충분히 커야 구분이 안정적이다. */
+    spread: number
+    /** deltaE / spread. 1보다 크게 넘어야 "팀이 개체차보다 잘 보인다". */
+    ratio: number
+  }
+}
+
+/** sRGB(0~255) → CIELAB. D65. 팀 색 분리도를 사람 눈에 가깝게 재려면 필요하다. */
+function srgbToLab(r: number, g: number, b: number): [number, number, number] {
+  const lin = (c: number): number => {
+    const v = c / 255
+    return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
+  }
+  const R = lin(r)
+  const G = lin(g)
+  const B = lin(b)
+  const X = (R * 0.4124 + G * 0.3576 + B * 0.1805) / 0.95047
+  const Y = R * 0.2126 + G * 0.7152 + B * 0.0722
+  const Z = (R * 0.0193 + G * 0.1192 + B * 0.9505) / 1.08883
+  const f = (t: number): number => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116)
+  const fx = f(X)
+  const fy = f(Y)
+  const fz = f(Z)
+  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)]
+}
+
+function deltaE(a: [number, number, number], b: [number, number, number]): number {
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
+}
+
+/** 리그의 몸 메시(그림자 평면 제외) 월드 바운딩박스를 화면 사각형으로 투영한다. */
+function screenRect(
+  rig: PlayerRig,
+  camera: THREE.PerspectiveCamera,
+  w: number,
+  h: number,
+): { x: number; y: number; w: number; h: number } | null {
+  rig.root.updateMatrixWorld(true)
+  const box = new THREE.Box3()
+  rig.root.traverse((o) => {
+    const m = o as THREE.Mesh
+    if (!m.isMesh) return
+    // 선수 **높이**를 재는 것이 목적이므로 지면에 눕는 것들은 뺀다.
+    //  - 접지 그림자 블롭: 정점 알파(RGBA color 어트리뷰트)를 가진 원판
+    //  - 예전 표현이었던 PlaneGeometry 블롭(변경 전 커밋을 같은 도구로 잴 수 있어야 한다)
+    // 등번호 평면도 PlaneGeometry지만 몸통 바운딩박스 안에 있어 결과가 달라지지 않는다.
+    const g = m.geometry as THREE.BufferGeometry
+    if (g?.getAttribute('color') || g?.type === 'PlaneGeometry') return
+    box.expandByObject(m)
+  })
+  if (box.isEmpty()) return null
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  const v = new THREE.Vector3()
+  for (let i = 0; i < 8; i++) {
+    v.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z)
+    v.project(camera)
+    if (v.z > 1) return null // 카메라 뒤
+    const sx = ((v.x + 1) / 2) * w
+    const sy = ((1 - v.y) / 2) * h
+    minX = Math.min(minX, sx)
+    maxX = Math.max(maxX, sx)
+    minY = Math.min(minY, sy)
+    maxY = Math.max(maxY, sy)
+  }
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
+}
+
+/**
+ * 브로드캐스트 프레임을 렌더하고 선수들을 잘라내 44px·52px로 축소한 판정 시트를 만든다.
+ * 프로덕션 씬 그대로이므로 여기서 통과하면 실제 화면에서도 통과한다.
+ */
+async function kitSheet(opts: Omit<RunOptions, 'scene'>): Promise<KitSheetResult> {
+  teardown()
+  live = await build({ ...opts, scene: 'broadcast' })
+  const { renderer, post, camera, rigs } = live
+  for (let i = 0; i < 6; i++) post.render(1 / 60)
+
+  const src = renderer.domElement
+  // 렌더 캔버스를 2D로 한 번 복사해 두면 crop drawImage와 getImageData를 같이 쓸 수 있다.
+  const flat = document.createElement('canvas')
+  flat.width = src.width
+  flat.height = src.height
+  const fctx = flat.getContext('2d', { willReadFrequently: true })
+  if (!fctx) throw new Error('2D 컨텍스트를 만들 수 없다')
+  fctx.drawImage(src, 0, 0)
+
+  interface Pick {
+    side: 'home' | 'away'
+    rect: { x: number; y: number; w: number; h: number }
+    lab: [number, number, number]
+  }
+  const picks: Pick[] = []
+  for (let i = 0; i < rigs.length; i++) {
+    const rect = screenRect(rigs[i], camera, src.width, src.height)
+    if (!rect || rect.h < 8) continue
+    const x0 = Math.max(0, Math.floor(rect.x) - 2)
+    const y0 = Math.max(0, Math.floor(rect.y) - 2)
+    const rw = Math.min(src.width - x0, Math.ceil(rect.w) + 4)
+    const rh = Math.min(src.height - y0, Math.ceil(rect.h) + 4)
+    if (rw < 4 || rh < 8) continue
+    // 킷 색만 재려면 잔디를 걸러야 한다. 초록이 우세한 픽셀(G가 R·B보다 확실히 큰)은
+    // 배경으로 보고 버린다 — 선수 몸에 초록은 없다.
+    const d = fctx.getImageData(x0, y0, rw, rh).data
+    let sr = 0
+    let sg = 0
+    let sb = 0
+    let n = 0
+    for (let p = 0; p < d.length; p += 4) {
+      const r = d[p]
+      const g = d[p + 1]
+      const b = d[p + 2]
+      if (g > r + 12 && g > b + 12) continue
+      sr += r
+      sg += g
+      sb += b
+      n++
+    }
+    if (n < 20) continue
+    picks.push({
+      side: live.rigSides[i] ?? 'home',
+      rect: { x: x0, y: y0, w: rw, h: rh },
+      lab: srgbToLab(sr / n, sg / n, sb / n),
+    })
+  }
+  const heights = picks.map((p) => p.rect.h)
+  const mean = (xs: number[]): number => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0)
+  const meanLab = (ps: Pick[]): [number, number, number] => [
+    mean(ps.map((p) => p.lab[0])),
+    mean(ps.map((p) => p.lab[1])),
+    mean(ps.map((p) => p.lab[2])),
+  ]
+  const home = picks.filter((p) => p.side === 'home')
+  const away = picks.filter((p) => p.side === 'away')
+  const hLab = meanLab(home)
+  const aLab = meanLab(away)
+  const spread = mean([...home.map((p) => deltaE(p.lab, hLab)), ...away.map((p) => deltaE(p.lab, aLab))])
+  const between = deltaE(hLab, aLab)
+
+  // ── 대비 시트 ──
+  // 행: [원본 크롭] [44px] [52px] [44px를 4배 최근접 확대(사람이 보라고)]
+  const cell = 4 * 52 + 16
+  const cols = Math.max(1, picks.length)
+  const sheetW = cols * (cell + 8) + 8
+  const sheetH = 4 * (cell + 8) + 8
+  const sheet = document.createElement('canvas')
+  sheet.width = sheetW
+  sheet.height = sheetH
+  const sctx = sheet.getContext('2d')
+  if (!sctx) throw new Error('시트 2D 컨텍스트를 만들 수 없다')
+  sctx.fillStyle = QA_BG
+  sctx.fillRect(0, 0, sheetW, sheetH)
+
+  const scratch = document.createElement('canvas')
+  const kctx = scratch.getContext('2d')
+  if (!kctx) throw new Error('스크래치 2D 컨텍스트를 만들 수 없다')
+
+  for (let i = 0; i < picks.length; i++) {
+    const { rect } = picks[i]
+    const cx = 8 + i * (cell + 8)
+    // 0행: 원본 크롭
+    sctx.imageSmoothingEnabled = true
+    sctx.drawImage(flat, rect.x, rect.y, rect.w, rect.h, cx, 8, rect.w, rect.h)
+    // 1·2행: 44px / 52px로 축소
+    for (let s = 0; s < QA_SIZES.length; s++) {
+      const th = QA_SIZES[s]
+      const tw = Math.max(1, Math.round((rect.w / rect.h) * th))
+      const y = 8 + (s + 1) * (cell + 8)
+      sctx.drawImage(flat, rect.x, rect.y, rect.w, rect.h, cx, y, tw, th)
+      if (s === 0) {
+        // 3행: 44px 축소본을 4배 최근접 확대 — 축소 후 남은 정보만 크게 본다.
+        scratch.width = tw
+        scratch.height = th
+        kctx.clearRect(0, 0, tw, th)
+        kctx.imageSmoothingEnabled = true
+        kctx.drawImage(flat, rect.x, rect.y, rect.w, rect.h, 0, 0, tw, th)
+        sctx.imageSmoothingEnabled = false
+        sctx.drawImage(scratch, 0, 0, tw, th, cx, 8 + 3 * (cell + 8), tw * 4, th * 4)
+        sctx.imageSmoothingEnabled = true
+      }
+    }
+  }
+
+  return {
+    dataUrl: sheet.toDataURL('image/png'),
+    screenPx: {
+      min: heights.length ? Math.min(...heights) : 0,
+      max: heights.length ? Math.max(...heights) : 0,
+      mean: mean(heights),
+      count: heights.length,
+    },
+    separation: {
+      home: [hLab[0], hLab[1], hLab[2]],
+      away: [aLab[0], aLab[1], aLab[2]],
+      deltaE: between,
+      spread,
+      ratio: spread > 1e-6 ? between / spread : 0,
+    },
+  }
+}
+
 declare global {
   interface Window {
     __toneHarness?: {
       run(opts: RunOptions): Promise<RunResult>
+      kitSheet(opts: Omit<RunOptions, 'scene'>): Promise<KitSheetResult>
       teardown(): void
     }
   }
 }
 
-window.__toneHarness = { run, teardown }
+window.__toneHarness = { run, kitSheet, teardown }

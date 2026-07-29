@@ -25,6 +25,13 @@ import {
   mixColor,
   luminance,
   contrastOn,
+  rgbToHsl,
+  hslToRgb,
+  deepKit,
+  kitInk,
+  ankleFromLeg,
+  solveLeg,
+  shadowFalloff,
 } from '../player3d'
 
 /** 위상 스윕(결정론 샘플) */
@@ -912,5 +919,212 @@ describe('disposePlayerCaches', () => {
     const rig = createPlayer(THREE, KIT)
     expect(() => rig.apply(poseOf(), 1)).not.toThrow()
     expect(meshesOf(rig.root).length).toBeGreaterThan(15)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3부: 킷 팔레트 · 접지 그림자 (B-5)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('HSL 변환', () => {
+  it('rgb → hsl → rgb 왕복이 정확하다', () => {
+    for (const c of [0xe63946, 0x4895ef, 0xd8ff3c, 0x000000, 0xffffff, 0x7f7f7f, 0x010203]) {
+      const { h, s, l } = rgbToHsl(c)
+      expect(hslToRgb(h, s, l)).toBe(c)
+    }
+  })
+
+  it('무채색은 채도 0이고 명도가 밝기를 따른다', () => {
+    expect(rgbToHsl(0x000000)).toEqual({ h: 0, s: 0, l: 0 })
+    expect(rgbToHsl(0xffffff)).toEqual({ h: 0, s: 0, l: 1 })
+  })
+
+  it('hslToRgb는 범위 밖 입력을 감싸거나 잘라 항상 유효한 색을 낸다', () => {
+    for (const [h, s, l] of [
+      [1.7, -0.3, 0.5],
+      [-0.4, 1.8, 0.5],
+      [0.3, 0.5, 2],
+      [0.3, 0.5, -1],
+    ] as const) {
+      const c = hslToRgb(h, s, l)
+      expect(c).toBeGreaterThanOrEqual(0)
+      expect(c).toBeLessThanOrEqual(0xffffff)
+    }
+  })
+})
+
+describe('deepKit — 팀 보조색', () => {
+  // 단순 shade()가 아니라 색상 보존 + 채도 유지여야 하는 이유: 야간 피치에서 두 팀의
+  // 어두운 트림이 같은 탁한 회색으로 수렴하면 안 된다.
+  it('색상(H)을 보존한다', () => {
+    for (const c of [0xe63946, 0x4895ef, 0xf2383d, 0x147df5]) {
+      expect(rgbToHsl(deepKit(c)).h).toBeCloseTo(rgbToHsl(c).h, 2)
+    }
+  })
+
+  it('원색보다 어둡고 채도는 0.7 이상으로 유지된다', () => {
+    for (const c of [0xe63946, 0x4895ef, 0xd8ff3c]) {
+      const d = deepKit(c)
+      expect(luminance(d)).toBeLessThan(luminance(c))
+      expect(rgbToHsl(d).s).toBeGreaterThanOrEqual(0.7 - 1e-9)
+      expect(rgbToHsl(d).l).toBeCloseTo(0.21, 2) // 8bit 양자화 오차 허용
+    }
+  })
+
+  it('두 팀의 보조색이 서로 수렴하지 않는다(축소 시 팀 구분의 마지막 보루)', () => {
+    const red = deepKit(0xe63946)
+    const blue = deepKit(0x4895ef)
+    // 채널 최대 차 — 회색으로 수렴하면 이 값이 작아진다
+    const dr = Math.abs(((red >> 16) & 255) - ((blue >> 16) & 255))
+    const db = Math.abs((red & 255) - (blue & 255))
+    expect(Math.max(dr, db)).toBeGreaterThan(60)
+  })
+})
+
+describe('kitInk — 등번호 색', () => {
+  it('밝은 킷에는 잉크블랙, 어두운 킷에는 밝은 글자', () => {
+    expect(luminance(kitInk(0xd8ff3c))).toBeLessThan(0.3) // GK 형광 → 검정
+    expect(luminance(kitInk(0xe63946))).toBeGreaterThan(0.8)
+    expect(luminance(kitInk(0x4895ef))).toBeGreaterThan(0.8)
+  })
+
+  it('따뜻한 킷에는 아이보리, 차가운 킷에는 순백', () => {
+    expect(kitInk(0xe63946)).toBe(0xfff1d0) // 스칼렛 → 아이보리
+    expect(kitInk(0x4895ef)).toBe(0xffffff) // 애저 → 흰색
+  })
+})
+
+describe('ankleFromLeg — 접지 그림자용 순기구학', () => {
+  it('solveLeg의 정확한 역함수다(도달 가능한 목표에 한해)', () => {
+    let checked = 0
+    for (const fx of [-0.4, -0.1, 0, 0.15, 0.45]) {
+      for (const fy of [0.6, 0.75, 0.88]) {
+        // 다리 길이를 넘는 목표는 solveLeg이 반경을 클램프하므로 왕복이 성립하지 않는다.
+        if (Math.hypot(fx, fy) > 0.92) continue
+        checked++
+        const { hip, knee } = solveLeg(fx, fy)
+        const back = ankleFromLeg(hip, knee)
+        expect(back.fx).toBeCloseTo(fx, 9)
+        expect(back.fy).toBeCloseTo(fy, 9)
+      }
+    }
+    expect(checked).toBeGreaterThan(8)
+  })
+
+  it('도달 불가 목표는 클램프되어도 다리 길이를 넘지 않는다', () => {
+    const { hip, knee } = solveLeg(0.5, 1.2)
+    const { fx, fy } = ankleFromLeg(hip, knee)
+    expect(Math.hypot(fx, fy)).toBeLessThanOrEqual(0.93)
+  })
+})
+
+describe('shadowFalloff — 블롭 감쇠 곡선', () => {
+  it('중심에서 최대, 가장자리에서 정확히 0', () => {
+    for (const core of [0.18, 0.34, 0.55, 0.8]) {
+      expect(shadowFalloff(0, core)).toBeCloseTo(0.95, 6)
+      expect(shadowFalloff(1, core)).toBeCloseTo(0, 6)
+    }
+  })
+
+  it('단조 감소한다(중간에 밝아지는 링이 생기면 그림자가 도넛이 된다)', () => {
+    for (const core of [0.18, 0.55, 0.9]) {
+      let prev = Infinity
+      for (let i = 0; i <= 100; i++) {
+        const v = shadowFalloff(i / 100, core)
+        expect(v).toBeLessThanOrEqual(prev + 1e-9)
+        expect(v).toBeGreaterThanOrEqual(0)
+        prev = v
+      }
+    }
+  })
+
+  it('범위 밖 입력을 클램프한다', () => {
+    expect(shadowFalloff(-1, 0.5)).toBeCloseTo(0.95, 6)
+    expect(shadowFalloff(2, 0.5)).toBeCloseTo(0, 6)
+  })
+})
+
+describe('접지 그림자 — 실제 발을 따라간다', () => {
+  /** 리그의 그림자 블롭 3장(정점 알파 원판 = 유일한 비인덱스 BufferGeometry 메시). */
+  const blobsOf = (root: THREE.Object3D): THREE.Mesh[] =>
+    meshesOf(root).filter((m) => !!(m.geometry as THREE.BufferGeometry).getAttribute('color'))
+
+  it('선수마다 발 블롭 2 + 질량 블롭 1을 가진다', () => {
+    const rig = createPlayer(THREE, KIT)
+    rig.apply(poseOf({ action: 'idle', speed: 0 }), 1)
+    expect(blobsOf(rig.root)).toHaveLength(3)
+  })
+
+  it('블롭은 항상 지면 높이에 눕는다(몸이 기울어도)', () => {
+    const rig = createPlayer(THREE, KIT)
+    for (const action of ['run', 'idle', 'kick', 'celebrate', 'dive', 'down'] as const) {
+      for (let i = 0; i <= 8; i++) {
+        rig.apply(poseOf({ action, actionT: i / 8, speed: 5 }), 3 + i * DT)
+        rig.root.updateMatrixWorld(true)
+        for (const b of blobsOf(rig.root)) {
+          // root.scale(체격 변주 0.965~1.035)이 걸리므로 정확히 0.02는 아니다.
+          const y = b.getWorldPosition(new THREE.Vector3()).y
+          expect(y).toBeGreaterThan(0.018)
+          expect(y).toBeLessThan(0.022)
+        }
+      }
+    }
+  })
+
+  it('발 블롭이 실제 부츠의 수평 위치를 따라간다(스케이팅 방지)', () => {
+    const rig = createPlayer(THREE, KIT)
+    let t = 0
+    for (let i = 0; i < 40; i++) {
+      t += DT
+      rig.apply(poseOf({ speed: 6 }), t)
+    }
+    rig.root.updateMatrixWorld(true)
+    const boots = meshesOf(rig.root)
+      .filter((m) => (m.geometry as THREE.BufferGeometry).type === 'BoxGeometry')
+      .map((m) => m.getWorldPosition(new THREE.Vector3()))
+    const blobs = blobsOf(rig.root).map((m) => m.getWorldPosition(new THREE.Vector3()))
+    // 각 부츠마다 수평거리 12cm 이내의 블롭이 있어야 한다(블롭은 발목 기준, 부츠는 앞쪽 오프셋).
+    for (const boot of boots) {
+      const best = Math.min(...blobs.map((b) => Math.hypot(b.x - boot.x, b.z - boot.z)))
+      expect(best).toBeLessThan(0.12)
+    }
+  })
+
+  it('발이 뜨면 블롭이 옅어지고 넓어진다(접지 순간만 진하다)', () => {
+    const rig = createPlayer(THREE, KIT)
+    const foot = (): { op: number; sx: number } => {
+      const b = blobsOf(rig.root)
+      // 질량 블롭은 x=0에 고정 — 발 블롭만 고른다
+      const f = b.filter((m) => Math.abs(m.position.z) > 1e-6)
+      const hi = f.reduce((a, m) => ((m.material as THREE.MeshBasicMaterial).opacity > a ? (m.material as THREE.MeshBasicMaterial).opacity : a), 0)
+      const lo = f.reduce((a, m) => ((m.material as THREE.MeshBasicMaterial).opacity < a ? (m.material as THREE.MeshBasicMaterial).opacity : a), 1)
+      const wide = f.reduce((a, m) => (m.scale.x > a ? m.scale.x : a), 0)
+      return { op: hi - lo, sx: wide }
+    }
+    // 스프린트 중에는 한 발이 접지, 한 발이 체공 → 두 블롭의 불투명도 차가 벌어진다
+    let t = 0
+    let maxGap = 0
+    let maxWide = 0
+    for (let i = 0; i < 120; i++) {
+      t += DT
+      rig.apply(poseOf({ speed: 8 }), t)
+      const f = foot()
+      maxGap = Math.max(maxGap, f.op)
+      maxWide = Math.max(maxWide, f.sx)
+    }
+    expect(maxGap).toBeGreaterThan(0.15) // 접지/체공이 확실히 구분된다
+    // 서 있을 때보다 넓게 퍼진 순간이 있다
+    rig.apply(poseOf({ action: 'idle', speed: 0 }), t + 1)
+    expect(maxWide).toBeGreaterThan(foot().sx * 1.15)
+  })
+
+  it('dispose가 인스턴스 소유 그림자 머티리얼을 해제한다(공유 캐시에 없다)', () => {
+    const rig = createPlayer(THREE, KIT)
+    rig.apply(poseOf(), 1)
+    const mats = blobsOf(rig.root).map((m) => m.material as THREE.MeshBasicMaterial)
+    let disposed = 0
+    for (const m of mats) m.addEventListener('dispose', () => disposed++)
+    rig.dispose()
+    expect(disposed).toBe(3)
   })
 })

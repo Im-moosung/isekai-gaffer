@@ -9,7 +9,6 @@ import {
   makeNetCanvas,
   makeNoiseCanvas,
   makePitchCanvas,
-  makeShadowCanvas,
 } from '../textures'
 
 describe('jsdom(2d 컨텍스트 없음)', () => {
@@ -23,7 +22,6 @@ describe('jsdom(2d 컨텍스트 없음)', () => {
       () => makePitchCanvas(2),
       () => makeNetCanvas(),
       () => makeNoiseCanvas(),
-      () => makeShadowCanvas(),
       () => makeConcreteCanvas(),
       () => makeAdBoardCanvas(),
     ]) {

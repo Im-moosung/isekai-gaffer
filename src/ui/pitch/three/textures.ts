@@ -315,20 +315,113 @@ export function makeNetCanvas(size = 128, cells = 10): HTMLCanvasElement | null 
   return canvas
 }
 
-// ── 컨택트 섀도우(방사형 알파) ──────────────────────────────────
-/** 선수 발밑 페이크 그림자 — 중심이 진하고 가장자리가 투명한 검은 원. */
-export function makeShadowCanvas(size = 64): HTMLCanvasElement | null {
-  const c = makeCanvas(size, size)
+// ── 킷(유니폼) 절차 텍스처 ──────────────────────────────────────
+//
+// 선수 몸통·소매·양말은 전부 CapsuleGeometry다. three의 캡슐 UV는
+//   u = 방위각(0 = 로컬 -X, 0.5 = 로컬 +X = 선수 정면),
+//   v = 아래(0)에서 위(1)로의 **호길이 비율**(반구 캡 포함)
+// 이라서, 캔버스 세로축만 쓰면 칼라·소매 트림·양말 밴드·횡스트라이프를 전부 그릴 수 있다.
+// (CanvasTexture는 flipY=true라 캔버스 맨 윗줄이 v=1 = 캡슐 위쪽이다.)
+//
+// **왜 세로 밴드만 쓰는가:** 가로(u) 위치에 의존하는 패턴(새시 등)은 u=0의 UV 이음매에서
+// 끊긴다. 그리고 화면상 40~52px에서는 팀 색 **면적**이 인식 속도를 지배한다는 것이
+// docs/refs 판정 결론이다. 세로 밴드만으로 칼라·트림·후프를 다 만들 수 있으므로
+// 이음매 문제를 안고 갈 이유가 없다.
+
+/** 팀 패턴. 무지 또는 횡스트라이프(후프). */
+export type KitPattern = 'plain' | 'hoops'
+
+/** v 구간을 채우는 색 밴드(칼라·소매 밑단·양말 밴드 공용). */
+export interface KitBand {
+  /** v 하한(0 = 캡슐 아래끝) */
+  from: number
+  /** v 상한(1 = 캡슐 위끝) */
+  to: number
+  color: string
+}
+
+export interface KitCanvasSpec {
+  /** 주 팀 색. 면적의 60% 이상을 차지해야 한다(docs/refs 판정). */
+  base: string
+  /** 어두운 보조색 — 칼라·트림·후프. */
+  deep: string
+  /** 기본 'plain'. */
+  pattern?: KitPattern
+  /**
+   * 패턴을 그릴 v 구간. 캡슐 캡(어깨·밑단)까지 후프를 흘리면 축소 시 몸통 위아래가
+   * 어두운 덩어리로 뭉치므로 보통 {@link capsuleVSpan}의 원통 구간만 준다.
+   */
+  patternSpan?: { from: number; to: number }
+  /** 후프 개수(어두운 띠 수). 기본 3. */
+  hoops?: number
+  /** 추가 밴드(칼라·트림). 순서대로 덧그린다. */
+  bands?: readonly KitBand[]
+  /** 위는 밝고 아래는 어두운 미세 명암. 램버트만으로는 축소 시 몸통이 납작해 보인다. */
+  shading?: boolean
+}
+
+/**
+ * `CapsuleGeometry(radius, cylLength)`에서 **원통 구간**이 차지하는 v 범위.
+ * 캡슐 UV의 v는 호길이 비율이므로 반구 캡 하나가 차지하는 몫은 (πr/2) / (πr + cylLength)다.
+ * (three 0.185 실측으로 확인: r=0.155·len=0.30 → 0.3094 ~ 0.6906)
+ */
+export function capsuleVSpan(radius: number, cylLength: number): { from: number; to: number } {
+  const cap = (Math.max(0, radius) * Math.PI) / 2
+  const total = 2 * cap + Math.max(0, cylLength)
+  if (total <= 0) return { from: 0, to: 1 }
+  const f = cap / total
+  return { from: f, to: 1 - f }
+}
+
+/**
+ * 킷 텍스처(캡슐 UV용 세로 밴드 아틀라스). canvas 미지원 환경에서는 null.
+ * @param w 가로 픽셀 — u 방향으로는 균일하므로 작아도 된다(기본 32)
+ * @param h 세로 픽셀 — 밴드 경계 선명도를 정한다(기본 256)
+ */
+export function makeKitCanvas(spec: KitCanvasSpec, w = 32, h = 256): HTMLCanvasElement | null {
+  const c = makeCanvas(w, h)
   if (!c) return null
   const { ctx, canvas } = c
-  const r = size / 2
-  const g = ctx.createRadialGradient(r, r, 0, r, r, r)
-  g.addColorStop(0, 'rgba(0,0,0,0.95)')
-  g.addColorStop(0.45, 'rgba(0,0,0,0.62)')
-  g.addColorStop(0.8, 'rgba(0,0,0,0.16)')
-  g.addColorStop(1, 'rgba(0,0,0,0)')
-  ctx.fillStyle = g
-  ctx.fillRect(0, 0, size, size)
+  /** v(0=아래, 1=위) → 캔버스 y. flipY=true라 v=1이 맨 윗줄이다. */
+  const vy = (v: number): number => (1 - v) * h
+  /** v 구간을 색으로 채운다(위아래 순서 무관). */
+  const fillSpan = (from: number, to: number, color: string): void => {
+    const y0 = vy(Math.max(from, to))
+    const y1 = vy(Math.min(from, to))
+    if (y1 - y0 <= 0) return
+    ctx.fillStyle = color
+    ctx.fillRect(0, y0, w, y1 - y0)
+  }
+
+  ctx.fillStyle = spec.base
+  ctx.fillRect(0, 0, w, h)
+
+  if (spec.pattern === 'hoops') {
+    const span = spec.patternSpan ?? { from: 0, to: 1 }
+    const n = Math.max(1, Math.round(spec.hoops ?? 3))
+    // 어두운 띠 n개 + 밝은 틈 n+1개로 나눠 **주 팀 색이 항상 과반**이 되게 한다
+    // (docs/refs 권고: 어두운 패턴 면적 35~40% 이하).
+    const unit = (span.to - span.from) / (2 * n + 1)
+    for (let i = 0; i < n; i++) {
+      const from = span.from + unit * (2 * i + 1)
+      fillSpan(from, from + unit, spec.deep)
+    }
+  }
+
+  for (const b of spec.bands ?? []) fillSpan(b.from, b.to, b.color ?? spec.deep)
+
+  if (spec.shading !== false) {
+    // 위 10% 밝게 / 아래 12% 어둡게. 캡슐 램버트 음영은 카메라 각도에 따라 사라지는데,
+    // 이 고정 그라디언트는 축소본에서도 상하 구분을 남긴다.
+    const g = ctx.createLinearGradient(0, 0, 0, h)
+    g.addColorStop(0, 'rgba(255,255,255,0.10)')
+    g.addColorStop(0.45, 'rgba(255,255,255,0)')
+    g.addColorStop(0.62, 'rgba(0,0,0,0)')
+    g.addColorStop(1, 'rgba(0,0,0,0.12)')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, w, h)
+  }
+
   return canvas
 }
 

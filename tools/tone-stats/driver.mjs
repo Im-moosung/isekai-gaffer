@@ -198,8 +198,11 @@ export async function runInBrowser(runs, cfg = {}) {
 
     for (const run of runs) {
       const opts = { width: WIDTH, height: HEIGHT, ...run.opts }
+      // 기본은 톤 통계용 run(). 킷 축소 판정처럼 다른 산출물이 필요한 러너는
+      // run.call로 하네스의 다른 진입점을 지정한다.
+      const entry = run.call ?? 'run'
       const r = await call('Runtime.evaluate', {
-        expression: `window.__toneHarness.run(${JSON.stringify(opts)})`,
+        expression: `window.__toneHarness.${entry}(${JSON.stringify(opts)})`,
         awaitPromise: true,
         returnByValue: true,
       })

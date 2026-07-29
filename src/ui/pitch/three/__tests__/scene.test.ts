@@ -408,7 +408,7 @@ describe('crowdCount 상한', () => {
 })
 
 describe('makeContactShadow', () => {
-  it('XZ 평면에 눕는 반투명 검정 원', () => {
+  it('XZ 평면에 눕는 반투명 원판', () => {
     const mesh = makeContactShadow(THREE, 0.6)
     const geo = mesh.geometry
     geo.computeBoundingBox()
@@ -421,7 +421,32 @@ describe('makeContactShadow', () => {
     expect(mat.depthWrite).toBe(false)
     expect(mat.opacity).toBeGreaterThan(0)
     expect(mat.opacity).toBeLessThan(1)
-    expect(mat.color.getHex()).toBe(0x000000)
+    mesh.geometry.dispose()
+    mat.dispose()
+  })
+
+  // 감쇠가 **정점 알파**로 구워져 있다는 것이 이 그림자의 핵심 계약이다. 텍스처 알파
+  // 경로(map·alphaMap)는 실제 렌더에서 화면에 아무것도 남기지 않아 그림자가 통째로
+  // 사라졌었다 — 그 회귀를 여기서 막는다.
+  it('정점 색은 검정이고 알파는 중심에서 가장자리로 단조 감소해 0에서 끝난다', () => {
+    const mesh = makeContactShadow(THREE, 0.6)
+    const mat = mesh.material as THREE.MeshBasicMaterial
+    expect(mat.vertexColors).toBe(true)
+    const col = mesh.geometry.getAttribute('color')
+    expect(col.itemSize).toBe(4) // RGBA — 알파가 없으면 감쇠가 사라진다
+    const pos = mesh.geometry.getAttribute('position')
+    let centreAlpha = 0
+    let rimAlpha = 1
+    for (let i = 0; i < col.count; i++) {
+      expect(col.getX(i)).toBe(0)
+      expect(col.getY(i)).toBe(0)
+      expect(col.getZ(i)).toBe(0)
+      const r = Math.hypot(pos.getX(i), pos.getZ(i))
+      if (r < 1e-6) centreAlpha = col.getW(i)
+      if (r > 0.6 - 1e-6) rimAlpha = Math.max(rimAlpha === 1 ? 0 : rimAlpha, col.getW(i))
+    }
+    expect(centreAlpha).toBeGreaterThan(0.8)
+    expect(rimAlpha).toBeCloseTo(0, 6)
     mesh.geometry.dispose()
     mat.dispose()
   })
