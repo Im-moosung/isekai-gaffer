@@ -32,6 +32,12 @@ interface Match3DProps {
   dwellMs?: number
   /** 시퀀스 재생(공격) 팀. */
   sequenceSide?: 'home' | 'away'
+  /**
+   * 이 시퀀스의 근거 이벤트. 하이라이트가 아닌 분에는 **null**을 넘겨야 한다 —
+   * 미지정이면 movement가 state.events에서 그 분의 이벤트를 역추적하는데, 그러면
+   * "코너가 났지만 화면은 점유 흐름"인 분에 코너 궤적·카메라가 잘못 붙는다.
+   */
+  event?: MatchEvent | null
   /** 3D를 쓸 수 없을 때 대신 렌더할 노드(렌더러 체인의 다음 단계 = PixiPitch). */
   fallback?: ReactNode
 }
@@ -311,6 +317,8 @@ export function Match3D(props: Match3DProps) {
           sequenceSide: p.sequenceSide ?? null,
           seed: p.state.seed,
           dwellMs: p.dwellMs ?? 0,
+          // undefined면 movement가 역추적한다 — 호출부가 명시하면 그 값을 신뢰한다.
+          ...(p.event !== undefined ? { event: p.event } : {}),
         })
         prevFrame = frame
 

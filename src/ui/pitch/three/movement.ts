@@ -12,7 +12,8 @@
 //    GK 5.5 m/s). prev=null(첫 프레임)일 때만 목표 위치로 스냅한다.
 //  - 좌표계·타입 계약은 ./types.ts가 정본이다.
 import type { MatchEvent, MatchEventType, MatchState, SideState } from '../../../engine/types'
-import type { ChoreoStep } from '../choreography'
+import type { BallArc, ChoreoStep } from '../choreography'
+import { possessingSide } from '../flow'
 import { slotCoords } from '../formations'
 // 보폭 모델은 표시 계층 전체가 **하나**를 공유한다(player3d가 정본).
 // player3d는 three를 정적 import하지 않으므로 이 import로 번들이 커지지 않는다.
@@ -80,8 +81,9 @@ const TAU = Math.PI * 2
 const HALF_W = PITCH_W / 2
 const HALF_H = PITCH_H / 2
 
-/** 볼 궤적 종류 — 이벤트 타입과 구간 인덱스로 결정된다. */
-export type BallArcKind = 'ground' | 'pass' | 'shot' | 'cross'
+/** 볼 궤적 종류 — 안무 스텝이 지정하면 그것이 우선, 없으면 이벤트 타입과 구간 인덱스로 추론.
+ *  정본 타입은 choreography(=scenes)에 있다 — 장면을 저술하는 쪽이 궤적도 안다. */
+export type BallArcKind = BallArc
 
 /** 궤적별 최고 높이(m). ground는 공 반지름(=지면). */
 export const BALL_PEAK: Record<BallArcKind, number> = {
@@ -229,16 +231,73 @@ export function sampleSequence(sequence: ChoreoStep[], t: number): SeqSample {
   }
 }
 
-/** 안무가 없을 때의 볼 — 중원을 완만히 순환하며 우세 팀(momentum) 쪽으로 드리프트. */
-function idleBall(minute: number, t: number, momentum: number, seed: number): { x: number; y: number; z: number } {
-  // 분 경계에서 끊기지 않도록 위상은 (minute + t)의 연속 함수, 시드는 상수 오프셋만.
-  const phase = (minute + t) * 0.9 + unit(`ball:${seed}`) * TAU
-  const drift = clamp(momentum, -1, 1) * 16
-  return {
-    x: clamp(drift + Math.cos(phase) * 14, -HALF_W + 2, HALF_W - 2),
-    y: BALL_RADIUS,
-    z: clamp(Math.sin(phase * 0.8) * 12, -HALF_H + 2, HALF_H - 2),
+/** 무사건 분의 패스 체인 단계 수(t를 4등분해 4명을 거친다). */
+const IDLE_CHAIN = 4
+/** 이 거리(0~100 좌표) 이상은 뜬 패스로 본다. */
+const IDLE_LOFT_DIST = 22
+
+/**
+ * 안무가 없을 때의 볼 — **실제 선수의 발밑**을 옮겨 다닌다.
+ *
+ * ★ 예전에는 리사주 곡선(cos/sin 합성)이었다. 사람과 무관하게 8자를 그리니 "공이 혼자
+ *   떠다닌다"로 보였다. 지금은 점유 팀의 라인업 좌표를 잇는 짧은 패스 체인이다 —
+ *   공은 언제나 누군가의 발에 있고, 수렴 로직이 그 주위로 선수를 끌어당긴다.
+ *
+ * 참고: 정상 경로에서는 MatchScreen이 무사건 분에도 flow 시퀀스를 넘기므로 이 함수는
+ * 폴백이다(시퀀스 없이 computeFrame을 직접 부르는 테스트·구버전 호출부).
+ */
+function idleBall(state: MatchState, minute: number, t: number, seed: number): { x: number; y: number; z: number } {
+  const side = possessingSide(state.momentum, minute, seed)
+  const st = side === 'home' ? state.home : state.away
+  const chain = idleChain(st, side, minute, seed)
+  if (chain.length === 0) return { x: 0, y: BALL_RADIUS, z: 0 }
+  if (chain.length === 1) {
+    const w = toWorld(chain[0].x, chain[0].y)
+    return { x: w.x, y: BALL_RADIUS, z: w.z }
   }
+  const segs = chain.length - 1
+  const k = Math.min(segs - 1, Math.floor(t * segs))
+  const u = clamp(t * segs - k, 0, 1)
+  // smoothstep — 구간 경계에서 속도가 0이라 팀 라인(BALL_SHIFT)이 튀지 않는다.
+  const e = u * u * (3 - 2 * u)
+  const a = chain[k]
+  const b = chain[k + 1]
+  // ★ 볼에 별도의 모멘텀 드리프트를 더하지 않는다 — 그러면 공이 선수에게서 떨어진다.
+  //   흐름은 이미 두 곳에서 표현된다: 누가 점유하는가(possessingSide)와 팀 라인 전진
+  //   (planSide의 BALL_SHIFT). 공은 언제나 두 선수를 잇는 선분 위에 있어야 한다.
+  const w = toWorld(clamp(lerp(a.x, b.x, e), 2, 98), clamp(lerp(a.y, b.y, e), 2, 98))
+  const lofted = Math.hypot(b.x - a.x, b.y - a.y) > IDLE_LOFT_DIST
+  return { x: w.x, y: lofted ? ballHeight('pass', e) : BALL_RADIUS, z: w.z }
+}
+
+/**
+ * 무사건 분의 패스 체인 — 시드로 고른 출발 선수에서 **가장 가까운 미방문 동료**로
+ * 이어 붙인다. 짧은 패스만 나오므로 공이 피치를 가로질러 튀지 않는다(팀 라인이 흔들리면
+ * 22명이 한꺼번에 달리는 것처럼 보인다).
+ */
+function idleChain(st: SideState, side: 'home' | 'away', minute: number, seed: number): { x: number; y: number }[] {
+  const lineup = st.tactics.lineup
+  const sentOff = new Set(st.sentOff)
+  const pts: { x: number; y: number }[] = []
+  const pool: { x: number; y: number }[] = []
+  for (let i = 1; i < lineup.length; i++) {
+    if (sentOff.has(lineup[i].playerId)) continue
+    pool.push(slotCoords(st.tactics.formation, i, side))
+  }
+  if (pool.length === 0) return pts
+  let cur = pool.splice(hash(`idle:${seed}:${minute}`) % pool.length, 1)[0]
+  pts.push(cur)
+  while (pts.length < IDLE_CHAIN && pool.length > 0) {
+    let bi = 0
+    let bd = Infinity
+    for (let i = 0; i < pool.length; i++) {
+      const d = (pool[i].x - cur.x) ** 2 + (pool[i].y - cur.y) ** 2
+      if (d < bd) { bd = d; bi = i }
+    }
+    cur = pool.splice(bi, 1)[0]
+    pts.push(cur)
+  }
+  return pts
 }
 
 /** 프레임에 실을 이벤트 라벨.
@@ -459,7 +518,10 @@ export function computeFrame(input: FrameInput): FrameState {
   // ── 1) 볼 ────────────────────────────────────────────────────────────
   const sample = seq ? sampleSequence(seq, t) : null
   const segCount = seq ? seq.length - 1 : 0
-  const arc = sample ? arcKindFor(event?.type, sample.segIndex, segCount) : 'ground'
+  // 궤적은 **장면이 저술한 값이 우선**한다(크로스는 크로스로 떠야 한다). 없으면 타입 추론.
+  const arc: BallArcKind = sample
+    ? (sample.start.arc ?? arcKindFor(event?.type, sample.segIndex, segCount))
+    : 'ground'
   let ballPos: { x: number; y: number; z: number }
   if (sample) {
     const w = toWorld(sample.ball.x, sample.ball.y)
@@ -468,7 +530,7 @@ export function computeFrame(input: FrameInput): FrameState {
       : ballHeight(arc, sample.u)
     ballPos = { x: w.x, y, z: w.z }
   } else {
-    ballPos = idleBall(input.minute, t, input.state.momentum, input.seed)
+    ballPos = idleBall(input.state, input.minute, t, input.seed)
   }
   const rolled = prev ? Math.hypot(ballPos.x - prev.ball.x, ballPos.z - prev.ball.z) : 0
   const spinRaw = (prev?.ball.spin ?? 0) + rolled / BALL_RADIUS

@@ -18,26 +18,27 @@ function seq(type: MatchEventType, opts: Partial<MatchEvent> = {}): ChoreoStep[]
 
 const inRange = (v: number) => v >= 0 && v <= 100
 
-describe('buildSequence — 스텝 수(타입별 2~4)', () => {
-  it('goal은 4스텝(빌드업→전진→슛→네트)', () => {
-    expect(seq('goal')).toHaveLength(4)
+// 장면 = 빌드업 3스텝(attackPattern) + 마무리(결과별 1~2스텝).
+describe('buildSequence — 스텝 수(빌드업 3 + 마무리)', () => {
+  it('goal·miss·save·shot은 5스텝(빌드업 3 + 마무리 2)', () => {
+    for (const t of ['goal', 'miss', 'save', 'shot'] as MatchEventType[]) {
+      expect(seq(t), t).toHaveLength(5)
+    }
   })
-  it('miss·save·shot은 3스텝', () => {
-    expect(seq('miss')).toHaveLength(3)
-    expect(seq('save')).toHaveLength(3)
-    expect(seq('shot')).toHaveLength(3)
+  it('chance는 4스텝(마무리가 없다)', () => {
+    expect(seq('chance')).toHaveLength(4)
   })
-  it('corner는 3스텝', () => {
+  it('corner는 3스텝(세트피스 — 빌드업 없음)', () => {
     expect(seq('corner')).toHaveLength(3)
   })
   it('foul은 2스텝(정지 근사)', () => {
     expect(seq('foul')).toHaveLength(2)
   })
-  it('모든 타입이 2~4스텝 범위', () => {
+  it('모든 타입이 2~5스텝 범위', () => {
     for (const t of ['goal', 'shot', 'save', 'miss', 'corner', 'foul', 'yellow', 'chance'] as MatchEventType[]) {
       const n = seq(t).length
       expect(n).toBeGreaterThanOrEqual(2)
-      expect(n).toBeLessThanOrEqual(4)
+      expect(n).toBeLessThanOrEqual(5)
     }
   })
 })
@@ -122,9 +123,9 @@ describe('buildSequence — 안무 유무', () => {
     }
   })
 
-  it('shot·chance는 안무가 있다(3스텝)', () => {
-    expect(seq('shot')).toHaveLength(3)
-    expect(seq('chance')).toHaveLength(3)
+  it('shot·chance는 안무가 있다', () => {
+    expect(seq('shot')).toHaveLength(5)
+    expect(seq('chance')).toHaveLength(4)
   })
 
   it('shot은 골문 앞에서 멈춘다(골처럼 네트에 닿지 않는다)', () => {

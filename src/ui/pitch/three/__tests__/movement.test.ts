@@ -25,6 +25,29 @@ function input(over: Partial<FrameInput> = {}): FrameInput {
   }
 }
 
+/** 볼이 "두 라인업 좌표를 잇는 선분" 위에 있는지 — 무사건 분 패스 체인 검증용.
+ *  리사주 곡선은 선수와 무관한 궤적이라 이 거리가 크게 벌어진다. */
+function distToLineupSegments(bx: number, bz: number): number {
+  const pts: { x: number; z: number }[] = []
+  for (const side of ['home', 'away'] as const) {
+    const st = base[side]
+    st.tactics.lineup.forEach((_, i) => {
+      const c = slotCoords(st.tactics.formation, i, side)
+      pts.push(toWorld(c.x, c.y))
+    })
+  }
+  let best = Infinity
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      const ax = pts[i].x, az = pts[i].z, dx = pts[j].x - ax, dz = pts[j].z - az
+      const len2 = dx * dx + dz * dz
+      const u = len2 > 0 ? Math.max(0, Math.min(1, ((bx - ax) * dx + (bz - az) * dz) / len2)) : 0
+      best = Math.min(best, Math.hypot(bx - (ax + dx * u), bz - (az + dz * u)))
+    }
+  }
+  return best
+}
+
 /** 정지 볼을 원하는 0~100 좌표에 고정하는 더미 시퀀스(무버 없음). */
 function pinnedBall(x: number, y: number): ChoreoStep[] {
   return [
@@ -434,18 +457,28 @@ describe('볼 높이(Y) — 이벤트 타입별 아크', () => {
     expect(maxY('foul')).toBeCloseTo(BALL_RADIUS, 6)
   })
 
-  it('시퀀스가 없으면 볼은 지면에서 중원을 완만히 순환한다', () => {
+  // ★ 예전엔 이 자리에 리사주 곡선(cos/sin 합성)이 있었다 — 공이 사람과 무관하게 8자를
+  //   그리니 "혼자 떠다닌다"로 보였다. 지금은 실제 선수를 잇는 짧은 패스 체인이므로
+  //   "가장 가까운 선수와의 거리"가 항상 작아야 한다(리사주는 이 검사를 통과할 수 없다).
+  it('시퀀스가 없으면 볼은 항상 어떤 선수의 발밑 근처에 있다(리사주 금지)', () => {
     let prev: FrameState | null = null
     let maxStep = 0
+    let maxToPlayer = 0
     for (let k = 0; k <= 40; k++) {
       const f: FrameState = computeFrame(input({ prev, dt: 0.05, t: k / 40 }))
-      expect(f.ball.y).toBeCloseTo(BALL_RADIUS, 6)
+      // 지면 또는 짧은 패스 아크(공중 최고점도 pass 피크를 넘지 않는다).
+      expect(f.ball.y).toBeGreaterThanOrEqual(BALL_RADIUS - 1e-9)
+      expect(f.ball.y).toBeLessThanOrEqual(BALL_PEAK.pass + 1e-9)
       expect(Math.abs(f.ball.x)).toBeLessThan(PITCH_W / 2)
       expect(Math.abs(f.ball.z)).toBeLessThan(PITCH_H / 2)
+      maxToPlayer = Math.max(maxToPlayer, distToLineupSegments(f.ball.x, f.ball.z))
       if (prev) maxStep = Math.max(maxStep, Math.hypot(f.ball.x - prev.ball.x, f.ball.z - prev.ball.z))
       prev = f
     }
-    expect(maxStep).toBeLessThan(3) // 완만한 순환(프레임당 급점프 없음)
+    // 공은 **두 라인업 좌표를 잇는 선분 위**에 정확히 있다(패스 중이거나 발밑이거나).
+    // 리사주 곡선은 이 검사를 통과할 수 없다.
+    expect(maxToPlayer).toBeLessThan(0.05)
+    expect(maxStep).toBeLessThan(3) // 완만한 전개(프레임당 급점프 없음)
   })
 })
 
@@ -745,11 +778,27 @@ describe('저속 히스테리시스', () => {
   // 발이 떤다. 이탈 문턱을 진입 문턱의 60%(0.24)로 낮춰 그 구간을 흡수한다.
   it('run 중 속도가 이탈 문턱 위에 있으면 idle로 떨어지지 않는다', () => {
     let band = 0
-    for (const dts of [[0.02, 0.09], [1 / 60, 1 / 60], [0.03, 0.05, 0.11]]) {
+    // ★ 무사건 분의 볼이 리사주 곡선에서 **패스 체인**으로 바뀐 뒤(smoothstep) 속도가
+    //   양극화되어 무사건 케이스만으로는 문턱 밴드 표본이 줄었다. 안무 케이스를 함께
+    //   돌려 표본을 유지한다 — 도착 감속(ARRIVE_RADIUS)이 밴드를 반드시 통과시킨다.
+    const goalSeq = buildSequence(ev('goal'), base.home, base.away)
+    const cases: { dts: number[]; seq: ChoreoStep[] | null }[] = [
+      { dts: [0.02, 0.09], seq: null },
+      { dts: [1 / 60, 1 / 60], seq: null },
+      { dts: [0.03, 0.05, 0.11], seq: null },
+      { dts: [0.02, 0.05], seq: goalSeq },
+      { dts: [1 / 60, 1 / 60], seq: goalSeq },
+      { dts: [0.03, 0.07], seq: buildSequence(ev('save'), base.home, base.away) },
+      { dts: [1 / 60, 0.04], seq: buildSequence(ev('corner'), base.home, base.away) },
+    ]
+    for (const { dts, seq } of cases) {
       let prev: FrameState | null = null
       for (let k = 0; k < 200; k++) {
         const f: FrameState = computeFrame(
-          input({ prev, dt: dts[k % dts.length], t: (k % 20) / 20, minute: 30 + Math.floor(k / 20) }),
+          input({
+            prev, dt: dts[k % dts.length], t: (k % 20) / 20, minute: 30 + Math.floor(k / 20),
+            ...(seq ? { sequence: seq, sequenceSide: 'home' as const } : {}),
+          }),
         )
         if (prev) {
           for (const p of f.players) {
