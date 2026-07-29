@@ -5,7 +5,7 @@
 // 계산해 다음 스텝을 예약한다. 사건이 큰 분(골·슛)은 오래 머물러 연출하고,
 // 무사건 분은 빠르게 넘겨(빨리감기) 지루함을 줄인다. 랜덤·시간 의존 없음(결정론).
 import type { MatchEvent, MatchEventType, Team } from '../../engine/types'
-import { commentate } from '../../game/commentary'
+import { commentateAt } from '../../game/commentary'
 import { estimateSpeechMs } from '../../audio/commentary-tts'
 
 /** 재생 속도 배율. UI 토글 1x / 1.5x / 2x. */
@@ -81,16 +81,34 @@ export function isImportantEvent(e: MatchEvent): boolean {
 
 /** 그 분 주인공 이벤트의 해설 발화 소요 시간(ms). 주인공이 없으면 0.
  *  speed는 발화 rate에 연동되므로(commentary-tts.utteranceRate) 함께 넘긴다 —
- *  2배속에서는 문장도 빨리 읽히므로 필요한 체류 하한이 그만큼 짧다. */
+ *  2배속에서는 문장도 빨리 읽히므로 필요한 체류 하한이 그만큼 짧다.
+ *
+ *  ★ allEvents/seed: Phase C 이후 해설은 히스토리 의존이다(streak·골 종류·변형 억제).
+ *  경기 전체 이벤트 배열과 시드를 넘겨야 실제 발화될 문장과 **같은** 문장을 추정한다.
+ *  생략하면 그 분 이벤트만을 히스토리로 취급한다(맥락 없는 근사 — 단위 테스트용). */
 export function minuteSpeechMs(
   eventsAtMinute: MatchEvent[],
   home: Team,
   away: Team,
   speed: PlaybackSpeed = 1,
+  allEvents: readonly MatchEvent[] = eventsAtMinute,
+  seed = 0,
 ): number {
   const drama = pickDramaEvent(eventsAtMinute)
   if (!drama) return 0
-  return estimateSpeechMs(commentate(drama, home, away), isImportantEvent(drama), speed)
+  const line = commentateAt(allEvents, eventIndex(allEvents, drama), home, away, seed)
+  return estimateSpeechMs(line.speech, isImportantEvent(drama), speed)
+}
+
+/** allEvents 안에서 이벤트의 위치. 참조가 다를 수 있으므로(스토어가 상태를 복제한다)
+ *  참조 → 필드 동등 순으로 찾는다. 못 찾으면 마지막(= 히스토리 전체를 맥락으로). */
+export function eventIndex(allEvents: readonly MatchEvent[], e: MatchEvent): number {
+  const byRef = allEvents.indexOf(e)
+  if (byRef >= 0) return byRef
+  const byVal = allEvents.findIndex(
+    x => x.minute === e.minute && x.type === e.type && x.teamId === e.teamId && x.playerId === e.playerId,
+  )
+  return byVal >= 0 ? byVal : allEvents.length - 1
 }
 
 /**
@@ -149,7 +167,9 @@ export function minuteDwellWithSpeech(
   clutch: boolean,
   scoreDiff: number,
   speechEnabled: boolean,
+  allEvents: readonly MatchEvent[] = eventsAtMinute,
+  seed = 0,
 ): number {
-  const speechMs = speechEnabled ? minuteSpeechMs(eventsAtMinute, home, away, speed) : 0
+  const speechMs = speechEnabled ? minuteSpeechMs(eventsAtMinute, home, away, speed, allEvents, seed) : 0
   return minuteDwellMs(minute, eventsAtMinute, speed, clutch, scoreDiff, speechMs)
 }

@@ -43,8 +43,16 @@ vi.mock('../../../audio/commentary-tts', async importOriginal => {
 import { MatchScreen } from '../MatchScreen'
 import { makeTestTeam } from '../../../engine/fixtures/testTeams'
 import { useMatchStore } from '../../../game/matchStore'
-import { commentate } from '../../../game/commentary'
-import { pickDramaEvent, isImportantEvent } from '../playback'
+import { commentateAt } from '../../../game/commentary'
+import { pickDramaEvent, isImportantEvent, eventIndex } from '../playback'
+
+/** MatchScreen이 발화 시점에 만든 것과 **같은** 라인을 재구성한다.
+ *  Phase C 이후 해설은 히스토리 의존이므로(streak·골 종류·변형 억제 링버퍼)
+ *  그 분까지의 이벤트 prefix와 경기 시드를 그대로 넘겨야 같은 문장이 나온다. */
+function speechAt(allEvents: MatchEvent[], minute: number, drawn: MatchEvent, seed: number): string {
+  const upTo = allEvents.filter(e => e.minute <= minute)
+  return commentateAt(upTo, eventIndex(upTo, drawn), home, away, seed).speech
+}
 
 const home = makeTestTeam('kor', 76)
 const away = makeTestTeam('esp', 88)
@@ -106,6 +114,7 @@ describe('MatchScreen — 음성과 안무가 같은 이벤트를 쓴다(Phase B
     await playFullMatch()
 
     expect(useMatchStore.getState().phase).toBe('fulltime')
+    const events = useMatchStore.getState().engine!.events
     expect(spokenByMinute.size).toBeGreaterThan(15) // 실제로 충분히 말했다
     expect(builtByMinute.size).toBeGreaterThanOrEqual(spokenByMinute.size)
 
@@ -113,7 +122,7 @@ describe('MatchScreen — 음성과 안무가 같은 이벤트를 쓴다(Phase B
       const drawn = builtByMinute.get(minute)
       expect(drawn, `${minute}분: 말은 했는데 안무가 없다 — "${spoken.line}"`).toBeDefined()
       // 그린 이벤트의 해설 문장 === 실제로 말한 문장.
-      expect(commentate(drawn!, home, away), `${minute}분 불일치`).toBe(spoken.line)
+      expect(speechAt(events, minute, drawn!, 1003), `${minute}분 불일치`).toBe(spoken.line)
       expect(spoken.important).toBe(isImportantEvent(drawn!))
     }
   })
@@ -144,10 +153,11 @@ describe('MatchScreen — 음성과 안무가 같은 이벤트를 쓴다(Phase B
       const { unmount } = render(<MatchScreen home={home} away={away} seed={seed} />)
       await flush()
       await playFullMatch()
+      const all = useMatchStore.getState().engine!.events
       for (const [minute, spoken] of spokenByMinute) {
         const drawn = builtByMinute.get(minute)
         expect(drawn, `seed=${seed} ${minute}분`).toBeDefined()
-        expect(commentate(drawn!, home, away), `seed=${seed} ${minute}분`).toBe(spoken.line)
+        expect(speechAt(all, minute, drawn!, seed), `seed=${seed} ${minute}분`).toBe(spoken.line)
       }
       unmount()
       act(() => { useMatchStore.getState().reset() })

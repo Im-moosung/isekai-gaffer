@@ -194,9 +194,24 @@
   font-size: 14px;
 }
 
+/* 분 타임스탬프 — 문장에서 걷어낸 분을 크롬으로 옮긴 자리(리서치 §4.1 #1).
+   등폭 숫자로 고정폭을 만들어 줄이 바뀌어도 문장 시작 위치가 흔들리지 않게 한다. */
+.bc-ticker__min {
+  display: inline-block;
+  min-width: 3.2em;
+  margin-right: 6px;
+  color: var(--bc-accent);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 12px;
+}
+
 .bc-ticker__line--current {
   color: var(--bc-text);
   animation: bc-ticker-in 0.35s ease-out;
+}
+.bc-ticker__line--prev .bc-ticker__min {
+  color: var(--bc-text-dim);
 }
 
 .bc-ticker__line--prev {

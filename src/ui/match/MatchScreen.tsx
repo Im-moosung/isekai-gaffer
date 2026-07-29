@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useRef, lazy, Suspense, Component, type R
 import type { Team, TacticState, MatchEvent, DecisionEntry } from '../../engine/types'
 import { useMatchStore } from '../../game/matchStore'
 import type { MomentKind } from '../../game/matchSession'
-import { commentate } from '../../game/commentary'
+import { commentateAll, commentateAt } from '../../game/commentary'
 import * as ctts from '../../audio/commentary-tts'
 import { Scorebug } from '../broadcast/Scorebug'
 import { Ticker } from '../broadcast/Ticker'
@@ -16,7 +16,7 @@ import { ShootoutPanel } from './ShootoutPanel'
 import { StatsTable } from './StatsTable'
 import { ShoutBar } from './ShoutBar'
 import {
-  minuteDwellWithSpeech, pickDramaEvent, isImportantEvent, type PlaybackSpeed,
+  minuteDwellWithSpeech, pickDramaEvent, isImportantEvent, eventIndex, type PlaybackSpeed,
 } from './playback'
 import * as sfx from '../../audio/sfx'
 import './match.css'
@@ -272,18 +272,23 @@ export function MatchScreen({
   // TTS 해설: 재생 중 현재 분의 **주인공 이벤트** 1개만 발화(과밀 방지).
   // ★ 위 highlight 안무와 동일한 pickDramaEvent를 쓴다 — 말하는 이벤트와 그리는
   //   이벤트가 항상 같아야 한다(이 계약은 MatchScreen 테스트가 고정한다).
-  // commentate() 문장을 그대로 읽고, goal·save는 important(rate·pitch 강조 + 발화 중 선점).
+  // Line.speech(TTS 전용 문자열)를 읽고, goal·save는 important(rate·pitch 강조 + 발화 중 선점).
+  // ★ 화면에 뿌리는 Line.text와 다른 문자열이다 — `고오오올`·`…`·`!!!`은 ko-KR 보이스에서
+  //   말더듬·오독이 되므로 발화에는 정규화된 speech를 쓴다(리서치 §5.2).
   // 분당 1회(spokenMinuteRef)만 발동 — 미지원·보이스 없음·토글 OFF면 조용한 no-op.
   useEffect(() => {
     if (phase !== 'playing' || !engine) return
     const m = engine.minute
     if (spokenMinuteRef.current === m) return
     spokenMinuteRef.current = m
-    const spoken = pickDramaEvent(engine.events.filter(e => e.minute === m))
+    const all = engine.events.filter(e => e.minute <= m)
+    const spoken = pickDramaEvent(all.filter(e => e.minute === m))
     if (!spoken) return
+    // 히스토리를 넘겨야 streak·골 종류·변형 억제가 산다(맥락 없는 단발 호출은 로봇 신호).
+    const line = commentateAt(all, eventIndex(all, spoken), home, away, seed)
     // speed를 함께 넘긴다 — 빨리감기 중계는 발화도 빨라져야 체류 시간과 맞는다.
-    ctts.speak(commentate(spoken, home, away), { important: isImportantEvent(spoken), speed })
-  }, [phase, engine, home, away, speed])
+    ctts.speak(line.speech, { important: isImportantEvent(spoken), speed })
+  }, [phase, engine, home, away, speed, seed])
 
   // 작전판 진입·pause 시 진행 중 발화를 취소한다(작전 지시 중 해설이 새지 않게).
   useEffect(() => {
@@ -359,7 +364,9 @@ export function MatchScreen({
   // 현재 분까지 도달한 이벤트만 노출. 엔진이 분 단위로 전진하므로 engine.score와
   // 일치하지만, Ticker/PitchView와 동일 필터로 골 이벤트에서 표시 스코어를 파생한다.
   const shown = engine.events.filter(e => e.minute <= displayMinute)
-  const lines = shown.map(e => commentate(e, home, away))
+  // 라인은 배열 단위로 만든다 — 접두 안정성이 있어 매 분 다시 계산해도 앞 줄이 바뀌지 않는다.
+  const commentaryLines = commentateAll(shown, home, away, seed)
+  const tickerLines = commentaryLines.map(l => ({ minute: l.minute, text: l.text }))
   const lastEvent = shown[shown.length - 1]
   const shownScore: [number, number] = [0, 0]
   for (const e of shown) {
@@ -375,7 +382,7 @@ export function MatchScreen({
   // 시퀀스 재생 총 시간 = 그 분의 실제 dwell(재생 루프와 동일 함수 — 어긋나면 안무가
   // 분 전환보다 늦게 끝나거나 일찍 끝나 정적이 생긴다).
   const seqDwell = minuteDwellWithSpeech(
-    displayMinute, minuteEvents, home, away, speed, clutchNow, diffNow, ctts.willSpeak(),
+    displayMinute, minuteEvents, home, away, speed, clutchNow, diffNow, ctts.willSpeak(), shown, seed,
   )
   const playSequence = replaying && !!highlight
   // 골 드라마: 이번 분 득점. 상대 골이면 실점 연출로 차별화.
@@ -506,7 +513,7 @@ export function MatchScreen({
           )}
         </div>
 
-        <Ticker lines={lines} emphasis={dangerMoment} />
+        <Ticker lines={tickerLines} emphasis={dangerMoment} />
 
         {/* ── 골 드라마: 대형 타이포 + 득점자 배너 + (스코어버그 펄스) ──
             풀스크린 플래시·파티클·카메라 셰이크는 PixiPitch(WebGL)가 담당한다

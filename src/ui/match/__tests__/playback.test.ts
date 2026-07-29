@@ -16,7 +16,7 @@ import {
 } from '../playback'
 import { createMatch, simulateSegment } from '../../../engine/simulate'
 import { makeTestTeam } from '../../../engine/fixtures/testTeams'
-import { commentate } from '../../../game/commentary'
+import { commentateAt } from '../../../game/commentary'
 import { estimateSpeechMs } from '../../../audio/commentary-tts'
 import { buildSequence } from '../../pitch/choreography'
 
@@ -343,7 +343,7 @@ describe('minuteSpeechMs / minuteDwellWithSpeech', () => {
     const drama = pickDramaEvent(events)!
     expect(drama.type).toBe('save')
     expect(minuteSpeechMs(events, h, a))
-      .toBe(estimateSpeechMs(commentate(drama, h, a), true))
+      .toBe(estimateSpeechMs(commentateAt(events, events.indexOf(drama), h, a).speech, true))
   })
 
   it('speechEnabled=false면 보정하지 않는다(해설 OFF에서 화면만 느려지면 안 된다)', () => {

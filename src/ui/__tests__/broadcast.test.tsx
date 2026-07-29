@@ -14,7 +14,7 @@ describe('broadcast components', () => {
     expect(screen.getByText(/LIVE/)).toBeTruthy()
   })
   it('Ticker: 마지막 해설 라인 표시', () => {
-    render(<Ticker lines={['첫 해설', '두 번째 해설']} />)
+    render(<Ticker lines={[{ minute: 12, text: '첫 해설' }, { minute: 20, text: '두 번째 해설' }]} />)
     expect(screen.getByText('두 번째 해설')).toBeTruthy()
   })
 })
