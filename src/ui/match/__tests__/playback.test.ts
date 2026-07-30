@@ -19,6 +19,14 @@ import { makeTestTeam } from '../../../engine/fixtures/testTeams'
 import { commentateAt } from '../../../game/commentary'
 import { casterRole, estimatePairMs, estimateSpeechMs } from '../../../audio/commentary-tts'
 import { buildSequence } from '../../pitch/choreography'
+import { SCENE_DWELL_MS } from '../../pitch/scenes'
+import { FLOW_DWELL_MS } from '../../pitch/flow'
+
+/** dwell 상수의 정본은 scenes.SCENE_DWELL_MS다 — 테스트도 리터럴 대신 상수를 참조한다.
+ *  (장면 소요가 실제 볼 속도에서 역산되므로 리터럴을 박으면 저술을 손댈 때마다 깨진다.) */
+const GOAL_DWELL = EVENT_DWELL_MS.goal!
+const SHOT_DWELL = EVENT_DWELL_MS.shot!
+const FOUL_DWELL = EVENT_DWELL_MS.foul!
 
 // 테스트용 이벤트(분/타입만 유효하면 됨).
 function ev(type: MatchEventType, minute = 10): MatchEvent {
@@ -27,16 +35,16 @@ function ev(type: MatchEventType, minute = 10): MatchEvent {
 
 describe('minuteDwellMs — 이벤트별 수치', () => {
   it('goal이 가장 오래 머문다', () => {
-    expect(minuteDwellMs(10, [ev('goal')], 1, false)).toBe(6500)
+    expect(minuteDwellMs(10, [ev('goal')], 1, false)).toBe(GOAL_DWELL)
   })
   it('shot·save·miss는 동일 dwell', () => {
-    expect(minuteDwellMs(10, [ev('shot')], 1, false)).toBe(4300)
-    expect(minuteDwellMs(10, [ev('save')], 1, false)).toBe(4300)
-    expect(minuteDwellMs(10, [ev('miss')], 1, false)).toBe(4300)
+    expect(minuteDwellMs(10, [ev('shot')], 1, false)).toBe(SHOT_DWELL)
+    expect(minuteDwellMs(10, [ev('save')], 1, false)).toBe(SHOT_DWELL)
+    expect(minuteDwellMs(10, [ev('miss')], 1, false)).toBe(SHOT_DWELL)
   })
-  it('foul·corner는 동일 dwell', () => {
-    expect(minuteDwellMs(10, [ev('foul')], 1, false)).toBe(2700)
-    expect(minuteDwellMs(10, [ev('corner')], 1, false)).toBe(2700)
+  it('foul·corner는 세트피스 dwell(파울 < 코너 — 코너는 안무가 더 길다)', () => {
+    expect(minuteDwellMs(10, [ev('foul')], 1, false)).toBe(FOUL_DWELL)
+    expect(minuteDwellMs(10, [ev('corner')], 1, false)).toBe(EVENT_DWELL_MS.corner!)
   })
   it('무사건 분은 무사건 dwell', () => {
     expect(minuteDwellMs(10, [], 1, false)).toBe(NO_EVENT_DWELL_MS)
@@ -45,7 +53,7 @@ describe('minuteDwellMs — 이벤트별 수치', () => {
     expect(minuteDwellMs(10, [ev('kickoff'), ev('yellow')], 1, false)).toBe(NO_EVENT_DWELL_MS)
   })
   it('여러 이벤트가 겹치면 최고 가중을 채택(골+파울 → 골)', () => {
-    expect(minuteDwellMs(10, [ev('foul'), ev('goal'), ev('corner')], 1, false)).toBe(6500)
+    expect(minuteDwellMs(10, [ev('foul'), ev('goal'), ev('corner')], 1, false)).toBe(GOAL_DWELL)
   })
   it('드라마 순서: goal > shot > foul > 무사건', () => {
     const g = minuteDwellMs(10, [ev('goal')], 1, false)
@@ -60,12 +68,12 @@ describe('minuteDwellMs — 이벤트별 수치', () => {
 
 describe('minuteDwellMs — speed 나눗셈', () => {
   it('1.5x는 dwell을 1.5로 나눈다', () => {
-    expect(minuteDwellMs(10, [ev('goal')], 1.5, false)).toBe(Math.round(6500 / 1.5))
-    expect(minuteDwellMs(10, [], 1.5, false)).toBe(Math.round(1800 / 1.5))
+    expect(minuteDwellMs(10, [ev('goal')], 1.5, false)).toBe(Math.round(GOAL_DWELL / 1.5))
+    expect(minuteDwellMs(10, [], 1.5, false)).toBe(Math.round(NO_EVENT_DWELL_MS / 1.5))
   })
   it('2x는 dwell을 절반으로', () => {
-    expect(minuteDwellMs(10, [ev('goal')], 2, false)).toBe(3250)
-    expect(minuteDwellMs(10, [ev('shot')], 2, false)).toBe(2150)
+    expect(minuteDwellMs(10, [ev('goal')], 2, false)).toBe(Math.round(GOAL_DWELL / 2))
+    expect(minuteDwellMs(10, [ev('shot')], 2, false)).toBe(Math.round(SHOT_DWELL / 2))
   })
   it('속도가 빠를수록 dwell이 짧다', () => {
     const a = minuteDwellMs(10, [ev('goal')], 1, false)
@@ -81,27 +89,27 @@ describe('minuteDwellMs — clutch 배수', () => {
     expect(minuteDwellMs(85, [], 1, true)).toBe(NO_EVENT_DWELL_MS * CLUTCH_MULTIPLIER)
   })
   it('clutch는 이벤트 분에는 영향 없음(이미 충분히 김)', () => {
-    expect(minuteDwellMs(85, [ev('goal', 85)], 1, true)).toBe(6500)
-    expect(minuteDwellMs(85, [ev('foul', 85)], 1, true)).toBe(2700)
+    expect(minuteDwellMs(85, [ev('goal', 85)], 1, true)).toBe(GOAL_DWELL)
+    expect(minuteDwellMs(85, [ev('foul', 85)], 1, true)).toBe(FOUL_DWELL)
   })
   it('clutch + speed 동시 적용', () => {
-    expect(minuteDwellMs(85, [], 2, true)).toBe(Math.round((1800 * 2) / 2))
+    expect(minuteDwellMs(85, [], 2, true)).toBe(Math.round((NO_EVENT_DWELL_MS * 2) / 2))
   })
 })
 
 describe('minuteDwellMs — 블로우아웃 가속(scoreDiff)', () => {
   it('scoreDiff 기본(0)은 가속 미적용 — 기존 계약 유지', () => {
-    expect(minuteDwellMs(50, [ev('goal')], 1, false)).toBe(6500)
-    expect(minuteDwellMs(50, [ev('goal')], 1, false, 0)).toBe(6500)
+    expect(minuteDwellMs(50, [ev('goal')], 1, false)).toBe(GOAL_DWELL)
+    expect(minuteDwellMs(50, [ev('goal')], 1, false, 0)).toBe(GOAL_DWELL)
   })
   it('scoreDiff가 임계 미만(≤2)이면 가속 없음', () => {
-    expect(minuteDwellMs(50, [ev('goal')], 1, false, 2)).toBe(6500)
+    expect(minuteDwellMs(50, [ev('goal')], 1, false, 2)).toBe(GOAL_DWELL)
   })
   it('scoreDiff ≥ BLOWOUT_DIFF(3)이면 이벤트 dwell ×0.6', () => {
     expect(minuteDwellMs(50, [ev('goal')], 1, false, BLOWOUT_DIFF))
-      .toBe(Math.round(6500 * BLOWOUT_MULTIPLIER))
+      .toBe(Math.round(GOAL_DWELL * BLOWOUT_MULTIPLIER))
     expect(minuteDwellMs(50, [ev('shot')], 1, false, 4))
-      .toBe(Math.round(4300 * BLOWOUT_MULTIPLIER))
+      .toBe(Math.round(SHOT_DWELL * BLOWOUT_MULTIPLIER))
   })
   it('블로우아웃은 무사건 dwell도 압축', () => {
     expect(minuteDwellMs(50, [], 1, false, 5))
@@ -109,7 +117,7 @@ describe('minuteDwellMs — 블로우아웃 가속(scoreDiff)', () => {
   })
   it('블로우아웃 + speed 동시 적용', () => {
     expect(minuteDwellMs(50, [ev('goal')], 2, false, 3))
-      .toBe(Math.round((6500 * BLOWOUT_MULTIPLIER) / 2))
+      .toBe(Math.round((GOAL_DWELL * BLOWOUT_MULTIPLIER) / 2))
   })
   it('블로우아웃이면 같은 이벤트라도 더 짧다', () => {
     const normal = minuteDwellMs(50, [ev('goal')], 1, false, 1)
@@ -118,7 +126,14 @@ describe('minuteDwellMs — 블로우아웃 가속(scoreDiff)', () => {
   })
 })
 
-// ── 1x 총합 검증: 90분 총합이 180,000~300,000ms(=3~5분) 범위에 들어오는지 ──
+// ── 1x 총합 검증 ─────────────────────────────────────────────────────────
+// ★ 2026-07-30 재캘리브레이션: [180k, 300k] → [200k, 380k].
+//   하이라이트 장면의 소요가 **실제 볼 속도에서 역산**되면서(슛 25 · 크로스 20 · 패스
+//   15 · 지면 13 m/s + 컨트롤 정지 380 ms) 장면 하나가 6~7초가 됐다. 예전 4.3초는 그
+//   안에 20 m 패스 3번과 슛을 밀어 넣어 공이 22~25 m/s로 날아가던 값이다.
+//   무사건 분을 1800 → 1100으로 더 과감히 넘겨 상쇄했지만, 실엔진 12시드 실측 총합은
+//   236~354초(평균 288초)로 올라갔다. 사용자가 "시간보다 완성도"를 명시했고 2x 토글이
+//   있으므로 게이트를 그 실측에 여유를 두어 다시 잡는다.
 // 합성 이벤트 분포 3종(sparse/medium/dense)으로 상수 캘리브레이션을 고정한다.
 // 각 이벤트를 서로 다른 분에 배치(분당 최대 1개) → 나머지는 무사건 분.
 function distribution(spec: Partial<Record<MatchEventType, number>>): MatchEvent[] {
@@ -143,22 +158,26 @@ function total1x(events: MatchEvent[]): number {
   return sum
 }
 
-describe('minuteDwellMs — 1x 90분 총합 범위(180k~300k)', () => {
+describe('minuteDwellMs — 1x 90분 총합 범위(200k~380k)', () => {
   const cases: { name: string; events: MatchEvent[] }[] = [
     { name: 'sparse(25 이벤트)', events: distribution({ goal: 2, save: 6, miss: 5, corner: 4, foul: 8 }) },
     { name: 'medium(33 이벤트)', events: distribution({ goal: 3, save: 9, miss: 8, corner: 6, foul: 7 }) },
     { name: 'dense(40 이벤트)', events: distribution({ goal: 4, save: 12, miss: 11, corner: 9, foul: 4 }) },
   ]
   for (const { name, events } of cases) {
-    it(`${name} → 총합이 180,000~300,000ms`, () => {
+    it(`${name} → 총합이 200,000~380,000ms`, () => {
       const total = total1x(events)
-      expect(total).toBeGreaterThanOrEqual(180_000)
-      expect(total).toBeLessThanOrEqual(300_000)
+      expect(total).toBeGreaterThanOrEqual(200_000)
+      expect(total).toBeLessThanOrEqual(380_000)
     })
   }
 
   it('EVENT_DWELL_MS 상수가 노출되어 있다(회귀 고정)', () => {
-    expect(EVENT_DWELL_MS.goal).toBe(6500)
+    // ★ 값의 정본은 scenes.SCENE_DWELL_MS다(장면 소요에서 역산). 여기서는 재수출만 고정한다.
+    expect(EVENT_DWELL_MS.goal).toBe(SCENE_DWELL_MS.goal)
+    expect(EVENT_DWELL_MS.save).toBe(SCENE_DWELL_MS.save)
+    expect(EVENT_DWELL_MS.corner).toBe(SCENE_DWELL_MS.corner)
+    expect(NO_EVENT_DWELL_MS).toBe(FLOW_DWELL_MS)
   })
 })
 
@@ -183,10 +202,10 @@ describe('minuteDwellMs — 실엔진 90분 총합 가드(12시드)', () => {
   }
 
   for (let seed = 1000; seed <= 1011; seed++) {
-    it(`seed=${seed} → 실경기 총합이 180,000~300,000ms`, () => {
+    it(`seed=${seed} → 실경기 총합이 200,000~380,000ms`, () => {
       const total = realTotal1x(seed)
-      expect(total).toBeGreaterThanOrEqual(180_000)
-      expect(total).toBeLessThanOrEqual(300_000)
+      expect(total).toBeGreaterThanOrEqual(200_000)
+      expect(total).toBeLessThanOrEqual(380_000)
     })
   }
 })
@@ -310,19 +329,19 @@ describe('R2 계약 — 음성이 고른 이벤트 === 안무가 고른 이벤�
 // ─────────────────────────────────────────────────────────────
 describe('minuteDwellMs — 발화 길이 하한(speechMs)', () => {
   it('speechMs 미지정은 기존 동작 그대로', () => {
-    expect(minuteDwellMs(10, [ev('goal')], 1, false, 0)).toBe(6500)
-    expect(minuteDwellMs(10, [ev('goal')], 1, false, 0, 0)).toBe(6500)
+    expect(minuteDwellMs(10, [ev('goal')], 1, false, 0)).toBe(GOAL_DWELL)
+    expect(minuteDwellMs(10, [ev('goal')], 1, false, 0, 0)).toBe(GOAL_DWELL)
   })
   it('리듬 dwell이 발화보다 길면 리듬이 이긴다', () => {
-    expect(minuteDwellMs(10, [ev('goal')], 1, false, 0, 2000)).toBe(6500)
+    expect(minuteDwellMs(10, [ev('goal')], 1, false, 0, 2000)).toBe(GOAL_DWELL)
   })
   it('리듬 dwell이 발화보다 짧으면 발화 길이까지 늘린다(말 잘림 방지)', () => {
     expect(minuteDwellMs(10, [ev('foul')], 2, false, 0, 2500)).toBe(2500)
   })
   it('발화 하한은 speed로 나눈 뒤 적용된다 — TTS는 재생 속도를 따르지 않는다', () => {
     // 2x에서 리듬은 절반이 되지만 발화 길이는 그대로다.
-    expect(minuteDwellMs(10, [ev('goal')], 2, false, 0, 4000)).toBe(4000)
-    expect(minuteDwellMs(10, [ev('goal')], 1, false, 0, 4000)).toBe(6500)
+    expect(minuteDwellMs(10, [ev('goal')], 2, false, 0, 4000)).toBe(Math.round(GOAL_DWELL / 2))
+    expect(minuteDwellMs(10, [ev('goal')], 1, false, 0, 4000)).toBe(GOAL_DWELL)
   })
   it('상한 MAX_DWELL_MS를 넘지 않는다(긴 문장이 화면을 붙잡지 못한다)', () => {
     expect(minuteDwellMs(10, [ev('goal')], 1, false, 0, 60_000)).toBe(MAX_DWELL_MS)
@@ -380,7 +399,7 @@ describe('minuteSpeechMs / minuteDwellWithSpeech', () => {
     }
   })
 
-  it('발화 보정을 켜도 1x 90분 총합이 180k~300k에 남는다(리듬 캘리브레이션 보존)', () => {
+  it('발화 보정을 켜도 1x 90분 총합이 200k~380k에 남는다(리듬 캘리브레이션 보존)', () => {
     for (let seed = 1000; seed <= 1011; seed++) {
       const final = simulateSegment(createMatch(h, a, { seed }), 90)
       let sum = 0
@@ -389,8 +408,8 @@ describe('minuteSpeechMs / minuteDwellWithSpeech', () => {
         const clutch = m >= 80 && Math.abs(final.score[0] - final.score[1]) <= 1
         sum += minuteDwellWithSpeech(m, atMinute, h, a, 1, clutch, 0, true)
       }
-      expect(sum, `seed=${seed}`).toBeGreaterThanOrEqual(180_000)
-      expect(sum, `seed=${seed}`).toBeLessThanOrEqual(300_000)
+      expect(sum, `seed=${seed}`).toBeGreaterThanOrEqual(200_000)
+      expect(sum, `seed=${seed}`).toBeLessThanOrEqual(380_000)
     }
   })
 })

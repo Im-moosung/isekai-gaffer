@@ -5,27 +5,40 @@
 // 계산해 다음 스텝을 예약한다. 사건이 큰 분(골·슛)은 오래 머물러 연출하고,
 // 무사건 분은 빠르게 넘겨(빨리감기) 지루함을 줄인다. 랜덤·시간 의존 없음(결정론).
 import type { MatchEvent, MatchEventType, Team } from '../../engine/types'
+import { FLOW_DWELL_MS } from '../pitch/flow'
+import { SCENE_DWELL_MS } from '../pitch/scenes'
 import { commentateAt, flowLineAt, type CommentaryCtx } from '../../game/commentary'
 import { casterRole, estimatePairMs, estimateSpeechMs } from '../../audio/commentary-tts'
 
 /** 재생 속도 배율. UI 토글 1x / 1.5x / 2x. */
 export type PlaybackSpeed = 1 | 1.5 | 2
 
-/** 이벤트 타입별 연출 dwell(ms, 1x 기준). 목록에 없는 타입(kickoff·yellow 등)은
- *  가중 0으로 취급 → 그 분에 다른 유의미 이벤트가 없으면 무사건과 동일하게 넘긴다.
- *  상수 설계 근거: 실경기 이벤트 밀도(경기당 유의미 이벤트 ~25~40 + 무사건 분)에서
- *  90분 총합이 180,000~300,000ms(=3~5분)에 들어오도록 캘리브레이션(playback.test 참조). */
+/**
+ * 이벤트 타입별 연출 dwell(ms, 1x 기준). 목록에 없는 타입(kickoff·yellow 등)은
+ * 가중 0으로 취급 → 그 분에 다른 유의미 이벤트가 없으면 무사건과 동일하게 넘긴다.
+ *
+ * ★ 2026-07-30부터 **값의 정본은 scenes.SCENE_DWELL_MS**다.
+ *
+ * 왜 뒤집혔나: 안무 키프레임의 t는 dwell 상대값이다. 예전엔 여기서 정한 dwell 안에
+ * 장면이 "알아서" 들어가야 했고, 그래서 4300 ms 안에 20 m 패스 3번 + 슛 1번을 밀어
+ * 넣어 패스가 22~25 m/s로 날아갔다(실측). 지금은 반대다 — 장면이 실제 볼 속도(슛
+ * 25 · 크로스 20 · 패스 15 · 지면 13 m/s)와 컨트롤 정지에서 소요를 역산하고, dwell은
+ * 그 소요에 여운을 더한 값을 **받아온다**. "1x면 진짜 축구처럼"의 근거가 여기 있다.
+ */
 export const EVENT_DWELL_MS: Partial<Record<MatchEventType, number>> = {
-  goal: 6500,
-  shot: 4300,
-  save: 4300,
-  miss: 4300,
-  foul: 2700,
-  corner: 2700,
+  goal: SCENE_DWELL_MS.goal,
+  shot: SCENE_DWELL_MS.shot,
+  save: SCENE_DWELL_MS.save,
+  miss: SCENE_DWELL_MS.miss,
+  chance: SCENE_DWELL_MS.chance,
+  foul: SCENE_DWELL_MS.foul,
+  corner: SCENE_DWELL_MS.corner,
 }
 
-/** 무사건 분 dwell(ms, 1x). 빠르게 넘어가는 "빨리감기" 구간. */
-export const NO_EVENT_DWELL_MS = 1800
+/** 무사건 분 dwell(ms, 1x). 빠르게 넘어가는 "빨리감기" 구간.
+ *  ★ 1800 → 1100: 하이라이트가 실제 축구 속도로 길어진 만큼(장면당 6~7 s) 무사건 분은
+ *  더 과감히 넘긴다. 이 구간은 2D 작전판이 받으므로 안무를 밀어 넣을 이유가 없다. */
+export const NO_EVENT_DWELL_MS = FLOW_DWELL_MS
 
 /** 클러치(80'+ & 스코어차 ≤1) 무사건 dwell 배수 — 긴장 유지(FM26 Dynamic Highlights 참조). */
 export const CLUTCH_MULTIPLIER = 2
@@ -37,12 +50,15 @@ export const BLOWOUT_MULTIPLIER = 0.6
 
 /** dwell 상한(ms, 속도 적용 후). 발화 길이 보정이 무한정 늘어나지 않게 막는다.
  *
- *  ★ Phase C 4단계에서도 9000을 유지한다. 화자가 둘이 되어 골 순간의 요구 발화가
+ *  ★ 2026-07-30: 9000 → 9600. 골 dwell이 8600이 되면서(장면 소요 6.5 s + 세리머니 2 s)
+ *  상한 9000이 골 해설의 하한 보정을 잘라 낼 수 있게 됐다.
+ *
+ *  ★ Phase C 4단계 기록(9000 시절). 화자가 둘이 되어 골 순간의 요구 발화가
  *  늘었지만(피크 캐스터 + 해설), 상한을 내리면 **골의 해설 문장이 다음 분에 잘린다**
  *  (브라우저 실측: 상한 7000에서 골 해설 2건이 전부 interrupted). 대신 길이를 콘텐츠
  *  쪽에서 줄였다 — 해설이 붙는 골에는 연호(`{선수}! {선수}!`)를 생략한다(commentary.ts).
  *  그 결과 골 한 분의 총 발화가 약 9초로 상한 안에 들어온다. */
-export const MAX_DWELL_MS = 9000
+export const MAX_DWELL_MS = 9600
 
 // ── 주인공 이벤트 선택자(단일 진실원) ─────────────────────────
 // ★ 왜 하나여야 하나: 예전엔 한 분의 대표 이벤트를 두 곳이 따로 골랐다.
