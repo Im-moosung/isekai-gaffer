@@ -1,7 +1,7 @@
 // src/engine/simulate.ts
 import { createRng, type Rng } from './rng'
 import { zoneStrength } from './strength'
-import { instructionEffects, formationEdge, mentalityEffects, attackPatternEffects, groupIntensityStaminaFactor, attackFocusEffects, footEffects, groupIntensityZoneFactor, setPieceEffects, markingFactor, type MatchupContext } from './tactics'
+import { instructionEffects, formationEdge, formationEffects, mentalityEffects, attackPatternEffects, groupIntensityStaminaFactor, attackFocusEffects, footEffects, groupIntensityZoneFactor, setPieceEffects, markingFactor, type MatchupContext } from './tactics'
 import { effectiveStats } from './fitness'
 import { pickBestXI } from './lineup'
 import type { Instructions, MatchEvent, MatchState, Player, Position, SideState, SideStats, TacticState, Team } from './types'
@@ -39,7 +39,17 @@ export const MAX_SUB_WINDOWS = 3
 // 이 값은 '기회의 양'만 늘린다. 슛 수는 ±15%(동급)/±25%(실팀) 캘리브레이션 계약에 묶여 있어
 // 여기만 올리면 전력 서열 게이트와 정면충돌한다. 그래서 전력 차의 나머지 절반은
 // XG_STRENGTH가 '기회의 질'로 싣는다 — 슛 수를 건드리지 않고 서열을 벌리는 축이다.
-const STRENGTH_SENSITIVITY = 1.6
+export const STRENGTH_SENSITIVITY = 1.6
+/** F2: 찬스 빈도 전력비에 미드필드가 섞이는 가중. 근거는 simulateMinute의 F2 주석.
+ *  추천 계층(game/scouting)이 형태를 고를 때 같은 혼합을 재현해야 하므로 내보낸다. */
+export const W_MID = 0.22
+
+/** 찬스 빈도 전력비에 들어가는 실효 공격·수비 전력(F2 미드필드 혼합). 엔진과 추천이
+ *  같은 수식을 쓰도록 여기 한 벌만 둔다. */
+export const effectiveAttack = (z: { attack: number; midfield: number }) =>
+  (1 - W_MID) * z.attack + W_MID * z.midfield
+export const effectiveDefense = (z: { defense: number; midfield: number }) =>
+  (1 - W_MID) * z.defense + W_MID * z.midfield
 
 export function createMatch(home: Team, away: Team, opts: { seed: number; homeTactics?: TacticState; awayTactics?: TacticState; firstHalfScript?: { events: MatchEvent[]; score: [number, number] } }): MatchState {
   const mkSide = (team: Team, tactics?: TacticState): SideState => {
@@ -213,7 +223,11 @@ export function matchupEdge(
   return (ours.attack / Math.max(30, theirs.defense)) * (ours.defense / Math.max(30, theirs.attack))
 }
 
-const mentalityRiskScale = (
+/** 뒷공간을 내주는 선택(공격적 태세 E1 · 전진 배치 형태 F1)의 **위험 항** 스케일.
+ *  대등(edge 1.0)하면 정확히 1.0. 우리가 우위면 <1(공짜에 가깝다), 열세면 >1(아프다).
+ *  두 축이 같은 판별자를 공유해야 "무엇을 걸고 나가는가"가 한 벌의 규칙으로 설명된다.
+ *  추천 계층(game/scouting)이 형태를 고를 때도 이 값을 읽는다. */
+export const counterRiskScale = (
   ours: { attack: number; defense: number },
   theirs: { attack: number; defense: number },
 ) => clamp(Math.pow(matchupEdge(ours, theirs), -RISK_SENSITIVITY), 0.35, 2.5)
@@ -231,7 +245,12 @@ function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
   // 멘탈리티(5프리셋): instructionEffects 위에 곱. 'balanced'는 전 축 1.0 → 회귀 불변.
   for (const i of [0, 1] as const) {
     const m = mentalityEffects(sides[i].tactics.mentality)
-    const risk = mentalityRiskScale(zs[i], zs[(1 - i) as 0 | 1])
+    const risk = counterRiskScale(zs[i], zs[(1 - i) as 0 | 1])
+    // F1 포메이션: 상성(상대 형태 의존) + 태세(상대 전력 의존). 둘 다 찬스 질 경로라
+    // 슛 수 캘리브레이션 계약은 건드리지 않는다. 근거는 tactics.formationEffects 주석.
+    const ff = formationEffects(sides[i].tactics.formation, sides[(1 - i) as 0 | 1].tactics.formation, risk)
+    fx[i].chanceQuality *= ff.chanceQuality
+    fx[i].concedeQuality *= ff.concedeQuality
     fx[i].chanceRate *= m.chanceRate
     fx[i].chanceQuality *= m.chanceQuality
     fx[i].possessionBias *= m.possessionBias
@@ -337,8 +356,26 @@ function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
 
   // 3) 찬스 롤 (공격 측): 공격 전력(공격 페이즈) vs 수비 전력(수비 페이즈) + 템포 + 모멘텀 + 공격 패턴
   //    phaseFormations 미지정·groupIntensity 0이면 phase 존은 neutral과 동일 → 회귀 불변.
-  const atkZone = zoneStrength(atk, 'attack').attack
-  const defZone = zoneStrength(def, 'defense').defense
+  //
+  // ── F2 미드필드를 승패 경로에 넣는다 (2026-07-30) ──────────────────
+  // 이전엔 midfield 존이 **점유 가중(possW)에만** 쓰였는데, 찬스 확률이 participation으로
+  // 나눠지는 정규화 때문에 점유는 승패에 거의 중립이다. 결과적으로 "미드필드에서 훔쳐
+  // 공격에 넣는 선택은 언제나 공짜 이득"이었다. F0(존 인원수)만 넣고 재보니 그 구멍이
+  // 그대로 드러났다 — 3-5-2 대신 **4-4-2가 4개 상대 전부에서 1위**가 됐다(미드 2명의
+  // 대가가 여전히 0이라서). 즉 인원수만으로는 고정 정답이 옮겨갈 뿐 사라지지 않는다.
+  //
+  // 실제 축구에서 중원은 공격의 공급선이자 **수비의 1선**이다. 그래서 찬스 빈도를 정하는
+  // 두 전력에 미드필드를 섞는다. 선형 혼합이라 두 팀의 중원이 같으면 비(比)가 그대로여서
+  // 동급 팀 캘리브레이션 계약(±15%)은 정의상 영향이 없다.
+  // 가중 0.22: 존 셋(공·미·수) 중 하나에 1/3을 주는 것이 자연스러운 상한이지만, 실팀은
+  // 미드필드 평균이 공격·수비와 크게 다를 수 있어(kor 4-2-3-1 기준 공 76.9 / 미 67.3 / 수 75.1)
+  // 가중이 크면 팀별 슛 베이스라인이 밀린다. F0 지수와 함께 실측으로 정한 상한이다 —
+  // (0.35, 0.30)에서 실팀 캘리브레이션(±25%)이 kor-cze +25.3% · esp-arg +28.7%로 깨졌고,
+  // (0.20, 0.22)에서 +15.3% · +20.4%로 통과하면서 형태 축 부호 반전은 그대로 유지된다.
+  const zAtk = zoneStrength(atk, 'attack')
+  const zDef = zoneStrength(def, 'defense')
+  const atkZone = effectiveAttack(zAtk)
+  const defZone = effectiveDefense(zDef)
   const ap = attackPatternEffects(atk.tactics.attackPattern)
   const momentumBoost = atkIdx === 0 ? 1 + st.momentum * 0.15 : 1 - st.momentum * 0.15
   // 수비 측의 suppression(하이라인·하이프레스로 상대 전개를 끊는 항)이 공격 측 찬스를 억제한다.

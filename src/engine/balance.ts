@@ -19,8 +19,7 @@ import type { FormationId, Mentality, TacticState, Team } from './types'
 import { loadTeam, type TeamId } from '../data/loader'
 import { createMatch, simulateSegment, flankStrength } from './simulate'
 import { pickBestXI } from './lineup'
-import { mapFormation } from './formations'
-import { MENTALITIES, formationEdge } from './tactics'
+import { FORMATION_POSTURE, MENTALITIES } from './tactics'
 
 export type AxisKey = 'lineHeight' | 'pressing' | 'tempo'
 
@@ -99,20 +98,40 @@ export function runMentalitySweep(
  *  XI는 batch()가 포메이션별로 다시 세운다 — 유저가 워룸에서 포메이션을 바꿨을 때와 같다.
  *
  *  이 스윕이 뒤늦게 추가된 이유: 지시·멘탈리티에는 지배 전략 방지 게이트가 있었는데
- *  **포메이션 축에만 아무 게이트도 없었다**. 실측(n=400, 중립 지시)에서 형태는 상대와 무관한
- *  이득을 싣고 있다 — 4-4-2·3-5-2가 mex·rsa·esp 전부에서 상위 둘이다. 승점 폭 자체는
- *  다른 축의 임계(0.30) 아래지만(mex 0.137 · rsa 0.058 · esp 0.185), 그 사실을 아무도
- *  재고 있지 않았다는 것이 문제였다. */
+ *  **포메이션 축에만 아무 게이트도 없었다**. 착수 전 실측(n=3200, 중립 지시)에서 순위가
+ *  8개 상대 **전부 동일**했다(3-5-2 > 4-4-2 > … > 5-4-1, 폭 0.061~0.123 · 페어드 SE
+ *  0.012~0.018). 폭이 임계(0.30) 아래라 폭 게이트만으로는 이 고정 정답을 잡을 수 없다 —
+ *  그래서 아래 formationSlope 기반 **부호 반전** 게이트가 함께 필요하다.
+ *  수리 내용은 engine/tactics.ts의 'F1 포메이션 축 비단조성' 주석 참고. */
 export function runFormationSweep(
-  homeId: TeamId, awayId: TeamId, n = 120,
+  homeId: TeamId, awayId: TeamId, n = 120, seedBase = 1000,
 ): { formation: FormationId; winRate: number; points: number; gf: number; ga: number }[] {
   return FORMATION_IDS.map(formation => {
     const r = batch(homeId, awayId, {
       instructions: { lineHeight: 50, pressing: 50, tempo: 50, attackFocus: 'balanced' },
       formation,
-    }, n, 1000)
+    }, n, seedBase)
     return { formation, ...r }
   })
+}
+
+/** 형태 축의 '기울기' — 가장 전진 배치(3-5-2, posture +0.55) 빼기 가장 후진 배치
+ *  (5-4-1, −1.0)의 경기당 승점 차. 양수면 "앞에 사람을 더 두는 것이 유리".
+ *
+ *  argmax가 아니라 두 극단의 차이를 재는 이유는 지시·멘탈리티 게이트와 같다: 6셀 중
+ *  최댓값 위치는 같은 posture 부호끼리(3-5-2/4-3-3, 5-4-1/4-1-4-1) 노이즈로 흔들린다.
+ *  양 끝점은 효과 크기가 커서 훨씬 안정적이고, **두 arm이 같은 시드 대역을 쓰므로 차이가
+ *  페어드**라 표준오차가 셀 단위 SE보다 작다(n=2400에서 약 0.018). */
+export function formationSlope(homeId: TeamId, awayId: TeamId, n: number, seedBase = 1000): number {
+  const ins = { lineHeight: 50, pressing: 50, tempo: 50, attackFocus: 'balanced' as const }
+  const fwd = batch(homeId, awayId, { instructions: ins, formation: '3-5-2' }, n, seedBase)
+  const back = batch(homeId, awayId, { instructions: ins, formation: '5-4-1' }, n, seedBase)
+  return fwd.points - back.points
+}
+
+/** 승점 최대 형태. 동점이면 목록 앞쪽(결정론). */
+export function bestFormation(cells: { formation: FormationId; points: number }[]): FormationId {
+  return cells.reduce((a, b) => (a.points >= b.points ? a : b)).formation
 }
 
 /** 추천 플랜을 "정반대"로 뒤집는다 — 감독의 나쁜 판단을 재현하는 표준 정의.
@@ -124,12 +143,18 @@ export function runFormationSweep(
  *   - 멘탈리티: 사다리의 반대 극단 (index 4 − i)
  *   - 그룹 적극성: 공격 라인과 수비 라인을 맞바꾼다
  *   - 공격 방향: 상대의 **가장 강한** 지역으로 몬다 (추천은 argmin, 여기선 argmax)
- *   - 포메이션: 상대 포메이션에 상성이 **가장 나쁜** 형태 (추천은 argmax, 여기선 argmin)
- *     ⚠ 상성만 뒤집힐 뿐 형태 자체의 값은 뒤집히지 않는다. kor 기준 argmin은 11개 상대 중
- *     9개에서 4-4-2인데, 4-4-2는 우리 스쿼드엔 기본 4-2-3-1보다 잘 맞아 상대와 무관하게
- *     +2.2~2.5pp를 돌려준다(n=3200 실측). 오판 페널티가 프랑스전에서 −1pp까지 얇아지는
- *     이유가 이것이다 — 정의의 결함이 아니라 형태 축이 실어 나르는 상대 무관 이득이다.
- *     그 크기는 '포메이션 축 지배 방지' 게이트(runFormationSweep)가 따로 감시한다.
+ *   - 포메이션: 추천 형태와 **무게중심(posture)이 정반대 극단**인 형태.
+ *     추천이 앞쪽(posture>0)이면 5-4-1, 뒤쪽이면 3-5-2다. 멘탈리티를 사다리의 반대 극단으로
+ *     보내는 것과 정확히 같은 조작이며, F1 이후 형태 축의 내용이 바로 그 무게중심이다.
+ *     ⚠ 두 번의 오답을 거쳐 이 정의에 왔다.
+ *       (1) formationEdge argmin — F1 이전의 유일한 판별자였다. 지금은 상성이 형태 효과의
+ *           일부일 뿐이라, vs 아르헨티나에서 상성 argmin이 추천과 **같은 형태**로 나왔다
+ *           (게이트 값 +0.3pp).
+ *       (2) formationPlanScore argmin — 점수는 argmax(추천)에 맞춰 조정된 1차 근사라
+ *           **하위 서열까지 맞지는 않는다**. vs 아르헨티나 실측 최하위는 3-5-2(1.202)인데
+ *           점수는 4-4-2(1.278)를 골랐고, 그 0.076 승점이 게이트를 +0.9pp로 밀었다.
+ *     무게중심 반대 극단은 11개 상대 중 **10개에서 실측 최하위와 일치**한다(예외는 전력이
+ *     대등해 축이 평평한 노르웨이: 최하위 4-4-2 1.587 vs 5-4-1 1.619).
  *  공격 패턴은 그대로 둔다 — 4종에 뚜렷한 반대 극이 없어(cross↔through가 대칭이 아니다)
  *  "뒤집었다"고 부를 만한 사상이 정의되지 않는다. */
 export function invertPlan(plan: Partial<TacticState>, opp: Team): Partial<TacticState> {
@@ -154,8 +179,12 @@ export function invertPlan(plan: Partial<TacticState>, opp: Team): Partial<Tacti
     out.groupIntensity = { ...plan.groupIntensity, attack: plan.groupIntensity.defense, defense: plan.groupIntensity.attack }
   }
   if (plan.formation) {
-    const of = mapFormation(opp.profile.preferredFormations[0] ?? '4-3-3')
-    out.formation = FORMATION_IDS.reduce((a, b) => (formationEdge(a, of) <= formationEdge(b, of) ? a : b))
+    // 추천 형태의 무게중심 부호를 뒤집어 반대 극단으로 보낸다.
+    const rec = FORMATION_POSTURE[plan.formation]
+    out.formation = FORMATION_IDS.reduce((a, b) => {
+      const pick = rec > 0 ? FORMATION_POSTURE[a] <= FORMATION_POSTURE[b] : FORMATION_POSTURE[a] >= FORMATION_POSTURE[b]
+      return pick ? a : b
+    })
   }
   return out
 }

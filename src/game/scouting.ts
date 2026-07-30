@@ -3,11 +3,11 @@
 // (엔진은 시뮬레이션만 담당하고, "감독에게 무엇을 권할까"는 게임 규칙이기 때문).
 // 추천은 정답이 아니라 출발점이다. UI는 반드시 "감독 판단으로 수정하십시오"를 함께 보여준다.
 import type { FormationId, Instructions, Mentality, TacticState, Team } from '../engine/types'
-import { MENTALITIES, formationEdge, trapFactor } from '../engine/tactics'
+import { FORMATION_POSTURE, MENTALITIES, formationEdge, formationEffects, trapFactor } from '../engine/tactics'
 import { mapFormation } from '../engine/formations'
 import { positionFitness } from '../engine/fitness'
 import { pickBestXI } from '../engine/lineup'
-import { flankStrength, weakestFlank, matchupEdge } from '../engine/simulate'
+import { STRENGTH_SENSITIVITY, counterRiskScale, effectiveAttack, effectiveDefense, flankStrength, weakestFlank, matchupEdge } from '../engine/simulate'
 import { kickoffZones } from '../engine/strength'
 
 export interface PlanRecommendation {
@@ -124,6 +124,31 @@ export function edgeMentality(edge: number): Mentality {
 /** 두 팀의 킥오프 매치업 우위(엔진 판별자 그대로). */
 export function planEdge(me: Team, opp: Team): number {
   return matchupEdge(kickoffZones(me), kickoffZones(opp))
+}
+
+// ── 포메이션 추천 점수 (F1 후속) ───────────────────────────────────
+// 형태는 승점에 **두 갈래**로 작용하고, 추천은 둘을 다 봐야 한다.
+//  (1) 구조 — 그 형태로 XI를 세웠을 때의 실효 공격·수비 전력. F0(존 인원수)·F2(미드필드
+//      혼합) 이후 형태마다 실제로 달라진다. 엔진의 찬스 확률이 (atk/def)^STRENGTH_SENSITIVITY
+//      이므로 로그를 취하면 그대로 가산 항이 된다.
+//  (2) xG — engine tactics.formationEffects의 상성·태세 항.
+// 이전 판은 (2)만 봤고, 그 점수는 posture에 대해 단조라 **항상 양 끝(3-5-2/5-4-1)만 골랐다**.
+// 실측 argmax는 중간(4-3-3 / 4-1-4-1)이다 — 양 끝은 구조적 대가(3-5-2 수비 −9.5%,
+// 5-4-1·4-4-2 미드 −13.2%)를 치르기 때문이다. 그 대가를 모르는 점수는 틀린 형태를 권한다.
+//
+// W_CONCEDE 0.50: 실점 항의 승점 무게(engine F1 주석 (a) 실측 0.49~0.79)에서 온 값이고,
+// 이 값에서 **11개 상대 전부 실측 argmax와 정확히 일치**한다(n=3200 스윕):
+//   4-3-3 ← rsa·cze·mex·ecu·can·mar   4-1-4-1 ← eng·nor·arg·esp·fra
+// 손익분기 risk는 약 0.98이고, 실측 경계도 mar(0.81, 전진)와 nor(1.03, 후진) 사이다.
+const W_CONCEDE = 0.50
+
+/** 형태 f의 상대적 가치(단위 없음, 6종 간 서열만 쓴다). 전부 엔진 판별자에서 파생한다. */
+export function formationPlanScore(me: Team, oppForm: FormationId, risk: number, f: FormationId): number {
+  const z = kickoffZones(me, f)
+  const fx = formationEffects(f, oppForm, risk)
+  const gain = STRENGTH_SENSITIVITY * Math.log(effectiveAttack(z)) + Math.log(fx.chanceQuality)
+  const cost = -STRENGTH_SENSITIVITY * Math.log(effectiveDefense(z)) + Math.log(fx.concedeQuality)
+  return gain - W_CONCEDE * cost
 }
 
 const MENTALITY_KO: Record<Mentality, string> = {
@@ -248,14 +273,22 @@ export function recommendPlan(me: Team, opp: Team): PlanRecommendation {
     reasons.push({ field: 'note', text: `FIFA 랭킹 ${me.fifaRanking}위 vs ${opp.fifaRanking}위 — 주도권을 잡을 수 있는 매치업입니다` })
   }
 
-  // 포메이션: 상대 포메이션 대비 상성 최댓값. 동점이면 목록 앞쪽(=결정론).
+  // ── 포메이션: 축·태세와 같은 방식으로 **엔진 판별자 둘**에서 파생한다 (F1) ──────────
+  // 이전 판은 formationEdge argmax 하나였다. 그때는 그것이 유일한 후보였지만, 실측에서
+  // formationEdge는 승점에 0.01 미만밖에 기여하지 않는 장식이었고(engine/tactics F1 주석),
+  // 지금은 형태가 **상성(상대 형태) + 태세(상대 전력)** 두 항으로 실제 승점을 움직인다.
+  // 추천도 그 두 항을 그대로 읽어야 한다 — 상성만 보면 프랑스 상대에 4-3-3(상성 0·태세 +0.45)
+  // 같은 자살 형태를 권하게 된다(실측 vs fra: 4-3-3 0.766 vs 5-4-1 1.242 승점).
+  // 판별자는 새로 만들지 않는다. 엔진이 실점 항을 스케일할 때 쓰는 counterRiskScale에
+  // 킥오프 존을 그대로 넣어 계산한다(태세 추천이 쓰는 matchupEdge와 같은 뿌리다).
   const of = oppFormation(opp)
-  let best = FORMATIONS[0], bestEdge = -Infinity
+  const formationRisk = counterRiskScale(myZones, oppZones)
+  let best = FORMATIONS[0], bestScore = -Infinity
   for (const f of FORMATIONS) {
-    const e = formationEdge(f, of)
-    if (e > bestEdge) { bestEdge = e; best = f }
+    const sc = formationPlanScore(me, of, formationRisk, f)
+    if (sc > bestScore) { bestScore = sc; best = f }
   }
-  // 우위가 없어도(최댓값 ≤ 0) argmax는 제시한다 — "고를 수 있는 최선"이 곧 추천이다.
+  const bestEdge = formationEdge(best, of)
   //
   // **XI 실현 가능성으로 포메이션을 재고(veto)하지 않는 이유** (2026-07-30, 풀백-ST 버그 수정 중 검토):
   // "3-5-2를 권했는데 세울 ST가 없다"는 사고는 실제로 났었다. 그러나 원인은 포메이션 선택이
@@ -266,11 +299,25 @@ export function recommendPlan(me: Team, opp: Team): PlanRecommendation {
   // 판별자 하나, 전부 엔진 판별자에서 파생")에 세 번째 숨은 기준을 끼워 넣는다.
   // 전제가 깨지면 테스트가 먼저 터지게 해 뒀다(scouting.test.ts '[추천 적용] 결과 XI').
   patch.formation = best
+  // 근거 문구도 두 판별자를 모두 말한다(축·태세 문구와 같은 규칙). 형태 하나만 말하면
+  // "상성 우위가 없는데 왜 5-4-1인가"를 유저가 검증할 수 없다.
+  const shapeClause = bestEdge > 0
+    ? `상대 ${of}에 상성 우위(+${bestEdge.toFixed(2)})`
+    : bestEdge < 0
+      ? `상대 ${of}에는 상성이 불리하지만(${bestEdge.toFixed(2)})`
+      : `상대 ${of}와 상성은 대등하지만`
+  // 무게중심은 **고른 형태의 posture 부호**로 설명한다. 임계값을 문구에 따로 박으면
+  // 상성 항이 태세 항을 이기는 경우(예: 멕시코 risk 0.64인데 상성 +0.04로 3-5-2)에
+  // 문면과 추천이 어긋난다 — 결과를 그대로 말하는 편이 항상 참이다.
+  const posture = FORMATION_POSTURE[best]
+  const shapeRiskClause = posture > 0
+    ? `볼을 잃었을 때의 처벌이 감당할 만해 앞에 사람을 더 둡니다(역습 위험 지수 ${formationRisk.toFixed(2)})`
+    : posture < 0
+      ? `볼을 잃었을 때의 처벌이 커 뒤에 사람을 더 둡니다(역습 위험 지수 ${formationRisk.toFixed(2)})`
+      : `앞뒤 균형을 맞춥니다(역습 위험 지수 ${formationRisk.toFixed(2)})`
   reasons.push({
     field: 'formation',
-    text: bestEdge > 0
-      ? `${best}가 상대 ${of}에 상성 우위(+${bestEdge.toFixed(2)})`
-      : `상대 ${of}에 상성 우위를 가진 형태가 없어 ${best}로 맞섭니다`,
+    text: `${best} — ${shapeClause} — ${shapeRiskClause}`,
   })
 
   if (opp.profile.benchPattern === 'protect-lead') {
