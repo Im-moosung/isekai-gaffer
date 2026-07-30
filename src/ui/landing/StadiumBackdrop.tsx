@@ -15,6 +15,7 @@
 //  - 언마운트 시 bundle.dispose()(disposeTree가 InstancedMesh 분기까지 처리) + renderer.dispose()
 //    + forceContextLoss로 GPU 컨텍스트를 즉시 반납한다.
 import { useEffect, useRef, useState } from 'react'
+import { bindResize, createRendererHost } from '../pitch/three/host'
 import { createPostFX } from '../pitch/three/postfx'
 import { EMISSIVE_BOOST, buildScene, type ThreeAPI } from '../pitch/three/scene'
 import { FOV, LOOK_AT_Y, landingCameraAt } from './camera'
@@ -69,21 +70,18 @@ export function StadiumBackdrop() {
       }
       if (cancelled) return
 
-      let renderer: import('three').WebGLRenderer
-      try {
-        renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'default' })
-      } catch {
+      // 렌더러 생성·톤매핑·부착은 경기 화면과 같은 계약이라 host.ts가 담당한다
+      // (톤매퍼가 갈리면 랜딩→경기 전환에서 색이 튄다).
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, MAX_DPR)
+      const renderer = createRendererHost(THREE, host, {
+        className: 'landing-bg__canvas',
+        powerPreference: 'default',
+        pixelRatio,
+      })
+      if (!renderer) {
         if (!cancelled) setFailed(true)
         return
       }
-      const pixelRatio = Math.min(window.devicePixelRatio || 1, MAX_DPR)
-      renderer.setPixelRatio(pixelRatio)
-      renderer.outputColorSpace = THREE.SRGBColorSpace
-      // 경기 화면과 같은 톤매퍼를 써야 랜딩→경기 전환에서 색이 튀지 않는다(근거는 scene.ts 헤더).
-      renderer.toneMapping = THREE.NeutralToneMapping
-      renderer.toneMappingExposure = 1.15
-      renderer.domElement.className = 'landing-bg__canvas'
-      host.appendChild(renderer.domElement)
 
       // matchMedia가 없는 환경(테스트 jsdom 등)에서는 모션을 켠 것으로 본다.
       const reduced =
@@ -113,9 +111,7 @@ export function StadiumBackdrop() {
         camera.updateProjectionMatrix()
       }
       resize()
-      const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => resize()) : null
-      ro?.observe(host)
-      if (!ro) window.addEventListener('resize', resize)
+      const unbindResize = bindResize(host, resize)
 
       const timer = new THREE.Timer()
       timer.connect(document)
@@ -141,8 +137,7 @@ export function StadiumBackdrop() {
         torn = true
         cancelAnimationFrame(raf)
         timer.dispose()
-        ro?.disconnect()
-        if (!ro) window.removeEventListener('resize', resize)
+        unbindResize()
         renderer.domElement.removeEventListener('webglcontextlost', onContextLost)
         post.dispose()
         bundle.dispose()

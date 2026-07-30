@@ -17,6 +17,7 @@ import type { ChoreoStep } from '../choreography'
 import { createCameraRig } from './camera'
 import { entranceFrame, entrancePhaseAt, type EntranceCast } from './entrance'
 import { FLASH_CONCEDED, FLASH_SCORED, createBall, flashQuad, goalBurst, type GoalBurst } from './fx3d'
+import { bindResize, createRendererHost } from './host'
 import { computeFrame } from './movement'
 import { createRenderScaler, readStoredScale, writeStoredScale } from './perf'
 import { createPlayer, disposePlayerCaches, type PlayerRig } from './player3d'
@@ -165,24 +166,6 @@ export function Match3D(props: Match3DProps) {
       }
       if (cancelled) return
 
-      // ── 렌더러(호출부 소유) ──────────────────────────────────────
-      let renderer: import('three').WebGLRenderer
-      try {
-        renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
-      } catch {
-        if (!cancelled) setFailed(true)
-        return
-      }
-      renderer.outputColorSpace = THREE.SRGBColorSpace
-      // ACESFilmic → Neutral: ACES의 깊은 토우가 야간 씬의 1/4을 순검정으로 뭉개고
-      // 관중석 채도를 절반으로 깎았다(tools/tone-stats 실측). 근거는 scene.ts 헤더 참조.
-      renderer.toneMapping = THREE.NeutralToneMapping
-      // 노출 1.05 → 1.15: Neutral은 0.8 위를 롤오프하므로 같은 노출에서 ACES보다 하이라이트가
-      // 낮게 나온다(p99 192→169). 1.15면 하이라이트를 되찾으면서도 암부는 여전히 안 뭉갠다.
-      renderer.toneMappingExposure = 1.15
-      renderer.domElement.className = 'm3d-canvas'
-      host.appendChild(renderer.domElement)
-
       const reducedMql = window.matchMedia('(prefers-reduced-motion: reduce)')
       let reduced = reducedMql.matches
 
@@ -194,7 +177,18 @@ export function Match3D(props: Match3DProps) {
         basePixelRatio,
         initialScale: readStoredScale(safeStorage()),
       })
-      renderer.setPixelRatio(scaler.pixelRatio)
+
+      // ── 렌더러(호출부 소유) ──────────────────────────────────────
+      // 생성·컬러스페이스·톤매핑·부착은 랜딩 배경과 같은 계약이라 host.ts가 담당한다.
+      const renderer = createRendererHost(THREE, host, {
+        className: 'm3d-canvas',
+        powerPreference: 'high-performance',
+        pixelRatio: scaler.pixelRatio,
+      })
+      if (!renderer) {
+        if (!cancelled) setFailed(true)
+        return
+      }
 
       const homeColor = cssColor(host, '--bc-home', HOME_FALLBACK)
       const awayColor = cssColor(host, '--bc-away', AWAY_FALLBACK)
@@ -271,9 +265,7 @@ export function Match3D(props: Match3DProps) {
         camera.updateProjectionMatrix()
       }
       resize()
-      const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => resize()) : null
-      ro?.observe(host)
-      if (!ro) window.addEventListener('resize', resize)
+      const unbindResize = bindResize(host, resize)
 
       const onReducedChange = (): void => {
         reduced = reducedMql.matches
@@ -489,8 +481,7 @@ export function Match3D(props: Match3DProps) {
         torn = true
         cancelAnimationFrame(raf)
         timer.dispose()
-        ro?.disconnect()
-        if (!ro) window.removeEventListener('resize', resize)
+        unbindResize()
         reducedMql.removeEventListener?.('change', onReducedChange)
         renderer.domElement.removeEventListener('webglcontextlost', onContextLost)
         for (const b of bursts) b.dispose()
