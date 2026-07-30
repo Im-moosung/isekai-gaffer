@@ -69,6 +69,12 @@ export function EntranceOverlay({ cast, onDone, onSkip, onProgress, startMs = 0 
 
   useEffect(() => {
     if (typeof requestAnimationFrame !== 'function') return
+    // ★ 이펙트가 다시 돌면 클럭도 다시 산다. 정리(cleanup)가 finishedRef를 세워 두는데
+    //   이걸 되돌리지 않으면 **두 번째 실행의 loop가 첫 줄에서 즉시 리턴해 연출이
+    //   영구 정지**한다. React StrictMode(dev)는 마운트 직후 이펙트를 정리→재실행하므로
+    //   개발 모드에서 항상 "심판진 입장"에 멈추고 건너뛰기도 먹지 않았다.
+    //   (prod 빌드는 재실행이 없어 증상이 안 보였다 — 그래서 오래 살아남았다.)
+    finishedRef.current = false
     let t0: number | null = null
     let key = viewKey(cast, startMs)
     const loop = (now: number) => {

@@ -2,6 +2,7 @@
 // 입장 오버레이 DOM 계약 — 건너뛰기(클릭·키), 자체 클럭, 언마운트 후 rAF 0, 소개 카드.
 // rAF는 스텁으로 갈아끼워 시간 흐름을 테스트가 소유한다(실제 타이머 대기 금지).
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
+import { StrictMode } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { EntranceOverlay } from '../EntranceOverlay'
 import { ENTRANCE_PHASES, ENTRANCE_TOTAL_MS, buildEntranceCast } from '../entrance'
@@ -83,6 +84,27 @@ describe('EntranceOverlay', () => {
     frame(ENTRANCE_TOTAL_MS)
     expect(onDone).toHaveBeenCalledTimes(1)
     expect(pending.size).toBe(0)
+  })
+
+  // ⚠ 회귀 방지: 정리 후 이펙트가 다시 도는 경우(React StrictMode dev의 마운트 이중 실행,
+  //   또는 cast 교체) 클럭이 되살아나야 한다. 예전엔 finishedRef가 세워진 채로 남아
+  //   두 번째 loop가 첫 줄에서 리턴했고, 개발 모드에서 입장 연출이 영구 정지했다.
+  it('이펙트가 재실행되면 클럭이 되살아난다(StrictMode 이중 마운트)', () => {
+    const onProgress = vi.fn()
+    const onDone = vi.fn()
+    const { rerender } = render(
+      <StrictMode>
+        <EntranceOverlay cast={cast} onDone={onDone} onProgress={onProgress} />
+      </StrictMode>,
+    )
+    // StrictMode는 마운트 시 이펙트를 정리→재실행한다. 그 뒤에도 프레임이 흘러야 한다.
+    frame(1000)
+    frame(1400)
+    expect(onProgress.mock.calls.map(c => c[0])).toEqual([0, 400])
+    // 총 길이에 도달하면 여전히 정확히 한 번만 끝난다.
+    frame(1000 + ENTRANCE_TOTAL_MS)
+    expect(onDone).toHaveBeenCalledTimes(1)
+    rerender(<StrictMode />)
   })
 
   it('언마운트하면 rAF가 취소되고, 남아 있던 콜백을 억지로 돌려도 아무 일이 없다', () => {
