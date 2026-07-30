@@ -65,3 +65,25 @@ export function bindResize(host: HTMLElement, onResize: () => void): () => void 
   window.addEventListener('resize', onResize)
   return () => window.removeEventListener('resize', onResize)
 }
+
+/**
+ * WebGL2 사용 가능 여부(동기). jsdom은 getContext가 null → false → 폴백.
+ *
+ * **탐지용 컨텍스트를 즉시 반납한다.** 브라우저는 동시 WebGL 컨텍스트를 약 16개로
+ * 제한하는데, 탐지만 하고 버린 컨텍스트도 그 상한을 잡아먹는다. 반납하지 않으면
+ * 랜딩 → 경기 전환마다 하나씩 새고, 캠페인 8경기를 돌면 상한에 닿아 그때부터
+ * 3D가 조용히 폴백으로 떨어진다.
+ *
+ * 이 함수가 두 곳(Match3D·StadiumBackdrop)에 복사돼 있었고 **한쪽만 반납했다.**
+ * 같은 함수가 두 벌이면 한쪽 수정이 다른 쪽에 닿지 않는다는 실례다.
+ */
+export function webgl2Available(): boolean {
+  try {
+    const c = document.createElement('canvas')
+    const gl = c.getContext('webgl2')
+    gl?.getExtension('WEBGL_lose_context')?.loseContext()
+    return !!gl
+  } catch {
+    return false
+  }
+}

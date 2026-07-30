@@ -17,7 +17,7 @@ import type { ChoreoStep } from '../choreography'
 import { createCameraRig } from './camera'
 import { entranceFrame, entrancePhaseAt, type EntranceCast } from './entrance'
 import { FLASH_CONCEDED, FLASH_SCORED, createBall, flashQuad, goalBurst, type GoalBurst } from './fx3d'
-import { bindResize, createRendererHost } from './host'
+import { bindResize, createRendererHost, webgl2Available } from './host'
 import { computeFrame } from './movement'
 import { createRenderScaler, readStoredScale, writeStoredScale } from './perf'
 import { createPlayer, disposePlayerCaches, type PlayerRig } from './player3d'
@@ -113,16 +113,6 @@ function cssColor(el: HTMLElement, name: string, fallback: number): number {
     /* ignore */
   }
   return fallback
-}
-
-/** WebGL2 사용 가능 여부(동기). jsdom은 getContext가 null → false → 폴백. */
-function webgl2Available(): boolean {
-  try {
-    const c = document.createElement('canvas')
-    return !!c.getContext('webgl2')
-  } catch {
-    return false
-  }
 }
 
 /** localStorage가 막힌 환경(사파리 프라이빗 등)에서 throw하지 않게 감싼다. */

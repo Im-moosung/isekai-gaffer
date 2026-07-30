@@ -15,7 +15,7 @@
 //  - 언마운트 시 bundle.dispose()(disposeTree가 InstancedMesh 분기까지 처리) + renderer.dispose()
 //    + forceContextLoss로 GPU 컨텍스트를 즉시 반납한다.
 import { useEffect, useRef, useState } from 'react'
-import { bindResize, createRendererHost } from '../pitch/three/host'
+import { bindResize, createRendererHost, webgl2Available } from '../pitch/three/host'
 import { createPostFX } from '../pitch/three/postfx'
 import { EMISSIVE_BOOST, buildScene, type ThreeAPI } from '../pitch/three/scene'
 import { FOV, LOOK_AT_Y, landingCameraAt } from './camera'
@@ -26,19 +26,6 @@ const PX_PER_M = 10
 
 /** 픽셀비 상한 — 배경일 뿐이므로 2까지 올릴 이유가 없다. */
 const MAX_DPR = 1.5
-
-/** WebGL2 사용 가능 여부(동기). jsdom은 getContext가 null → false → 배경 없음. */
-function webgl2Available(): boolean {
-  try {
-    const c = document.createElement('canvas')
-    const gl = c.getContext('webgl2')
-    // 탐지용 컨텍스트도 브라우저 컨텍스트 상한(≈16)을 잡아먹는다 — 즉시 반납한다.
-    gl?.getExtension('WEBGL_lose_context')?.loseContext()
-    return !!gl
-  } catch {
-    return false
-  }
-}
 
 /**
  * 랜딩 3D 배경. 준비되면 CSS 트랜지션으로 페이드인한다.
