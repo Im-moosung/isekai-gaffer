@@ -3,6 +3,7 @@
 // 일반 32강 브래킷이 아니라 "한국 한 팀의 경로"만 그리는 이유: 우리 캠페인은 다른 조의
 // 대진을 시뮬레이션하지 않는다. 없는 데이터를 그리면 거짓 정보가 된다.
 // 탈락하면 남은 칸이 빈 채로 남는다 — "여기서 멈췄다"가 화면에 남는 것이 대체역사 훅이다.
+import { useState } from 'react'
 import { GROUP_MATCHES } from '../../data/groupStage'
 import { loadTeam } from '../../data/loader'
 import type { TeamId } from '../../data/loader'
@@ -62,14 +63,27 @@ export interface JourneyLadderProps {
   currentOpponentId?: TeamId | null
   /** 엔딩 화면용 축약 배치(캡션 유지, 여백 축소). */
   compact?: boolean
+  /** 토너먼트 5칸을 기본으로 접는다(허브 전용). 결과가 생기면 자동으로 펼친다. */
+  collapsible?: boolean
 }
 
 /** 여정 사다리. 허브와 엔딩이 같은 컴포넌트를 공유한다 — 두 화면의 여정 표기가 어긋나지 않게. */
 export function JourneyLadder({
-  stage, records, groupRank, ending, currentOpponentId, compact,
+  stage, records, groupRank, ending, currentOpponentId, compact, collapsible,
 }: JourneyLadderProps) {
+  const [userExpanded, setUserExpanded] = useState(false)
   const byStage = new Map<CampaignStage, MatchRecord>()
   for (const r of records) byStage.set(r.stage, r)
+
+  // 토너먼트 5칸이 전부 "상대 미정 —"이면 정보 밀도가 0인 행이 화면 절반을 먹는다(H-5).
+  // 다만 접기 자체는 FM25가 저지른 실수라 기본만 접고 1클릭으로 펼친다.
+  // 조별을 통과했거나 토너먼트 기록·엔딩이 생기면 접을 이유가 사라지므로 자동 전개한다.
+  const tournamentLive =
+    !!ending
+    || stage === 'ended'
+    || STAGE_ORDER.indexOf(stage) >= 3
+    || records.some(r => STAGE_ORDER.indexOf(r.stage) >= 3)
+  const collapsed = !!collapsible && !tournamentLive && !userExpanded
 
   // 탈락 지점: 이 인덱스 뒤의 칸은 "치르지 못한 경기"로 비워 둔다.
   const cutIdx = ending && !ending.champion ? STAGE_ORDER.indexOf(ending.reached) : -1
@@ -170,10 +184,13 @@ export function JourneyLadder({
 
   return (
     <section className={`jl${compact ? ' jl--compact' : ''}`} aria-label="캠페인 여정">
-      <div className="jl__head">
-        <h3 className="jl__title">여정</h3>
-        <p className="jl__sub">조별리그 3경기 · 토너먼트 5경기</p>
-      </div>
+      {/* compact(엔딩)에서는 바깥 섹션이 이미 "최종 여정" 제목을 갖는다 — 제목을 두 번 쓰지 않는다. */}
+      {!compact && (
+        <div className="jl__head">
+          <h3 className="jl__title">여정</h3>
+          <p className="jl__sub">조별리그 3경기 · 토너먼트 5경기</p>
+        </div>
+      )}
       <ol className="jl__list">
         {ROWS.slice(0, 3).map((r, i) => renderRow(r, i))}
         <li className={`jl-gate jl-gate--${gateState}`}>
@@ -181,8 +198,34 @@ export function JourneyLadder({
           <span className="jl-gate__label">진출 관문</span>
           <span className="jl-gate__text">{gateText}</span>
         </li>
-        {ROWS.slice(3).map((r, i) => renderRow(r, i + 3))}
+        {collapsed ? (
+          <li className="jl-fold">
+            <span className="jl-row__rail" aria-hidden="true" />
+            <span className="jl-row__stage">토너먼트</span>
+            <span className="jl-fold__text">5경기 · 조별리그를 통과해야 대진이 정해진다</span>
+            <button
+              type="button"
+              className="btn btn--ghost btn--sm jl-fold__toggle"
+              aria-expanded="false"
+              onClick={() => setUserExpanded(true)}
+            >
+              펼치기
+            </button>
+          </li>
+        ) : (
+          ROWS.slice(3).map((r, i) => renderRow(r, i + 3))
+        )}
       </ol>
+      {collapsible && !collapsed && !tournamentLive && (
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm jl__collapse"
+          aria-expanded="true"
+          onClick={() => setUserExpanded(false)}
+        >
+          접기
+        </button>
+      )}
       {cutIdx >= 0 && (
         <p className="jl__cutnote">
           {cutIdx === 2 && groupRank === 3

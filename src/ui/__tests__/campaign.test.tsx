@@ -14,22 +14,32 @@ beforeEach(() => store().reset())
 afterEach(() => cleanup())
 
 describe('HubScreen 스모크', () => {
-  it('캠페인 시작 상태에서 cze 상대 카드·여정 사다리(8칸)를 렌더하고 버튼이 onProceed를 호출한다', () => {
+  it('캠페인 시작 상태에서 cze 히어로 카드·여정 사다리를 렌더하고 CTA가 onProceed를 호출한다', () => {
     store().startCampaign(7)
     const onProceed = vi.fn()
     const { container, getByRole } = render(<HubScreen onProceed={onProceed} />)
 
-    // 여정 사다리 8칸
-    expect(container.querySelectorAll('.jl-row')).toHaveLength(8)
+    // 조별 3칸 + 접힌 토너먼트 1칸(미정 5행 압축). 펼치면 8칸이 된다.
+    expect(container.querySelectorAll('.jl-row')).toHaveLength(3)
+    expect(container.querySelector('.jl-fold')).toBeTruthy()
     // 현 위치(group1) 하이라이트
     expect(container.querySelector('.jl-row--current')).toBeTruthy()
-    // 다음 상대 카드 = 체코
-    expect(container.querySelector('.hub-oppcard__name')!.textContent).toBe('체코')
+    // 다음 경기 히어로 = 체코
+    expect(container.querySelector('.hub-hero__opp')!.textContent).toBe('체코')
     // 선호 포메이션 원문 노출
-    expect(container.querySelector('.hub-oppcard__meta dd')!.textContent).toContain('3-4-2-1')
+    expect(container.querySelector('.hub-hero__meta')!.textContent).toContain('3-4-2-1')
 
-    fireEvent.click(getByRole('button', { name: '경기 준비' }))
+    // 주 CTA는 하단 고정 바에 있고 라벨이 상대 이름으로 구체화된다
+    fireEvent.click(getByRole('button', { name: '체코전 준비하기' }))
     expect(onProceed).toHaveBeenCalledTimes(1)
+  })
+
+  it('접힌 토너먼트 칸은 [펼치기] 1클릭으로 8칸 전체가 된다', () => {
+    store().startCampaign(7)
+    const { container, getByRole } = render(<HubScreen onProceed={() => {}} />)
+    fireEvent.click(getByRole('button', { name: '펼치기' }))
+    expect(container.querySelectorAll('.jl-row')).toHaveLength(8)
+    expect(container.querySelector('.jl-fold')).toBeNull()
   })
 
   it('ended 상태에서는 null을 반환한다', () => {
@@ -44,7 +54,8 @@ describe('HubScreen 스모크', () => {
 describe('여정 사다리(JourneyLadder)', () => {
   it('시작 직후: 조별 3칸은 대진 확정, 토너먼트 5칸은 상대 미정, 관문은 대기', () => {
     store().startCampaign(7)
-    const { container } = render(<HubScreen onProceed={() => {}} />)
+    const { container, getByRole } = render(<HubScreen onProceed={() => {}} />)
+    fireEvent.click(getByRole('button', { name: '펼치기' })) // 토너먼트 칸은 기본이 접힘
     const opps = [...container.querySelectorAll('.jl-row__opp')].map(e => e.textContent)
     expect(opps.slice(0, 3)).toEqual(['체코', '멕시코', '남아프리카공화국'])
     expect(opps.slice(3)).toEqual(Array(5).fill('상대 미정'))
@@ -152,7 +163,7 @@ describe('EndingScreen 스모크', () => {
     store().recordResult([0, 1], {})
     expect(store().ending!.reached).toBe('group3')
     const { container, unmount } = render(<EndingScreen onRestart={() => {}} />)
-    const groupText = container.querySelector('.end-card')!.textContent!
+    const groupText = container.querySelector('.end-root')!.textContent!
     for (const w of BANNED) expect(groupText).not.toContain(w)
     expect(container.querySelector('.end-headline')!.textContent).toContain('조별리그 탈락')
     unmount()
@@ -169,7 +180,7 @@ describe('EndingScreen 스모크', () => {
       store().recordResult([0, 1], {}) // 해당 라운드 패배
       expect(store().stage).toBe('ended')
       const { container: c, unmount: u } = render(<EndingScreen onRestart={() => {}} />)
-      const text = c.querySelector('.end-card')!.textContent!
+      const text = c.querySelector('.end-root')!.textContent!
       for (const w of BANNED) expect(text).not.toContain(w)
       u()
     }

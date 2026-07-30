@@ -71,19 +71,21 @@ describe('App 랜딩 스모크', () => {
     expect(text).not.toContain('리더보드 미반영')
   })
 
-  it('[캠페인 시작] → 허브 렌더(진행 바 8칸 + 첫 상대 체코)', () => {
+  it('[캠페인 시작] → 허브 렌더(여정 조별 3칸 + 접힌 토너먼트 + 첫 상대 체코)', () => {
     const { getByRole, container } = render(<App />)
     fireEvent.click(getByRole('button', { name: '캠페인 시작' }))
 
-    expect(container.querySelectorAll('.jl-row')).toHaveLength(8)
-    expect(container.querySelector('.hub-oppcard__name')!.textContent).toBe('체코')
+    // 토너먼트 5칸은 기본 접힘 — 조별 3칸 + .jl-fold 1행
+    expect(container.querySelectorAll('.jl-row')).toHaveLength(3)
+    expect(container.querySelector('.jl-fold')).toBeTruthy()
+    expect(container.querySelector('.hub-hero__opp')!.textContent).toBe('체코')
     expect(useCampaignStore.getState().stage).toBe('group1')
   })
 
   it('허브 → [경기 준비] → 라인업 단독 화면 없이 곧바로 경기(전술 센터)로 진입', () => {
     const { getByRole, queryByRole } = render(<App />)
     fireEvent.click(getByRole('button', { name: '캠페인 시작' }))
-    fireEvent.click(getByRole('button', { name: '경기 준비' }))
+    fireEvent.click(getByRole('button', { name: '체코전 준비하기' }))
     // 라인업 단독 화면(확정 버튼)은 더 이상 라우팅에 없다 — 전술 센터가 흡수했다.
     expect(queryByRole('button', { name: '라인업 확정' })).toBeNull()
     // MatchScreen이 목이므로 경기 종료 버튼이 곧바로 보인다.
@@ -127,7 +129,7 @@ describe('App 캠페인 경기 후 플로우 스모크', () => {
   it('경기 결과 → 기자회견(질문) → 3답변 → 신문(FICTION) → [다음] → 허브(다음 상대)', async () => {
     const { getByRole, container } = render(<App />)
     fireEvent.click(getByRole('button', { name: '캠페인 시작' }))
-    fireEvent.click(getByRole('button', { name: '경기 준비' }))
+    fireEvent.click(getByRole('button', { name: '체코전 준비하기' }))
 
     // 목 MatchScreen에서 경기 종료
     fireEvent.click(getByRole('button', { name: '경기 종료(목)' }))
@@ -147,6 +149,6 @@ describe('App 캠페인 경기 후 플로우 스모크', () => {
     await waitFor(() => expect(container.querySelector('.hub-root')).toBeTruthy())
     expect(useCampaignStore.getState().stage).toBe('group2')
     // 다음 상대는 멕시코
-    expect(container.querySelector('.hub-oppcard__name')!.textContent).toBe('멕시코')
+    expect(container.querySelector('.hub-hero__opp')!.textContent).toBe('멕시코')
   })
 })

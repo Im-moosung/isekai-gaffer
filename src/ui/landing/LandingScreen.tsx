@@ -1,6 +1,10 @@
 // src/ui/landing/LandingScreen.tsx
 // 첫인상 화면 — 3D 스타디움 라이브 배경 위에 대체역사 훅 문안과 두 개의 진입 CTA.
 //
+// [2026-07-30 재설계 · L-2/L-4] 유리 카드를 없애고 문안을 3D 위에 직접 얹는다.
+// 방송 타이틀 시퀀스의 문법이고, 카드가 없어야 3D가 화면을 온전히 쓴다.
+// 대비는 좌→우 선형 스크림(.landing__scrim)이 전담한다.
+//
 // 순서 계약(심사자가 1분 안에 판단한다):
 //  1. **문안·버튼이 먼저 뜬다.** 3D는 lazy 청크라 로드에 수백 ms가 걸리므로,
 //     첫 페인트 이후(rAF 1틱 뒤)에야 마운트를 시작한다. 버튼 클릭은 3D와 무관하게 즉시 동작한다.
@@ -8,6 +12,8 @@
 //     StadiumBackdrop 내부가 받아 null을 렌더한다 → CSS 그라디언트 배경만 남는다.
 //  3. 모바일(좁은 뷰포트)에서는 3D를 아예 로드하지 않는다 — 근거는 shouldLoad3d 주석.
 import { Component, Suspense, lazy, useEffect, useState, type ReactNode } from 'react'
+// 공통 프리미티브(.btn, .eyebrow)를 쓰므로 셸 스타일시트를 함께 싣는다.
+import '../shell/shell.css'
 
 const StadiumBackdrop = lazy(() =>
   import('./StadiumBackdrop').then(m => ({ default: m.StadiumBackdrop })),
@@ -71,8 +77,8 @@ export function LandingScreen({ onCampaign, onDemo }: {
       </div>
       <div className="landing__scrim" aria-hidden="true" />
 
-      <div className="landing__card">
-        <p className="landing__kicker">대체역사 축구 감독 시뮬레이션</p>
+      <div className="landing__content">
+        <p className="eyebrow landing__eyebrow">대체역사 축구 감독 시뮬레이션</p>
         {/* 제목은 두 절을 각각 한 줄로 고정한다. 뷰포트에 따라 "내가," 뒤에서
             끊기거나 "국대 / 감독?"으로 갈라지면 밈 문장의 리듬이 죽는다. */}
         <h1 className="landing__title">
@@ -86,11 +92,12 @@ export function LandingScreen({ onCampaign, onDemo }: {
           당신에게 <span className="landing__nowrap">90분</span>과{' '}
           <span className="landing__nowrap">다섯 번의 개입</span>이 주어진다.
         </p>
+        {/* 주 CTA는 --brand 파랑. 라임은 --live("지금 진행 중") 전용으로 강등됐다. */}
         <div className="landing__actions">
-          <button type="button" className="landing__cta" onClick={onCampaign}>
+          <button type="button" className="btn btn--primary btn--lg" onClick={onCampaign}>
             캠페인 시작 <span aria-hidden="true">→</span>
           </button>
-          <button type="button" className="landing__cta landing__cta--ghost" onClick={onDemo}>
+          <button type="button" className="btn btn--ghost btn--lg" onClick={onDemo}>
             바로 지휘하기
           </button>
         </div>

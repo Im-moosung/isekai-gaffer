@@ -18,7 +18,7 @@ describe('App 캠페인 경기 스모크 — 실 MatchScreen 진입', () => {
   it('캠페인 시작 → 경기 준비 → 곧바로 전술 센터(킥오프 버튼 + pre phase)', () => {
     const { getByRole, container } = render(<App />)
     fireEvent.click(getByRole('button', { name: '캠페인 시작' }))
-    fireEvent.click(getByRole('button', { name: '경기 준비' }))
+    fireEvent.click(getByRole('button', { name: '체코전 준비하기' }))
 
     // 라인업 단독 화면 없이 곧바로 전술 센터가 뜬다(사용자 지적 해소).
     expect(container.querySelector('.tc-root')).toBeTruthy()
@@ -38,7 +38,7 @@ describe('조별 경기도 전반부터 시뮬된다 (전반 스크립트 배선
   it('1차전(체코)에 firstHalfScript가 걸리지 않고, 하이드레이션 시점에 체력·슛·이벤트가 움직여 있다', () => {
     const { getByRole } = render(<App />)
     fireEvent.click(getByRole('button', { name: '캠페인 시작' }))
-    fireEvent.click(getByRole('button', { name: '경기 준비' }))
+    fireEvent.click(getByRole('button', { name: '체코전 준비하기' }))
 
     const ms = () => useMatchStore.getState()
     // 조별 1차전인데도 엔진에 전반 스크립트가 실려 있지 않다 — 배선 해제의 직접 단언.
@@ -71,7 +71,7 @@ describe('realScore는 표시용 기준선으로만 쓰인다', () => {
   it('전술 센터에 "참고 · 실제 역사 2-1"이 뜨지만 경기 결과를 고정하지 않는다', () => {
     const { getByRole, getByText } = render(<App />)
     fireEvent.click(getByRole('button', { name: '캠페인 시작' }))
-    fireEvent.click(getByRole('button', { name: '경기 준비' }))
+    fireEvent.click(getByRole('button', { name: '체코전 준비하기' }))
     // 1차전 체코전 실제 역사 2-1이 참고 표기로 노출된다.
     expect(getByText('참고 · 실제 역사 2-1')).toBeTruthy()
     // 그러나 엔진 스코어는 0-0에서 시작해 시뮬로만 움직인다.

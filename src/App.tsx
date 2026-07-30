@@ -59,7 +59,12 @@ function DemoFlow({ onExit }: { onExit(): void }) {
   if (!result) {
     return (
       <div className="demo-wrap">
-        <div className="demo-banner" role="note">데모 · 리더보드 미반영</div>
+        {/* 전폭 라임 띠를 폐지했다 — 라임은 --live 전용이고, 띠 높이가 아래 경기
+            화면의 높이 예산과 충돌해 스테이지 하단을 화면 밖으로 밀어냈다(M-10). */}
+        <p className="demo-note" role="note">
+          <span className="badge">데모</span>
+          리더보드 미반영
+        </p>
         <MatchScreen
           home={teams.home}
           away={teams.away}

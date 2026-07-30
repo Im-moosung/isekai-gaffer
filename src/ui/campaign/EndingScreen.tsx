@@ -6,8 +6,49 @@ import { computeScore, submitScore, topScores } from '../../online/leaderboard'
 import type { LeaderboardMode, LeaderboardRow, ScoreBreakdown } from '../../online/leaderboard'
 import { sanitizeNickname } from '../../online/nickname'
 import { buildEpilogue } from '../../game/pressconf'
+import { AppShell } from '../shell/AppShell'
 import { JourneyLadder } from './JourneyLadder'
 import './campaign.css'
+
+/** 우승 트로피 실루엣. 이모지(🏆)를 쓰지 않는 이유는 OS마다 모양·크기가 달라
+ *  8경기의 보상 화면 톤이 통째로 흔들리기 때문이다. */
+function TrophyMark() {
+  return (
+    <svg className="end-trophy" viewBox="0 0 48 56" role="img" aria-label="우승 트로피">
+      <path
+        d="M12 4h24v14a12 12 0 0 1-24 0V4Z"
+        fill="currentColor"
+        opacity="0.9"
+      />
+      <path
+        d="M12 8H6v4a8 8 0 0 0 6.6 7.9M36 8h6v4a8 8 0 0 1-6.6 7.9"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+      />
+      <path
+        d="M24 30v8m-8 0h16l3 10H13l3-10Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+/** 컨페티 — 절대배치 파티클 12개. 위치·색은 CSS(nth-child)가 정하고
+ *  prefers-reduced-motion에서는 토큰의 전역 규칙이 애니메이션을 1ms로 끝내
+ *  종료 상태(정지 이미지)로 남긴다. */
+function Confetti() {
+  return (
+    <div className="end-confetti" aria-hidden="true">
+      {Array.from({ length: 12 }, (_, i) => (
+        <span key={i} className="end-confetti__bit" />
+      ))}
+    </div>
+  )
+}
 
 const STAGE_LABEL: Record<CampaignStage, string> = {
   group1: '조별 1차전', group2: '조별 2차전', group3: '조별리그',
@@ -132,24 +173,58 @@ export function EndingScreen({ onRestart }: { onRestart(): void }) {
   }
 
   return (
-    <div className={`end-root${ending.champion ? ' end-root--champion' : ''}`}>
-      <div className="end-card">
-        <h1 className="end-headline">{title}</h1>
-        <p className="end-body">{body}</p>
+    <AppShell
+      className={`end-root${ending.champion ? ' end-root--champion' : ''}`}
+      top={
+        <>
+          <span className="shell__brand">Isekai Gaffer</span>
+          <span className="shell__context">여정의 끝 · 최종 기록</span>
+        </>
+      }
+      bottom={
+        <>
+          <span className="shell__bottom-status">
+            총점 <span className="num">{breakdown.total}</span>점 ·{' '}
+            {ending.champion ? '우승' : STAGE_LABEL[ending.reached]}
+          </span>
+          <button type="button" className="btn btn--primary btn--lg" onClick={onRestart}>
+            처음부터
+          </button>
+        </>
+      }
+    >
+      {/* 히어로 — 8경기의 보상 자리. 560px 모달을 걷어내고 화면 전체를 쓴다(D-1·D-2). */}
+      <section className="end-hero">
+        {ending.champion && <Confetti />}
+        <div className="end-hero__inner">
+          {ending.champion && <TrophyMark />}
+          <span className="eyebrow">최종 결과</span>
+          <h1 className="end-headline">{title}</h1>
+          <p className="end-body">{body}</p>
 
-        <dl className="end-summary" aria-label="기록 요약">
-          <div className="end-summary__item">
-            <dt>전적</dt>
-            <dd>{t.w}승 {t.d}무 {t.l}패</dd>
-          </div>
-          <div className="end-summary__item">
-            <dt>득실</dt>
-            <dd>{t.gf}득점 {t.ga}실점 ({diffLabel})</dd>
-          </div>
-        </dl>
+          <dl className="end-summary" aria-label="기록 요약">
+            <div className="end-summary__item">
+              <dt>전적</dt>
+              <dd className="num">{t.w}승 {t.d}무 {t.l}패</dd>
+            </div>
+            <div className="end-summary__item">
+              <dt>득실</dt>
+              <dd className="num">{t.gf}득점 {t.ga}실점 ({diffLabel})</dd>
+            </div>
+            <div className="end-summary__item">
+              <dt>총점</dt>
+              <dd className="num">{breakdown.total}</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
 
-        {/* 최종 여정 — 어디서 멈췄는지가 남는다. 허브와 같은 컴포넌트라 표기가 어긋나지 않는다. */}
-        <div className="end-journey">
+      <div className="end-cols">
+        {/* 최종 여정 — 허브와 같은 컴포넌트라 두 화면의 표기가 어긋나지 않는다(수미상관). */}
+        <section className="section end-journey" aria-label="최종 여정">
+          <div className="section__head">
+            <h2 className="section__title">최종 여정</h2>
+          </div>
           <JourneyLadder
             stage="ended"
             records={records}
@@ -157,84 +232,94 @@ export function EndingScreen({ onRestart }: { onRestart(): void }) {
             ending={ending}
             compact
           />
-        </div>
+        </section>
 
-        <table className="end-score" aria-label="점수 상세">
-          <tbody>
-            {SCORE_ROWS.map(([key, label]) => (
-              <tr key={key}>
-                <th scope="row">{label}</th>
-                <td>{fmtPts(breakdown[key])}</td>
-              </tr>
-            ))}
-            <tr className="end-score__total">
-              <th scope="row">합계</th>
-              <td>{breakdown.total}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div className="end-side">
+          {epilogue.length > 0 && (
+            <section className="section end-epilogue" aria-label="여정 에필로그">
+              <div className="section__head">
+                <h2 className="section__title">에필로그</h2>
+              </div>
+              {epilogue.map((p, i) => (
+                <p key={i} className="end-epilogue__p">{p}</p>
+              ))}
+            </section>
+          )}
 
-        {epilogue.length > 0 && (
-          <div className="end-epilogue" aria-label="여정 에필로그">
-            {epilogue.map((p, i) => (
-              <p key={i} className="end-epilogue__p">{p}</p>
-            ))}
-          </div>
-        )}
+          <section className="section" aria-label="점수 상세">
+            <div className="section__head">
+              <h2 className="section__title">점수 상세</h2>
+            </div>
+            <table className="end-score">
+              <tbody>
+                {SCORE_ROWS.map(([key, label]) => (
+                  <tr key={key}>
+                    <th scope="row">{label}</th>
+                    <td className="num">{fmtPts(breakdown[key])}</td>
+                  </tr>
+                ))}
+                <tr className="end-score__total">
+                  <th scope="row">합계</th>
+                  <td className="num">{breakdown.total}</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
 
-        {!submitted ? (
-          <div className="end-submit">
-            <input
-              className="end-nick"
-              type="text"
-              value={nickname}
-              onChange={e => setNickname(e.target.value)}
-              placeholder="닉네임 (2~12자, 미입력 시 익명 감독)"
-              maxLength={12}
-              aria-label="닉네임"
-            />
-            <button
-              type="button"
-              className="end-register"
-              onClick={handleSubmit}
-              disabled={busy}
-            >
-              {busy ? '등록 중…' : '기록 등록'}
-            </button>
-          </div>
-        ) : (
-          <div className="end-board">
-            <div className="end-board__head">
-              <h2 className="end-board__title">리더보드 TOP 10</h2>
-              {mode === 'local' && (
-                <span className="end-board__badge">이 기기 기록</span>
+          <section className="section" aria-label="리더보드">
+            <div className="section__head">
+              <h2 className="section__title">리더보드</h2>
+              {submitted && mode === 'local' && (
+                <span className="badge end-board__badge">이 기기 기록</span>
               )}
             </div>
-            <ol className="end-board__list">
-              {rows.map((r, i) => {
-                const mine = r.nickname === myNick && r.total === breakdown.total
-                return (
-                  <li
-                    key={`${r.nickname}-${r.total}-${i}`}
-                    className={`end-board__row${mine ? ' end-board__row--me' : ''}`}
-                  >
-                    <span className="end-board__rank">{i + 1}</span>
-                    <span className="end-board__nick">{r.nickname}</span>
-                    <span className="end-board__reached">
-                      {r.champion ? '우승' : STAGE_LABEL[r.reached]}
-                    </span>
-                    <span className="end-board__pts">{r.total}</span>
-                  </li>
-                )
-              })}
-            </ol>
-          </div>
-        )}
 
-        <button type="button" className="end-restart" onClick={onRestart}>
-          처음부터
-        </button>
+            {!submitted ? (
+              <div className="end-submit">
+                <input
+                  className="end-nick"
+                  type="text"
+                  value={nickname}
+                  onChange={e => setNickname(e.target.value)}
+                  placeholder="닉네임 (2~12자, 미입력 시 익명 감독)"
+                  maxLength={12}
+                  aria-label="닉네임"
+                />
+                <button
+                  type="button"
+                  className="btn btn--secondary end-register"
+                  onClick={handleSubmit}
+                  disabled={busy}
+                >
+                  {busy ? '등록 중…' : '기록 등록'}
+                </button>
+              </div>
+            ) : (
+              <div className="end-board">
+                <h3 className="end-board__title">리더보드 TOP 10</h3>
+                <ol className="end-board__list">
+                  {rows.map((r, i) => {
+                    const mine = r.nickname === myNick && r.total === breakdown.total
+                    return (
+                      <li
+                        key={`${r.nickname}-${r.total}-${i}`}
+                        className={`end-board__row${mine ? ' end-board__row--me' : ''}`}
+                      >
+                        <span className="end-board__rank num">{i + 1}</span>
+                        <span className="end-board__nick">{r.nickname}</span>
+                        <span className="end-board__reached">
+                          {r.champion ? '우승' : STAGE_LABEL[r.reached]}
+                        </span>
+                        <span className="end-board__pts num">{r.total}</span>
+                      </li>
+                    )
+                  })}
+                </ol>
+              </div>
+            )}
+          </section>
+        </div>
       </div>
-    </div>
+    </AppShell>
   )
 }
