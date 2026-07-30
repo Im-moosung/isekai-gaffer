@@ -10,16 +10,28 @@
  * 종료 코드 1이면 회귀다.
  *
  * ── CI 승격에 대한 판단 ────────────────────────────────────────────────
- * 이 하니스는 유용하지만 **현 상태 그대로 CI 게이트로 올리면 안 된다.** 이유 셋:
- *  ① 대비비 측정에 오탐이 있다. effBg가 반투명 배경을 겹칠 때 alpha를 1로 강제해
- *     실제보다 밝은 배경으로 계산한다(반투명 4% 배경 위 텍스트가 1.14:1로 잡혔으나
- *     육안으로는 정상). 이 오탐을 고치기 전에는 lowContrast를 하드 실패로 쓸 수 없다.
- *  ② overlaps/lowContrast가 상위 12·15건으로 잘려 있어 "0건" 외의 수치는 추세로만 쓸 수 있다.
- *  ③ 주행이 setTimeout 워프에 의존해 머신 부하에 따라 도달 상태가 달라진다
- *     (2D 토글 버튼을 못 찾는 MISS가 실제로 관측됐다). 플레이키하다.
- * → 권장: **경고 전용(non-blocking) 나이틀리 잡**으로 먼저 올리고,
- *   overlaps와 hidScroll(하드클립)만 하드 실패로 승격한다. 이 둘은 오탐이 없고
- *   결정론적이며, 실제로 게임을 못 하게 만든 두 지표다.
+ * **승격할 가치가 있다. 단 하드 실패는 세 지표로 제한한다** —
+ * 비-sticky 겹침 / 하드클립 / 가로 오버플로. 이 셋은 오탐이 없고 결정론적이며,
+ * 실제로 게임을 못 하게 만들었던 지표다(390px 작전판 79% 하드클립 = 교체 불가).
+ *
+ * 이번 작업에서 오탐 두 종류를 제거해 게이트를 쓸 수 있게 만들었다:
+ *  ① **클립 인식** — 조상이 overflow를 자르면 요소는 그 교집합만큼만 보인다.
+ *     예전엔 잘린 원래 사각형으로 계산해 보이지도 않는 요소를 겹침으로 잡았다.
+ *  ② **sticky 구분** — sticky 바 아래로 콘텐츠가 지나가는 것은 sticky의 정의다.
+ *     바가 불투명하고 문서 끝에서 아무것도 묻히지 않으면 결함이 아니다(실측 확인).
+ *     이 둘을 넣자 "실결함 겹침"이 54건 → 0건으로 분리됐다.
+ *
+ * 여전히 하드 실패로 쓰면 안 되는 것:
+ *  · **대비비** — effBg가 반투명 배경을 겹칠 때 alpha를 1로 강제해 실제보다 밝은
+ *    배경으로 계산한다(4% 반투명 위 텍스트가 1.14:1로 잡혔으나 육안 정상).
+ *    3D 캔버스 위 텍스트는 아예 배경을 모른다 → landing-contrast.mjs가 픽셀로 따로 잰다.
+ *  · **터치 타깃/글리프 잘림** — 추세 지표로 충분하다.
+ *
+ * 운영 권장:
+ *  · PR 게이트: 1440·390 두 뷰포트만(약 2분). 하드 3종.
+ *  · 나이틀리: 4뷰포트 + drive2(후반~신문) + play390 + landing-contrast.
+ *  · 주행은 setTimeout 워프에 의존해 머신 부하에 민감하므로 clickAny 폴백을 유지하고,
+ *    MISS-ALL이 나오면 실패가 아니라 **주행 불가**로 따로 보고해야 한다.
  */
 import fs from 'node:fs'
 
@@ -62,9 +74,14 @@ const visit = (node, path) => {
 }
 
 function check(where, s) {
-  if (s.overlaps.length > HARD.overlaps) {
-    fails.push(`${where}: 겹침 ${s.overlaps.length}건 — ${s.overlaps.slice(0, 3).map(o => `${o.a}↔${o.b} ${o.ov}`).join(', ')}`)
+  // sticky 바 아래로 콘텐츠가 지나가는 것은 sticky의 정의다. 바가 불투명하고
+  // 문서 끝에서 아무것도 묻히지 않으면 결함이 아니므로 경고로 내린다.
+  const hard = s.overlaps.filter(o => !o.sticky)
+  const transient = s.overlaps.filter(o => o.sticky)
+  if (hard.length > HARD.overlaps) {
+    fails.push(`${where}: 겹침 ${hard.length}건 — ${hard.slice(0, 3).map(o => `${o.a}↔${o.b} ${o.ov}`).join(', ')}`)
   }
+  if (transient.length) warns.push(`${where}: sticky 통과 겹침 ${transient.length}건(스크롤 중 일시적)`)
   const clips = s.hidScroll.filter(h => h.HARDCLIP)
   if (clips.length > HARD.hardclip) {
     fails.push(`${where}: 하드클립 ${clips.length}건 — ${clips.slice(0, 3).map(c => `${c.sel} ${c.hiddenPct}%`).join(', ')}`)

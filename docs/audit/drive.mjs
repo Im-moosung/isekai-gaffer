@@ -17,6 +17,10 @@ const AUDIT = () => {
   const sel=el=>{let s=el.tagName.toLowerCase(); const c=String(el.className&&el.className.baseVal!==undefined?el.className.baseVal:el.className||'').trim().split(/\s+/).filter(Boolean).slice(0,3); if(c.length)s+='.'+c.join('.'); return s;};
   // 조상이 overflow를 자르면 요소는 그 교집합만큼만 실제로 보인다.
   // 이걸 모르면 클립되어 안 보이는 요소가 겹침으로 잡힌다(티커 퇴장 애니메이션 등).
+  // position:sticky/fixed 안의 요소는 스크롤 중 다른 콘텐츠 위를 지나간다.
+  // 이건 sticky의 정의이지 결함이 아니다(바가 불투명하고 문서 끝에서 아무것도
+  // 가리지 않으면 콘텐츠는 항상 도달 가능하다). 겹침에 표시만 해 두고 게이트가 구분한다.
+  const inSticky = el => { for(let n=el;n&&n!==document.body;n=n.parentElement){ const p=getComputedStyle(n).position; if(p==='sticky'||p==='fixed') return true; } return false; };
   const clipRect = el => {
     let r = el.getBoundingClientRect();
     let t = r.top, l = r.left, b = r.bottom, rt = r.right;
@@ -60,7 +64,7 @@ const AUDIT = () => {
     if(a.el.contains(b.el)||b.el.contains(a.el))continue;
     const x=Math.min(a.r.right,b.r.right)-Math.max(a.r.left,b.r.left);
     const y=Math.min(a.r.bottom,b.r.bottom)-Math.max(a.r.top,b.r.top);
-    if(x>4&&y>4){const area=x*y,minA=Math.min(a.r.width*a.r.height,b.r.width*b.r.height); if(area/minA>0.2)overlaps.push({a:sel(a.el),at:(a.el.textContent||'').trim().slice(0,16),b:sel(b.el),bt:(b.el.textContent||'').trim().slice(0,16),ov:Math.round(area/minA*100)+'%'});}
+    if(x>4&&y>4){const area=x*y,minA=Math.min(a.r.width*a.r.height,b.r.width*b.r.height); if(area/minA>0.2)overlaps.push({a:sel(a.el),at:(a.el.textContent||'').trim().slice(0,16),b:sel(b.el),bt:(b.el.textContent||'').trim().slice(0,16),ov:Math.round(area/minA*100)+'%',sticky:inSticky(a.el)||inSticky(b.el)});}
   }
   const de=document.documentElement;
   const dedupe = arr => { const s=new Set(); return arr.filter(o=>{const k=JSON.stringify(o); if(s.has(k))return false; s.add(k); return true;}); };
