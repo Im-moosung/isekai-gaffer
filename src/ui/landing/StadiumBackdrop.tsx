@@ -20,8 +20,13 @@ import { createPostFX } from '../pitch/three/postfx'
 import { EMISSIVE_BOOST, buildScene, type ThreeAPI } from '../pitch/three/scene'
 import { FOV, LOOK_AT_Y, landingCameraAt } from './camera'
 
-/** 랜딩 배경은 경기 화면보다 가벼워야 한다(첫 로드 체감) — 관중 절반, 피치 텍스처 저해상도. */
-const CROWD_COUNT = 2000
+/**
+ * 랜딩 배경은 경기 화면보다 가벼워야 한다(첫 로드 체감) — 피치 텍스처를 저해상도로 쓴다.
+ * 관중은 **줄이지 않는다.** 좌석 격자가 현실 피치로 고정된 뒤로 관중 수를 줄이는 유일한
+ * 수단은 `crowdDetail`(좌석 간격을 벌린다)인데, 그러면 랜딩 첫 화면에서 관중이 다시
+ * 성긴 색 블록으로 보인다 — 심사자가 보는 첫 프레임에서 가장 손해가 큰 절약이다.
+ * 파도타기가 정점 셰이더로 옮겨가 프레임 비용이 인스턴스 수와 무관해진 것도 근거다.
+ */
 const PX_PER_M = 10
 
 /** 픽셀비 상한 — 배경일 뿐이므로 2까지 올릴 이유가 없다. */
@@ -74,7 +79,7 @@ export function StadiumBackdrop() {
       const reduced =
         typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
-      const bundle = buildScene(THREE, { crowdCount: CROWD_COUNT, pxPerMeter: PX_PER_M })
+      const bundle = buildScene(THREE, { pxPerMeter: PX_PER_M })
       const scene = bundle.scene
       const camera = bundle.camera
       camera.fov = FOV
