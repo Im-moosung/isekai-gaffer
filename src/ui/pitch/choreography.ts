@@ -14,7 +14,15 @@
 //  - 랜덤·시간 의존 없음. 변형은 이벤트 해시로만(결정론).
 import type { AttackPattern, MatchEvent, SideState } from '../../engine/types'
 import { slotCoords } from './formations'
-import { LANE_COUNT, buildScene, type BallArc, type SceneFinish } from './scenes'
+import {
+  BUILDUP_VARIANT_COUNT,
+  FINISH_VARIANT_COUNT,
+  LANE_COUNT,
+  buildScene,
+  type BallArc,
+  type SceneFinish,
+  type SceneVariants,
+} from './scenes'
 
 export type { BallArc } from './scenes'
 
@@ -32,10 +40,13 @@ export interface ChoreoStep {
 
 const clamp = (v: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v))
 
-/** FNV-1a + 애벌런치 마무리 — 레인 변형 선택용(Math.random 금지).
+/** FNV-1a + 애벌런치 마무리 — 장면 변형 선택용(Math.random 금지).
  *  ★ 마무리가 필요한 이유: 순수 FNV-1a는 하위 비트 확산이 약해, 한 글자만 다른 키
  *  (분만 다른 이벤트)를 작은 수로 나누면 잔여가 쏠린다. 실측에서 한 경기 최다 반복이
- *  6 → 3으로 떨어졌다. */
+ *  6 → 3으로 떨어졌다.
+ *  ★ 2026-07-30 재검증: 실제로 등장한 이벤트 키 542종의 레인 분포 χ²=2.4(자유도 5)로
+ *  완전 균일이었다. 즉 남은 반복은 해시 편향이 아니라 **칸 수 부족**이었고, 처방은
+ *  확산 강화가 아니라 변형 축을 늘리는 것이었다(scenes.ts 참조). */
 function hash(s: string): number {
   let h = 2166136261
   for (let i = 0; i < s.length; i++) {
@@ -114,7 +125,7 @@ export function buildSequence(event: MatchEvent, homeState: SideState, awayState
   const isHome = event.teamId === homeState.team.id
   const attacking = isHome ? homeState : awayState
   const pattern: AttackPattern = attacking.tactics.attackPattern ?? 'balanced'
-  const scene = buildScene(pattern, finish, laneFor(event))
+  const scene = buildScene(pattern, finish, laneFor(event), variantsFor(event))
   const ids = pickByRole(attacking, scene.roles, event.playerId)
 
   // away면 x 미러(100-x). y는 불변.
@@ -130,14 +141,30 @@ export function buildSequence(event: MatchEvent, homeState: SideState, awayState
   }))
 }
 
-/** 이벤트 → 레인 변형 인덱스(0~3). 분·타입·선수를 섞어 같은 분에 몰리지 않게 한다. */
+/** 이벤트 → 레인 변형 인덱스(0~5). 분·타입·선수·팀을 섞어 같은 분에 몰리지 않게 한다. */
 function laneFor(event: MatchEvent): number {
-  return hash(`${event.minute}:${event.type}:${event.playerId ?? ''}:${event.teamId}`) % LANE_COUNT
+  return hash(`lane|${event.minute}:${event.type}:${event.playerId ?? ''}:${event.teamId}`) % LANE_COUNT
+}
+
+/**
+ * 이벤트 → 빌드업 실행·마무리 변형. 축마다 **다른 salt**를 써서 서로 독립이 되게 한다
+ * (같은 해시를 나눠 쓰면 두 축이 붙어 다녀 칸 수가 늘지 않는다).
+ *
+ * ★ 키에 teamId를 넣지 않는 이유: 좌우 미러 계약 때문이다. 같은 사건을 홈이 하든 원정이
+ *   하든 x는 서로 미러(합 100)여야 하는데, teamId가 변형을 가르면 슈팅 지점 x부터 달라져
+ *   미러가 깨진다. 레인(y축)은 teamId를 포함해도 x에 영향이 없으므로 그대로 둔다.
+ */
+function variantsFor(event: MatchEvent): SceneVariants {
+  const core = `${event.minute}:${event.type}:${event.playerId ?? ''}`
+  return {
+    buildup: hash(`bv|${core}`) % BUILDUP_VARIANT_COUNT,
+    finish: hash(`fv|${core}`) % FINISH_VARIANT_COUNT,
+  }
 }
 
 /**
  * 이 이벤트가 어떤 장면을 쓰는지의 식별자 — 반복 측정·디버그 전용(렌더에 쓰지 않는다).
- * 예: `kor/wing/goal/L1`. 팀을 포함하는 이유는 좌우 미러가 사실상 다른 그림이기 때문이다.
+ * 예: `H/wing.b/goal.c/L1`. 팀을 포함하는 이유는 좌우 미러가 사실상 다른 그림이기 때문이다.
  */
 export function sceneKeyFor(event: MatchEvent, homeState: SideState, awayState: SideState): string | null {
   const finish = finishFor(event.type)
@@ -145,5 +172,5 @@ export function sceneKeyFor(event: MatchEvent, homeState: SideState, awayState: 
   const isHome = event.teamId === homeState.team.id
   const attacking = isHome ? homeState : awayState
   const pattern: AttackPattern = attacking.tactics.attackPattern ?? 'balanced'
-  return `${isHome ? 'H' : 'A'}/${buildScene(pattern, finish, laneFor(event)).key}`
+  return `${isHome ? 'H' : 'A'}/${buildScene(pattern, finish, laneFor(event), variantsFor(event)).key}`
 }
