@@ -117,10 +117,57 @@
   }
 }
 
+/* 라벨 레이어 — 배치 패스(labels.ts)가 자리를 정한 텍스트만 여기 들어온다.
+   후광(paint-order: stroke)으로 피치 선·도트 위에서도 읽힌다. */
+.pv-labels text { paint-order: stroke; pointer-events: none; }
+/* 이름 폰트는 PitchView의 NAME_FS(2.5)와 **같은 값**이어야 배치 박스가 맞는다.
+   tactics.css의 `.pv-name`(2.1)을 특이성으로 이긴다. */
+.pv-root .pv-name {
+  font-size: 2.5px;
+  stroke: rgba(6, 12, 22, 0.85);
+  stroke-width: 0.7;
+}
+/* 라이브 무브먼트 중에는 **아무것도 보간하지 않는다.**
+   왜: 라벨 배치 패스(labels.ts)는 "이 틱의 좌표"에서 겹침 0을 보장한다. 도트만 CSS로
+   0.1s 뒤처지면 화면에는 지난 틱의 도트와 이번 틱의 글자가 함께 보여 계약이 깨진다.
+   20Hz(50ms) 갱신이면 최대 이동 속도(2.8 유닛/s)에서 틱당 0.14 유닛 — 보간 없이도 부드럽다.
+
+   ★ 선택자를 `--analysis.--tactics`로 겹쳐 쓴다. tactics.css의 `.pv-root--tactics .pv-dot`
+     (0.5s)와 특이성이 같으면 **나중에 로드되는 tactics.css가 이긴다** — 실제로 그래서
+     도트가 0.5s 뒤처지고 라벨만 제때 움직여 겹침이 났다(실측으로 잡음). */
+.pv-root--analysis.pv-root--tactics .pv-dot,
+.pv-root--analysis.pv-root--tactics .pv-num,
+.pv-root--analysis.pv-root--tactics .pv-mood,
+.pv-root--analysis.pv-root--tactics .pv-name,
+.pv-root--analysis .pv-dot,
+.pv-root--analysis .pv-num,
+.pv-root--analysis .pv-mood,
+.pv-root--analysis .pv-labels text,
+.pv-root--analysis .an-tag__plate,
+.pv-root--analysis .an-line,
+.pv-root--analysis .an-line__cap,
+.pv-root--analysis .an-press,
+.pv-root--analysis .an-press__edge { transition: none; }
+
 /* ── 전술 시각화 레이어(2D 작전판) ─────────────────────────────
    하이라이트 사이 구간에서 3D가 못 그리는 것을 그린다: 수비 라인은 선으로,
-   압박은 존으로, 패스 루트는 화살표로. 전부 유저가 만진 숫자에서 나온다. */
-.pv-root--analysis { background: var(--bc-board, #0e1622); }
+   압박은 존으로, 패스 루트는 화살표로. 전부 유저가 만진 숫자에서 나온다.
+
+   ★ 색 규약(감사 A-1 재배정):
+     · --an-us / --an-them = **팀 정체성 전용**. 다른 의미로 쓰지 않는다.
+     · --an-plan(흰색) = 감독의 계획(패스 레인·집중 밴드·공). 팀 소속이 아니다.
+     · 라임(--bc-accent)은 작전판에 등장하지 않는다 — 라이브 UI 전용 색이다.
+   ★ 형태 규약: 실선=현재 상태 / 파선=의도 / 점선=참고 경계 / 화살촉=방향 있는 경로. */
+.pv-root--analysis {
+  background: var(--bc-board, #0e1622);
+  /* 팀 색 토큰이 생기면 자동으로 따라간다. 없으면 확정 팔레트를 쓴다. */
+  --an-us: var(--team-us, #f2383d);
+  --an-them: var(--team-them, #147df5);
+  --an-plan: #eaf2ff;
+}
+/* 작전판 안에서는 도트도 같은 팀 색을 쓴다 — 선과 도트가 다른 빨강이면 규약이 깨진다. */
+.pv-root--analysis .pv-dot--home { fill: var(--an-us); }
+.pv-root--analysis .pv-dot--away { fill: var(--an-them); }
 /* 작전판 라인 색은 tactics.css의 --tb-board-line에 기대지 않는다 — 그 변수는
    TacticsBoard 루트 스코프에만 있어서, 경기 화면에 얹으면 마킹이 통째로 사라진다.
    선택자를 --tactics와 함께 써서 특이성으로 이긴다(tactics.css가 나중에 로드된다). */
@@ -129,52 +176,89 @@
 .pv-root--analysis.pv-root--tactics .pv-stripe,
 .pv-root--analysis .pv-stripe { fill: rgba(127, 212, 255, 0.035); }
 
-/* 압박 범위 존 — 수비 라인 앞으로 뻗는 밴드. 폭 = 압박 수치. */
-.an-press {
-  fill: color-mix(in srgb, var(--bc-accent) 10%, transparent);
-  stroke: color-mix(in srgb, var(--bc-accent) 26%, transparent);
-  stroke-width: 0.25;
-  transition: x 0.6s ease, width 0.6s ease;
+/* 압박 범위 존 — 수비 라인 앞으로 뻗는 밴드(팀 색 6% 채움). 폭 = 압박 수치.
+   앞 경계만 파선으로 그어 "여기까지 나가서 압박한다"를 형태로 말한다. */
+.an-press { fill: color-mix(in srgb, var(--an-us) 7%, transparent); stroke: none; }
+.an-press__edge {
+  stroke: var(--an-us);
+  stroke-width: 0.3;
+  stroke-dasharray: 1.6 1.6;
+  opacity: 0.5;
 }
-.an-team--away .an-press { fill: color-mix(in srgb, var(--bc-away) 9%, transparent); stroke: none; }
+.an-team--away .an-press { fill: color-mix(in srgb, var(--an-them) 7%, transparent); }
+.an-team--away .an-press__edge { stroke: var(--an-them); }
 
-/* 수비 라인 — 라인 높이를 내리면 자기 골문 쪽으로 내려간다. */
-.an-line {
-  stroke: var(--bc-accent);
-  stroke-width: 0.55;
-  stroke-dasharray: 2.4 1.4;
-  opacity: 0.85;
-  transition: x1 0.6s ease, x2 0.6s ease;
+/* 수비 라인 — **실선**(현재 상태). 라인 높이를 내리면 자기 골문 쪽으로 내려간다.
+   화살촉 없는 실선 + 양끝 T캡 = "경계선"이라는 뜻이 형태만으로 읽힌다. */
+.an-line,
+.an-line__cap {
+  stroke: var(--an-us);
+  stroke-width: 0.5;
+  opacity: 0.9;
 }
-.an-team--away .an-line { stroke: var(--bc-away); opacity: 0.6; }
+.an-line__cap { stroke-width: 0.7; }
+.an-team--away .an-line,
+.an-team--away .an-line__cap { stroke: var(--an-them); }
+
+/* 라인 태그 — 불투명 플레이트 위에 팀 색 글자. 자리는 labels.ts가 정한다(겹침 0 보장). */
+.an-tag__plate { fill: rgba(6, 12, 22, 0.82); stroke: rgba(255, 255, 255, 0.1); stroke-width: 0.15; }
 .an-line__tag {
-  fill: var(--bc-accent);
-  font-size: 2.2px;
   font-weight: 700;
   text-anchor: middle;
-  opacity: 0.85;
-  transition: x 0.6s ease;
+  dominant-baseline: central;
 }
-.an-team--away .an-line__tag { fill: var(--bc-away); opacity: 0.6; }
+.an-line__tag--home { fill: var(--an-us); }
+.an-line__tag--away { fill: var(--an-them); }
 
-/* 공격 집중 밴드(좌/중앙/우). */
-.an-focus { fill: color-mix(in srgb, var(--bc-home) 7%, transparent); transition: y 0.6s ease, height 0.6s ease; }
+/* 공격 집중 밴드 — 계획이므로 흰색. 채움은 아주 옅게, 경계는 점선(참고선). */
+.an-focus__fill { fill: color-mix(in srgb, var(--an-plan) 4%, transparent); }
+.an-focus__edge {
+  stroke: var(--an-plan);
+  stroke-width: 0.22;
+  stroke-dasharray: 0.6 1.4;
+  opacity: 0.45;
+}
 
-/* 패스 레인 화살표 — 공격 패턴 4택이 곧 이 모양이다. */
+/* 패스 레인 — **흰색**(계획은 팀 소속이 아니다, 방송 텔레스트레이션 관례).
+   전개=실선 / 뒷공간 침투=파선 / 슛=점선. 색이 아니라 선 스타일이 종류를 말한다. */
 .an-lane {
   fill: none;
-  stroke: var(--bc-home);
-  stroke-width: 0.6;
+  stroke: var(--an-plan);
+  stroke-width: 0.55;
   stroke-linecap: round;
   stroke-linejoin: round;
+  opacity: 0.8;
+}
+.an-lane--through { stroke-dasharray: 2 1.5; }
+.an-lane--shot { stroke-dasharray: 0.6 1.2; stroke-width: 0.7; }
+.an-arrow__head { fill: var(--an-plan); }
+
+/* 볼 소유 링 — 공이 지금 누구 발밑에 있는지. 흰색(공과 같은 계열). */
+.pv-carrier {
+  fill: none;
+  stroke: var(--an-plan, #eaf2ff);
+  stroke-width: 0.45;
+  stroke-dasharray: 1.4 1.1;
   opacity: 0.75;
 }
-.an-lane--dashed { stroke-dasharray: 1.8 1.4; }
-.an-arrow__head { fill: var(--bc-home); }
 
-@media (prefers-reduced-motion: reduce) {
-  .an-press,
-  .an-line,
-  .an-line__tag,
-  .an-focus { transition: none; }
+/* ── 범례(HTML) — 작전판 하단. 색·형태 규약을 3줄로 끝낸다.
+   왜 SVG가 아니라 HTML인가: 피치 안에 두면 도트를 덮고, 뷰포트가 좁아지면 글자가
+   3px 아래로 내려간다. 밖에 두면 12px 본문 크기를 지킬 수 있다. */
+.an-legend {
+  /* 피치(.pv-root--analysis) 밖이라 팀 색 변수를 여기서도 선언한다 — 같은 정본. */
+  --an-us: var(--team-us, #f2383d);
+  --an-them: var(--team-them, #147df5);
+  --an-plan: #eaf2ff;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: center;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--bc-text-dim, #8fa0bd);
 }
+.an-legend__item { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.an-legend__swatch { display: block; flex: none; }
+.an-legend__val { color: var(--bc-text, #e8edf6); font-weight: 700; font-variant-numeric: tabular-nums; }
+

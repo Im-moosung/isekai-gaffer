@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { MatchState, MatchEvent, SideState } from '../../engine/types'
-import { tacticalCoords } from './shape'
+import { backlineIndices, blockMetrics, liveTeamCoords, tacticalCoords, type LiveInput } from './shape'
+import type { Coord } from './formations'
 import type { ChoreoStep } from './choreography'
-import { AnalysisLayer } from './AnalysisLayer'
+import { AnalysisLayer, analysisLabels, TAG_FS, type AnalysisGeom } from './AnalysisLayer'
+import { DOT_BLOCK_R, layoutLabels, textWidth, type Box, type LabelReq, type PlacedLabel } from './labels'
 import { PITCH_W, PITCH_H, CENTER_CIRCLE_R, PENALTY_BOX_D, GOAL_AREA_D } from './geometry'
 import './pitch.css'
 
@@ -12,6 +14,28 @@ const H = PITCH_H
 // slotCoords의 0~100 좌표를 viewBox 좌표로 스케일.
 const sx = (x: number) => (x / 100) * W
 const sy = (y: number) => (y / 100) * H
+
+/** 이름 라벨 폰트(viewBox 단위) — pitch.css의 `.pv-root .pv-name`과 **같은 값**이어야
+ *  배치 패스가 잰 박스와 실제 글자 폭이 맞는다. */
+const NAME_FS = 2.5
+/** 라이브 무브먼트 틱 — rAF 3프레임마다 1회(≈20Hz). CSS 보간을 쓰지 않으므로(pitch.css 참조)
+ *  이 값이 곧 프레임레이트다. 시간은 프레임 수로만 센다(Date 계열 금지, 결정론). */
+const FRAMES_PER_TICK = 3
+const TICK_S = FRAMES_PER_TICK / 60
+/** 공 위치 평활 계수(틱당). 0.045 @20Hz ≈ 시상수 1.1초 — 블록이 스텝 경계에서 튀지 않고 미끄러진다. */
+const BALL_SMOOTH = 0.045
+/** 평활된 공이 한 틱에 움직일 수 있는 최대 거리(0~100 프레임).
+ *  왜 필요한가: 지수 평활만으로는 **처음 몇 틱**이 가장 빠르다. 분이 바뀌어 공이 반대편으로
+ *  건너뛰면 블록이 0.2초에 4유닛(≈21m/s) 미끄러져 글리치로 읽혔다(실측). 0.5/틱 @20Hz면
+ *  블록 슬라이드가 최대 초속 2.2유닛(≈1.6m/s) — 실제 팀이 옆으로 미는 속도다. */
+const MAX_BALL_STEP = 0.5
+/** 점유 전환도 계단이 아니라 경사로 — 2.5초에 걸쳐 뒤집힌다(2/(2.5*20)). */
+const POSSESS_STEP = 2 / (2.5 * 20)
+/** 공이 없을 때 블록이 되돌아갈 중립점. */
+const CENTER = { x: 50, y: 50 }
+
+interface LiveTarget { ball: Coord | null; possess: number }
+interface LiveState { t: number; ball: Coord | null; possess: number }
 
 interface PitchViewProps {
   state: MatchState
@@ -33,17 +57,150 @@ interface PitchViewProps {
   dwellMs?: number
   /** 시퀀스를 재생하는 공격 팀(공·무버 색). 미지정 시 'home'. */
   sequenceSide?: 'home' | 'away'
-  /** 전술 시각화 레이어(수비 라인·압박 존·패스 레인) — 하이라이트 사이 2D 작전판 전용. */
+  /** 전술 시각화 레이어(수비 라인·압박 존·패스 레인) + 라이브 무브먼트 — 2D 작전판 전용. */
   analysis?: boolean
+  /** 블록 지표(길이·폭 m) 콜백 — 작전판 칩이 실시간 수치를 띄운다. */
+  onMetrics?: (m: { lengthM: number; widthM: number }) => void
+}
+
+/** 안무 스텝 인덱스 — 이전에 ChoreoLayer 안에 있었지만, 공 위치가 **도트 배치(블록 이동)**
+ *  에도 필요해져 PitchView로 끌어올렸다. */
+function useChoreoStep(sequence: ChoreoStep[] | undefined, dwellMs: number): number {
+  const [target, setTarget] = useState(0)
+  useEffect(() => {
+    setTarget(0)
+    if (!sequence) return
+    const timers: ReturnType<typeof setTimeout>[] = []
+    for (let k = 1; k < sequence.length; k++) {
+      timers.push(setTimeout(() => setTarget(k), sequence[k - 1].t * dwellMs))
+    }
+    return () => timers.forEach(clearTimeout)
+  }, [sequence, dwellMs])
+  return target
+}
+
+/**
+ * 라이브 무브먼트 클럭. 결정론: Math.random·Date를 쓰지 않고 **틱 카운터만** 센다
+ * (같은 틱이면 언제나 같은 좌표). prefers-reduced-motion이면 아예 돌리지 않는다.
+ *
+ * 공 위치는 안무 스텝 경계에서 계단식으로 바뀌므로 지수 평활을 걸어 넘긴다 —
+ * 블록 전체가 한 프레임에 4m 순간이동하면 시각화가 아니라 글리치로 읽힌다.
+ */
+function useLiveClock(on: boolean, ball: Coord | null, possess: number): LiveState {
+  const targetRef = useRef<LiveTarget>({ ball, possess })
+  targetRef.current = { ball, possess }
+  const [live, setLive] = useState<LiveState>({ t: 0, ball, possess })
+  const reduced = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  useEffect(() => {
+    if (!on || reduced || typeof requestAnimationFrame !== 'function') return
+    // ★ setInterval이 아니라 rAF다. 이 컴포넌트는 경기 내내 마운트되어 있어서 타이머를
+    //   물고 있으면 재생 체인의 "다음 타이머"를 매번 가로챈다(MatchScreen 재생 루프가
+    //   advanceTimersToNextTimer로 1분씩 넘어간다). rAF는 그 큐에 끼지 않는다.
+    let frame = 0
+    let id = 0
+    const loop = () => {
+      id = requestAnimationFrame(loop)
+      if (++frame % FRAMES_PER_TICK) return
+      setLive(p => {
+        const tgt = targetRef.current
+        // ★ 목표가 사라져도 null로 되돌리지 않는다 — 시퀀스가 끊길 때마다 블록이
+        //   순간이동한다. 대신 피치 중앙(중립)으로 **천천히** 되돌아간다.
+        const aim = tgt.ball ?? CENTER
+        const from = p.ball ?? aim
+        let dx = (aim.x - from.x) * BALL_SMOOTH
+        let dy = (aim.y - from.y) * BALL_SMOOTH
+        const d = Math.hypot(dx, dy)
+        if (d > MAX_BALL_STEP) { dx *= MAX_BALL_STEP / d; dy *= MAX_BALL_STEP / d }
+        const dp = Math.max(-POSSESS_STEP, Math.min(POSSESS_STEP, tgt.possess - p.possess))
+        return { t: p.t + TICK_S, ball: { x: from.x + dx, y: from.y + dy }, possess: p.possess + dp }
+      })
+    }
+    id = requestAnimationFrame(loop)
+    return () => cancelAnimationFrame(id)
+  }, [on, reduced])
+  // 정지 모드(reduced/off)에서는 목표값을 그대로 쓴다 — 움직이지 않되 위치는 맞는다.
+  return on && !reduced ? live : { t: 0, ball, possess }
 }
 
 /** SVG 105×68 피치 뷰.
  *  외곽선·센터서클·페널티박스 + 양팀 lineup 11 도트(등번호) + lastEvent 마커.
  *  엔진 호출 없이 전달받은 state만 그린다(컴포넌트는 엔진 타입 import만).
- *  variant='tactics'면 다크 보드 클래스(pv-root--tactics)를 붙여 작전판 톤으로 렌더하고,
- *  도트 좌표에 transition을 걸어(포메이션 변경 시) 새 위치로 부드럽게 이동한다(tactics.css). */
-export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels = false, highlightId, ghost, onDotClick, sequence, dwellMs, sequenceSide = 'home', analysis = false }: PitchViewProps) {
+ *  variant='tactics'면 다크 보드 클래스(pv-root--tactics)를 붙여 작전판 톤으로 렌더한다.
+ *
+ *  ★ analysis=true(2D 작전판)에서는 선수가 **미세하게 계속 움직인다**(shape.liveTeamCoords):
+ *    선수별 ±1m 재정렬 + 공·점유에 따른 블록 슬라이드. 공만 왔다갔다 하던 화면을 고친다. */
+export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels = false, highlightId, ghost, onDotClick, sequence, dwellMs, sequenceSide = 'home', analysis = false, onMetrics }: PitchViewProps) {
   const playing = !!sequence && sequence.length > 0
+  const stepIdx = Math.min(useChoreoStep(sequence, dwellMs ?? 3000), (sequence?.length ?? 1) - 1)
+  const stepBall = playing ? sequence![stepIdx].ball : null
+  const clock = useLiveClock(analysis, stepBall, playing ? (sequenceSide === 'home' ? 1 : -1) : 0)
+
+  const live: LiveInput | undefined = analysis
+    ? { t: clock.t, ball: clock.ball ?? undefined, possess: clock.possess }
+    : undefined
+  const homeC = teamCoords(state.home, 'home', live)
+  const awayC = teamCoords(state.away, 'away', live)
+
+  // 수비 라인 마커는 **도트 배열의 백라인 평균**에서 뽑는다 — 마커-도트 일치 계약(shape.ts).
+  const geom: AnalysisGeom = {
+    homeLineX: meanBackline(state.home, homeC),
+    awayLineX: meanBackline(state.away, awayC),
+  }
+
+  const metrics = blockMetrics(homeC)
+  const mRef = useRef(onMetrics)
+  mRef.current = onMetrics
+  useEffect(() => {
+    mRef.current?.({ lengthM: Math.round(metrics.lengthM), widthM: Math.round(metrics.widthM) })
+  }, [metrics.lengthM, metrics.widthM])
+
+  // ── 텍스트 배치 패스(labels.ts) — 피치 위 모든 글자가 여기서 자리를 받는다.
+  const stickyRef = useRef(new Map<string, number>())
+  const reqs: LabelReq[] = []
+  if (analysis) reqs.push(...analysisLabels(state, geom))
+  if (nameLabels) {
+    const nameById = new Map(state.home.team.squad.map(p => [p.id, p.name.ko]))
+    state.home.tactics.lineup.forEach((slot, i) => {
+      const name = nameById.get(slot.playerId)
+      if (!name || !homeC[i]) return
+      const cx = sx(homeC[i].x)
+      const cy = sy(homeC[i].y)
+      reqs.push({
+        id: `nm-${slot.playerId}`,
+        text: name,
+        ax: cx,
+        ay: cy,
+        fontSize: NAME_FS,
+        slots: nameSlots(name),
+        rank: 1,
+      })
+    })
+  }
+  // 도트·배지는 텍스트가 아니지만 글자에 덮이면 안 된다 → 고정 장애물로 넘긴다.
+  const blockers: Box[] = []
+  for (const c of [...homeC, ...awayC]) {
+    blockers.push({ x: sx(c.x) - DOT_BLOCK_R, y: sy(c.y) - DOT_BLOCK_R, w: DOT_BLOCK_R * 2, h: DOT_BLOCK_R * 2 })
+  }
+  const layout = layoutLabels(reqs, { x: 0.6, y: 0.6, w: W - 1.2, h: H - 1.2 }, blockers, stickyRef.current)
+  useEffect(() => {
+    const m = stickyRef.current
+    m.clear()
+    for (const p of layout.placed) m.set(p.id, p.slot)
+  })
+  const placedById = new Map(layout.placed.map(p => [p.id, p]))
+
+  // ★ 공·무버는 안무 좌표(전술 위치 기준)로 오는데 도트는 라이브로 움직인다 → 그대로 두면
+  //   공이 아무도 없는 잔디 위에 뜬다(flow.ts가 애써 없앤 바로 그 문제). 점유 팀의
+  //   **블록 평행이동분**을 공·무버에 그대로 얹어 발밑을 유지한다.
+  const ballOffset = analysis && playing ? blockOffset(state, sequenceSide, sequenceSide === 'home' ? homeC : awayC) : ZERO
+  const carrier = analysis && playing
+    ? nearestDot(
+        { x: sequence![stepIdx].ball.x + ballOffset.x, y: sequence![stepIdx].ball.y + ballOffset.y },
+        sequenceSide === 'home' ? homeC : awayC,
+      )
+    : null
+
   return (
     <svg
       className={`pv-root${variant === 'tactics' ? ' pv-root--tactics' : ''}${analysis ? ' pv-root--analysis' : ''}`}
@@ -54,43 +211,117 @@ export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels 
     >
       <PitchMarkings />
       {/* 전술 레이어는 마킹 위·도트 아래 — 선수를 가리지 않는다. */}
-      {analysis && <AnalysisLayer state={state} />}
-      <SideDots side={state.home} which="home" nameLabels={nameLabels} highlightId={highlightId} onDotClick={onDotClick} />
-      <SideDots side={state.away} which="away" />
+      {analysis && <AnalysisLayer state={state} geom={geom} />}
+      <SideDots side={state.home} which="home" coords={homeC} highlightId={highlightId} onDotClick={onDotClick} />
+      <SideDots side={state.away} which="away" coords={awayC} />
       {ghost && <GhostDot side={state.home} slotIndex={ghost.slotIndex} number={ghost.number} />}
       {/* 시퀀스 재생 중엔 안무(공·무버) 우선, 아니면 정적 lastEvent 마커. */}
       {playing
-        ? <ChoreoLayer sequence={sequence!} dwellMs={dwellMs ?? 3000} side={sequenceSide} />
+        ? <ChoreoLayer sequence={sequence!} dwellMs={dwellMs ?? 3000} idx={stepIdx} side={sequenceSide}
+            offset={ballOffset} carrier={carrier} movers={!analysis} />
         : lastEvent && <EventMarker event={lastEvent} state={state} />}
+      {/* 라벨 레이어는 최상단 — 배치 패스가 서로 겹치지 않음을 보장한다. */}
+      <g className="pv-labels" aria-hidden="true">
+        {[...placedById.values()].map(p => <LabelText key={p.id} p={p} />)}
+      </g>
     </svg>
   )
+}
+
+/**
+ * 이름 라벨의 후보 자리 — 아래 → 위 → 대각 4방 → 좌우 → 멀리 아래/위.
+ * 가로 오프셋은 **그 이름의 실제 폭**에서 계산한다(3글자와 7글자가 같은 자리를 쓸 수 없다).
+ * 후보가 많을수록 혼잡한 포메이션(5-4-1 로우블록)에서 지워지는 이름이 줄어든다.
+ */
+function nameSlots(name: string): { dx: number; dy: number }[] {
+  const half = (textWidth(name, NAME_FS) + 1) / 2
+  const side = DOT_BLOCK_R + half + 0.3
+  return [
+    { dx: 0, dy: 5.2 }, { dx: 0, dy: -5.2 },
+    { dx: side * 0.7, dy: 4.4 }, { dx: -side * 0.7, dy: 4.4 },
+    { dx: side * 0.7, dy: -4.4 }, { dx: -side * 0.7, dy: -4.4 },
+    { dx: side, dy: 0 }, { dx: -side, dy: 0 },
+    { dx: 0, dy: 8.3 }, { dx: 0, dy: -8.3 },
+  ]
+}
+
+/** 배치된 라벨 하나 — 라인 태그는 플레이트(불투명 판)를, 이름은 후광(paint-order)을 쓴다. */
+function LabelText({ p }: { p: PlacedLabel }) {
+  const tag = p.id.startsWith('an-tag-')
+  const cls = tag ? `an-line__tag an-line__tag--${p.id.endsWith('home') ? 'home' : 'away'}` : 'pv-name'
+  return (
+    <g>
+      {tag && <rect className="an-tag__plate" x={p.box.x} y={p.box.y} width={p.box.w} height={p.box.h} rx={0.8} />}
+      <text className={cls} x={p.x} y={p.y} style={tag ? { fontSize: `${TAG_FS}px` } : undefined}>{p.text}</text>
+    </g>
+  )
+}
+
+/** 팀 좌표 11개. analysis면 라이브 무브먼트, 아니면 기존 정적 전술 좌표(3D·방송과 동일). */
+function teamCoords(side: SideState, which: 'home' | 'away', live: LiveInput | undefined): Coord[] {
+  const { formation, lineup, instructions } = side.tactics
+  if (live) return liveTeamCoords(formation, which, instructions, live)
+  return lineup.map((_, i) => tacticalCoords(formation, i, which, instructions))
+}
+
+/** 백라인 평균 x — 수비 라인 마커의 정본. **실제 도트 좌표**에서 뽑으므로
+ *  마커와 도트가 어긋날 수 없다(shape.ts의 마커-도트 일치 계약). */
+function meanBackline(side: SideState, coords: Coord[]): number {
+  const idx = backlineIndices(side.tactics.formation)
+  return idx.reduce((s, i) => s + coords[i].x, 0) / idx.length
+}
+
+const ZERO = { x: 0, y: 0 }
+
+/** 라이브 좌표가 전술 좌표에서 통째로 얼마나 밀려났나(팀 평균) — 공·무버를 같이 옮기는 값. */
+function blockOffset(state: MatchState, which: 'home' | 'away', coords: Coord[]): Coord {
+  const side = which === 'home' ? state.home : state.away
+  const { formation, instructions } = side.tactics
+  let dx = 0
+  let dy = 0
+  for (let i = 0; i < coords.length; i++) {
+    const base = tacticalCoords(formation, i, which, instructions)
+    dx += coords[i].x - base.x
+    dy += coords[i].y - base.y
+  }
+  return coords.length ? { x: dx / coords.length, y: dy / coords.length } : ZERO
+}
+
+/** 공에 가장 가까운 도트 인덱스 — "지금 누가 갖고 있나"를 링으로 말한다. */
+function nearestDot(ball: Coord, coords: Coord[]): Coord | null {
+  let best: Coord | null = null
+  let bd = Infinity
+  for (const c of coords) {
+    const d = (c.x - ball.x) ** 2 + (c.y - ball.y) ** 2
+    if (d < bd) { bd = d; best = c }
+  }
+  // 12 유닛(≈12m)보다 멀면 아무도 안 가진 것으로 본다(전환 중인 공).
+  return bd <= 144 ? best : null
 }
 
 /** 안무 재생 레이어 — 공(원+그림자)과 무버 도트를 키프레임대로 CSS transition 재생.
  *  스텝 k로 넘어가는 전환은 이전 스텝 시각(t[k-1]*dwell)에 시작해 (t[k]-t[k-1])*dwell 동안
  *  진행되어 t[k]*dwell에 도착한다(데드타임 없이 마지막 결과가 dwell 80% 내 완료).
  *  transition 길이는 --pv-dur(ms) 커스텀 프로퍼티로 전달 → reduced-motion 시 CSS가 무효화. */
-function ChoreoLayer({ sequence, dwellMs, side }: { sequence: ChoreoStep[]; dwellMs: number; side: 'home' | 'away' }) {
-  const [target, setTarget] = useState(0)
-  useEffect(() => {
-    setTarget(0)
-    const timers: ReturnType<typeof setTimeout>[] = []
-    for (let k = 1; k < sequence.length; k++) {
-      timers.push(setTimeout(() => setTarget(k), sequence[k - 1].t * dwellMs))
-    }
-    return () => timers.forEach(clearTimeout)
-  }, [sequence, dwellMs])
-
-  const idx = Math.min(target, sequence.length - 1)
+function ChoreoLayer({ sequence, dwellMs, idx, side, carrier, offset, movers }: {
+  sequence: ChoreoStep[]; dwellMs: number; idx: number; side: 'home' | 'away'
+  carrier: Coord | null; offset: Coord
+  /** 무버 고스트 도트를 그릴까. 작전판에서는 끈다 — 실제 도트가 이미 그 자리에 있어서
+   *  번호 없는 반투명 원이 하나 더 뜨면 버그로 읽힌다(감사 A-6). */
+  movers: boolean
+}) {
   const cur = sequence[idx]
   const durMs = idx > 0 ? Math.max(0, (sequence[idx].t - sequence[idx - 1].t) * dwellMs) : 0
   const durStyle = { '--pv-dur': `${Math.round(durMs)}ms` } as React.CSSProperties
-  const bx = sx(cur.ball.x)
-  const by = sy(cur.ball.y)
+  const bx = sx(cur.ball.x + offset.x)
+  const by = sy(cur.ball.y + offset.y)
   return (
     <g className="pv-choreo" aria-hidden="true">
-      {cur.movers.map(m => (
-        <circle key={m.playerId} className={`pv-mover pv-mover--${side}`} cx={sx(m.x)} cy={sy(m.y)} r={2.2} style={durStyle} />
+      {/* 볼 터치 링 — 공이 지금 향하는 선수. 공이 추상적으로 떠다니는 게 아니라
+          **사람 발밑으로** 간다는 걸 형태로 말한다(패스 중에는 받는 선수를 미리 가리킨다). */}
+      {carrier && <circle className="pv-carrier" cx={sx(carrier.x)} cy={sy(carrier.y)} r={3.6} style={durStyle} />}
+      {movers && cur.movers.map(m => (
+        <circle key={m.playerId} className={`pv-mover pv-mover--${side}`} cx={sx(m.x + offset.x)} cy={sy(m.y + offset.y)} r={2.2} style={durStyle} />
       ))}
       <ellipse className="pv-ball__shadow" cx={bx} cy={by + 1.2} rx={1.7} ry={0.7} style={durStyle} />
       <circle className="pv-ball" cx={bx} cy={by} r={1.5} style={durStyle} />
@@ -141,19 +372,19 @@ function PitchMarkings() {
   )
 }
 
-function SideDots({ side, which, nameLabels = false, highlightId, onDotClick }: {
-  side: SideState; which: 'home' | 'away'; nameLabels?: boolean
+function SideDots({ side, which, coords, highlightId, onDotClick }: {
+  side: SideState; which: 'home' | 'away'; coords: Coord[]
   highlightId?: string | null; onDotClick?: (playerId: string) => void
 }) {
-  // ★ 도트 좌표는 포메이션 원형이 아니라 **전술 변환을 거친 좌표**다 — 라인을 내리면
-  //   수비진이 실제로 내려가고, 압박을 올리면 블록이 앞으로 기울고 좁아진다(shape.ts).
-  const { formation, lineup, instructions } = side.tactics
+  // ★ 도트 좌표는 포메이션 원형이 아니라 **전술 변환 + (작전판에선) 라이브 무브먼트**를
+  //   거친 좌표다 — 라인을 내리면 수비진이 실제로 내려가고, 공이 왼쪽에 있으면 블록이 쏠린다.
   const numberById = new Map(side.team.squad.map(p => [p.id, p.number]))
   const nameById = new Map(side.team.squad.map(p => [p.id, p.name.ko]))
   return (
     <g>
-      {lineup.map((slot, i) => {
-        const c = tacticalCoords(formation, i, which, instructions)
+      {side.tactics.lineup.map((slot, i) => {
+        const c = coords[i]
+        if (!c) return null
         const cx = sx(c.x)
         const cy = sy(c.y)
         const num = numberById.get(slot.playerId)
@@ -176,9 +407,6 @@ function SideDots({ side, which, nameLabels = false, highlightId, onDotClick }: 
             )}
             {mood && (
               <text className="pv-mood" x={cx + 2.7} y={cy - 2.4} aria-hidden="true">{mood}</text>
-            )}
-            {nameLabels && name && (
-              <text className="pv-name" x={cx} y={cy + 4.4}>{name}</text>
             )}
           </g>
         )

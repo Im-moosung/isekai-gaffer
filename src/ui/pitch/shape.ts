@@ -104,3 +104,129 @@ export function tacticalCoords(
   const hx = clampX(x)
   return { x: side === 'home' ? hx : 100 - hx, y: clampY(y) }
 }
+
+// ── 라이브 무브먼트 ────────────────────────────────────────────────
+// 왜: 2D 작전판에서 공만 움직이고 선수는 못 박힌 듯 서 있었다. 실제 축구에서 선수는
+// 포지션을 "유지"하는 동안에도 끊임없이 1~2m씩 몸을 옮기고, 팀 블록 전체가 공을 따라
+// 좌우·전후로 미끄러진다. 그 두 가지만 얹는다 — 2D는 전술 시각화지 중계가 아니다.
+//
+// 결정론: Math.random·Date 금지. 위상은 (side, 슬롯)의 FNV 해시에서만 나오고,
+// 시간 t는 호출자가 주는 틱 카운터 파생값이다(같은 t면 언제나 같은 좌표).
+
+/** 라이브 무브먼트 입력. */
+export interface LiveInput {
+  /** 진행 위상(초). 결정론적 틱 카운터에서 파생한다. */
+  t: number
+  /** 공 위치(절대 프레임 0~100, home이 +x로 공격). 없으면 블록 이동 없음. */
+  ball?: Coord
+  /** 점유 정도 −1(어웨이 완전 점유) ~ +1(홈 완전 점유). 0이 중립.
+   *  **불연속 열거형이 아니라 연속값**인 이유: 점유가 뒤집힐 때 계단식으로 바뀌면
+   *  블록 전체가 한 프레임에 2.8유닛 순간이동한다(실측으로 잡은 글리치). */
+  possess?: number
+}
+
+/**
+ * 라인별 미세 진폭(0~100 프레임). 105×68m 피치에서 x 1.0 ≈ 1.05m, y 1.0 ≈ 0.68m.
+ * 최전방 ±1.5x/±1.7y ≈ ±1.6m/±1.2m — 실제 선수가 상대 움직임에 맞춰 재정렬하는 폭.
+ * 수비진은 라인을 지켜야 하므로 절반, GK는 골문 각도만 다듬으므로 그보다 더 작다.
+ */
+const LIVE_AMP: Record<Group, { x: number; y: number }> = {
+  gk: { x: 0.5, y: 0.7 },
+  def: { x: 0.9, y: 1.0 },
+  mid: { x: 1.2, y: 1.4 },
+  att: { x: 1.5, y: 1.7 },
+}
+/** 두 정현파의 주기(초) — 9.0초와 5.3초. 서로 나누어떨어지지 않아 패턴이 눈에 띄게 반복되지 않는다.
+ *  주기로 **속도**를 정한다: 진폭 1.5에서 최대 1.3유닛/초(≈1.3m/s) — 걸으며 자리를 다듬는
+ *  속도다. 주기를 5.5/3.4초로 짧게 잡았더니 22명이 계속 조깅하는 것처럼 보였다(실측 평균
+ *  2.4m/s). 진폭이 아니라 주기를 늘려 "보이되 부산스럽지 않게" 맞췄다. */
+const W1 = (Math.PI * 2) / 9.0
+const W2 = (Math.PI * 2) / 5.3
+
+/** 공 위치 → 블록 이동 계수. 좌우 0.20(터치라인 근처 공이면 약 5.4m 슬라이드),
+ *  전후 0.09(공이 한쪽 박스 앞이면 약 3.3m). 실측 트래킹의 블록 슬라이드보다 보수적이다. */
+const BALL_PULL_X = 0.09
+const BALL_PULL_Y = 0.2
+/** 점유 팀은 공격 방향으로 전진(+1.6), 비점유 팀은 자기 골문 쪽으로 후퇴(−1.2). 그 사이는 선형. */
+const PUSH_ON = 1.6
+const PUSH_OFF = 1.2
+/** GK는 블록 슬라이드를 그대로 따라가지 않는다(골문을 비울 수 없다). */
+const GK_DAMP = 0.35
+
+/** 결정론 위상 — (side, 슬롯, 채널) → 0~2π. */
+function livePhase(side: 'home' | 'away', slotIndex: number, ch: number): number {
+  let h = 2166136261
+  const s = `${side}:${slotIndex}:${ch}`
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return ((h >>> 0) % 10000) / 10000 * Math.PI * 2
+}
+
+/**
+ * 라이브 좌표 11개(절대 프레임). tacticalCoords(전술 기반 정적 위치) 위에
+ * ① 선수별 미세 진동 ② 공·점유 기반 블록 이동을 얹는다.
+ *
+ * ★ 마커-도트 일치 계약은 여기서도 유지된다 — 수비 라인 마커는 이 배열의
+ *   백라인 평균에서 뽑는다(liveBacklineX). 별도 수식을 쓰지 않는다.
+ */
+export function liveTeamCoords(
+  formation: FormationId,
+  side: 'home' | 'away',
+  ins: Instructions,
+  live?: LiveInput,
+): Coord[] {
+  const n = XI_SLOTS[formation].length
+  const dir = side === 'home' ? 1 : -1
+  let bx = 0
+  let by = 0
+  if (live?.ball) {
+    // own ∈ [−1,1] — 이 팀이 공을 얼마나 갖고 있나.
+    const own = Math.max(-1, Math.min(1, live.possess ?? 0)) * dir
+    bx = (live.ball.x - 50) * BALL_PULL_X + dir * (PUSH_ON * (own + 1) / 2 - PUSH_OFF * (1 - own) / 2)
+    by = (live.ball.y - 50) * BALL_PULL_Y
+  }
+  const t = live?.t ?? 0
+  const out: Coord[] = []
+  for (let i = 0; i < n; i++) {
+    const base = tacticalCoords(formation, i, side, ins)
+    const g = groupOf(i, slotCoords(formation, i, 'home').x)
+    const amp = LIVE_AMP[g]
+    const p1 = livePhase(side, i, 1)
+    const p2 = livePhase(side, i, 2)
+    // 두 정현파 합성 — 진폭은 [-1,1]을 넘지 않는다(0.62+0.38=1).
+    const u = 0.62 * Math.sin(W1 * t + p1) + 0.38 * Math.sin(W2 * t + p2)
+    const v = 0.62 * Math.sin(W1 * 0.87 * t + p2) + 0.38 * Math.cos(W2 * 1.13 * t + p1)
+    const damp = g === 'gk' ? GK_DAMP : 1
+    out.push({
+      x: clampX(base.x + amp.x * u * damp + bx * damp),
+      y: clampY(base.y + amp.y * v * damp + by * damp),
+    })
+  }
+  return out
+}
+
+/** 수비 라인 마커 x(절대 프레임) — liveTeamCoords의 백라인 평균. 정의상 도트와 일치한다. */
+export function liveBacklineX(
+  formation: FormationId,
+  side: 'home' | 'away',
+  ins: Instructions,
+  live?: LiveInput,
+): number {
+  const cs = liveTeamCoords(formation, side, ins, live)
+  const idx = backlineIndices(formation)
+  return idx.reduce((s, i) => s + cs[i].x, 0) / idx.length
+}
+
+/** 블록 길이·폭(m). GK를 뺀 10명의 x·y 스팬 — "우리가 얼마나 컴팩트한가"의 실측 지표. */
+export function blockMetrics(coords: Coord[]): { lengthM: number; widthM: number } {
+  const f = coords.slice(1)
+  if (f.length === 0) return { lengthM: 0, widthM: 0 }
+  const xs = f.map(c => c.x)
+  const ys = f.map(c => c.y)
+  return {
+    lengthM: ((Math.max(...xs) - Math.min(...xs)) / 100) * 105,
+    widthM: ((Math.max(...ys) - Math.min(...ys)) / 100) * 68,
+  }
+}
