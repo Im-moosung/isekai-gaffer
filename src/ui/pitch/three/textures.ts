@@ -294,14 +294,16 @@ export function makePitchCanvas(pxPerMeter = 20): HTMLCanvasElement | null {
 /**
  * 골 네트용 격자 텍스처(배경 투명 + 흰 실선). RepeatWrapping으로 타일링해 쓴다.
  * @param size 타일 픽셀 @param cells 한 타일의 격자 칸 수
+ * @param weight 선 굵기 = 칸 크기 / weight. 작을수록 굵다. 기본 12는 칸 대비 8%라
+ *   근경에서도 네트가 거의 보이지 않는다 — props.ts는 6을 쓴다.
  */
-export function makeNetCanvas(size = 128, cells = 10): HTMLCanvasElement | null {
+export function makeNetCanvas(size = 128, cells = 10, weight = 12): HTMLCanvasElement | null {
   const c = makeCanvas(size, size)
   if (!c) return null
   const { ctx, canvas } = c
   ctx.clearRect(0, 0, size, size)
   ctx.strokeStyle = 'rgba(255,255,255,0.85)'
-  ctx.lineWidth = Math.max(1, size / cells / 12)
+  ctx.lineWidth = Math.max(1, size / cells / Math.max(1, weight))
   const step = size / cells
   ctx.beginPath()
   for (let i = 0; i <= cells; i++) {
@@ -448,6 +450,371 @@ export function makeConcreteCanvas(size = 256): HTMLCanvasElement | null {
   return canvas
 }
 
+// ── 원경 관중 패턴 ──────────────────────────────────────────────
+//
+// docs/refs/stadium/crowd-distant-color-pattern.png의 조건을 코드로 옮긴 것이다:
+//   "얼굴 없는 작은 블록, 약 70%의 어두운 질량, 드문 빨강·파랑·흰색·황색 점".
+//
+// **왜 인스턴싱만으로는 부족한가:** 인스턴스 사람은 좌석 피치(0.62m)·열 간격(0.9m)
+// 격자에 놓이므로 사람과 사람 사이에 슬래브가 그대로 드러난다. 레퍼런스에는 그 틈이
+// 없다 — 뒷사람 머리가 앞사람 어깨를 메워 빈틈 없는 인간 질량이 된다. 그 틈을 메우는
+// 것이 이 텍스처다(슬래브에 깔고 그 위에 인스턴스를 세운다 = 2단 구성).
+// 텍스처는 밀도를, 인스턴스는 실루엣과 파도타기 모션을 담당한다.
+
+/** 관중 색 편향. 홈/어웨이 서포터 구역과 중립 구역을 나눈다. */
+export type CrowdBias = 'home' | 'away' | 'mix'
+
+/**
+ * 레퍼런스에서 뽑은 어두운 질량 팔레트(약 68% 지분). 야간 관중석의 코트·그림자·머리다.
+ * 이 색들이 화면을 지배해야 원색 점이 "흩뿌려진" 것으로 읽힌다 — 예전 구현은
+ * 중립색에 밝은 회색(#d8dde6)을 넣고 지분을 44%나 줘서 관중석 전체가 밝게 떴다.
+ */
+export const CROWD_DARK: readonly string[] = [
+  '#1d2740', '#242f4b', '#2b3757', '#334063', '#3b486e', '#45527a', '#232b3e',
+]
+/**
+ * 팀색이 아닌 원색 액센트(약 32% 중 일부). 레퍼런스의 황색·흰색·살색 점.
+ * 빨강·파랑은 팀 컬러가 대신하므로 여기 넣지 않는다.
+ */
+export const CROWD_ACCENT: readonly string[] = [
+  '#dd9a1e', '#e8ebf2', '#b98a68', '#c9ced9', '#e0b45a',
+]
+
+/** rgb 문자열을 0~1 배율로 어둡게 만든다(캔버스용 — three Color를 쓰지 않는다). */
+function shade(hex: string, k: number): string {
+  const n = parseInt(hex.slice(1), 16)
+  const r = Math.round(((n >> 16) & 255) * k)
+  const g = Math.round(((n >> 8) & 255) * k)
+  const b = Math.round((n & 255) * k)
+  return `rgb(${r},${g},${b})`
+}
+
+export interface CrowdCanvasSpec {
+  /** 정사각 타일 픽셀. 기본 256. */
+  size?: number
+  /** 홈 팀 색(`#rrggbb`). */
+  home?: string
+  /** 어웨이 팀 색(`#rrggbb`). */
+  away?: string
+  /** 구역 편향. */
+  bias?: CrowdBias
+  /** 타일 한 변에 들어갈 인물 수. 기본 30 → 인물 하나가 타일의 1/30. */
+  perSide?: number
+  /** 시드. */
+  seed?: number
+}
+
+/**
+ * 원경 관중 타일 텍스처(RepeatWrapping 전제, **상하좌우 심리스**).
+ *
+ * 인물 하나는 "어깨 사각 + 머리 사각" 두 조각뿐이다 — 레퍼런스의 40px 이하 인물이
+ * 정확히 그 정도 정보량이고, 그보다 더 그리면 타일링 반복이 눈에 띈다.
+ * 배경은 순검정이 아니라 가장 어두운 네이비다(레퍼런스 바탕색).
+ */
+export function makeCrowdCanvas(spec: CrowdCanvasSpec = {}): HTMLCanvasElement | null {
+  const size = Math.max(32, Math.round(spec.size ?? 256))
+  const c = makeCanvas(size, size)
+  if (!c) return null
+  const { ctx, canvas } = c
+  const home = spec.home ?? '#d7263d'
+  const away = spec.away ?? '#2453b8'
+  const bias = spec.bias ?? 'mix'
+  const perSide = Math.max(6, Math.round(spec.perSide ?? 30))
+  const seed = spec.seed ?? 0
+
+  // 바탕 = 레퍼런스의 지배색인 짙은 네이비. 인물 사이 빈틈이 검정이 되면 관중석이
+  // 구멍 뚫린 것처럼 보인다.
+  ctx.fillStyle = '#0f1524'
+  ctx.fillRect(0, 0, size, size)
+
+  const cell = size / perSide
+  // 홈/어웨이 지분. 서포터 구역은 한쪽 색이 확실히 우세해야 "구역"으로 읽힌다.
+  const homeShare = bias === 'home' ? 0.62 : bias === 'away' ? 0.08 : 0.24
+  const awayShare = bias === 'away' ? 0.62 : bias === 'home' ? 0.08 : 0.24
+
+  /** 심리스를 위해 타일 경계를 넘는 인물은 반대편에도 한 번 더 그린다. */
+  const drawAt = (x: number, y: number, w: number, hh: number, body: string, head: string): void => {
+    for (const dx of [0, -size, size]) {
+      for (const dy of [0, -size, size]) {
+        const px = x + dx
+        const py = y + dy
+        if (px > size || px + w < 0 || py > size || py + hh < 0) continue
+        // 어깨(사다리꼴 대신 사각 — 이 크기에서 구분되지 않는다)
+        ctx.fillStyle = body
+        ctx.fillRect(px, py + hh * 0.36, w, hh * 0.64)
+        // 머리
+        ctx.fillStyle = head
+        ctx.fillRect(px + w * 0.28, py, w * 0.44, hh * 0.38)
+      }
+    }
+  }
+
+  // 뒷줄부터 그려 앞줄이 위에 겹치게 한다(레퍼런스의 머리-어깨 겹침).
+  // 행 간격을 셀보다 좁게(0.78) 잡아 세로로도 빈틈이 없다.
+  const rowStep = cell * 0.78
+  const rows = Math.ceil(size / rowStep)
+  for (let r = 0; r < rows; r++) {
+    for (let cIdx = 0; cIdx < perSide; cIdx++) {
+      const i = r * perSide + cIdx
+      const h1 = hash2(cIdx, r, seed + 1)
+      const h2 = hash2(cIdx, r, seed + 2)
+      const h3 = hash2(cIdx, r, seed + 3)
+      const h4 = hash2(cIdx, r, seed + 4)
+      // 빈 좌석(레퍼런스에도 드문드문 검은 구멍이 있다) — 6%.
+      if (h4 < 0.06) continue
+      // 홀수 행 반 칸 어긋남 + 지터로 격자 티를 지운다.
+      const jx = (h1 - 0.5) * cell * 0.5
+      const x = cIdx * cell + (r % 2 ? cell / 2 : 0) + jx
+      const y = r * rowStep + (h2 - 0.5) * rowStep * 0.3
+      const w = cell * (0.5 + h3 * 0.16)
+      const hh = rowStep * (1.25 + h1 * 0.3)
+
+      let body: string
+      if (h2 < homeShare) body = home
+      else if (h2 < homeShare + awayShare) body = away
+      else if (h2 < homeShare + awayShare + 0.1) body = CROWD_ACCENT[i % CROWD_ACCENT.length]
+      else body = CROWD_DARK[Math.floor(h3 * CROWD_DARK.length) % CROWD_DARK.length]
+
+      // 명도 지터. 팀 색도 60%까지 떨어뜨려야 "전부 새 유니폼"처럼 보이지 않는다.
+      const k = 0.6 + h3 * 0.45
+      // 머리는 몸통보다 어둡다(머리카락) — 가끔 살색.
+      const head = h1 > 0.82 ? shade('#b98a68', k) : shade('#1c2231', 0.7 + h4 * 0.6)
+      drawAt(x, y, w, hh, shade(body, k), head)
+    }
+  }
+  return canvas
+}
+
+// ── 밤하늘 ──────────────────────────────────────────────────────
+/**
+ * 스카이돔용 그라디언트 + 별. v=1(캔버스 위)이 천정, v=0이 지평선이다.
+ *
+ * **왜 단색 배경으로는 안 되는가:** 예전에는 `scene.background`가 단색 `#080e18`뿐이라
+ * 경기장 밖이 완전한 검정 벽이었다. 밤하늘은 위로 갈수록 어둡고 지평선 쪽은 도시
+ * 광공해로 살짝 데워진다 — 그 수직 그라디언트 하나만 있어도 "경기장이 허공에 떠 있다"가
+ * "밤에 도시 안에 있다"로 바뀐다.
+ */
+export function makeSkyCanvas(w = 512, h = 512): HTMLCanvasElement | null {
+  const c = makeCanvas(w, h)
+  if (!c) return null
+  const { ctx, canvas } = c
+  const g = ctx.createLinearGradient(0, 0, 0, h)
+  g.addColorStop(0, '#03050b') // 천정 — 거의 검정
+  g.addColorStop(0.42, '#070d1c')
+  g.addColorStop(0.72, '#0e1830')
+  g.addColorStop(0.9, '#1a2440') // 지평선 직전 — 도시 광공해로 데워진 남색
+  g.addColorStop(1, '#242c42')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, w, h)
+
+  // 별 — 위쪽 65%에만. 지평선 근처는 광공해로 별이 보이지 않는다.
+  for (let i = 0; i < 420; i++) {
+    const x = hash01(i * 3 + 17) * w
+    const y = hash01(i * 3 + 9173) * h * 0.65
+    const a = 0.12 + hash01(i + 551) * 0.45
+    // 위로 갈수록 밝게(지평선 쪽 페이드)
+    const fade = 1 - y / (h * 0.65)
+    ctx.fillStyle = `rgba(220,232,255,${(a * fade).toFixed(3)})`
+    ctx.fillRect(x, y, 1, 1)
+  }
+  return canvas
+}
+
+// ── 발광 헤일로(조명탑) ─────────────────────────────────────────
+/**
+ * 가산합성 스프라이트용 방사형 감쇠. 중심 흰색 → 가장자리 검정(가산합성에서 검정은 무기여).
+ * 조명탑 리그 자체는 작은 사각형이라 블룸만으로는 "빛나는 등"이 되지 않는다 —
+ * 대기 산란(halo)이 있어야 야간 경기장으로 읽힌다.
+ */
+export function makeGlowCanvas(size = 256, core = 0.06): HTMLCanvasElement | null {
+  const c = makeCanvas(size, size)
+  if (!c) return null
+  const { ctx, canvas } = c
+  const r = size / 2
+  const g = ctx.createRadialGradient(r, r, 0, r, r, r)
+  g.addColorStop(0, 'rgba(255,250,235,1)')
+  g.addColorStop(Math.min(0.5, Math.max(0.01, core)), 'rgba(255,244,214,0.62)')
+  g.addColorStop(0.34, 'rgba(214,226,255,0.16)')
+  g.addColorStop(0.68, 'rgba(150,180,255,0.035)')
+  g.addColorStop(1, 'rgba(0,0,0,0)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, size, size)
+  return canvas
+}
+
+/**
+ * 조명 콘(빛기둥)용 세로 감쇠. 캔버스 위(v=1)가 광원, 아래(v=0)가 지면이다.
+ * 가산합성으로 쓰므로 알파가 아니라 **밝기**로 감쇠시킨다(검정 = 무기여).
+ */
+export function makeLightConeCanvas(w = 8, h = 128): HTMLCanvasElement | null {
+  const c = makeCanvas(w, h)
+  if (!c) return null
+  const { ctx, canvas } = c
+  const g = ctx.createLinearGradient(0, 0, 0, h)
+  g.addColorStop(0, 'rgb(60,64,74)') // 광원 쪽
+  g.addColorStop(0.35, 'rgb(24,27,34)')
+  g.addColorStop(1, 'rgb(0,0,0)') // 지면 쪽 — 완전 소멸
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, w, h)
+  return canvas
+}
+
+// ── 원경 도시 실루엣 ────────────────────────────────────────────
+/**
+ * 지평선 실루엣 링용 텍스처(**가로 심리스**, 배경 투명).
+ * 어두운 건물 덩어리 + 드문 창문 불빛. 경기장 바깥이 검정 벽이 아니라 "도시"가 된다.
+ * @param w 가로 픽셀(원주 방향) @param h 세로 픽셀 — 아래쪽이 지면이다
+ */
+export function makeSkylineCanvas(w = 2048, h = 256): HTMLCanvasElement | null {
+  const c = makeCanvas(w, h)
+  if (!c) return null
+  const { ctx, canvas } = c
+  ctx.clearRect(0, 0, w, h)
+
+  // 뒷줄(멀고 낮고 흐림) → 앞줄(가깝고 높고 진함) 2겹으로 깊이를 만든다.
+  const layers = [
+    { count: 46, minH: 0.18, maxH: 0.46, color: '#0a1020', win: 0.1 },
+    { count: 34, minH: 0.3, maxH: 0.78, color: '#060a15', win: 0.16 },
+  ]
+  let s = 0
+  for (const L of layers) {
+    const step = w / L.count
+    for (let i = 0; i < L.count; i++) {
+      const h1 = hash01(s * 7 + i * 3 + 101)
+      const h2 = hash01(s * 7 + i * 3 + 8803)
+      const bw = step * (0.55 + h2 * 0.7)
+      const bh = h * (L.minH + h1 * (L.maxH - L.minH))
+      const x = i * step + (h2 - 0.5) * step * 0.4
+      ctx.fillStyle = L.color
+      ctx.fillRect(x, h - bh, bw, bh)
+      // 심리스: 오른쪽 끝을 넘는 건물은 왼쪽에도 그린다.
+      if (x + bw > w) ctx.fillRect(x - w, h - bh, bw, bh)
+      // 창문 불빛(따뜻한 소듐등) — 아주 드물게.
+      const cols = Math.max(1, Math.floor(bw / 7))
+      const rows = Math.max(1, Math.floor(bh / 9))
+      for (let cx = 0; cx < cols; cx++) {
+        for (let cy = 0; cy < rows; cy++) {
+          if (hash2(cx, cy, i * 31 + s * 977) > L.win) continue
+          const wx = x + 3 + cx * 7
+          const wy = h - bh + 4 + cy * 9
+          ctx.fillStyle = hash2(cx, cy, i + 5) > 0.7 ? 'rgba(255,214,140,0.85)' : 'rgba(190,206,240,0.55)'
+          ctx.fillRect(wx, wy, 2, 3)
+          if (wx > w) ctx.fillRect(wx - w, wy, 2, 3)
+        }
+      }
+    }
+    s++
+  }
+  return canvas
+}
+
+// ── 스타디움 외벽(파사드) ───────────────────────────────────────
+/**
+ * 경기장 외벽 패널 텍스처(세로 핀 + 안쪽에서 새어나오는 콘코스 불빛).
+ * 관중석 뒷벽만 있으면 볼(bowl)이 종잇장처럼 보인다 — 바깥에 두께와 창을 준다.
+ */
+export function makeFacadeCanvas(w = 512, h = 256): HTMLCanvasElement | null {
+  const c = makeCanvas(w, h)
+  if (!c) return null
+  const { ctx, canvas } = c
+  ctx.fillStyle = '#0b0f18'
+  ctx.fillRect(0, 0, w, h)
+
+  // 세로 핀(구조 리브) — 밝은 면/어두운 면 한 쌍이 원통형 볼륨감을 만든다.
+  // 한 타일에 **8베이**만 둔다. 첫 렌더에서 16px 간격(32베이)으로 잡았더니 실치수로
+  // 베이가 1m가 되어, 외벽이 건축이 아니라 좁쌀 LED 벽으로 보였다. 실제 경기장 파사드
+  // 베이는 4m 안팎이다(scene 쪽 FACADE_TILE_W 32m ÷ 8베이 = 4m).
+  const bays = 8
+  const fin = w / bays
+  for (let i = 0; i < bays; i++) {
+    const x = i * fin
+    ctx.fillStyle = 'rgba(255,255,255,0.055)'
+    ctx.fillRect(x, 0, 6, h)
+    ctx.fillStyle = 'rgba(0,0,0,0.4)'
+    ctx.fillRect(x + 6, 0, 9, h)
+  }
+  // 콘코스 층(가로 띠) — 안쪽 조명이 새어나오는 창. 층마다 굵은 그늘 + 창 한 칸.
+  const winH = h * 0.09
+  for (const band of [0.26, 0.56, 0.84]) {
+    const y = h * band
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'
+    ctx.fillRect(0, y - h * 0.03, w, winH + h * 0.06)
+    for (let i = 0; i < bays; i++) {
+      const lit = hash01(Math.round(i * 613 + band * 9973))
+      if (lit < 0.42) continue
+      ctx.fillStyle = lit > 0.84 ? 'rgba(255,226,168,0.62)' : 'rgba(110,138,190,0.24)'
+      ctx.fillRect(i * fin + 17, y, fin - 26, winH)
+    }
+  }
+  return canvas
+}
+
+/**
+ * 스탠드 지붕 상면 패널 텍스처. 야간 외부 샷에서 지붕은 조명이 거의 닿지 않아
+ * 단색이면 **떠 있는 검은 덩어리**로 보인다(첫 렌더에서 실제로 그랬다).
+ * 이음매 선과 미세 반사만으로 "금속 패널 지붕"이라는 정보를 준다.
+ */
+export function makeRoofCanvas(size = 256): HTMLCanvasElement | null {
+  const c = makeCanvas(size, size)
+  if (!c) return null
+  const { ctx, canvas } = c
+  ctx.fillStyle = '#1a2130'
+  ctx.fillRect(0, 0, size, size)
+  // 가로 패널 이음매(지붕 물매 방향) + 세로 트러스 그림자.
+  for (let y = 0; y < size; y += size / 8) {
+    ctx.fillStyle = 'rgba(255,255,255,0.06)'
+    ctx.fillRect(0, y, size, 2)
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'
+    ctx.fillRect(0, y + 2, size, 3)
+  }
+  for (let x = 0; x < size; x += size / 4) {
+    ctx.fillStyle = 'rgba(0,0,0,0.22)'
+    ctx.fillRect(x, 0, 4, size)
+  }
+  // 조명탑 방향(캔버스 왼쪽 위)에서 오는 약한 스침광.
+  const g = ctx.createLinearGradient(0, 0, size, size)
+  g.addColorStop(0, 'rgba(150,178,224,0.16)')
+  g.addColorStop(0.5, 'rgba(0,0,0,0)')
+  g.addColorStop(1, 'rgba(0,0,0,0.2)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, size, size)
+  return canvas
+}
+
+// ── 코너 플래그 ─────────────────────────────────────────────────
+/**
+ * 코너 깃발 텍스처. docs/refs/stadium/corner-flag-main-side.png 조건:
+ * "노랑/코럴 큰 색면" — 사선 코럴 밴드 하나만 있는 노랑 삼각기다.
+ * 삼각형 지오메트리의 UV(폴 쪽 u=0)에 맞춰 좌→우로 그린다.
+ */
+export function makeFlagCanvas(w = 128, h = 96): HTMLCanvasElement | null {
+  const c = makeCanvas(w, h)
+  if (!c) return null
+  const { ctx, canvas } = c
+  ctx.fillStyle = '#f5c518' // 노랑
+  ctx.fillRect(0, 0, w, h)
+  // 코럴 사선 밴드(좌상 → 우하). 레퍼런스의 유일한 패턴이다.
+  ctx.save()
+  ctx.fillStyle = '#f0553c'
+  ctx.beginPath()
+  ctx.moveTo(0, h * 0.16)
+  ctx.lineTo(w, h * 0.66)
+  ctx.lineTo(w, h * 0.9)
+  ctx.lineTo(0, h * 0.44)
+  ctx.closePath()
+  ctx.fill()
+  ctx.restore()
+  // 폴 쪽 접힘 그늘 — 평면 한 장이 천처럼 보이게 하는 최소 단서.
+  const g = ctx.createLinearGradient(0, 0, w, 0)
+  g.addColorStop(0, 'rgba(0,0,0,0.3)')
+  g.addColorStop(0.18, 'rgba(0,0,0,0)')
+  g.addColorStop(0.7, 'rgba(255,255,255,0.06)')
+  g.addColorStop(1, 'rgba(0,0,0,0.14)')
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, w, h)
+  return canvas
+}
+
 // ── 광고보드(LED 페리미터) ──────────────────────────────────────
 /**
  * 광고보드 기본 문구(가상 브랜드만 — 실존 상표 사용 금지).
@@ -455,39 +822,146 @@ export function makeConcreteCanvas(size = 256): HTMLCanvasElement | null {
  * 몇십 픽셀 높이로 흐르므로 짧은 대문자 라틴 문자열만 읽힌다. 더 중요하게는,
  * 밈 톤 제목은 바깥(탭·랜딩·공유 카드)에서만 쓰고 경기 화면 안쪽은 방송 톤을 유지한다.
  */
-export const AD_TEXTS = ['KOREA 2026', 'DAKER', 'MATCHDAY LIVE']
+export const AD_TEXTS = [
+  'VOROQ',
+  'DAKER',
+  'NIMUVA',
+  'KOREA 2026',
+  'KELZOX',
+  'MATCHDAY LIVE',
+  'TARVIO',
+]
 
 /**
- * 페리미터 LED 보드 텍스처. 어두운 배경에 밝은 문구 + 액센트 바.
- * @param texts 순환 문구 @param w,h 타일 픽셀
+ * 광고판 한 장의 가로:세로 비. docs/refs/stadium/adboards-fictional-brands.png의 패널이
+ * 약 5.2:1이고 실제 페리미터 LED가 6m×1m이므로 6:1로 잡는다. scene.ts가 이 값으로
+ * 보드 길이 대비 텍스처 repeat을 역산한다 — 안 그러면 글자가 늘어나거나 뭉갠다.
+ */
+export const AD_PANEL_ASPECT = 6
+
+/**
+ * 광고판 색 조합. 레퍼런스의 네 패널(보라/네이비+황색/애저/코럴)에서 그대로 뽑았다.
+ * 어두운 배경 + 작은 액센트 바였던 예전 구현과의 차이가 핵심이다: 레퍼런스는
+ * **전면 채색 + 굵은 대문자 + 높은 명도 대비**다. 원경 수십 픽셀에서 읽히는 건
+ * 글자가 아니라 색면이므로 배경을 채워야 보드가 존재감을 갖는다.
+ */
+const AD_STYLES: readonly { bg: string; fg: string; icon: number }[] = [
+  { bg: '#6b21f0', fg: '#ffffff', icon: 0 }, // VOROQ — 바이올렛/흰색, V 셰브런
+  { bg: '#101722', fg: '#f2f6ff', icon: 4 }, // DAKER — 차콜/흰색, 바 3개
+  { bg: '#0b1a3a', fg: '#f5a614', icon: 1 }, // NIMUVA — 네이비/황색, N 사선
+  { bg: '#c8102e', fg: '#ffffff', icon: 3 }, // KOREA 2026 — 레드/흰색, 태극 원호 대신 원
+  { bg: '#109cf1', fg: '#ffffff', icon: 2 }, // KELZOX — 애저/흰색, 다이아
+  { bg: '#f2f5ff', fg: '#101722', icon: 4 }, // MATCHDAY LIVE — 흰색/차콜(반전 대비)
+  { bg: '#f0463c', fg: '#14161c', icon: 5 }, // TARVIO — 코럴/차콜, T 바
+]
+
+/** 굵은 기하 아이콘 6종. 로고처럼 보이되 실존 상표를 흉내 내지 않는 순수 도형이다. */
+function drawAdIcon(ctx: CanvasRenderingContext2D, kind: number, x: number, y: number, s: number, color: string): void {
+  ctx.save()
+  ctx.fillStyle = color
+  ctx.translate(x, y)
+  switch (kind % 6) {
+    case 0: // 셰브런(V)
+      ctx.beginPath()
+      ctx.moveTo(0, 0)
+      ctx.lineTo(s * 0.26, 0)
+      ctx.lineTo(s * 0.5, s * 0.62)
+      ctx.lineTo(s * 0.74, 0)
+      ctx.lineTo(s, 0)
+      ctx.lineTo(s * 0.62, s)
+      ctx.lineTo(s * 0.38, s)
+      ctx.closePath()
+      ctx.fill()
+      break
+    case 1: // 사선 바(N)
+      ctx.fillRect(0, 0, s * 0.26, s)
+      ctx.fillRect(s * 0.74, 0, s * 0.26, s)
+      ctx.beginPath()
+      ctx.moveTo(s * 0.26, 0)
+      ctx.lineTo(s * 0.74, s * 0.72)
+      ctx.lineTo(s * 0.74, s)
+      ctx.lineTo(s * 0.26, s * 0.28)
+      ctx.closePath()
+      ctx.fill()
+      break
+    case 2: // 다이아 링
+      ctx.beginPath()
+      ctx.moveTo(s * 0.5, 0)
+      ctx.lineTo(s, s * 0.5)
+      ctx.lineTo(s * 0.5, s)
+      ctx.lineTo(0, s * 0.5)
+      ctx.closePath()
+      ctx.fill()
+      break
+    case 3: // 원
+      ctx.beginPath()
+      ctx.arc(s * 0.5, s * 0.5, s * 0.5, 0, Math.PI * 2)
+      ctx.fill()
+      break
+    case 4: // 수평 바 3개
+      for (let i = 0; i < 3; i++) ctx.fillRect(0, i * s * 0.38, s * (1 - i * 0.22), s * 0.22)
+      break
+    default: // T 바
+      ctx.fillRect(0, 0, s, s * 0.3)
+      ctx.fillRect(s * 0.35, 0, s * 0.3, s)
+      break
+  }
+  ctx.restore()
+}
+
+/**
+ * 페리미터 LED 보드 텍스처. 패널마다 전면 채색 + 기하 아이콘 + 굵은 대문자.
+ * 캔버스 폭은 `panelH × {@link AD_PANEL_ASPECT} × 패널 수`로 **자동 계산**한다
+ * (호출부가 폭을 정하면 패널 비율이 깨져 글자가 늘어난다).
+ * @param texts 순환 문구(빈 배열이면 기본값) @param panelH 패널 한 장의 세로 픽셀
  */
 export function makeAdBoardCanvas(
   texts: readonly string[] = AD_TEXTS,
-  w = 1024,
-  h = 96,
+  panelH = 72,
 ): HTMLCanvasElement | null {
+  const list = texts.length > 0 ? texts : AD_TEXTS
+  const h = Math.max(16, Math.round(panelH))
+  const panel = h * AD_PANEL_ASPECT
+  const w = panel * list.length
   const c = makeCanvas(w, h)
   if (!c) return null
   const { ctx, canvas } = c
-  const list = texts.length > 0 ? texts : AD_TEXTS
-  const panel = w / list.length
-  const accents = ['#e4373f', '#2f6bd8', '#f0b429']
+
   for (let i = 0; i < list.length; i++) {
+    // 기본 문구는 인덱스로, 사용자 지정 문구는 문자열 해시로 스타일을 고른다(결정론).
+    const st = AD_STYLES[(texts === AD_TEXTS ? i : fnv1a(list[i])) % AD_STYLES.length]
     const x0 = i * panel
-    const g = ctx.createLinearGradient(x0, 0, x0, h)
-    g.addColorStop(0, '#0d1220')
-    g.addColorStop(1, '#050810')
-    ctx.fillStyle = g
+    ctx.fillStyle = st.bg
     ctx.fillRect(x0, 0, panel, h)
-    // 액센트 바(아래쪽)
-    ctx.fillStyle = accents[i % accents.length]
-    ctx.fillRect(x0 + 6, h - 10, panel - 12, 6)
-    // 문구
-    ctx.fillStyle = '#f2f6ff'
-    ctx.font = `bold ${Math.round(h * 0.44)}px sans-serif`
-    ctx.textAlign = 'center'
+
+    // 아이콘 — 왼쪽 정사각 영역. 레퍼런스처럼 텍스트와 같은 색이다.
+    const pad = h * 0.16
+    const iconS = h - pad * 2
+    drawAdIcon(ctx, st.icon, x0 + pad * 1.4, pad, iconS, st.fg)
+
+    // 문구 — 레퍼런스는 캡하이트가 패널 높이의 약 55%다.
+    ctx.fillStyle = st.fg
+    ctx.font = `900 ${Math.round(h * 0.56)}px sans-serif`
+    ctx.textAlign = 'left'
     ctx.textBaseline = 'middle'
-    ctx.fillText(list[i], x0 + panel / 2, h * 0.44, panel - 20)
+    const textX = x0 + pad * 1.4 + iconS + h * 0.24
+    ctx.fillText(list[i], textX, h * 0.52, panel - (textX - x0) - pad)
+
+    // 패널 경계 — 실제 LED 보드는 모듈 사이에 검은 틈이 있다.
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'
+    ctx.fillRect(x0, 0, 2, h)
   }
+
+  // LED 주사선 — 아주 약하게. 원경에서 보드가 화면 픽셀과 모아레를 일으키지 않을 정도.
+  ctx.fillStyle = 'rgba(0,0,0,0.13)'
+  for (let y = 0; y < h; y += 3) ctx.fillRect(0, y, w, 1)
+  // 위아래 프레임 그늘 — 보드가 얇은 판이라는 단서.
+  const edge = ctx.createLinearGradient(0, 0, 0, h)
+  edge.addColorStop(0, 'rgba(0,0,0,0.4)')
+  edge.addColorStop(0.16, 'rgba(0,0,0,0)')
+  edge.addColorStop(0.84, 'rgba(0,0,0,0)')
+  edge.addColorStop(1, 'rgba(0,0,0,0.45)')
+  ctx.fillStyle = edge
+  ctx.fillRect(0, 0, w, h)
   return canvas
 }
