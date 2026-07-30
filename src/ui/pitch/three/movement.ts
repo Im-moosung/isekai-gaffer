@@ -42,8 +42,14 @@ export const CONVERGE_COUNT = 3
 export const CONVERGE_MAX = 12
 /** 이 거리(m)를 넘으면 수렴 당김이 0이 된다. */
 export const CONVERGE_RANGE = 40
-/** 수렴 시 공에 이보다 가까이 붙지 않는다(m) — 선수끼리 공 좌표에 겹치는 것 방지. */
-export const STANDOFF = 1.2
+/**
+ * 수렴 시 공에 이보다 가까이 붙지 않는다(m).
+ * ★ 1.2 → 1.8: 예전엔 수렴한 **일반 선수**가 킥 판정 반경(3 m) 안으로 들어와, 엔진이 정한
+ *   슈터도 안무 캐리어도 아닌 사람이 킥 모션을 받았다(실측: goal 장면에서 8→10→16번).
+ *   지금은 킥 대상이 캐리어로 못 박혔지만, 수렴 인원이 공에 붙어 서 있으면 여전히 공이
+ *   누구 발에 있는지 읽히지 않으므로 링을 넓힌다.
+ */
+export const STANDOFF = 1.8
 /** 수렴 링: 순번마다 반경을 이만큼 벌린다(m). */
 const RING_STEP = 0.45
 /** 수렴 링: 순번별 각도 오프셋(rad) — 공 주위를 감싸듯 벌어진다. */
@@ -64,8 +70,11 @@ export const ARRIVE_RADIUS = 1.5
 export const CELEBRATE_MS = 2000
 /** dwell 미지정 시 기본값(ms) — 세리머니 창을 t로 환산할 때 쓴다. */
 export const DEFAULT_DWELL_MS = 3000
-/** 킥 모션이 유지되는 구간 진행도. */
-const KICK_WINDOW = 0.3
+/**
+ * 무버 목표를 앞서 읽는 폭(ms). 도착 감속이 남기는 정상상태 지연(약 1.4 m)을 상쇄한다.
+ * ARRIVE_RADIUS / MAX_SPEED = 1.5 / 7.5 = 0.2 s가 이론값이다.
+ */
+export const MOVER_LOOKAHEAD_MS = 200
 /** focus 스무딩 시상수(s). */
 const FOCUS_TAU = 0.4
 /** yaw 스무딩 시상수(s). */
@@ -89,13 +98,53 @@ const HALF_H = PITCH_H / 2
  *  정본 타입은 choreography(=scenes)에 있다 — 장면을 저술하는 쪽이 궤적도 안다. */
 export type BallArcKind = BallArc
 
-/** 궤적별 최고 높이(m). ground는 공 반지름(=지면). */
+/**
+ * 궤적별 최고 높이(m). ground는 공 반지름(=지면).
+ *
+ * ★ shot 2.5 → 2.0, cross 6 → 4.2 (docs/research/football-sim-physics.md §2.2)
+ *  - 크로스: 발사 20 m/s 기준 최고점 6 m는 약 36°·도달 27 m다. 박스 안 15~20 m 크로스에는
+ *    과하다. 문헌 역산 적정치가 3~4.5 m.
+ *  - 슛: 예전 `sin(πu/2)` 곡선은 **끝에서 정점**이라 골라인 통과 높이가 항상 정확히
+ *    2.50 m였다(전수 실측). 크로스바는 2.44 m다 — 모든 골이 크로스바 위로 들어갔다.
+ */
 export const BALL_PEAK: Record<BallArcKind, number> = {
   ground: BALL_RADIUS,
   pass: 1.2,
-  shot: 2.5,
-  cross: 6,
+  shot: 2.0,
+  cross: 4.2,
 }
+
+/**
+ * 궤적별 **도착 높이**(m). 포물선의 끝점이며, 슛만 지면보다 높다(골문 안 1.05 m —
+ * 크로스바 2.44 m 아래, 골라인 통과 높이가 여기서 결정된다).
+ */
+export const BALL_END: Record<BallArcKind, number> = {
+  ground: BALL_RADIUS,
+  pass: BALL_RADIUS,
+  shot: 1.05,
+  cross: BALL_RADIUS,
+}
+
+// ── 볼 항력 상수 (Bray & Kerwin 2003, J Sports Sci 21:75–85) ──────────────
+/** 공 질량(kg) — 규정 410~450 g의 중앙값. */
+export const BALL_MASS = 0.43
+/** 공기 밀도(kg/m³, 해면 15 °C). */
+export const AIR_DENSITY = 1.225
+/** 항력계수 — Bray & Kerwin 프리킥 10회 실측 평균(0.25~0.30). */
+export const DRAG_CD = 0.275
+/**
+ * 공중 구간의 거리 감쇠 상수(m⁻¹) = ρ·A·C_d / 2m, A = π·0.11².
+ * 항력만 받는 1D 운동은 v(s) = v₀·e^(−k·s)라는 닫힌 해를 가지며, 그 역함수가
+ * {@link dragProgress}다. 25 m/s에서 감속 k·v² = 9.3 m/s² — 중력과 맞먹는다.
+ */
+export const K_DRAG = 0.01489
+/**
+ * 지면 구름 구간의 거리 감쇠 상수(m⁻¹).
+ * 잔디 구름저항(μ_r ≈ 0.06)과 잔여 공기저항을 합친 **등가 지수 감쇠**로 근사한다.
+ * 근사인 이유: 등감속 해는 구간 소요 시간 T를 알아야 하는데 sampleSequence는 t 비율만
+ * 안다. 0.020 m⁻¹이면 20 m에서 15 → 10.1 m/s로 문헌 역산치(10.3)와 맞는다.
+ */
+export const K_ROLL = 0.02
 
 export interface FrameInput {
   /** 엔진 상태(읽기 전용). */
@@ -187,21 +236,86 @@ export function arcKindFor(type: MatchEventType | undefined, segIndex: number, s
   }
 }
 
-/** 궤적 종류·구간 진행도 → 공 높이(m). 최고점은 BALL_PEAK와 정확히 일치한다. */
+/**
+ * 궤적 종류·구간 진행도 → 공 높이(m).
+ *
+ * **중력 포물선**이다. (0, BALL_RADIUS)에서 출발해 (1, BALL_END)로 떨어지고 최고점이
+ * 정확히 BALL_PEAK인 2차식을 닫힌 형태로 푼다:
+ *   y(u) = R + b·u + c·u²,  b + c = D,  −b²/(4c) = P
+ *   ⇒ b = 2P + 2√(P(P−D)),  c = D − b      (P = PEAK−R, D = END−R)
+ * 패스·크로스는 D=0이라 정점이 u=0.5(대칭 포물선), 슛은 D>0이라 정점이 u≈0.59로
+ * 뒤로 밀리고 **도착 높이가 1.05 m**가 된다 — 예전 `sin(πu/2)`가 만들던
+ * "모든 골이 정확히 2.50 m로 통과"(크로스바 2.44 m 초과)를 이것이 없앤다.
+ */
 export function ballHeight(kind: BallArcKind, u: number): number {
   const p = clamp(u, 0, 1)
-  const amp = BALL_PEAK[kind] - BALL_RADIUS
-  if (amp <= 0) return BALL_RADIUS
-  // 슛은 끝에서 정점(상승 궤적), 패스·크로스는 중간에서 정점(포물선).
-  const shape = kind === 'shot' ? Math.sin((Math.PI / 2) * p) : Math.sin(Math.PI * p)
-  return BALL_RADIUS + amp * shape
+  const P = BALL_PEAK[kind] - BALL_RADIUS
+  if (P <= 1e-9) return BALL_RADIUS
+  const D = BALL_END[kind] - BALL_RADIUS
+  const b = 2 * P + 2 * Math.sqrt(Math.max(0, P * (P - D)))
+  const c = D - b
+  return BALL_RADIUS + b * p + c * p * p
 }
 
-/** 안무 키프레임 배열을 시각 t(0~1)로 샘플링한다(0~100 좌표계 유지). */
-export function sampleSequence(sequence: ChoreoStep[], t: number): SeqSample {
+/**
+ * 항력 감속을 반영한 구간 진행도 — `lerp(a, b, u)`의 u를 이 함수로 갈아끼우면
+ * 구조를 하나도 바꾸지 않고 물리적 감속을 얻는다.
+ *
+ * 유도: 항력만 받는 1D 운동은 v = v₀/(1 + k·v₀·t), s = ln(1 + k·v₀·t)/k라는 닫힌 해를
+ * 갖는다. 구간 거리 S와 소요 T가 주어지면 v₀ = (e^(kS) − 1)/(kT)이고
+ *   u(τ) = ln(1 + (e^(kS) − 1)·τ) / (kS),  τ = t/T
+ * 로 u(0)=0, u(1)=1이 정확히 성립한다. 즉 T를 몰라도 정규화 시간만으로 감속이 나온다.
+ *
+ * @param kind 궤적 종류(지면이면 구름저항 상수, 그 외 공기저항 상수).
+ * @param distanceM 구간의 실제 거리(m). 0에 가까우면(컨트롤 정지) 선형으로 되돌린다.
+ * @param tau 구간 정규화 시간 0~1.
+ */
+export function dragProgress(kind: BallArcKind, distanceM: number, tau: number): number {
+  const p = clamp(tau, 0, 1)
+  if (!(distanceM > 0.05)) return p
+  const kS = (kind === 'ground' ? K_ROLL : K_DRAG) * distanceM
+  if (kS < 1e-4) return p
+  return clamp(Math.log1p(Math.expm1(kS) * p) / kS, 0, 1)
+}
+
+/** 0~100 좌표 두 점의 실제 거리(m) — 항력 곡선이 실거리를 알아야 한다. */
+function ballMetres(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.hypot(((b.x - a.x) / 100) * PITCH_W, ((b.y - a.y) / 100) * PITCH_H)
+}
+
+/** 무버 좌표를 시각 tc에서 선형 보간한다(볼과 달리 감속 곡선을 쓰지 않는다). */
+function moversAt(steps: ChoreoStep[], tc: number): { playerId: string; x: number; y: number }[] {
+  const last = steps[steps.length - 1]
+  if (steps.length === 1 || tc >= last.t) return last.movers.map(m => ({ ...m }))
+  let k = 0
+  for (let i = 0; i < steps.length - 1; i++) if (tc >= steps[i].t) k = i
+  const a = steps[k]
+  const b = steps[k + 1]
+  const u = clamp((tc - a.t) / Math.max(1e-6, b.t - a.t), 0, 1)
+  const nextById = new Map(b.movers.map(m => [m.playerId, m]))
+  return a.movers.map(m => {
+    const n = nextById.get(m.playerId) ?? m
+    return { playerId: m.playerId, x: lerp(m.x, n.x, u), y: lerp(m.y, n.y, u) }
+  })
+}
+
+/**
+ * 안무 키프레임 배열을 시각 t(0~1)로 샘플링한다(0~100 좌표계 유지).
+ *
+ * 볼은 {@link dragProgress}로 **감속**하고, 무버는 선형 보간에 `lookahead`만큼 앞선
+ * 시각을 쓴다.
+ *
+ * ★ lookahead가 필요한 이유: computeFrame의 도착 감속(ARRIVE_RADIUS=1.5 m)은 목표가
+ *   움직이면 정상상태 지연 d ≈ ARRIVE_RADIUS·v/cap을 남긴다(v=7 m/s에서 약 1.4 m).
+ *   그 1.4 m가 곧 "공이 발에서 떨어져 보인다"이므로, 목표를 그만큼 미리 읽어 상쇄한다.
+ *
+ * @param lookahead 무버 목표를 앞서 읽는 t 폭(0이면 기존 동작).
+ */
+export function sampleSequence(sequence: ChoreoStep[], t: number, lookahead = 0): SeqSample {
   const steps = sequence
   const last = steps[steps.length - 1]
   const tc = clamp(t, 0, 1)
+  const tm = clamp(tc + lookahead, 0, Math.max(tc, last.t))
   if (steps.length === 1 || tc >= last.t) {
     const rest = Math.max(1e-6, 1 - last.t)
     return {
@@ -220,19 +334,119 @@ export function sampleSequence(sequence: ChoreoStep[], t: number): SeqSample {
   const b = steps[k + 1]
   const span = Math.max(1e-6, b.t - a.t)
   const u = clamp((tc - a.t) / span, 0, 1)
-  const nextById = new Map(b.movers.map(m => [m.playerId, m]))
+  // 볼만 항력 곡선을 탄다. 아크가 없으면 공중 패스로 본다(computeFrame이 타입으로 추론).
+  const ub = dragProgress(a.arc ?? 'pass', ballMetres(a.ball, b.ball), u)
   return {
-    ball: { x: lerp(a.ball.x, b.ball.x, u), y: lerp(a.ball.y, b.ball.y, u) },
-    movers: a.movers.map(m => {
-      const n = nextById.get(m.playerId) ?? m
-      return { playerId: m.playerId, x: lerp(m.x, n.x, u), y: lerp(m.y, n.y, u) }
-    }),
+    ball: { x: lerp(a.ball.x, b.ball.x, ub), y: lerp(a.ball.y, b.ball.y, ub) },
+    movers: moversAt(steps, tm),
     segIndex: k,
     u,
     finished: false,
     after: 0,
     start: a,
   }
+}
+
+// ── 킥 스케줄러: 물리가 애니메이션을 구동한다(역방향 스케줄링) ─────────────
+/**
+ * `pose.kickAngles`에서 발이 공에 닿는 진행도.
+ * 백스윙 0~0.32, 임팩트 스윙 0.32~0.58이므로 접촉은 그 사이 0.45다.
+ */
+export const KICK_IMPACT_T = 0.45
+/** 백스윙 소요(ms) — 스윙 다리 최대 후방 → 접촉. */
+export const KICK_BACKSWING_MS = 260
+/** 팔로스루 소요(ms). */
+export const KICK_FOLLOW_MS = 340
+/** 이 거리(m) 미만은 킥이 아니다 — 컨트롤 정지 구간(볼 좌표 동일)을 걸러낸다. */
+const KICK_MIN_DISTANCE = 1
+
+/** 한 번의 킥 — 누가, 언제(dwell 상대 t) 공을 찬다. */
+export interface KickEvent {
+  playerId: string
+  /** 임팩트 시각(= 볼이 출발하는 키프레임의 t). */
+  tImpact: number
+  /** 임팩트 시점의 볼 좌표(0~100). */
+  ball: { x: number; y: number }
+}
+
+/**
+ * 시퀀스에서 킥 목록을 뽑는다 — **저술이 지정한 캐리어**가 찬다.
+ *
+ * 예전에는 "구간 시작 볼에서 가장 가까운 아무나"였다. 실측에서 그 선수는 수렴 로직에
+ * 빨려온 일반 선수였고, 그래서 "패스가 선수를 거치지도 않고 휘어진다"가 됐다.
+ */
+export function kickEvents(sequence: ChoreoStep[]): KickEvent[] {
+  const out: KickEvent[] = []
+  for (let k = 0; k + 1 < sequence.length; k++) {
+    const a = sequence[k]
+    if (!a.carrier) continue
+    if (ballMetres(a.ball, sequence[k + 1].ball) < KICK_MIN_DISTANCE) continue
+    out.push({ playerId: a.carrier, tImpact: a.t, ball: { ...a.ball } })
+  }
+  return out
+}
+
+/**
+ * 지금 이 시각에 재생 중인 킥과 그 진행도.
+ *
+ * **역방향 스케줄링**: 결과 시각(볼 출발)이 이미 정해져 있으므로 접촉 프레임 오프셋을
+ * 빼서 클립 시작 시각을 역산한다. t=0에서 시작하는 첫 패스는 백스윙 시간이 없으므로
+ * 클립을 중간부터 재생한다(football-match-viewer의 `pose.startFrom`과 같은 처방).
+ */
+export function kickAt(
+  kicks: KickEvent[],
+  t: number,
+  dwellMs: number,
+): { kick: KickEvent; actionT: number } | null {
+  const back = KICK_BACKSWING_MS / dwellMs
+  const fwd = KICK_FOLLOW_MS / dwellMs
+  let best: { kick: KickEvent; actionT: number } | null = null
+  let bestGap = Infinity
+  for (const k of kicks) {
+    if (t < k.tImpact - back || t > k.tImpact + fwd) continue
+    const gap = Math.abs(t - k.tImpact)
+    if (gap >= bestGap) continue
+    const actionT = t <= k.tImpact
+      ? KICK_IMPACT_T * (1 - (k.tImpact - t) / back)
+      : KICK_IMPACT_T + (1 - KICK_IMPACT_T) * ((t - k.tImpact) / fwd)
+    bestGap = gap
+    best = { kick: k, actionT: clamp(actionT, 0, 1) }
+  }
+  return best
+}
+
+// ── GK 다이브 인과 ────────────────────────────────────────────────────────
+/** 시각 단서 → 근육 활성까지의 반응 지연(ms). 스포츠 과학 관례값 180~250의 중앙. */
+export const GK_REACTION_MS = 200
+/** 도약 → 최대 신전(=볼 접촉)까지(ms). 문헌 500~700의 하한. */
+export const GK_DIVE_MS = 550
+/** 접촉 이후 착지·정착(ms). */
+export const GK_SETTLE_MS = 450
+/** `pose.diveAngles`가 완전 측와가 되는 진행도 — 이 값이 볼 도착과 일치해야 한다. */
+const DIVE_LAY_U = 0.55
+
+/**
+ * 다이브 스케줄 — **최대 신전 순간이 볼 도착과 정확히 일치**하도록 역산한다.
+ *
+ * 예전에는 슛 임팩트와 동시에(반응 지연 0) 다이브가 시작되고 `smoothstep(u/0.55)`가
+ * u=0.55에서 완전히 눕혔다. 실측 결과 GK는 볼이 오기 **473 ms 전**에 이미 잔디에
+ * 누워 있었다. 지금은 시작 시각이 `도착 − 550 ms`이고(짧은 슛이면 반응 지연이 우선),
+ * 진행도를 0.55에 맞춰 압축한 뒤 도착 후 나머지 0.45로 착지를 그린다.
+ *
+ * @returns t가 다이브 창 밖이면 null.
+ */
+export function diveScheduleAt(
+  tImpact: number,
+  tArrive: number,
+  t: number,
+  dwellMs: number,
+): number | null {
+  const start = Math.max(tImpact + GK_REACTION_MS / dwellMs, tArrive - GK_DIVE_MS / dwellMs)
+  if (t < start) return null
+  const span = Math.max(1e-6, tArrive - start)
+  if (t <= tArrive) return DIVE_LAY_U * ((t - start) / span)
+  const settle = Math.max(1e-6, GK_SETTLE_MS / dwellMs)
+  return DIVE_LAY_U + (1 - DIVE_LAY_U) * clamp((t - tArrive) / settle, 0, 1)
 }
 
 /** 무사건 분의 패스 체인 단계 수(t를 4등분해 4명을 거친다). */
@@ -520,7 +734,7 @@ export function computeFrame(input: FrameInput): FrameState {
   const homeTeamId = input.state.home.team.id
 
   // ── 1) 볼 ────────────────────────────────────────────────────────────
-  const sample = seq ? sampleSequence(seq, t) : null
+  const sample = seq ? sampleSequence(seq, t, MOVER_LOOKAHEAD_MS / dwellMs) : null
   const segCount = seq ? seq.length - 1 : 0
   // 궤적은 **장면이 저술한 값이 우선**한다(크로스는 크로스로 떠야 한다). 없으면 타입 추론.
   const arc: BallArcKind = sample
@@ -579,16 +793,21 @@ export function computeFrame(input: FrameInput): FrameState {
   separatePoses(posed, dt)
 
   // ── 4) 액션 컨텍스트(실제 포즈 기준) ─────────────────────────────────
-  // 킥: 구간 시작 볼에 가장 가까운 안무 팀 선수. KICK_REACH 밖이면 아무도 차지
-  // 않는다(안무 무버는 속도 클램프로 뒤처질 수 있어 "허공 슛"이 되기 때문).
+  // 킥: **저술이 지정한 캐리어**가 찬다. 임팩트 프레임(actionT ≈ 0.45)이 볼 출발 시각과
+  // 정확히 일치하도록 백스윙 260 ms를 앞당겨 창을 연다(역방향 스케줄링).
+  // KICK_REACH 밖이면 취소한다 — 속도 클램프로 뒤처졌다면 "허공 슛"이 되기 때문이다.
+  const kicks = seq ? kickEvents(seq) : []
+  const kickNow = seq ? kickAt(kicks, t, dwellMs) : null
   let kickerId: string | null = null
-  if (sample && !sample.finished && arc !== 'ground' && sample.u < KICK_WINDOW) {
-    const sb = toWorld(sample.start.ball.x, sample.start.ball.y)
-    let best = KICK_REACH
-    for (const q of posed) {
-      if (q.p.side !== seqSide) continue
-      const d = Math.hypot(q.x - sb.x, q.z - sb.z)
-      if (d < best) { best = d; kickerId = q.p.id }
+  let kickT = 0
+  if (kickNow) {
+    const q = posed.find(o => o.p.id === kickNow.kick.playerId)
+    if (q) {
+      const kb = toWorld(kickNow.kick.ball.x, kickNow.kick.ball.y)
+      if (Math.hypot(q.x - kb.x, q.z - kb.z) < KICK_REACH) {
+        kickerId = q.p.id
+        kickT = kickNow.actionT
+      }
     }
   }
   // 세리머니: 골 키프레임 이후 CELEBRATE_MS 동안 득점팀 전원.
@@ -599,9 +818,17 @@ export function computeFrame(input: FrameInput): FrameState {
   const scoringSide: 'home' | 'away' = event?.teamId === homeTeamId ? 'home' : 'away'
   const celebrateT = celebrating ? clamp((t - goalT) / celebrateSpan, 0, 1) : 0
   // 다이브: 슛을 받는 쪽(안무의 볼이 향하는 골문) GK.
+  // **최대 신전 = 볼 도착**이 되도록 역산한다(§R4). 예전엔 슛 임팩트와 동시에 시작해
+  // 볼보다 473 ms 먼저 잔디에 누웠다.
   const divingSide: 'home' | 'away' = seqSide === 'home' ? 'away' : 'home'
-  const diving = !!sample && event?.type === 'save' && (sample.finished || sample.segIndex >= segCount - 1)
-  const diveT = sample ? (sample.finished ? 1 : sample.u) : 0
+  const tArrive = seq ? seq[seq.length - 1].t : 0
+  const tShot = kicks.length > 0 ? kicks[kicks.length - 1].tImpact : tArrive
+  const diveU = seq && event?.type === 'save' ? diveScheduleAt(tShot, tArrive, t, dwellMs) : null
+  const diving = diveU != null
+  const diveT = diveU ?? 0
+  // 다이브 방향 — 볼이 향하는 쪽(월드 Z)으로 눕는다. 예전엔 선수 id 해시로 좌우를
+  // 아무렇게나 골랐다(볼과 반대로 뛰는 GK가 절반).
+  const diveDir = seq ? (toWorld(seq[seq.length - 1].ball.x, seq[seq.length - 1].ball.y).z >= 0 ? 1 : -1) : 1
   // 다운: 파울 성립 후 볼에 가장 가까운 안무 팀 선수 1명.
   const fouled = !!sample && sample.finished && (event?.type === 'foul' || event?.type === 'yellow' || event?.type === 'red')
   let downId: string | null = null
@@ -634,9 +861,10 @@ export function computeFrame(input: FrameInput): FrameState {
     let action: PlayerAction = moving ? 'run' : 'idle'
     // run의 actionT는 곧 보폭 위상이다(예전에는 별도 상수 보폭으로 계산돼 렌더러가 무시했다).
     let actionT = moving ? gaitPhase : (pp?.actionT ?? 0)
+    let actionDir = 0
     if (kickerId === p.id) {
       action = 'kick'
-      actionT = clamp((sample?.u ?? 0) / KICK_WINDOW, 0, 1)
+      actionT = kickT
     }
     if (downId === p.id) {
       action = 'down'
@@ -645,13 +873,18 @@ export function computeFrame(input: FrameInput): FrameState {
     if (diving && p.isGk && p.side === divingSide) {
       action = 'dive'
       actionT = clamp(diveT, 0, 1)
+      // 홈 GK는 -X 골문을 지키므로 로컬 +Z가 월드 +Z와 반대다(yaw 180°).
+      actionDir = p.side === 'home' ? -diveDir : diveDir
     }
     if (celebrating && p.side === scoringSide) {
       action = 'celebrate'
       actionT = celebrateT
     }
 
-    return { id: p.id, side: p.side, number: p.number, x, z, yaw, speed, action, actionT, gaitPhase }
+    return {
+      id: p.id, side: p.side, number: p.number, x, z, yaw, speed, action, actionT, gaitPhase,
+      ...(actionDir !== 0 ? { actionDir } : {}),
+    }
   })
 
   // ── 6) focus 스무딩 ──────────────────────────────────────────────────

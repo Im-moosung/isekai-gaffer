@@ -852,7 +852,7 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
       seed = hash01(p.id)
       phase = seed * TAU // 22명이 한 몸처럼 움직이지 않게 초기 위상 분산
       kickRight = seed < 0.78 // 결정론적 주발(약 22%가 왼발잡이)
-      diveDir = hash01(`${p.id}:dive`) < 0.5 ? -1 : 1
+      diveDir = hash01(`${p.id}:dive`) < 0.5 ? -1 : 1 // actionDir가 없을 때만 쓰는 폴백
       root.scale.setScalar(0.965 + 0.07 * seed) // 체격 미세 변주
       smoothSpeed = p.speed // 등장 프레임부터 실제 속도로 시작(초기 슬로모션 방지)
       seeded = true
@@ -873,6 +873,9 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
         : advancePhase(phase, Math.max(smoothSpeed, p.speed * 0.6), dt)
     const t = clockT + seed * 6.28 // 개체별 시간 오프셋(호흡·세리머니 위상 분산)
     const at = clamp01(p.actionT)
+    // 다이브 방향은 **볼이 향하는 쪽**을 무브먼트가 정한다(types.PlayerPose.actionDir).
+    // 해시 폴백은 그 값이 없는 구버전 프레임·단위 테스트 전용이다.
+    if (p.actionDir) diveDir = p.actionDir > 0 ? 1 : -1
 
     root.position.set(p.x, 0, p.z)
     root.rotation.y = -p.yaw

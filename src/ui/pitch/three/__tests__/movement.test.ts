@@ -9,8 +9,10 @@ import { strideLength } from '../player3d'
 import { PITCH_H, PITCH_W, toWorld, type FrameState } from '../types'
 import {
   computeFrame, ballHeight, arcKindFor, sampleSequence, gkBox,
-  BALL_PEAK, BALL_RADIUS, BALL_SHIFT, CONVERGE_MAX, GK_MAX_SPEED, MAX_SPEED,
-  KICK_REACH, STANDOFF,
+  BALL_PEAK, BALL_END, BALL_RADIUS, BALL_SHIFT, CONVERGE_MAX, GK_MAX_SPEED, MAX_SPEED,
+  KICK_REACH, STANDOFF, MOVER_LOOKAHEAD_MS, DEFAULT_DWELL_MS,
+  kickEvents, kickAt, dragProgress, diveScheduleAt,
+  GK_DIVE_MS, GK_REACTION_MS, KICK_IMPACT_T, KICK_BACKSWING_MS,
   type FrameInput,
 } from '../movement'
 
@@ -385,15 +387,19 @@ describe('sampleSequence / 안무 추종', () => {
     expect(s.ball).toEqual(seq[seq.length - 1].ball)
   })
 
-  it('prev=null이면 무버가 안무 좌표에 정확히 놓인다', () => {
+  it('prev=null이면 무버가 안무 좌표(선행 보정 포함)에 정확히 놓인다', () => {
     const seq = buildSequence(ev('goal'), base.home, base.away)
-    const f = computeFrame(input({ sequence: seq, sequenceSide: 'home', t: seq[1].t, event: ev('goal') }))
-    for (const m of seq[1].movers) {
+    const t = seq[1].t
+    const f = computeFrame(input({ sequence: seq, sequenceSide: 'home', t, event: ev('goal') }))
+    // 무버 목표는 도착 감속 지연을 상쇄하려고 MOVER_LOOKAHEAD_MS만큼 앞선 시각을 읽는다.
+    const target = sampleSequence(seq, t, MOVER_LOOKAHEAD_MS / DEFAULT_DWELL_MS)
+    for (const m of target.movers) {
       const pose = f.players.find(p => p.id === m.playerId)
       if (!pose || pose.id === homeId(0)) continue // GK는 박스 클램프 우선
       const w = toWorld(m.x, m.y)
-      expect(pose.x).toBeCloseTo(w.x, 6)
-      expect(pose.z).toBeCloseTo(w.z, 6)
+      // 완전 일치가 아닌 이유: 무버끼리 MIN_POSE_SEPARATION(1.3 m) 안으로 붙으면
+      // 소프트 분리가 밀어낸다. 그 폭 안에 있으면 "안무 좌표에 놓였다"로 본다.
+      expect(Math.hypot(pose.x - w.x, pose.z - w.z), m.playerId).toBeLessThan(1.4)
     }
   })
 
@@ -449,13 +455,16 @@ describe('볼 높이(Y) — 이벤트 타입별 아크', () => {
       const e = ev(type)
       const seq = buildSequence(e, base.home, base.away)
       let m = 0
-      for (let i = 0; i <= 100; i++) {
-        m = Math.max(m, computeFrame(input({ sequence: seq, sequenceSide: 'home', t: i / 100, event: e })).ball.y)
+      // 정점이 구간 내부(u≈0.5~0.59)라 표본을 촘촘히 잡아야 실제 최고점을 밟는다.
+      for (let i = 0; i <= 2000; i++) {
+        m = Math.max(m, computeFrame(input({ sequence: seq, sequenceSide: 'home', t: i / 2000, event: e })).ball.y)
       }
       return m
     }
-    expect(maxY('corner')).toBeCloseTo(BALL_PEAK.cross, 4)
-    expect(maxY('goal')).toBeCloseTo(BALL_PEAK.shot, 4)
+    // 정점은 구간 내부(u≈0.5~0.59)라 dwell을 100등분한 표본이 정확히 밟지 못한다 —
+    // 소수 둘째 자리까지만 본다.
+    expect(maxY('corner')).toBeCloseTo(BALL_PEAK.cross, 3)
+    expect(maxY('goal')).toBeCloseTo(BALL_PEAK.shot, 3)
     expect(maxY('foul')).toBeCloseTo(BALL_RADIUS, 6)
   })
 
@@ -547,7 +556,7 @@ describe('액션 판정', () => {
   it('공 옆에 선수가 있으면 그 선수가 kick(actionT 0~1)', () => {
     const striker = homeId(10)
     const seq: ChoreoStep[] = [
-      { t: 0, ball: { x: 80, y: 50 }, movers: [{ playerId: striker, x: 80, y: 50 }] },
+      { t: 0, ball: { x: 80, y: 50 }, movers: [{ playerId: striker, x: 80, y: 50 }], carrier: striker },
       { t: 0.6, ball: { x: 99, y: 50 }, movers: [{ playerId: striker, x: 82, y: 50 }] },
     ]
     const e = ev('goal')
@@ -559,29 +568,52 @@ describe('액션 판정', () => {
     expect(kickers[0].actionT).toBeLessThanOrEqual(1)
   })
 
-  it('kick은 구간 시작 볼에서 KICK_REACH 이내 + 안무 팀 선수에게만 부여된다', () => {
-    // 전 이벤트 타입 × 전체 재생(prev 체인) — 허공 슛(먼 선수 kick) 0건이어야 한다.
+  // ★ R3: 킥은 **저술이 지정한 캐리어**만 받는다. 예전엔 "구간 시작 볼에서 가장 가까운
+  //   아무나"였고, 실측에서 그 선수는 수렴 로직에 빨려온 일반 선수였다.
+  it('kick은 임팩트 볼에서 KICK_REACH 이내 + 그 구간의 캐리어에게만 부여된다', () => {
     let kickFrames = 0
     for (const type of ['goal', 'shot', 'save', 'miss', 'corner', 'foul'] as const) {
       const e = ev(type)
       const seq = buildSequence(e, base.home, base.away)
+      const kicks = kickEvents(seq)
+      const carriers = new Set(kicks.map(k => k.playerId))
       let prev: FrameState | null = null
       const N = 60
       for (let k = 0; k <= N; k++) {
         const t = k / N
         const f: FrameState = computeFrame(input({ prev, dt: 0.033, t, sequence: seq, sequenceSide: 'home', event: e }))
-        const s = sampleSequence(seq, t)
-        const sb = toWorld(s.start.ball.x, s.start.ball.y)
         for (const p of f.players.filter(q => q.action === 'kick')) {
           kickFrames++
           expect(p.side).toBe('home')
-          expect(Math.hypot(p.x - sb.x, p.z - sb.z)).toBeLessThan(KICK_REACH)
+          expect(carriers.has(p.id), `${type}: ${p.id}는 캐리어가 아니다`).toBe(true)
+          const hit = kickAt(kicks, t, DEFAULT_DWELL_MS)!
+          const kb = toWorld(hit.kick.ball.x, hit.kick.ball.y)
+          expect(Math.hypot(p.x - kb.x, p.z - kb.z)).toBeLessThan(KICK_REACH)
         }
         prev = f
       }
     }
     // 규칙이 kick을 죽이지 않았는지도 확인 — 공 옆에 실제로 선 프레임에서는 발동한다.
     expect(kickFrames).toBeGreaterThan(0)
+  })
+
+  // ★ 사용자 불만 ①: "공을 차는 느낌이 없다". 원인은 임팩트 프레임(actionT≈0.45)이
+  //   볼 출발보다 90 ms **뒤**에 왔다는 것이다(백스윙 중에 공이 이미 떠났다).
+  it('킥 임팩트 프레임이 볼 출발 시각과 정확히 일치한다(역방향 스케줄링)', () => {
+    const e = ev('goal')
+    const seq = buildSequence(e, base.home, base.away)
+    const kicks = kickEvents(seq)
+    expect(kicks.length).toBeGreaterThanOrEqual(3)
+    for (const k of kicks) {
+      const at = kickAt(kicks, k.tImpact, DEFAULT_DWELL_MS)!
+      expect(at.kick.playerId).toBe(k.playerId)
+      expect(at.actionT).toBeCloseTo(KICK_IMPACT_T, 6)
+    }
+    // 임팩트 전에는 백스윙 구간(0 ~ 0.45), 뒤에는 팔로스루(0.45 ~ 1).
+    const mid = kicks[1]
+    const back = kickAt(kicks, mid.tImpact - (KICK_BACKSWING_MS / 2) / DEFAULT_DWELL_MS, DEFAULT_DWELL_MS)!
+    expect(back.actionT).toBeLessThan(KICK_IMPACT_T)
+    expect(back.actionT).toBeGreaterThan(0)
   })
 
   it('파울 뒤엔 한 명이 down', () => {
@@ -892,5 +924,207 @@ describe('저속 히스테리시스', () => {
       }
     }
     expect(band).toBeGreaterThan(20) // 실제로 문턱 밴드를 지나갔는지(공허한 통과 방지)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ★ 2026-07-30 물리·인과 개편 (docs/research/football-sim-physics.md)
+//   사용자 원문: "공을 차는 느낌이 없고 공이 혼자 떠다닌다 / 너무 빠르다 /
+//   공이 가지도 않았는데 GK가 먼저 넘어진다". 아래가 그 셋의 회귀 가드다.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('★ R5 — 골이 크로스바 아래로 들어간다', () => {
+  // 예전 `ballHeight('shot', u) = 0.11 + 2.39·sin(πu/2)`는 **끝에서 정점**이라
+  // 골라인 통과 높이가 항상 정확히 2.50 m였다. 크로스바는 2.44 m다.
+  const CROSSBAR = 2.44
+
+  it('슛 아크의 도착 높이가 1.05 m이고 정점도 크로스바 아래다', () => {
+    expect(BALL_END.shot).toBeCloseTo(1.05, 6)
+    expect(ballHeight('shot', 1)).toBeCloseTo(BALL_END.shot, 6)
+    let peak = 0
+    for (let i = 0; i <= 1000; i++) peak = Math.max(peak, ballHeight('shot', i / 1000))
+    expect(peak).toBeCloseTo(BALL_PEAK.shot, 4)
+    expect(peak).toBeLessThan(CROSSBAR)
+  })
+
+  it('전 패턴·전 변형의 골 장면에서 볼이 크로스바를 넘지 않는다', () => {
+    for (const pattern of ['balanced', 'cross', 'through', 'longshot'] as const) {
+      const st = structuredClone(base)
+      st.home.tactics.attackPattern = pattern
+      for (const minute of [12, 27, 41, 58, 73, 88]) {
+        const e = ev('goal', { minute, playerId: st.home.tactics.lineup[9].playerId })
+        const seq = buildSequence(e, st.home, st.away)
+        let maxAfterShot = 0
+        const tShot = seq.find(p => p.arc === 'shot')!.t
+        for (let i = 0; i <= 400; i++) {
+          const t = i / 400
+          if (t < tShot) continue
+          const f = computeFrame(input({ state: st, sequence: seq, sequenceSide: 'home', t, event: e, minute }))
+          maxAfterShot = Math.max(maxAfterShot, f.ball.y)
+        }
+        expect(maxAfterShot, `${pattern}/${minute}`).toBeLessThan(CROSSBAR)
+      }
+    }
+  })
+})
+
+describe('★ R1 — 볼이 감속한다(항력 곡선)', () => {
+  it('dragProgress는 u(0)=0, u(1)=1이고 항상 선형보다 앞선다(= 감속)', () => {
+    for (const kind of ['pass', 'shot', 'cross', 'ground'] as const) {
+      for (const S of [5, 12, 25, 40]) {
+        expect(dragProgress(kind, S, 0)).toBeCloseTo(0, 9)
+        expect(dragProgress(kind, S, 1)).toBeCloseTo(1, 9)
+        for (const tau of [0.15, 0.35, 0.5, 0.75, 0.9]) {
+          expect(dragProgress(kind, S, tau), `${kind}/${S}/${tau}`).toBeGreaterThan(tau)
+        }
+      }
+    }
+  })
+
+  it('거리 0(컨트롤 정지) 구간은 선형으로 되돌아간다', () => {
+    for (const tau of [0, 0.3, 0.7, 1]) expect(dragProgress('pass', 0, tau)).toBeCloseTo(tau, 9)
+  })
+
+  it('긴 구간일수록 감속이 크다(같은 τ에서 진행도가 더 앞선다)', () => {
+    expect(dragProgress('shot', 40, 0.5)).toBeGreaterThan(dragProgress('shot', 10, 0.5))
+    // 지면 구름은 공중보다 더 빨리 죽는다(잔디 저항).
+    expect(dragProgress('ground', 20, 0.5)).toBeGreaterThan(dragProgress('pass', 20, 0.5))
+  })
+
+  it('실제 하이라이트 재생에서 구간 안 볼 속도가 단조 감소한다', () => {
+    const e = ev('goal')
+    const seq = buildSequence(e, base.home, base.away)
+    // 슛 구간을 5등분해 앞뒤 속도를 잰다 — 예전엔 선형 lerp라 완전히 일정했다.
+    const tShot = seq.findIndex(p => p.arc === 'shot')
+    const t0 = seq[tShot].t
+    const t1 = seq[tShot + 1].t
+    const at = (t: number) => computeFrame(input({ sequence: seq, sequenceSide: 'home', t, event: e })).ball
+    const speeds: number[] = []
+    const N = 8
+    for (let i = 0; i < N; i++) {
+      const a = at(t0 + ((t1 - t0) * i) / N)
+      const b = at(t0 + ((t1 - t0) * (i + 1)) / N)
+      speeds.push(Math.hypot(b.x - a.x, b.z - a.z))
+    }
+    for (let i = 1; i < speeds.length; i++) expect(speeds[i]).toBeLessThan(speeds[i - 1])
+  })
+})
+
+describe('★ R4 — GK가 볼보다 먼저 넘어지지 않는다', () => {
+  it('다이브 최대 신전(u=0.55)이 볼 도착과 정확히 일치한다', () => {
+    const dwell = 8400
+    for (const [imp, arr] of [[0.4, 0.5], [0.2, 0.9], [0.55, 0.62]] as const) {
+      expect(diveScheduleAt(imp, arr, arr, dwell)).toBeCloseTo(0.55, 9)
+      // 도착 전에는 아직 눕지 않았다.
+      expect(diveScheduleAt(imp, arr, arr - 0.01, dwell)!).toBeLessThan(0.55)
+      // 도착 이후에만 착지·정착이 진행된다.
+      expect(diveScheduleAt(imp, arr, arr + 0.05, dwell)!).toBeGreaterThan(0.55)
+    }
+  })
+
+  it('반응 지연 — 슛 임팩트 직후에는 아직 뛰지 않는다', () => {
+    const dwell = 8400
+    const imp = 0.4
+    const arr = 0.4 + 0.9 // 아주 먼 슛(도착이 늦다)
+    expect(diveScheduleAt(imp, arr, imp, dwell)).toBeNull()
+    expect(diveScheduleAt(imp, arr, imp + (GK_REACTION_MS / 2) / dwell, dwell)).toBeNull()
+  })
+
+  it('먼 슛일수록 늦게 반응한다(다이브 지속은 GK_DIVE_MS로 고정)', () => {
+    const dwell = 8400
+    const dive = GK_DIVE_MS / dwell
+    // 도착까지 여유가 크면 시작은 "도착 − 550 ms"다.
+    const arr = 0.9
+    expect(diveScheduleAt(0.1, arr, arr - dive - 1e-6, dwell)).toBeNull()
+    expect(diveScheduleAt(0.1, arr, arr - dive + 1e-6, dwell)).not.toBeNull()
+  })
+
+  it('실제 save 장면 재생: GK가 완전히 눕는 시각이 볼 도착보다 앞서지 않는다', () => {
+    for (const pattern of ['balanced', 'cross', 'through', 'longshot'] as const) {
+      const st = structuredClone(base)
+      st.home.tactics.attackPattern = pattern
+      const e = ev('save', { minute: 55, playerId: st.home.tactics.lineup[9].playerId })
+      const seq = buildSequence(e, st.home, st.away)
+      const dwell = 8400
+      const tArrive = seq[seq.length - 1].t
+      let laidAt: number | null = null
+      let prev: FrameState | null = null
+      const N = 600
+      for (let k = 0; k <= N; k++) {
+        const t = k / N
+        const f: FrameState = computeFrame(
+          input({ state: st, prev, dt: 1 / 60, t, sequence: seq, sequenceSide: 'home', event: e, minute: 55, dwellMs: dwell }),
+        )
+        const gk = f.players.find(p => p.id === st.away.tactics.lineup[0].playerId)!
+        if (laidAt == null && gk.action === 'dive' && gk.actionT >= 0.55) laidAt = t
+        prev = f
+      }
+      expect(laidAt, `${pattern}: GK가 눕지 않았다`).not.toBeNull()
+      // 프레임 격자(1/600) 오차만 허용한다. 예전 실측은 −473 ms(= −0.11 dwell)였다.
+      const leadMs = (tArrive - laidAt!) * dwell
+      expect(leadMs, `${pattern}: GK가 볼보다 ${leadMs.toFixed(0)} ms 먼저 누웠다`).toBeLessThan(30)
+    }
+  })
+
+  it('다이브 방향이 볼이 향하는 쪽을 따른다(해시 난수가 아니다)', () => {
+    const st = structuredClone(base)
+    const e = ev('save', { minute: 55 })
+    const seq = buildSequence(e, st.home, st.away)
+    const endZ = toWorld(seq[seq.length - 1].ball.x, seq[seq.length - 1].ball.y).z
+    const f = computeFrame(input({ sequence: seq, sequenceSide: 'home', t: seq[seq.length - 1].t, event: e, dwellMs: 8400 }))
+    const gk = f.players.find(p => p.id === st.away.tactics.lineup[0].playerId)!
+    expect(gk.action).toBe('dive')
+    // away GK는 로컬 +Z가 월드 +Z와 같다(yaw 0 기준). 부호가 볼 쪽을 가리켜야 한다.
+    expect(Math.sign(gk.actionDir ?? 0)).toBe(endZ >= 0 ? 1 : -1)
+  })
+})
+
+describe('★ R2 — 공은 캐리어의 발에 있다', () => {
+  it('킥 임팩트 순간 렌더된 캐리어가 볼에서 1.5 m 안에 있다(전 이벤트 타입)', () => {
+    let worst = 0
+    let worstTag = ''
+    for (const pattern of ['balanced', 'cross', 'through', 'longshot'] as const) {
+      const st = structuredClone(base)
+      st.home.tactics.attackPattern = pattern
+      for (const type of ['goal', 'save', 'miss', 'shot'] as const) {
+        for (const minute of [12, 37, 64, 81]) {
+          const e = ev(type, { minute, playerId: st.home.tactics.lineup[9].playerId })
+          const seq = buildSequence(e, st.home, st.away)
+          const dwell = 8400
+          const kicks = kickEvents(seq)
+          let prev: FrameState | null = null
+          const N = 500
+          for (let k = 0; k <= N; k++) {
+            const t = k / N
+            const f: FrameState = computeFrame(
+              input({ state: st, prev, dt: 1 / 60, t, sequence: seq, sequenceSide: 'home', event: e, minute, dwellMs: dwell }),
+            )
+            for (const kick of kicks) {
+              if (Math.abs(t - kick.tImpact) > 0.5 / N) continue
+              const p = f.players.find(q => q.id === kick.playerId)!
+              const d = Math.hypot(p.x - f.ball.x, p.z - f.ball.z)
+              if (d > worst) { worst = d; worstTag = `${pattern}/${type}/${minute}` }
+            }
+            prev = f
+          }
+        }
+      }
+    }
+    // 예전 실측: 저술 키프레임에서 볼-무버 거리 6.7 ~ 17.9 m.
+    expect(worst, `최악 볼-캐리어 거리 ${worst.toFixed(2)} m @ ${worstTag}`).toBeLessThan(1.5)
+  })
+
+  it('킥을 받는 선수는 항상 이벤트의 주인공(playerId)을 포함한다', () => {
+    for (const pattern of ['balanced', 'cross', 'through', 'longshot'] as const) {
+      const st = structuredClone(base)
+      st.home.tactics.attackPattern = pattern
+      const shooter = st.home.tactics.lineup[9].playerId
+      for (const minute of [9, 31, 52, 77]) {
+        const e = ev('goal', { minute, playerId: shooter })
+        const kicks = kickEvents(buildSequence(e, st.home, st.away))
+        // 마지막 킥 = 슛. 그 주인공은 엔진이 정한 선수여야 한다.
+        expect(kicks[kicks.length - 1].playerId, `${pattern}/${minute}`).toBe(shooter)
+      }
+    }
   })
 })
