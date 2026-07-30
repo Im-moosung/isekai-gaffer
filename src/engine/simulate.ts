@@ -333,9 +333,22 @@ function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
   const defIdx = (1 - atkIdx) as 0 | 1
   const atk = atkIdx === 0 ? st.home : st.away
   const def = defIdx === 0 ? st.home : st.away
-  // 점유율 누적 (이동 평균)
-  st.stats[atkIdx].possession = round1((st.stats[atkIdx].possession * (st.minute - 1) + 100) / st.minute)
-  st.stats[defIdx].possession = round1(100 - st.stats[atkIdx].possession)
+  // 점유율 누적 (이동 평균).
+  //
+  // ★ 이 분의 기여는 **연속 비율**이지 승자독식이 아니다. 예전엔 이긴 쪽에 100을
+  //   주고 평균을 냈는데, 그러면 1분에 반드시 100:0이 뜨고 초반 몇 분은 90:10처럼
+  //   축구에 존재하지 않는 값이 화면에 남는다(실제로 2분에 100%가 표시됐다).
+  //   possW0/possW1은 바로 위에서 이미 계산한 연속 점유 가중치다 — 그 비율을 쓴다.
+  //   승패 판정(atkIdx)은 그대로 가중 추첨이라 시드 결정론과 이벤트 흐름은 불변이다.
+  //
+  //   다만 연속 비율만 쓰면 90분 내내 같은 값이 박혀 있어 그것대로 가짜로 보인다.
+  //   실제 점유율은 흐름을 타므로 **실현된 분 승자를 35%만 섞는다**. 승자 추첨이
+  //   이미 그 비율을 따르므로 E[실현] = 연속 비율 — 장기 평균은 편향되지 않고
+  //   분 단위 변동만 생긴다(캘리브레이션 계약 불변).
+  const cont0 = (possW0 / (possW0 + possW1)) * 100
+  const share0 = cont0 * 0.65 + (atkIdx === 0 ? 100 : 0) * 0.35
+  st.stats[0].possession = round1((st.stats[0].possession * (st.minute - 1) + share0) / st.minute)
+  st.stats[1].possession = round1(100 - st.stats[0].possession)
 
   trackPasses(st, sides, atkIdx)
 
