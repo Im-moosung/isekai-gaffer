@@ -1,31 +1,44 @@
-/* 첫인상 랜딩 — 3D 스타디움 라이브 배경 + 대체역사 훅 문안.
-   배경(.landing__bg)이 실패하거나 로드 전이어도 .landing의 그라디언트가 그대로 화면을 채운다. */
+/* ============================================================================
+   랜딩(첫인상) + 데모 래퍼
+   ----------------------------------------------------------------------------
+   [2026-07-30 재설계 · 감사 L-2/L-4·M-10]
+   이전: 화면 정중앙에 620px 글래스모피즘 카드(radius 18 + blur 10px)가 떠 있었다.
+   그건 2020년식 SaaS 랜딩 문법이고, 방송 타이틀 시퀀스는 카드를 쓰지 않는다 —
+   텍스트를 프레임에 직접 얹고 스크림으로만 대비를 만든다. 카드를 없애고
+   문안 블록을 좌하단에 앉혔다(경기장 소실점이 화면 중앙이라 중앙 정렬 텍스트는
+   3D를 정면으로 가린다).
+   ========================================================================== */
+
 .landing {
   position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  align-content: end;
   min-height: 100dvh;
-  padding: 24px;
-  box-sizing: border-box;
+  padding: var(--sp-7) var(--sp-6);
   overflow: hidden; /* 3D 캔버스가 어떤 상황에서도 가로 스크롤을 만들지 않게 */
-  background:
-    radial-gradient(120% 90% at 50% 8%, #1a2a4a 0%, #0d1526 55%, var(--bc-bg) 100%);
-  color: var(--bc-text);
-  font-family: var(--bc-font);
+  /* 배경(.landing__bg)이 실패하거나 로드 전이어도 이 그라디언트가 화면을 채운다. */
+  background: radial-gradient(
+    120% 90% at 62% 6%,
+    color-mix(in srgb, var(--s-2) 70%, var(--brand) 6%) 0%,
+    var(--s-1) 46%,
+    var(--s-0) 100%
+  );
+  color: var(--t-hi);
+  font-family: var(--f-ui);
 }
+
 /* 3D 배경 레이어 — 텍스트보다 항상 뒤. 비어 있어도(로드 전·실패) 레이아웃에 영향이 없다. */
 .landing__bg {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: var(--z-base);
   pointer-events: none; /* 버튼 클릭이 배경에 막히지 않는다 */
 }
 .landing-bg__host {
   width: 100%;
   height: 100%;
   opacity: 0;
-  transition: opacity 900ms ease-out;
+  transition: opacity var(--dur-4) var(--ease-out);
 }
 .landing-bg__host.is-ready {
   opacity: 1;
@@ -35,120 +48,136 @@
   width: 100%;
   height: 100%;
 }
-/* 가독성 스크림 — 3D가 아무리 밝아도 문안 대비를 확보한다. */
+
+/* 스크림 — **국소 스크림**.
+   [2026-07-30 재조정] 3D 배경이 밤하늘 돔·도시 실루엣·조명탑 halo·25,200석
+   관중 실루엣으로 교체되면서, 전면 디밍 스크림이 그 전부를 덮어 버렸다.
+   스크림의 목적은 "화면을 어둡게 하기"가 아니라 "글자 자리의 대비 확보"다.
+   그래서 텍스트 블록을 감싸는 타원 하나 + 바닥 얕은 비네트만 남기고
+   상단(하늘·조명탑)과 우측(원경 스탠드)은 완전히 열어 둔다.
+
+   대비는 실측으로 관리한다 — `node docs/audit/landing-contrast.mjs`가
+   텍스트를 숨긴 배경을 다시 캡처해 글자 bbox 안 **가장 밝은 픽셀** 기준으로
+   WCAG 비를 계산한다. 평균이 아니라 최악을 보는 이유는 잔디·조명탑 때문에
+   배경 휘도가 국소적으로 크게 튀기 때문이다. */
 .landing__scrim {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: var(--z-base);
   pointer-events: none;
   background:
-    radial-gradient(70% 55% at 50% 52%, rgba(4, 8, 16, 0.7) 0%, rgba(4, 8, 16, 0.34) 60%, rgba(4, 8, 16, 0.05) 100%),
-    linear-gradient(180deg, rgba(4, 8, 16, 0.5) 0%, rgba(4, 8, 16, 0.08) 42%, rgba(4, 8, 16, 0.62) 100%);
+    /* ① 문안 블록을 감싸는 타원. 좌하단에 앵커를 두고 텍스트 폭만큼만 덮는다. */
+    radial-gradient(
+      58% 62% at 19% 72%,
+      var(--s-scrim) 0%,
+      color-mix(in srgb, var(--s-scrim) 78%, transparent) 44%,
+      color-mix(in srgb, var(--s-scrim) 34%, transparent) 68%,
+      transparent 86%
+    ),
+    /* ② 바닥 비네트 — 하단 각주·고지 두 줄이 잔디 밝은 부분에 걸리는 것만 막는다. */
+    linear-gradient(
+      180deg,
+      transparent 58%,
+      color-mix(in srgb, var(--s-scrim) 55%, transparent) 88%,
+      color-mix(in srgb, var(--s-scrim) 78%, transparent) 100%
+    );
 }
-.landing__card {
+
+/* 3D 위에 직접 얹히는 텍스트는 전부 후광을 갖는다. 스크림을 국소화한 대신
+   글자 자체가 대비의 절반을 책임진다 — 배경을 어둡게 하지 않고 대비만 올리는
+   유일한 수단이고, 조명탑처럼 국소적으로 밝은 지점에서 특히 효과가 크다. */
+.landing__content,
+.landing__actions {
+  text-shadow:
+    0 1px 2px rgba(4, 8, 16, 0.92),
+    0 0 14px rgba(4, 8, 16, 0.7);
+}
+/* 채움 버튼은 자기 배경이 불투명하므로 후광이 오히려 지저분해진다. */
+.landing__actions .btn--primary {
+  text-shadow: none;
+}
+
+/* 문안 블록 — 3456px에서도 카드처럼 좁아지지 않게 뷰포트 폭을 따라 자란다(L-4). */
+.landing__content {
   position: relative;
-  z-index: 2;
-  width: min(620px, 100%);
-  padding: 44px 40px 32px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 18px;
-  background: rgba(9, 14, 26, 0.55);
-  backdrop-filter: blur(10px) saturate(120%);
-  -webkit-backdrop-filter: blur(10px) saturate(120%);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
-  text-align: center;
+  z-index: var(--z-furniture);
+  width: clamp(360px, 52vw, 760px);
+  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-4);
 }
-.landing__kicker {
-  margin: 0 0 14px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  color: var(--bc-accent);
+
+/* 키커는 문안 블록의 최상단이라 스크림 타원의 가장자리에 걸린다. --t-mid로는
+   실측 4.05:1(기준 4.5)이었다. 스크림을 더 키우면 3D를 다시 덮게 되므로
+   배경이 아니라 글자를 올려 해결한다. */
+.landing__eyebrow {
+  margin: 0;
+  color: var(--t-hi);
 }
+
 .landing__title {
-  margin: 0 0 18px;
-  /* 상한 42px: 제목 최장 줄("현실에서 축덕인 내가,")이 약 11em이라
-     카드 내부 폭(620 - 좌우 40 = 540px) 안에 들어오는 한계값이다. */
-  font-size: clamp(24px, 3.6vw, 42px);
+  margin: 0;
+  font-size: var(--fs-display);
   font-weight: 800;
-  line-height: 1.12;
-  letter-spacing: -0.01em;
-  /* index.css의 전역 h1은 --text-h(라이트 테마에서 거의 검정)를 쓴다.
-     랜딩은 항상 다크 배경이므로 색을 고정한다. */
-  color: #ffffff;
-  text-shadow: 0 2px 24px rgba(0, 0, 0, 0.6);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-display);
+  color: var(--t-hi);
 }
 /* 절 단위 줄바꿈 고정 — 폭이 아무리 넓어도 두 줄을 유지한다. */
 .landing__title-line {
   display: block;
 }
+
 .landing__lede {
-  margin: 0 0 30px;
-  font-size: clamp(15px, 1.5vw, 18px);
-  line-height: 1.7;
-  color: #dbe4f4;
-  text-wrap: balance;
+  margin: 0;
+  font-size: var(--fs-lg);
+  line-height: var(--lh-loose);
+  color: var(--t-mid);
 }
 .landing__nowrap {
   white-space: nowrap;
 }
-.landing__foot {
-  margin: 24px 0 0;
-  font-size: 12px;
-  line-height: 1.6;
-  letter-spacing: 0.02em;
-  color: var(--bc-text-dim);
-}
-/* 픽션 고지 — 각주보다 한 단계 더 물러난 톤(작게·흐리게). 시선을 뺏지 않되 항상 보인다. */
-.landing__disclaimer {
-  margin: 8px 0 0;
-  font-size: 11px;
-  line-height: 1.5;
-  letter-spacing: 0.02em;
-  color: rgba(255, 255, 255, 0.45);
-}
+
 .landing__actions {
   display: flex;
-  gap: 12px;
-  justify-content: center;
   flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-top: var(--sp-2);
 }
-.landing__cta {
-  padding: 14px 32px;
-  border: 1px solid var(--bc-accent);
-  border-radius: 12px;
-  background: var(--bc-accent);
-  color: #0b1220;
-  font-family: inherit;
-  font-size: 16px;
-  font-weight: 800;
-  cursor: pointer;
+
+.landing__foot {
+  margin: var(--sp-3) 0 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-md);
+  color: var(--t-mid);
 }
-.landing__cta:hover {
-  filter: brightness(1.05);
+/* 픽션 고지 — 각주보다 한 단계 물러난 톤. 다만 3D 위에서는 --t-low가 실측 4.01:1로
+   기준(4.5)에 미달했다. 고지는 항상 읽혀야 하므로 한 단계 올린다. */
+.landing__disclaimer {
+  margin: 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
+  color: var(--t-mid);
 }
-.landing__cta--ghost {
-  background: transparent;
-  border-color: var(--bc-line);
-  color: var(--bc-text);
-}
-.landing__cta--ghost:hover {
-  border-color: var(--bc-accent);
-  filter: none;
-}
-/* 모바일 — 3D는 로드하지 않는다(LandingScreen 참고). 카드도 여백을 줄여 문안이 잘리지 않게. */
-@media (max-width: 720px) {
+
+/* 모바일 — 3D는 로드하지 않는다(LandingScreen 참고). 좌우 여백만 줄인다. */
+@media (max-width: 719px) {
   .landing {
-    padding: 20px 16px;
+    padding: var(--sp-6) var(--sp-4);
   }
-  .landing__card {
-    padding: 32px 22px 24px;
-  }
-  .landing__cta {
+  .landing__content {
     width: 100%;
-    padding: 14px 20px;
+  }
+  /* 390px에서 두 CTA가 각각 한 줄을 차지해야 오조작이 없다. */
+  .landing__actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
   }
 }
+
 /* 모션 최소화 — 페이드인도 즉시 전환(3D 카메라는 StadiumBackdrop이 정지시킨다). */
 @media (prefers-reduced-motion: reduce) {
   .landing-bg__host {
@@ -156,18 +185,25 @@
   }
 }
 
-/* 데모 배너 — 리더보드 미반영 안내(경기·신문 상단 고정). */
+/* ============================================================================
+   데모 래퍼 — 리더보드 미반영 안내
+   ----------------------------------------------------------------------------
+   [M-10] 이전에는 전폭 라임 띠(42px)였다. 라임은 --live("지금 진행 중") 전용으로
+   강등됐고, 무엇보다 이 띠의 높이가 그 아래 경기 화면의 100vh와 합산되어
+   스테이지 하단을 화면 밖으로 밀어냈다. 중립 칩 한 줄로 낮춘다.
+   .demo-wrap은 높이를 배분하지 않는다 — min-height만 갖고 내용이 자라게 둔다.
+   ========================================================================== */
 .demo-wrap {
   min-height: 100dvh;
-  background: var(--bc-bg);
+  background: var(--s-0);
 }
-.demo-banner {
-  padding: 8px 16px;
-  text-align: center;
-  font-family: var(--bc-font);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #0b1220;
-  background: var(--bc-accent);
+.demo-note {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  border-bottom: 1px solid var(--s-line);
+  font-family: var(--f-ui);
+  font-size: var(--fs-sm);
+  color: var(--t-mid);
 }
