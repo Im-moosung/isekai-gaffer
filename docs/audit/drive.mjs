@@ -56,6 +56,16 @@ const AUDIT = () => {
     clippedLH:dedupe(clippedLH).slice(0,8), tinyTap:dedupe(tinyTap).slice(0,10), overlaps:dedupe(overlaps).slice(0,12)};
 };
 
+/** 후보 라벨을 순서대로 시도한다. UI 재설계로 라벨이 바뀔 때마다 주행이
+ *  통째로 멈추면 회귀 측정을 못 한다 — 하니스는 문구 변경에 견뎌야 한다. */
+const clickAny = async (page, candidates, nth = 0) => {
+  for (const t of candidates) {
+    const r = await clickText(page, t, nth);
+    if (r.startsWith('OK')) return r;
+  }
+  return 'MISS-ALL:' + candidates.join('|');
+};
+
 const clickText = async (page, t, nth = 0) => {
   const r = await page.evaluate(([t, nth]) => {
     const els = [...document.querySelectorAll('button,a,[role=button],[role=tab]')]
@@ -93,19 +103,19 @@ for (const [w, h] of VIEWPORTS) {
   await page.waitForTimeout(800);
   await snap('02-hub', true);
 
-  console.log(await clickText(page, '경기 준비'));
+  console.log(await clickAny(page, ['준비하기', '경기 준비', '준비']));
   await page.waitForTimeout(1200);
   await snap('03-warroom', true);
 
   // war room: 팀 전술 tab
-  console.log(await clickText(page, '팀 전술'));
+  console.log(await clickAny(page, ['팀 전술', '전술']));
   await page.waitForTimeout(600);
   await snap('04-warroom-tactics', true);
-  console.log(await clickText(page, '선발'));
+  console.log(await clickAny(page, ['선발', '라인업']));
   await page.waitForTimeout(400);
 
   // kickoff
-  console.log(await clickText(page, '킥오프'));
+  console.log(await clickAny(page, ['킥오프']));
   await page.waitForTimeout(1500);
   await snap('05-entrance');
   await page.waitForTimeout(6000);
@@ -114,12 +124,12 @@ for (const [w, h] of VIEWPORTS) {
   await snap('07-match-early');
 
   // try 2D toggle
-  console.log('2D:', await clickText(page, '2D'));
+  console.log('2D:', await clickAny(page, ['2D']));
   await page.waitForTimeout(1200);
   await snap('08-match-2d');
 
   // 감독 타임
-  console.log('타임:', await clickText(page, '감독 타임'));
+  console.log('타임:', await clickAny(page, ['감독 타임', '타임']));
   await page.waitForTimeout(1500);
   await snap('09-manager-time', true);
 

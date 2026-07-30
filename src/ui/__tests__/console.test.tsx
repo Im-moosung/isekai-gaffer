@@ -35,13 +35,15 @@ describe('ConsolePanel (지시 4축)', () => {
 
   it("(a2) 킥오프 전('pre')은 슬라이더 조작이 버튼 없이 즉시 반영된다", () => {
     store().startMatch(home, away, 42) // phase='pre'
-    const { queryByRole, getByLabelText } = render(<ConsolePanel side="home" />)
+    const { queryByRole, getByLabelText, getByRole } = render(<ConsolePanel side="home" />)
     // 즉시 반영이므로 [지시 적용] 버튼 자체가 없다(있으면 "아직 적용 안 됨"이라는 거짓 신호).
     expect(queryByRole('button', { name: '지시 적용' })).toBeNull()
     fireEvent.change(getByLabelText('템포') as HTMLInputElement, { target: { value: '70' } })
     expect(store().engine!.home.tactics.instructions.tempo).toBe(70)
-    fireEvent.change(getByLabelText('공격방향') as HTMLSelectElement, { target: { value: 'left' } })
+    // 공격방향은 네이티브 select가 아니라 세그먼트 컨트롤이다(선택지 4개 전부 노출).
+    fireEvent.click(getByRole('button', { name: '좌측' }))
     expect(store().engine!.home.tactics.instructions.attackFocus).toBe('left')
+    expect(getByRole('button', { name: '좌측' }).getAttribute('aria-pressed')).toBe('true')
   })
 
   it("(a3) 킥오프 전 슬라이더 드래그는 결정 로그를 남기지 않는다(기자회견 노이즈 방지)", () => {

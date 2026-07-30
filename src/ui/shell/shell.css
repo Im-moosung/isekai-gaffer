@@ -31,8 +31,8 @@
   gap: var(--sp-4);
   min-height: var(--h-topbar);
   padding: var(--sp-2) var(--sp-4);
-  background: color-mix(in srgb, var(--s-0) 88%, transparent);
-  backdrop-filter: blur(12px);
+  /* 완전 불투명. 반투명이면 아래로 흐르는 콘텐츠 글자가 비쳐 두 겹으로 읽힌다. */
+  background: var(--s-0);
   border-bottom: 1px solid var(--s-line);
 }
 
@@ -70,8 +70,7 @@
   gap: var(--sp-4);
   min-height: var(--h-bottombar);
   padding: var(--sp-2) var(--sp-4);
-  background: color-mix(in srgb, var(--s-0) 92%, transparent);
-  backdrop-filter: blur(12px);
+  background: var(--s-0);
   border-top: 1px solid var(--s-line);
 }
 .shell__bottom-status {
@@ -132,7 +131,9 @@
   font-family: inherit;
   font-size: var(--fs-md);
   font-weight: 700;
-  line-height: 1;
+  /* 한글은 line-height 1이면 받침이 잘린다. flex 정렬이 세로 중앙을 잡고
+     min-height가 크기를 보장하므로 행간을 넉넉히 줘도 버튼 높이는 안 변한다. */
+  line-height: var(--lh-ui);
   cursor: pointer;
   transition: background var(--dur-1) var(--ease-out),
     border-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);

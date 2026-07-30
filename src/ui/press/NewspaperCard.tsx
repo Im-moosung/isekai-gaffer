@@ -7,6 +7,7 @@
 import { useCallback, useState } from 'react'
 import type { Headline } from '../../game/pressconf'
 import type { MatchRecord } from '../../game/campaignStore'
+import '../shell/shell.css'
 import './press.css'
 
 // 가상 발행일 — 실제 날짜(Date) 사용 금지, 대체역사 톤을 위해 고정.
@@ -68,13 +69,11 @@ export function NewspaperCard({ headline, record, teamName, onNext }: Props) {
   return (
     <div className="np-wrap">
       <article className="np-card" aria-label="신문 1면">
-        <div className="np-watermark" aria-hidden>{WATERMARK}</div>
-
         <header className="np-masthead">
           <h1 className="np-masthead__title">{MASTHEAD}</h1>
           <div className="np-masthead__meta">
             <span>{FAKE_DATE}</span>
-            <span className="np-masthead__fiction">{WATERMARK}</span>
+            <span>스포츠 · 1면</span>
           </div>
         </header>
 
@@ -87,21 +86,26 @@ export function NewspaperCard({ headline, record, teamName, onNext }: Props) {
 
         <div className="np-scorebox" aria-label="스코어">
           <span className="np-scorebox__team">{teamName}</span>
-          <span className="np-scorebox__score">{kor} - {og}</span>
+          <span className="np-scorebox__score num">{kor} - {og}</span>
           <span className="np-scorebox__team">{opp}</span>
-          {so && <span className="np-scorebox__so">{so}</span>}
+          {so && <span className="np-scorebox__so num">{so}</span>}
         </div>
+
+        {/* 사실 고지는 지면 밖 도장으로. 본문을 가로지르던 대각선 워터마크는
+            헤드라인·인용문의 가독성을 깎았다. */}
+        <span className="np-stamp">{WATERMARK}</span>
       </article>
 
       <div className="np-actions">
-        <button type="button" className="np-save" onClick={onSave} disabled={busy}>
-          {busy ? '저장 중…' : '이미지 저장'}
-        </button>
+        {/* 우선순위: 진행 동작이 primary. [이미지 저장]은 부차 동작이다. */}
         {onNext && (
-          <button type="button" className="np-next" onClick={onNextClick} disabled={advancing}>
+          <button type="button" className="btn btn--lg btn--primary" onClick={onNextClick} disabled={advancing}>
             다음
           </button>
         )}
+        <button type="button" className="btn btn--lg btn--secondary" onClick={onSave} disabled={busy}>
+          {busy ? '저장 중…' : '이미지 저장'}
+        </button>
       </div>
     </div>
   )
@@ -110,6 +114,8 @@ export function NewspaperCard({ headline, record, teamName, onNext }: Props) {
 // ═══════════════════════════════════════════════════════════
 // renderNewspaperPng — canvas 2D 직접 드로잉(1080×1350). 외부 lib 없음.
 // jsdom에서 getContext('2d')가 null → null 반환(테스트 스킵). 브라우저 E2E 검증.
+// 색 리터럴이 남는 유일한 자리다: canvas 2D는 CSS 변수를 읽지 못한다.
+// 값은 press.css의 .np-card 지역 변수(--np-paper/--np-ink/…)와 일치시켜 둔다.
 // ═══════════════════════════════════════════════════════════
 const PNG_W = 1080
 const PNG_H = 1350
@@ -128,7 +134,9 @@ export function renderNewspaperPng(
   const opp = oppName(record.opponentId)
   const [kor, og] = record.score
   const so = record.shootout ? `승부차기 ${record.shootout[0]}-${record.shootout[1]}` : null
-  const serif = 'Georgia, "Times New Roman", "Apple SD Gothic Neo", serif'
+  // 화면과 같은 명조 스택. 신문으로 읽히게 하는 것이 이 카드의 핵심이라
+  // PNG도 같은 서체 우선순위를 따른다.
+  const serif = '"Nanum Myeongjo", "Apple SD Gothic Neo", "Times New Roman", serif'
   const sans = '"Apple SD Gothic Neo", "Noto Sans KR", sans-serif'
   const PAD = 72
 
@@ -166,15 +174,15 @@ export function renderNewspaperPng(
   y += 24
   y = wrapText(ctx, headline.sub, PAD, y, PNG_W - PAD * 2, `500 38px ${sans}`, 50)
 
-  // 인용 박스
+  // 인용 — 좌측 강조 바 대신 큰따옴표 글리프 + 들여쓰기(신문 관례).
   y += 60
   const quoteH = 200
-  ctx.fillStyle = '#e9e4d6'
-  ctx.fillRect(PAD, y, PNG_W - PAD * 2, quoteH)
+  const quoteX = PAD + 96
   ctx.fillStyle = '#14110c'
-  ctx.fillRect(PAD, y, 10, quoteH) // 왼쪽 강조 바
-  ctx.fillStyle = '#2a251d'
-  wrapText(ctx, headline.quote, PAD + 44, y + 70, PNG_W - PAD * 2 - 80, `italic 500 40px ${serif}`, 52)
+  ctx.font = `800 140px ${serif}`
+  ctx.fillText('“', PAD, y + 100)
+  ctx.fillStyle = '#3a352c'
+  wrapText(ctx, headline.quote, quoteX, y + 70, PNG_W - quoteX - PAD, `italic 500 40px ${serif}`, 52)
 
   // 스코어박스
   const boxY = y + quoteH + 80
@@ -194,15 +202,20 @@ export function renderNewspaperPng(
     ctx.fillText(so, cx, boxY + 215)
   }
 
-  // 대각선 워터마크(반투명)
+  // FICTION 도장 — 지면 하단 오른쪽. 본문을 가로지르던 대각선 워터마크는
+  // 헤드라인·인용문 위에 겹쳐 가독성을 깎았다.
   ctx.save()
-  ctx.translate(PNG_W / 2, PNG_H / 2)
-  ctx.rotate(-Math.PI / 6)
-  ctx.globalAlpha = 0.10
-  ctx.fillStyle = '#b02a2a'
+  ctx.translate(PNG_W - PAD - 130, PNG_H - PAD - 20)
+  ctx.rotate(-Math.PI / 30) // -6°
+  ctx.globalAlpha = 0.3
+  ctx.strokeStyle = '#14110c'
+  ctx.lineWidth = 4
+  ctx.strokeRect(-150, -40, 300, 72)
+  ctx.fillStyle = '#14110c'
   ctx.textAlign = 'center'
-  ctx.font = `800 130px ${sans}`
-  ctx.fillText(WATERMARK, 0, 0)
+  ctx.textBaseline = 'middle'
+  ctx.font = `800 34px ${sans}`
+  ctx.fillText(WATERMARK, 0, -2)
   ctx.restore()
 
   return new Promise(resolve => {

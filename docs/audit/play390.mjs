@@ -118,10 +118,22 @@ record('경기 → 감독 타임', r.ok, r.why)
 await page.waitForTimeout(1500)
 await page.screenshot({ path: `${SHOTS}/390-play-05-manager-time.png`, fullPage: true })
 
-const layer = await measure('.ms-tactics-layer')
-record('작전판 하드클립 없음',
-  !layer || layer.scrollH <= layer.clientH + 8,
-  layer ? `표시 ${layer.clientH} / 전체 ${layer.scrollH}` : '레이어 없음')
+// 원래 결함(T-3)은 overflow:hidden으로 콘텐츠가 **도달 불가능**했던 것이다(79% 하드클립).
+// 스크롤 가능한 컨테이너는 결함이 아니다 — 단, 스크롤할 수 있다는 어포던스가 있어야 한다.
+const layer = await page.evaluate(() => {
+  const el = document.querySelector('.ms-tactics-layer')
+  if (!el) return null
+  const cs = getComputedStyle(el)
+  return {
+    clientH: el.clientHeight, scrollH: el.scrollHeight, overflowY: cs.overflowY,
+    hasAffordance: el.classList.contains('scroll-y') || cs.scrollbarWidth === 'thin',
+    // 실제로 끝까지 스크롤되는가
+    reachable: (el.scrollTop = el.scrollHeight, el.scrollTop > 0),
+  }
+})
+record('작전판 콘텐츠 도달 가능 (하드클립 없음)',
+  !layer || ['auto', 'scroll'].includes(layer.overflowY) && layer.hasAffordance && layer.reachable,
+  layer ? `overflow-y:${layer.overflowY} 표시 ${layer.clientH}/${layer.scrollH} 어포던스 ${layer.hasAffordance} 도달 ${layer.reachable}` : '레이어 없음')
 
 // 교체 탭 → 벤치 선수 투입
 const subTab = await tap('교체')

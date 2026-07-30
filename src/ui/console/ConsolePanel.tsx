@@ -1,12 +1,15 @@
 import { useState, useEffect } from 'react'
 import { interventionLevel, useMatchStore } from '../../game/matchStore'
 import type { Instructions } from '../../engine/types'
+import '../shell/shell.css'
 import './console.css'
 
-// cost: 슬라이더 옆 트레이드오프 표시(⚡ 체력·⚠ 리스크). threshold 이상일 때 강조.
-const AXES: { key: 'lineHeight' | 'pressing' | 'tempo'; label: string; cost?: { icon: string; text: string; threshold: number } }[] = [
-  { key: 'lineHeight', label: '라인', cost: { icon: '⚠', text: '뒷공간 노출', threshold: 70 } },
-  { key: 'pressing', label: '압박', cost: { icon: '⚡', text: '체력 소모 +40% · 지치면 파울 증가', threshold: 70 } },
+// cost: 슬라이더 아래 트레이드오프 표시. threshold 이상일 때 강조.
+// 이모지(⚠·⚡) 대신 평문 한글 태그를 쓴다 — OS마다 모양·크기가 달라 톤이 무너지고,
+// 방송 관례도 카드 아이콘 대신 "DOWN TO 10 PLAYERS" 같은 평문 배너를 쓴다.
+const AXES: { key: 'lineHeight' | 'pressing' | 'tempo'; label: string; cost?: { tag: string; text: string; threshold: number } }[] = [
+  { key: 'lineHeight', label: '라인', cost: { tag: '주의', text: '뒷공간 노출', threshold: 70 } },
+  { key: 'pressing', label: '압박', cost: { tag: '체력', text: '체력 소모 +40% · 지치면 파울 증가', threshold: 70 } },
   { key: 'tempo', label: '템포' },
 ]
 
@@ -100,22 +103,30 @@ export function ConsolePanel({ side }: { side: 'home' | 'away' }) {
             </div>
             {cost && (
               <p className={`cs-cost${shown[key] >= cost.threshold ? ' cs-cost--hot' : ''}`}>
-                <span aria-hidden="true">{cost.icon}</span> {cost.text}
+                <span className="cs-cost__tag">{cost.tag}</span> {cost.text}
               </p>
             )}
           </div>
         ))}
+        {/* 네이티브 select는 OS 팝업이라 다크 UI 밖으로 튀고 터치 타깃도 작다.
+            선택지가 4개뿐이므로 세그먼트 컨트롤로 전부 펼친다. */}
         <div className="cs-axis cs-axis--focus">
-          <span className="cs-axis__label" aria-hidden="true">공격방향</span>
-          <select
-            aria-label="공격방향"
-            value={shown.attackFocus}
-            disabled={!open}
-            onChange={e => edit({ attackFocus: e.target.value as Instructions['attackFocus'] })}
-            className="cs-axis__select"
-          >
-            {FOCUS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-          </select>
+          <span className="cs-axis__label" id="cs-focus-label">공격방향</span>
+          <div className="seg cs-focus" role="group" aria-labelledby="cs-focus-label">
+            {/* 세그먼트 높이는 34px지만 손가락에는 44px가 필요하다 — tap-44가 히트 영역만 넓힌다. */}
+            {FOCUS.map(f => (
+              <button
+                key={f.value}
+                type="button"
+                className="seg__item tap-44"
+                aria-pressed={shown.attackFocus === f.value}
+                disabled={!open}
+                onClick={() => edit({ attackFocus: f.value })}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -123,7 +134,7 @@ export function ConsolePanel({ side }: { side: 'home' | 'away' }) {
         {/* 즉시 반영 모드에선 버튼이 "아직 적용 안 됐다"는 거짓 신호가 되므로 감춘다. */}
         {immediate
           ? <span className="cs-live">조작 즉시 반영 — 하단 검토 요약에서 확인하십시오</span>
-          : <button type="button" className="cs-btn" onClick={apply} disabled={!open}>지시 적용</button>}
+          : <button type="button" className="btn btn--primary" onClick={apply} disabled={!open}>지시 적용</button>}
         {!open && <span className="cs-lock">다음 브레이크까지 잠김</span>}
       </div>
       {error && <p className="cs-error" role="alert">{error}</p>}

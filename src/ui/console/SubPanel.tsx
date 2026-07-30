@@ -3,6 +3,7 @@ import { useMatchStore } from '../../game/matchStore'
 import { MAX_SUBS, MAX_SUB_WINDOWS } from '../../engine/simulate'
 import type { MatchEvent, Player, SideState } from '../../engine/types'
 import { playerMatchStats, hasPlayerMatchStats, type PlayerMatchStats } from '../../game/playerStats'
+import '../shell/shell.css'
 import './console.css'
 
 interface SubPanelProps {
@@ -104,7 +105,8 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
       )}
 
       <p className="cs-sub__hint">
-        {!out ? '① 나갈 선수를 고르세요(보드 발광)' : !inSel ? '② 들어올 벤치 선수를 고르세요' : '③ [교체 확정]'}
+        {/* 원문자(①②③)는 폰트에 따라 빠지거나 크기가 튄다 — 평문 단계 표기로 쓴다. */}
+        {!out ? '1단계 · 나갈 선수를 고르세요(보드 발광)' : !inSel ? '2단계 · 들어올 벤치 선수를 고르세요' : '3단계 · [교체 확정]'}
       </p>
 
       <div className="cs-sub__lineup" role="group" aria-label="라인업">
@@ -139,7 +141,7 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
       </div>
 
       <div className="cs-panel__foot">
-        <button type="button" className="cs-btn" onClick={swap} disabled={!open || !ready}>교체 확정</button>
+        <button type="button" className="btn btn--primary" onClick={swap} disabled={!open || !ready}>교체 확정</button>
         {!open && <span className="cs-lock">다음 브레이크까지 잠김</span>}
       </div>
       {error && <p className="cs-error" role="alert">{error}</p>}
@@ -177,18 +179,21 @@ function SubCard({ player, slot, stamina, stats, selected, disabled, onSelect }:
 
 /** 교체 카드 한 줄 기록 — 0인 항목은 생략해 카드가 길어지지 않게 한다.
  *  유효슛은 일부러 넣지 않는다: 선방당한 슛은 슈터를 알 수 없어 정직하게 셀 수 없다
- *  (playerStats.ts 주석 참조). 확실한 '슛/골'만 내건다. */
+ *  (playerStats.ts 주석 참조). 확실한 '슛/골'만 내건다.
+ *  이모지(⚽🅰🧤🟥🟨)를 쓰지 않는다 — 10px 자리에서 OS마다 크기가 달라 줄 높이가
+ *  흔들렸고, 색 이모지가 카드의 유일한 채도가 되어 톤이 무너졌다. 평문 한글로 적는다. */
 function SubCardStats({ stats }: { stats: PlayerMatchStats }) {
   const parts: string[] = []
-  if (stats.goals > 0) parts.push(`⚽${stats.goals}`)
-  if (stats.assists > 0) parts.push(`🅰${stats.assists}`)
-  if (stats.saves > 0) parts.push(`🧤${stats.saves}`)
-  if (stats.shots > 0) parts.push(`슛${stats.shots}`)
-  if (stats.fouls > 0) parts.push(`파울${stats.fouls}`)
-  const carded = stats.reds > 0 ? '🟥' : stats.yellows > 0 ? '🟨' : ''
+  if (stats.goals > 0) parts.push(`골 ${stats.goals}`)
+  if (stats.assists > 0) parts.push(`도움 ${stats.assists}`)
+  if (stats.saves > 0) parts.push(`선방 ${stats.saves}`)
+  if (stats.shots > 0) parts.push(`슛 ${stats.shots}`)
+  if (stats.fouls > 0) parts.push(`파울 ${stats.fouls}`)
+  const carded = stats.reds > 0 ? '퇴장' : stats.yellows > 0 ? '경고' : ''
   return (
-    <span className={`cs-card__rec${carded ? ' cs-card__rec--carded' : ''}`}>
-      {carded}{parts.join(' · ')}
+    <span className="cs-card__rec num">
+      {carded && <span className={`cs-card__card cs-card__card--${stats.reds > 0 ? 'red' : 'yellow'}`}>{carded}</span>}
+      {parts.join(' · ')}
     </span>
   )
 }

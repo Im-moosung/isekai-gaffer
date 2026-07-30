@@ -1,164 +1,303 @@
-/* 감독 콘솔 — 지시 4축·교체 패널. 색·간격은 방송 토큰 사용, 인라인 스타일 금지(데이터 바인딩 폭 예외). */
+/* ============================================================================
+   감독 콘솔 — 지시 4축 · 교체 패널
+   ----------------------------------------------------------------------------
+   [2026-07-30 토큰 정합 패스] 하드코딩 hex(#0b1220 버튼 잉크, #f5c542 카드 표시),
+   11px·10px 폰트, 30px 안팎의 터치 타깃, 브레이크포인트 부재를 정리했다.
+   색은 전부 tokens.css에서만 온다. 라임(--live)은 "지금 진행 중" 전용이므로
+   선택·CTA에는 --brand만 쓴다. 버튼은 shell.css의 .btn 프리미티브를 쓴다.
+   ========================================================================== */
+
 .cs-panel {
-  background: var(--bc-panel);
-  border: 1px solid var(--bc-line);
-  border-radius: 10px;
-  padding: 12px 14px;
-  color: var(--bc-text);
-  font-family: var(--bc-font);
+  background: var(--s-1);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  padding: var(--sp-3) var(--sp-4);
+  color: var(--t-hi);
+  font-family: var(--f-ui);
+  min-width: 0;
 }
 
 .cs-panel__head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
 }
 .cs-panel__title {
-  margin: 0 0 10px;
-  font-size: 14px;
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-md);
   font-weight: 700;
-  letter-spacing: 0.02em;
+  line-height: var(--lh-tight);
 }
 .cs-panel__foot {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 12px;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+  margin-top: var(--sp-3);
 }
 
-/* 지시 슬라이더 */
-.cs-axes { display: flex; flex-direction: column; gap: 10px; }
+/* ── 지시 슬라이더 ───────────────────────────────────────────────────────── */
+.cs-axes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
 .cs-axis {
   display: grid;
-  grid-template-columns: 56px 1fr 34px;
+  /* 값 컬럼이 34px였다 — 세 자리("100")에서 잘렸다. tabular 숫자 3자리 기준. */
+  grid-template-columns: 56px minmax(0, 1fr) 40px;
   align-items: center;
-  gap: 10px;
+  gap: var(--sp-3);
 }
-.cs-axis__label { font-size: 13px; color: var(--bc-text-dim); }
+.cs-axis__label {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-md);
+  color: var(--t-mid);
+}
 .cs-axis__val {
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
+  font-family: var(--f-num);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-size: var(--fs-sm);
   text-align: right;
-  color: var(--bc-text);
+  color: var(--t-hi);
 }
-.cs-axis__range { width: 100%; accent-color: var(--bc-accent); }
-.cs-axis__select {
-  background: var(--bc-panel-2);
-  color: var(--bc-text);
-  border: 1px solid var(--bc-line);
-  border-radius: 6px;
-  padding: 4px 8px;
-  font-family: inherit;
-}
-.cs-axis--focus { grid-template-columns: 56px 1fr; }
-
-/* 슬라이더 트레이드오프 비용 표시(⚡ 체력·⚠ 리스크). */
-.cs-axis-wrap { display: flex; flex-direction: column; gap: 2px; }
-.cs-cost {
-  margin: 0 0 0 66px;
-  font-size: 11px;
-  line-height: 1.3;
-  color: var(--bc-text-dim);
-}
-.cs-cost--hot { color: var(--bc-danger); font-weight: 600; }
-
-/* 버튼·잠금·에러 */
-.cs-btn {
-  background: var(--bc-accent);
-  color: #0b1220;
-  border: none;
-  border-radius: 8px;
-  padding: 8px 16px;
-  font-weight: 700;
-  font-family: inherit;
+/* range는 트랙만 얇고 히트 영역은 손가락 크기여야 한다(WCAG 2.5.5). */
+.cs-axis__range {
+  width: 100%;
+  height: var(--tap-min);
+  accent-color: var(--brand);
   cursor: pointer;
 }
-.cs-btn:disabled {
-  background: var(--bc-panel-2);
-  color: var(--bc-text-dim);
+.cs-axis__range:disabled {
   cursor: not-allowed;
+  opacity: 0.5;
 }
-.cs-lock { font-size: 12px; color: var(--bc-text-dim); }
-/* 킥오프 전 즉시 반영 안내 — [지시 적용] 버튼 자리를 대신한다. */
-.cs-live { font-size: 12px; color: var(--bc-text-dim); }
-.cs-error { margin: 8px 0 0; font-size: 12px; color: var(--bc-danger); }
+.cs-axis--focus {
+  grid-template-columns: 56px minmax(0, 1fr);
+}
+.cs-focus {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
 
-/* 교체 패널 */
+/* 슬라이더 트레이드오프 비용 — 이모지 대신 평문 태그. */
+.cs-axis-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+.cs-cost {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0 0 0 68px;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
+  color: var(--t-low);
+}
+.cs-cost__tag {
+  flex: none;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--s-line-strong);
+  border-radius: var(--r-sm);
+  font-weight: 700;
+}
+/* 임계값을 넘긴 축만 경고색으로 승격한다 — 색이 늘 켜져 있으면 경고가 아니다. */
+.cs-cost--hot {
+  color: var(--warn);
+}
+.cs-cost--hot .cs-cost__tag {
+  border-color: var(--warn-line);
+  background: var(--warn-weak);
+}
+
+/* ── 잠금 · 안내 · 에러 ──────────────────────────────────────────────────── */
+.cs-lock,
+.cs-live {
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
+  color: var(--t-low);
+}
+.cs-error {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
+  color: var(--danger);
+}
+
+/* ── 교체 패널 ───────────────────────────────────────────────────────────── */
 .cs-sub__count {
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-  color: var(--bc-text-dim);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-size: var(--fs-sm);
+  color: var(--t-mid);
 }
 .cs-sub__hint {
-  margin: 6px 0 4px;
-  font-size: 12px;
+  margin: var(--sp-2) 0 var(--sp-1);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
   font-weight: 700;
-  color: var(--bc-accent);
+  color: var(--t-mid);
 }
-/* 교체 기회 소진 안내 — 왜 [교체 확정]이 막혔는지 그 자리에서 말한다. */
+/* 교체 기회 소진 안내 — 왜 [교체 확정]이 막혔는지 그 자리에서 말한다.
+   점선 테두리는 폐지했다. 4변 테두리 색조 + 배경 틴트로 상태를 말한다. */
 .cs-sub__locked {
-  margin: 6px 0 4px;
-  padding: 6px 8px;
-  border-radius: 8px;
-  border: 1px dashed var(--bc-danger);
-  font-size: 12px;
+  margin: var(--sp-2) 0 var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--danger-line);
+  border-radius: var(--r-sm);
+  background: var(--danger-weak);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
   font-weight: 700;
-  color: var(--bc-danger);
+  color: var(--danger);
 }
 .cs-sub__subtitle {
-  margin: 12px 0 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--bc-text-dim);
+  margin: var(--sp-3) 0 var(--sp-2);
+  font-size: var(--fs-eyebrow);
+  font-weight: 800;
+  letter-spacing: var(--ls-caps);
+  color: var(--t-low);
 }
-.cs-sub__lineup, .cs-sub__bench {
+.cs-sub__lineup,
+.cs-sub__bench {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--sp-2);
 }
 
 .cs-card {
   display: grid;
-  grid-template-columns: 22px 1fr auto;
-  grid-template-rows: auto auto;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 2px 8px;
-  background: var(--bc-panel-2);
-  border: 1px solid var(--bc-line);
-  border-radius: 8px;
-  padding: 6px 8px;
-  color: var(--bc-text);
+  gap: var(--sp-1) var(--sp-2);
+  /* 카드 자체가 선택 컨트롤이다 — 손가락에 44px를 준다. */
+  min-height: var(--tap-min);
+  padding: var(--sp-2);
+  background: var(--s-2);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-sm);
+  color: var(--t-hi);
   font-family: inherit;
   text-align: left;
   cursor: pointer;
+  transition: border-color var(--dur-1) var(--ease-out),
+    background var(--dur-1) var(--ease-out);
 }
-.cs-card:disabled { cursor: not-allowed; opacity: 0.7; }
-.cs-card--sel { border-color: var(--bc-accent); box-shadow: 0 0 0 1px var(--bc-accent) inset; }
+.cs-card:hover:not(:disabled) {
+  border-color: var(--s-line-strong);
+}
+.cs-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+/* 선택 = 감독의 행동이므로 --brand. 라임은 "진행 중" 전용이라 여기 오지 않는다. */
+.cs-card--sel {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 12%, var(--s-2));
+}
 .cs-card__num {
-  font-size: 12px;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-size: var(--fs-xs);
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--bc-text-dim);
+  color: var(--t-low);
 }
-.cs-card__name { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cs-card__slot { font-size: 11px; color: var(--bc-text-dim); }
+.cs-card__name {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cs-card__slot {
+  font-size: var(--fs-xs);
+  color: var(--t-low);
+}
 .cs-card__stamina {
   grid-column: 1 / -1;
   height: 5px;
-  border-radius: 3px;
-  background: var(--bc-line);
+  border-radius: var(--r-pill);
+  /* 트랙은 카드 배경보다 어둡게. 트랙과 채움의 명도가 가까우면 100%인 바가
+     "빈 트랙"처럼 보인다(--s-line 트랙 + 회색 채움이 그랬다). */
+  background: var(--s-0);
   overflow: hidden;
 }
-.cs-card__bar { display: block; height: 100%; background: var(--bc-accent); }
-.cs-card__bar--low { background: var(--bc-danger); }
+/* 체력바는 데이터다 — 브랜드 파랑을 쓰지 않는다(브랜드는 감독의 행동 전용).
+   저하 구간에서만 경고색으로 넘어간다. */
+.cs-card__bar {
+  display: block;
+  height: 100%;
+  background: var(--t-mid);
+}
+.cs-card__bar--low {
+  background: var(--warn);
+}
 /* 이 경기 개인 기록 — 카드 맨 아랫줄. 0인 항목은 렌더되지 않으므로 기록이 있는
    선수만 한 줄이 늘어난다(전원에게 붙으면 리스트가 두 배로 길어진다). */
 .cs-card__rec {
   grid-column: 1 / -1;
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-  color: var(--bc-text-dim);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex-wrap: wrap;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
+  color: var(--t-mid);
   text-align: left;
-  line-height: 1.2;
 }
-.cs-card__rec--carded { color: #f5c542; }
+.cs-card__card {
+  padding: 0 var(--sp-1);
+  border-radius: var(--r-sm);
+  font-weight: 700;
+}
+.cs-card__card--yellow {
+  background: var(--warn-weak);
+  color: var(--warn);
+}
+.cs-card__card--red {
+  background: var(--danger-weak);
+  color: var(--danger);
+}
+
+/* sm — 390px 세로 스택. 라벨 컬럼을 접어 슬라이더가 손가락 폭을 확보한다. */
+@media (max-width: 719px) {
+  .cs-panel {
+    padding: var(--sp-3);
+  }
+  .cs-axis {
+    grid-template-columns: minmax(0, 1fr) 40px;
+    grid-template-areas:
+      'label val'
+      'range range';
+    gap: var(--sp-1) var(--sp-2);
+  }
+  .cs-axis__label {
+    grid-area: label;
+  }
+  .cs-axis__val {
+    grid-area: val;
+  }
+  .cs-axis__range {
+    grid-area: range;
+  }
+  .cs-axis--focus {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'label'
+      'range';
+  }
+  .cs-focus {
+    grid-area: range;
+  }
+  .cs-cost {
+    margin-left: 0;
+  }
+  .cs-sub__lineup,
+  .cs-sub__bench {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+  .cs-panel__foot > .btn {
+    flex: 1 1 100%;
+  }
+}

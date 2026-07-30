@@ -27,14 +27,24 @@ const errs = []; page.on('pageerror', e => errs.push(String(e).slice(0,140)));
 const R = { console: errs, steps: {} };
 const tag = `${W}-flow`;
 const snap = async (name, full=false) => { await page.screenshot({ path: `${SHOTS}/${tag}-${name}.png`, fullPage: full }); R.steps[name] = await page.evaluate(AUDIT); console.log('shot', name); };
+/** 후보 라벨을 순서대로 시도한다. 문구가 바뀔 때마다 주행 전체가 멈추면
+ *  회귀 측정을 못 한다 — 하니스는 카피 변경에 견뎌야 한다. */
+const clickAny = async (page, candidates, nth = 0) => {
+  for (const t of candidates) {
+    const r = await clickText(page, t, nth);
+    if (r.startsWith('OK')) return r;
+  }
+  return 'MISS-ALL:' + candidates.join('|');
+};
+
 const minute = () => page.evaluate(() => (document.querySelector('.bc-scorebug__clock')||{}).textContent || document.body.innerText.match(/\d+'/)?.[0] || '?');
 
 await page.goto('http://localhost:5173/', { waitUntil: 'networkidle' });
 await page.waitForTimeout(1500);
 console.log(await clickText(page, '캠페인 시작'));
-console.log(await clickText(page, '경기 준비'));
+console.log(await clickAny(page, ['준비하기', '경기 준비', '준비']));
 await page.waitForTimeout(800);
-console.log(await clickText(page, '킥오프'));
+console.log(await clickAny(page, ['킥오프']));
 await page.waitForTimeout(4000);
 console.log('after kickoff min=', await minute());
 console.log(await clickText(page, '2x'));

@@ -14,6 +14,7 @@ import type { MatchRecord } from '../../game/campaignStore'
 import type { DecisionEntry } from '../../engine/types'
 import { narrate } from '../../ai/aiClient'
 import { useMatchStore } from '../../game/matchStore'
+import '../shell/shell.css'
 import './press.css'
 
 interface Props {
@@ -24,6 +25,26 @@ interface Props {
 }
 
 const TONE_LABEL = ['공격적', '겸손', '유머'] as const
+
+// 상대·라운드 한글 표기(계층 격리: pressconf 내부 상수를 끌어오지 않는다).
+// 컨텍스트 스트립 전용 — 미등록 id는 코드 그대로 노출한다.
+const OPPONENT_KO: Record<string, string> = {
+  cze: '체코', mex: '멕시코', rsa: '남아공',
+  ecu: '에콰도르', eng: '잉글랜드', nor: '노르웨이', arg: '아르헨티나', esp: '스페인',
+  can: '캐나다', mar: '모로코', fra: '프랑스',
+}
+const STAGE_KO: Record<string, string> = {
+  group1: '조별리그 1차전', group2: '조별리그 2차전', group3: '조별리그 3차전',
+  r32: '32강', r16: '16강', qf: '8강', sf: '4강', final: '결승', ended: '여정의 끝',
+}
+
+// 질문자 표기 — 회견장이라는 사실을 화면이 스스로 말하게 하는 장치.
+// 실존 매체명은 쓰지 않는다(신문 제호와 같은 이유). 질문 순서로 결정론 선택.
+const PRESS_DESK = [
+  { outlet: '대한스포츠', name: '김 기자' },
+  { outlet: '월드컵 데일리', name: '박 기자' },
+  { outlet: '축구주간', name: '이 기자' },
+] as const
 
 export function PressConference({ record, log, teamName, onDone }: Props) {
   // 킥오프 플랜 이탈 축 수 — matchStore는 경기 종료 후에도 리셋되지 않으므로 여기서 직접 읽는다.
@@ -70,32 +91,55 @@ export function PressConference({ record, log, teamName, onDone }: Props) {
     onDone({ ...template, title })
   }
 
+  const opponent = OPPONENT_KO[record.opponentId] ?? record.opponentId
+  const stage = STAGE_KO[record.stage] ?? record.stage
+  const shootout = record.shootout ? ` (승부차기 ${record.shootout[0]}-${record.shootout[1]})` : ''
+  const desk = PRESS_DESK[idx % PRESS_DESK.length]
+
   return (
     <div className="pc-root">
       <div className="pc-stage">
-        <div className="pc-badge">
-          <span className="pc-badge__dot" /> 기자회견
-        </div>
+        {/* 컨텍스트 스트립 — 어느 경기 뒤의 회견인지 화면 안에서 확인된다. */}
+        <header className="pc-strip">
+          <span className="pc-strip__live">
+            <span className="live-dot" aria-hidden /> 기자회견
+          </span>
+          <span className="pc-strip__ctx num">
+            {teamName} {record.score[0]}-{record.score[1]} {opponent}{shootout} · {stage}
+          </span>
+        </header>
 
-        <div className="pc-stack">
-          {/* 이전 문답: 위로 쌓임 */}
-          {answers.map((ans, i) => (
-            <div key={questions[i].id} className="pc-turn pc-turn--past">
-              <div className="pc-question pc-question--past">
-                <span className="pc-reporter" aria-hidden>🎙️</span>
-                <p className="pc-question__text">{questions[i].text}</p>
-              </div>
-              <p className="pc-answer-said">{ans}</p>
-            </div>
-          ))}
+        {/* 지난 문답 — 요약 레일. 말풍선이 아니라 회견록 한 줄이다. */}
+        {answers.length > 0 && (
+          <ol className="pc-past" aria-label="지난 문답">
+            {answers.map((ans, i) => (
+              <li key={questions[i].id} className="pc-past__item">
+                <p className="pc-past__q">
+                  <span className="pc-past__mark" aria-hidden>Q.</span>{questions[i].text}
+                </p>
+                <p className="pc-past__a">
+                  <span className="pc-past__mark" aria-hidden>A.</span>{ans}
+                </p>
+              </li>
+            ))}
+          </ol>
+        )}
 
-          {/* 현재 질문 + 3택 */}
+        <div className="pc-main">
+          {/* 현재 질문(로어서드) + 3택 */}
           {current && !finishing && (
-            <div className="pc-turn pc-turn--current">
-              <div className="pc-question" key={current.id}>
-                <span className="pc-reporter" aria-hidden>🎙️</span>
+            <>
+              <article className="pc-question" key={current.id}>
+                <div className="pc-question__meta">
+                  <span className="pc-question__outlet">{desk.outlet} · {desk.name}</span>
+                  {/* 진행 표시는 막대가 아니라 평문이다 — 로딩바로 오독되지 않는다. */}
+                  <span className="pc-question__count num">
+                    질문 {idx + 1} / {questions.length}
+                  </span>
+                </div>
                 <p className="pc-question__text">{current.text}</p>
-              </div>
+              </article>
+
               <div className="pc-answers" role="group" aria-label="답변 선택">
                 {current.options.map((opt, i) => (
                   <button
@@ -109,18 +153,12 @@ export function PressConference({ record, log, teamName, onDone }: Props) {
                   </button>
                 ))}
               </div>
-            </div>
+            </>
           )}
 
           {finishing && (
             <p className="pc-finishing" role="status">헤드라인 발표 준비 중…</p>
           )}
-        </div>
-
-        <div className="pc-progress" aria-label={`질문 ${Math.min(idx + (finishing ? 0 : 1), questions.length)} / ${questions.length}`}>
-          {questions.map((q, i) => (
-            <span key={q.id} className={`pc-progress__dot${i < answers.length ? ' is-done' : ''}${i === idx && !finishing ? ' is-active' : ''}`} />
-          ))}
         </div>
       </div>
     </div>
