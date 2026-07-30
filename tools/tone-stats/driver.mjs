@@ -140,11 +140,16 @@ async function launchChrome(userDataDir) {
 /**
  * 여러 렌더 조합을 한 브라우저 세션에서 순차 실행한다.
  * @param {{label: string, opts: object}[]} runs 각 실행의 라벨(스크린샷 파일명)과 하네스 옵션
- * @param {{shots?: boolean}} [cfg] shots=false면 스크린샷을 생략한다(스윕에서 유용).
+ * @param {{shots?: boolean, harness?: string, globalName?: string}} [cfg]
+ *   shots=false면 스크린샷을 생략한다(스윕에서 유용).
+ *   harness/globalName은 **다른 하네스 페이지**를 몰기 위한 것이다(tools/stadium-review 등).
+ *   기본값은 톤 통계 하네스라 기존 러너들은 인자 없이 그대로 동작한다.
  * @returns {Promise<Array<object>>} 하네스 RunResult에 label·shot 경로를 얹은 배열
  */
 export async function runInBrowser(runs, cfg = {}) {
   const withShots = cfg.shots !== false
+  const harnessPath = cfg.harness ?? 'tools/tone-stats/harness.html'
+  const globalName = cfg.globalName ?? '__toneHarness'
   if (withShots) await mkdir(SHOTS, { recursive: true })
 
   // 포트는 우리가 직접 잡는다. vite에 port:0을 주면 기본 5173으로 정규화되는데, 다른
@@ -156,7 +161,7 @@ export async function runInBrowser(runs, cfg = {}) {
     logLevel: 'error',
   })
   await server.listen()
-  const url = `http://127.0.0.1:${port}/tools/tone-stats/harness.html`
+  const url = `http://127.0.0.1:${port}/${harnessPath}`
 
   const userDataDir = join(tmpdir(), `tone-stats-${process.pid}`)
   const { proc, port: cdpPort } = await launchChrome(userDataDir)
@@ -186,7 +191,7 @@ export async function runInBrowser(runs, cfg = {}) {
     await waitFor(
       async () => {
         const r = await call('Runtime.evaluate', {
-          expression: 'typeof window.__toneHarness === "object"',
+          expression: `typeof window.${globalName} === "object"`,
           returnByValue: true,
         })
         return r.result.value === true
@@ -202,7 +207,7 @@ export async function runInBrowser(runs, cfg = {}) {
       // run.call로 하네스의 다른 진입점을 지정한다.
       const entry = run.call ?? 'run'
       const r = await call('Runtime.evaluate', {
-        expression: `window.__toneHarness.${entry}(${JSON.stringify(opts)})`,
+        expression: `window.${globalName}.${entry}(${JSON.stringify(opts)})`,
         awaitPromise: true,
         returnByValue: true,
       })
@@ -224,7 +229,7 @@ export async function runInBrowser(runs, cfg = {}) {
       }
       results.push(res)
     }
-    await call('Runtime.evaluate', { expression: 'window.__toneHarness.teardown()' })
+    await call('Runtime.evaluate', { expression: `window.${globalName}.teardown()` })
   } finally {
     ws?.close()
     proc.kill('SIGKILL')
