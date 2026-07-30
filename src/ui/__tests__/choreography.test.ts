@@ -18,27 +18,43 @@ function seq(type: MatchEventType, opts: Partial<MatchEvent> = {}): ChoreoStep[]
 
 const inRange = (v: number) => v >= 0 && v <= 100
 
-// 장면 = 빌드업 3스텝(attackPattern) + 마무리(결과별 1~2스텝).
-describe('buildSequence — 스텝 수(빌드업 3 + 마무리)', () => {
-  it('goal·miss·save·shot은 5스텝(빌드업 3 + 마무리 2)', () => {
+// 장면 = 빌드업 스테이션 3개(attackPattern) + 마무리(결과별 1~2개).
+//
+// ★ 2026-07-30: 스텝 수 계약이 "스테이션 수"에서 "키프레임 수"로 갈라졌다. 저술 단위는
+//   여전히 스테이션이지만, 구간 사이에 **컨트롤 정지**(TOUCH_MS)를 넣기 위해 도착·출발
+//   키프레임을 한 쌍으로 낸다(같은 볼 좌표를 두 번). 예전 공은 90분 하이라이트 내내
+//   한 번도 멈추지 않았고 그것이 "쉼 없이 빠르다"의 정체였다
+//   (docs/research/football-sim-physics.md §1.2).
+//   그래서 여기서는 **볼이 실제로 이동하는 구간 수**를 센다 — 그게 저술 단위다.
+describe('buildSequence — 스텝 수(볼 이동 구간 = 스테이션 - 1)', () => {
+  /** 볼이 실제로 움직이는 구간 수(정지 키프레임 쌍은 세지 않는다). */
+  function moves(s: ChoreoStep[]): number {
+    let n = 0
+    for (let i = 0; i + 1 < s.length; i++) {
+      if (Math.hypot(s[i + 1].ball.x - s[i].ball.x, s[i + 1].ball.y - s[i].ball.y) > 0.5) n++
+    }
+    return n
+  }
+  it('goal·miss·save·shot은 빌드업 2 + 배달 1 + 슛 1 = 4구간', () => {
     for (const t of ['goal', 'miss', 'save', 'shot'] as MatchEventType[]) {
-      expect(seq(t), t).toHaveLength(5)
+      expect(moves(seq(t)), t).toBe(4)
     }
   })
-  it('chance는 4스텝(마무리가 없다)', () => {
-    expect(seq('chance')).toHaveLength(4)
+  it('chance는 마무리가 없다 — 슛 구간이 없다', () => {
+    expect(seq('chance').some(s => s.arc === 'shot')).toBe(false)
+    expect(moves(seq('chance'))).toBeGreaterThanOrEqual(2)
   })
-  it('corner는 3스텝(세트피스 — 빌드업 없음)', () => {
-    expect(seq('corner')).toHaveLength(3)
+  it('corner는 세트피스 — 빌드업 없이 2구간', () => {
+    expect(moves(seq('corner'))).toBe(2)
   })
-  it('foul은 2스텝(정지 근사)', () => {
+  it('foul은 정지 근사(2 키프레임)', () => {
     expect(seq('foul')).toHaveLength(2)
   })
-  it('모든 타입이 2~5스텝 범위', () => {
+  it('모든 타입이 2~10 키프레임 범위', () => {
     for (const t of ['goal', 'shot', 'save', 'miss', 'corner', 'foul', 'yellow', 'chance'] as MatchEventType[]) {
       const n = seq(t).length
       expect(n).toBeGreaterThanOrEqual(2)
-      expect(n).toBeLessThanOrEqual(5)
+      expect(n).toBeLessThanOrEqual(10)
     }
   })
 })
@@ -124,8 +140,8 @@ describe('buildSequence — 안무 유무', () => {
   })
 
   it('shot·chance는 안무가 있다', () => {
-    expect(seq('shot')).toHaveLength(5)
-    expect(seq('chance')).toHaveLength(4)
+    expect(seq('shot').length).toBeGreaterThanOrEqual(4)
+    expect(seq('chance').length).toBeGreaterThanOrEqual(3)
   })
 
   it('shot은 골문 앞에서 멈춘다(골처럼 네트에 닿지 않는다)', () => {

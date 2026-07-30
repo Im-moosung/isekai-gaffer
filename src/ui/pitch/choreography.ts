@@ -36,6 +36,14 @@ export interface ChoreoStep {
   movers: { playerId: string; x: number; y: number }[]
   /** 이 스텝에서 시작하는 구간의 볼 궤적. 미지정이면 렌더러가 이벤트 타입으로 추론한다. */
   arc?: BallArc
+  /**
+   * 이 스텝에서 **공을 소유한 선수**의 id. 없으면 공이 자유(비행 중/결과 지점).
+   *
+   * ★ 왜 필요한가: 예전 렌더러는 "구간 시작 볼에서 가장 가까운 아무나"에게 킥 모션을
+   *   줬다. 실측에서 그 선수는 엔진이 정한 슈터도, 안무 무버도 아닌 **수렴 로직에 빨려온
+   *   일반 선수**였다(docs/research/football-sim-physics.md §1.1). 소유자는 저술이 안다.
+   */
+  carrier?: string
 }
 
 const clamp = (v: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v))
@@ -138,6 +146,8 @@ export function buildSequence(event: MatchEvent, homeState: SideState, awayState
       return { playerId, x: clamp(fx(m[0])), y: clamp(m[1]) }
     }),
     ...(p.arc ? { arc: p.arc } : {}),
+    // 캐리어 슬롯 → 실제 선수 id. 슬롯보다 배정된 선수가 적으면(퇴장 등) 소유자 없음.
+    ...(p.carrier != null && ids[p.carrier] ? { carrier: ids[p.carrier] } : {}),
   }))
 }
 
