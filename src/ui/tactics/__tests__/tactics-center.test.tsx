@@ -89,10 +89,13 @@ describe('TacticsCenter — 킥오프 전 워룸', () => {
 
   it('[추천 적용]이 컨트롤을 실제로 움직이고 근거를 노출한다', () => {
     const { getByRole, container } = mountPre()
-    // 픽스처 상대는 4-3-3 — 상성 최댓값은 3-5-2(+0.04)다.
-    expect(store().engine!.home.tactics.formation).not.toBe('3-5-2')
+    // 픽스처는 kor 76 vs esp 88 — 전력이 크게 밀리는 상대다. 따라서 무게중심을
+    // 내린 5-4-1이 권고된다(실측 esp: 5-4-1 0.936 · 4-1-4-1 0.934 · 3-5-2 0.808).
+    // 이전 기대값 '3-5-2'는 formationEdge argmax 규칙의 산물이었는데, 그 항은
+    // 실측 기여가 ±0.004 승점(관측 격차의 1/15)인 죽은 레버로 판명됐다.
+    expect(store().engine!.home.tactics.formation).not.toBe('5-4-1')
     fireEvent.click(getByRole('button', { name: /추천 적용/ }))
-    expect(store().engine!.home.tactics.formation).toBe('3-5-2')
+    expect(store().engine!.home.tactics.formation).toBe('5-4-1')
     expect(container.querySelector('.tc-reasons')!.textContent).toContain('상성')
     // 포메이션이 바뀌어도 선발 11인은 유지된다(슬롯만 재배치).
     expect(store().engine!.home.tactics.lineup.length).toBe(11)
