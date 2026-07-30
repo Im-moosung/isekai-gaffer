@@ -64,7 +64,7 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
               type="button"
               aria-pressed={m === mentality}
               disabled={!open}
-              className={`tx-btn${m === mentality ? ' tx-btn--active' : ''}`}
+              className="tx-btn"
               onClick={() => patch({ mentality: m })}
             >
               {MENTALITY_KO[m]}
@@ -86,7 +86,7 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
                   type="button"
                   aria-pressed={gi[key] === v}
                   disabled={!open}
-                  className={`tx-btn tx-btn--sm${gi[key] === v ? ' tx-btn--active' : ''}`}
+                  className="tx-btn tx-btn--sm"
                   onClick={() => patch({ groupIntensity: { ...gi, [key]: v } })}
                 >
                   {il}
@@ -107,7 +107,7 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
               type="button"
               aria-pressed={p === pattern}
               disabled={!open}
-              className={`tx-btn${p === pattern ? ' tx-btn--active' : ''}`}
+              className="tx-btn"
               onClick={() => patch({ attackPattern: p })}
             >
               {PATTERN_KO[p]}
@@ -119,56 +119,87 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
       {/* GK 파워플레이 토글 */}
       <div className="tx-group" role="group" aria-label="GK 파워플레이">
         <h4 className="tx-group__title">GK 파워플레이</h4>
+        {/* 이모지를 아이콘으로 쓰지 않는다 — OS마다 모양·크기가 달라 톤이 무너진다.
+            방송 관례도 카드 아이콘 대신 평문 배너를 쓴다. */}
         <button
           type="button"
           aria-pressed={gkPowerplay}
           disabled={!open || !ppUnlocked}
-          className={`tx-toggle${gkPowerplay ? ' tx-toggle--on' : ''}`}
+          className="tx-toggle"
           onClick={() => patch({ gkPowerplay: !gkPowerplay })}
         >
-          {gkPowerplay ? '⚡ GK 전진 (도박)' : 'GK 전진'}
+          GK 전진
         </button>
         <p className="tx-hint">
           {ppUnlocked
             ? '세트피스 찬스 퀄 +40% · 역습 시 빈 골문 실점 위험 3배'
-            : `🔒 ${ppReason} 가능`}
+            : `잠김 — ${ppReason} 가능`}
         </p>
       </div>
 
-      {/* 페이즈 포메이션 3슬롯 (기본 + 공격 시 + 수비 시) */}
+      {/* 페이즈 포메이션 3슬롯 (기본 + 공격 시 + 수비 시).
+          네이티브 select를 쓰지 않는다 — OS 기본 스타일이 그대로 튀어나오고,
+          7개짜리 배타 선택은 열지 않고도 현재 값과 후보를 함께 보이는 편이 낫다. */}
       <div className="tx-group" role="group" aria-label="페이즈 포메이션">
         <h4 className="tx-group__title">페이즈 포메이션</h4>
         <div className="tx-slot">
           <span className="tx-slot__label">기본</span>
-          <span className="tx-slot__base">{t.formation}</span>
+          <span className="tx-slot__base num">{t.formation}</span>
         </div>
-        <div className="tx-slot">
-          <span className="tx-slot__label">공격 시</span>
-          <select
-            aria-label="공격 시 포메이션"
-            value={pf.attack ?? ''}
-            disabled={!open}
-            className="tx-slot__select"
-            onChange={e => patch({ phaseFormations: { ...pf, attack: (e.target.value || undefined) as FormationId | undefined } })}
-          >
-            <option value="">기본 유지</option>
-            {FORMATIONS.map(f => <option key={f} value={f}>{f}</option>)}
-          </select>
-        </div>
-        <div className="tx-slot">
-          <span className="tx-slot__label">수비 시</span>
-          <select
-            aria-label="수비 시 포메이션"
-            value={pf.defense ?? ''}
-            disabled={!open}
-            className="tx-slot__select"
-            onChange={e => patch({ phaseFormations: { ...pf, defense: (e.target.value || undefined) as FormationId | undefined } })}
-          >
-            <option value="">기본 유지</option>
-            {FORMATIONS.map(f => <option key={f} value={f}>{f}</option>)}
-          </select>
-        </div>
+        <PhaseFormationRow
+          label="공격 시"
+          value={pf.attack}
+          disabled={!open}
+          onPick={f => patch({ phaseFormations: { ...pf, attack: f } })}
+        />
+        <PhaseFormationRow
+          label="수비 시"
+          value={pf.defense}
+          disabled={!open}
+          onPick={f => patch({ phaseFormations: { ...pf, defense: f } })}
+        />
       </div>
     </section>
+  )
+}
+
+/** 페이즈 포메이션 한 줄 — "기본 유지" + 6종 세그먼트. */
+function PhaseFormationRow({ label, value, disabled, onPick }: {
+  label: string
+  value: FormationId | undefined
+  disabled: boolean
+  onPick(f: FormationId | undefined): void
+}) {
+  return (
+    <div className="tx-slot tx-slot--seg">
+      <span className="tx-slot__label">{label}</span>
+      <div className="tx-btnrow" role="group" aria-label={`${label} 포메이션`}>
+        <button
+          type="button"
+          aria-pressed={value == null}
+          disabled={disabled}
+          className="tx-btn tx-btn--sm"
+          aria-label={`${label} 기본 유지`}
+          onClick={() => onPick(undefined)}
+        >
+          기본 유지
+        </button>
+        {FORMATIONS.map(f => (
+          <button
+            key={f}
+            type="button"
+            aria-pressed={value === f}
+            disabled={disabled}
+            className="tx-btn tx-btn--sm num"
+            // 같은 페이지에 선발 포메이션 세그먼트가 이미 있다 — 접근성 이름을
+            // 구분해야 스크린리더도 테스트도 "어느 4-4-2인지"를 가릴 수 있다.
+            aria-label={`${label} ${f}`}
+            onClick={() => onPick(f)}
+          >
+            {f}
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }

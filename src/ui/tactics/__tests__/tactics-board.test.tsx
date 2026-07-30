@@ -100,10 +100,15 @@ describe('TacticsBoard — 확장 전술 지시(Task 5)', () => {
     expect(store().engine!.home.tactics.gkPowerplay).toBe(true)
   })
 
+  // 네이티브 <select>는 폐지했다(OS 기본 스타일이 그대로 나오고, 7개짜리 배타 선택은
+  // 열지 않고도 후보를 보이는 편이 낫다). 세그먼트 버튼으로 같은 계약을 검증한다.
   it('페이즈 포메이션: 공격 시 3-5-2 선택 → phaseFormations.attack', () => {
-    const { getByLabelText } = mountAt('paused-break')
-    fireEvent.change(getByLabelText('공격 시 포메이션'), { target: { value: '3-5-2' } })
+    const { getByRole } = mountAt('paused-break')
+    fireEvent.click(getByRole('button', { name: '공격 시 3-5-2' }))
     expect(store().engine!.home.tactics.phaseFormations!.attack).toBe('3-5-2')
+    // 되돌리기: [기본 유지]는 undefined로 지운다.
+    fireEvent.click(getByRole('button', { name: '공격 시 기본 유지' }))
+    expect(store().engine!.home.tactics.phaseFormations!.attack).toBeUndefined()
   })
 
   it('압박 슬라이더 옆 체력 소모 트레이드오프(⚡) 표시', () => {

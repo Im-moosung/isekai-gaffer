@@ -38,15 +38,16 @@ function reasonText(
   if (halftime) return '전반 종료'
   if (!reason) return ''
   switch (reason.kind) {
+    // 이모지를 아이콘으로 쓰지 않는다 — OS마다 모양·크기가 달라 톤이 무너진다.
     case 'hydration1':
     case 'hydration2':
-      return '🧊 하이드레이션 브레이크'
+      return '하이드레이션 브레이크'
     case 'halftime':
       return '전반 종료'
     case 'user':
-      return '⏸ 감독 타임'
+      return '감독 타임'
     case 'moment':
-      return `⚡ ${reason.moment.title}`
+      return reason.moment.title
   }
 }
 
@@ -201,7 +202,7 @@ export function TacticsBoard() {
               className={`tb-tab${tab === 'tactics' ? ' tb-tab--active' : ''}`}
               onClick={() => setTab('tactics')}
             >
-              전술{!full && ' 🔒'}
+              전술{!full && <span className="tb-tab__lock">잠김</span>}
             </button>
             <button
               type="button"
@@ -227,7 +228,7 @@ export function TacticsBoard() {
               <div className="tb-tactics">
                 {!full && (
                   <p className="tb-locked" role="status">
-                    🔒 {touchlineNotice(engine.minute, schedule)}
+                    잠김 — {touchlineNotice(engine.minute, schedule)}
                   </p>
                 )}
                 <ConsolePanel side={SIDE} />
@@ -253,7 +254,7 @@ export function TacticsBoard() {
         <span className="tb-foot__reason">{reasonText(pauseReason, halftime)}</span>
         <button
           type="button"
-          className="tb-confirm"
+          className="btn btn--primary btn--lg"
           // 작전판 이탈 애니메이션(600ms) 동안 버튼이 DOM에 남아 있어 연타가 가능하다.
           // 두 번째 클릭은 이미 phase가 'playing'이라 store가 throw한다 — 개입 가능할 때만 보낸다.
           disabled={!canIntervene(phase)}
@@ -337,14 +338,17 @@ function CoachMeeting({ canAdopt }: { canAdopt: boolean }) {
             <p className="tb-coach__rationale">{a.rationale}</p>
             <p className="tb-coach__proposal">{a.proposal}</p>
             {canAdopt && hasPatch(a.apply) && (
-              <button type="button" className="tb-coach__adopt" onClick={() => adopt(a.apply)}>
-                채택
-              </button>
+              <div className="tb-coach__actions">
+                <button type="button" className="tb-coach__adopt btn btn--secondary btn--sm" onClick={() => adopt(a.apply)}>
+                  채택
+                </button>
+              </div>
             )}
           </li>
         ))}
       </ul>
-      <button type="button" className="tb-coach__dismiss" onClick={() => setDismissed(true)}>
+      {/* 점선 테두리 버튼 폐지 — 무시하기는 보조 동작이므로 ghost. */}
+      <button type="button" className="btn btn--ghost btn--sm" onClick={() => setDismissed(true)}>
         감독 판단대로 간다
       </button>
     </section>

@@ -1,111 +1,148 @@
-/* 상대 분석 탭 — 작전판 다크 톤 재사용(--bc-* / tactics 로컬 토큰). */
+/* 상대 브리핑 — 값은 전부 tokens.css. 하드코딩 hex 0.
+
+   ★ 감사 W-6 수정: 매치업 힌트와 변경 이력이 "컬러 좌측 띠 + 중립 카드" 금지 패턴이었다.
+   좌측 3px 띠를 전부 걷어내고 4변 색조 카드(.card--warn/--good) + 아이브로우로 바꿨다.
+   색은 텍스트와 테두리에만 얹는다. */
 .op {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  color: var(--bc-text);
-  font-family: var(--bc-font);
+  gap: var(--sp-3);
+  min-width: 0;
+  color: var(--t-hi);
+  font-family: var(--f-ui);
 }
 .op__head {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: var(--sp-3);
 }
-.op__name { font-size: 16px; font-weight: 900; }
+.op__name { font-size: var(--fs-h2); font-weight: 900; }
+/* 상대 포메이션 배지에 팀 색을 칠하지 않는다 — 팀 색은 도트·킷 스트립·점유율 바 셋뿐이고,
+   여기서 쓰면 "파란 배지 = 누를 수 있는 것"이라는 --brand 규약과도 충돌한다. */
 .op__form {
-  padding: 2px 8px;
-  border-radius: 6px;
-  background: var(--bc-away);
-  color: #fff;
-  font-size: 12px;
+  padding: 2px var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--s-3);
+  color: var(--t-hi);
+  font-size: var(--fs-xs);
   font-weight: 800;
-  font-variant-numeric: tabular-nums;
 }
-.op__pref { margin: 0; font-size: 11px; color: var(--bc-text-dim); }
+.op__pref { margin: 0; font-size: var(--fs-xs); color: var(--t-mid); }
 
+/* 매치업 힌트 — 4변 색조 카드. 톤은 상성 부호가 정한다. */
 .op__matchup {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border-left: 3px solid var(--bc-text-dim);
-  background: var(--bc-panel-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--s-1);
 }
-.op__matchup--up { border-left-color: var(--bc-accent); }
-.op__matchup--down { border-left-color: var(--bc-danger); }
+.op__matchup--up {
+  border-color: var(--good-line);
+  background: color-mix(in srgb, var(--good) 6%, var(--s-1));
+}
+.op__matchup--down {
+  border-color: var(--warn-line);
+  background: color-mix(in srgb, var(--warn) 6%, var(--s-1));
+}
 .op__matchup-vs {
-  font-size: 11px;
+  font-size: var(--fs-eyebrow);
   font-weight: 800;
-  color: var(--bc-text-dim);
-  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--ls-caps);
+  color: var(--t-low);
 }
-.op__matchup-text { font-size: 13px; font-weight: 700; }
-.op__matchup--up .op__matchup-text { color: var(--bc-accent); }
-.op__matchup--down .op__matchup-text { color: var(--bc-danger); }
+.op__matchup-text { font-size: var(--fs-sm); font-weight: 700; line-height: var(--lh-md); }
+.op__matchup--up .op__matchup-text { color: var(--good); }
+.op__matchup--down .op__matchup-text { color: var(--warn); }
 
-/* 상대 감독 변경 이력 — 최근 3건. 방송 배너가 흘려보낸 정보를 다시 확인하는 자리. */
+/* 상대 감독 변경 이력 — 최근 3건. 헤어라인 구획만 쓴다(좌측 띠 없음). */
 .op__timeline {
   list-style: none;
   margin: 0;
-  padding: 6px 8px;
+  padding: var(--sp-2) var(--sp-3);
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  border-radius: 8px;
-  border-left: 3px solid var(--bc-text-dim);
-  background: var(--bc-panel-2);
+  gap: var(--sp-1);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--s-1);
 }
-.op__timeline-row { display: flex; gap: 6px; font-size: 11.5px; line-height: 1.4; }
+.op__timeline-row {
+  display: flex;
+  gap: var(--sp-2);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
+}
 .op__timeline-min {
   flex: 0 0 auto;
   font-weight: 800;
-  color: var(--bc-text-dim);
-  font-variant-numeric: tabular-nums;
+  color: var(--t-low);
 }
-.op__timeline-text { color: var(--bc-text); }
+.op__timeline-text { color: var(--t-hi); }
 
+/* 상대 포메이션 도해 — 라인업 보드와 **같은 피치 표현**을 쓴다.
+   화면에 축구를 세 번 다르게 그리던 것(3D 띠 / 네이비 미니맵 / 형광 초록 보드)을
+   하나로 줄이는 것이 감사 W-5의 처방이다. */
 .op__board {
-  border-radius: 10px;
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--pitch-bg);
   overflow: hidden;
 }
 .op__notes {
   margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--bc-text-dim);
-  font-style: italic;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-md);
+  color: var(--t-mid);
 }
 
-.op__subtitle { margin: 4px 0 0; font-size: 12px; color: var(--bc-text-dim); font-weight: 700; }
-.op__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.op__subtitle {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-eyebrow);
+  font-weight: 800;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--t-low);
+}
+.op__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
 .op__row {
   width: 100%;
   display: grid;
-  grid-template-columns: 24px 1fr auto auto;
+  grid-template-columns: 26px minmax(0, 1fr) auto auto;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border: 1px solid var(--bc-line);
-  border-radius: 7px;
-  background: var(--bc-panel);
-  color: var(--bc-text);
+  gap: var(--sp-2);
+  min-height: 36px;
+  padding: var(--sp-1) var(--sp-2);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-sm);
+  background: var(--s-1);
+  color: var(--t-hi);
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   cursor: pointer;
   text-align: left;
 }
-.op__row:hover { border-color: var(--bc-away); }
-.op__row--sel { border-color: var(--bc-away); box-shadow: 0 0 0 1px var(--bc-away) inset; }
-.op__row--key { background: color-mix(in srgb, var(--bc-accent) 8%, var(--bc-panel)); }
-.op__row-num { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--bc-text-dim); }
+.op__row:hover { border-color: var(--s-line-strong); }
+.op__row--sel { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand) inset; }
+.op__row--key { background: var(--s-2); }
+.op__row-num { font-weight: 800; color: var(--t-low); }
 .op__row-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.op__row-star { color: var(--bc-accent); font-size: 12px; }
+.op__row-star { color: var(--gold); font-size: var(--fs-xs); }
 .op__row-slot {
-  padding: 1px 6px;
-  border-radius: 5px;
-  background: var(--bc-panel-2);
-  font-size: 11px;
+  padding: 1px var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--s-3);
+  color: var(--t-mid);
+  font-size: var(--fs-xs);
   font-weight: 800;
 }
-.op__card { margin-top: 4px; }
+.op__card { margin-top: var(--sp-1); }

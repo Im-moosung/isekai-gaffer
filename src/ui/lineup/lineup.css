@@ -1,294 +1,321 @@
-/* 라인업 편집 화면 — 방송 토큰(--bc-*) 사용.
-   인라인 style은 (1) 피치 칩의 slotCoords 파생 left/top, (2) dnd 드래그 변환에만 한정한다. */
-/* 단독 화면 셸(LineupScreen) — 전체화면 높이·배경은 여기가 갖는다.
-   편집 본체(.lu-root)는 전술 센터 탭 안에도 들어가므로 뷰포트 높이를 갖지 않는다. */
+/* 라인업 편집 — 값은 전부 tokens.css. 하드코딩 hex 0.
+   인라인 style은 (1) 피치 칩의 slotCoords 파생 left/top, (2) dnd 드래그 변환,
+   (3) 컨디션 바 폭 % 세 가지 데이터 바인딩만 허용한다.
+
+   ★ 구조 원칙: 이 화면은 높이를 예산으로 배분하지 않는다. 세로로 자라도 되고,
+   내부 스크롤 컨테이너는 **벤치 하나**뿐이다(감사 W-2: 벤치 73% 은닉의 원인은
+   중첩 스크롤 5단이었다). 그 하나에는 가시 스크롤바 + 하단 페이드 + 총원 카운트를
+   반드시 붙인다. */
+
+/* 단독 화면 셸(LineupScreen) — 편집 본체(.lu-root)는 전술 센터 안에도 들어가므로
+   뷰포트 높이를 갖지 않는다. */
 .lu-screen {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--sp-5);
   width: 100%;
-  height: 100vh;
-  min-height: 0;
-  padding: 16px;
-  box-sizing: border-box;
-  background: var(--bc-bg);
-  color: var(--bc-text);
-  font-family: var(--bc-font);
+  min-height: 100dvh;
+  padding: var(--sp-4);
+  background: var(--s-0);
+  color: var(--t-hi);
+  font-family: var(--f-ui);
 }
 .lu-root {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--sp-5);
   width: 100%;
   min-width: 0;
-  /* 단독 화면에선 셸의 남은 높이를 채우고, 임베드에선 내용 높이로 접힌다. */
-  flex: 1 1 0;
-  min-height: 0;
-  box-sizing: border-box;
-  color: var(--bc-text);
-  font-family: var(--bc-font);
+  color: var(--t-hi);
+  font-family: var(--f-ui);
 }
-/* 전술 센터 ① 선발 탭 임베드 — 피치는 aspect-ratio 때문에 높이 제한을 받으면
-   가로가 남는다. 그 남는 폭을 벤치가 쓰도록 2열 그리드로 재배치한다.
-   minmax(0, 1fr)로 좌열이 내용 폭에 밀려 커지는 것을 막는다. */
-.lu-root--embed {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 260px);
-  grid-template-rows: auto auto;
-  align-items: start;
-  flex: 0 0 auto;
-}
-.lu-root--embed .lu-head { grid-column: 1 / -1; }
-/* 33vh 캡의 근거: 전술 센터는 헤더·본체·검토 요약 3단이 한 화면에 들어가야 하고
-   (1440×900 기준 본체에 허용된 높이가 약 390px), 이 탭의 높이는 피치가 아니라
-   벤치(카드 15장)가 정한다. 벤치는 어차피 내부 스크롤이므로 캡을 낮춰도 잃는 것이 없고,
-   피치는 같은 캡 안에서 오히려 46vh 때보다 넓어진다(높이 제약 → aspect-ratio로 폭 결정). */
-.lu-root--embed .lu-pitch { max-height: 33vh; }
-.lu-root--embed .lu-bench {
-  min-width: 0;
-  max-height: 33vh;
-  overflow-y: auto;
-}
-/* ★ 임베드 피치는 33vh(≈262px)로 눌려 있는데 선수 카드는 350px다 — .lu-pitch가
-   overflow:hidden이라 카드 아랫부분이 잘린다. 하필 잘리는 것이 맨 아래 붙는
-   체력·사기 게이지라 "컨디션을 추가했는데 안 보인다"가 그대로 재발한다.
-   레이더를 줄여 카드 전체가 피치 안에 들어오게 한다(축 라벨은 유지 — 여기서
-   size='compact'로 내리면 라벨까지 사라진다). */
-.lu-root--embed .lu-pop { width: 190px; max-height: calc(100% - 16px); }
-.lu-root--embed .lu-pop .pc { padding: 8px; gap: 6px; }
-.lu-root--embed .lu-pop .pc-radar { max-width: 118px; }
 
-/* ── 헤더: 제목 + 포메이션 버튼 ─────────────────────────── */
+/* 임베드(전술 센터) — 보드와 벤치를 나란히. 피치는 세로라 폭이 남고, 그 폭을
+   벤치가 쓴다. lg 미만에서는 세로 스택으로 접힌다(아래 미디어 쿼리). */
+@media (min-width: 1200px) {
+  .lu-root--embed {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+    grid-template-rows: auto auto;
+    align-items: start;
+    gap: var(--sp-5);
+  }
+  .lu-root--embed .lu-head { grid-column: 1 / -1; }
+}
+
+/* ── 헤더: 제목 + 포메이션 세그먼트 ─────────────────────── */
 .lu-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
   flex-wrap: wrap;
 }
 .lu-title {
   margin: 0;
-  font-size: 18px;
-  font-weight: 700;
 }
+/* 포메이션은 6종 배타 선택이므로 .seg. 좁은 폭에서는 줄바꿈보다 가로 스크롤이 낫다
+   — 줄바꿈하면 헤더 높이가 상황에 따라 달라져 아래 보드가 위아래로 튄다. */
 .lu-formations {
-  display: flex;
-  gap: 6px;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
-.lu-fbtn {
-  padding: 8px 12px;
-  border: 1px solid var(--bc-line);
-  border-radius: 8px;
-  background: var(--bc-panel);
-  color: var(--bc-text-dim);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.lu-fbtn:hover { border-color: var(--bc-accent); }
-.lu-fbtn--active {
-  background: var(--bc-accent);
-  border-color: var(--bc-accent);
-  color: #0b1220;
-}
+.lu-formations::-webkit-scrollbar { display: none; }
 
-/* ── 피치 미니뷰 (home 슬롯 배치) ─────────────────────── */
+/* ── 세로 피치 보드 ─────────────────────────────────────
+   FM26이 포메이션 보드를 초록에서 다크 네이비 + 얇은 흰 선으로 바꾼 이유를 따른다:
+   라인 대비를 낮춰야 그 위에 얹히는 불투명 이름 카드가 이긴다. 초록 피치 위
+   어두운 초록 카드는 같은 색상환이라 카드와 배경이 서로를 지운다(감사 W-8). */
+.lu-boardcol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
 .lu-pitch {
   position: relative;
-  flex: 1 1 0;
-  min-height: 260px;
-  aspect-ratio: 105 / 68;
-  max-width: 100%;
+  width: 100%;
+  max-width: 440px;
+  aspect-ratio: 68 / 105;
   margin: 0 auto;
-  border: 1px solid var(--bc-line);
-  border-radius: 12px;
-  background:
-    linear-gradient(90deg, rgba(255,255,255,0.04) 0 1px, transparent 1px) 50% 0 / 100% 100%,
-    radial-gradient(120% 140% at 100% 50%, rgba(255,255,255,0.06), transparent 55%),
-    var(--bc-pitch);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-lg);
+  background: linear-gradient(180deg, var(--pitch-bg-2), var(--pitch-bg));
   overflow: hidden;
 }
-/* 하프라인 + 센터서클 */
-.lu-pitch::before {
-  content: '';
+.lu-pitch__lines {
   position: absolute;
-  left: 50%;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: var(--bc-pitch-line);
-  transform: translateX(-50%);
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
-.lu-pitch::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 18%;
-  aspect-ratio: 1;
-  border: 2px solid var(--bc-pitch-line);
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
+.lu-pitch__line {
+  fill: none;
+  stroke: var(--pitch-line);
+  stroke-width: 0.5;
+}
+.lu-pitch__spot {
+  fill: var(--pitch-line);
+  stroke: none;
 }
 
-/* 선수 칩: slotCoords % 위치, 중심 정렬 */
+/* 선수 카드 — 라인을 "피해서" 놓지 않는다. 불투명 카드로 라인을 가려버린다. */
 .lu-chip {
   position: absolute;
   transform: translate(-50%, -50%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1px;
-  width: 62px;
-  padding: 5px 4px;
-  border: 2px solid transparent;
-  border-radius: 9px;
-  background: rgba(11, 18, 32, 0.82);
-  color: var(--bc-text);
+  gap: 2px;
+  width: 19%;
+  min-width: 54px;
+  max-width: 84px;
+  padding: var(--sp-1) 2px;
+  border: 1px solid var(--s-line-strong);
+  border-radius: var(--r-sm);
+  background: var(--s-1); /* 불투명 — 반투명이면 라인이 글자를 관통한다 */
+  color: var(--t-hi);
   font-family: inherit;
   cursor: grab;
   touch-action: none;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+  box-shadow: var(--shadow-1);
 }
 .lu-chip:active { cursor: grabbing; }
-.lu-chip__num { font-size: 15px; font-weight: 800; line-height: 1; }
+.lu-chip__line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  width: 100%;
+}
+.lu-chip__num { font-size: var(--fs-xs); font-weight: 800; line-height: 1.2; }
 .lu-chip__name {
-  font-size: 10px;
-  line-height: 1.1;
-  max-width: 56px;
+  width: 100%;
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 적합도는 색이 아니라 **테두리 + 배지**로 말한다. 배지 배경색 3단은 유지하되
+   텍스트 대비를 확보한 조합만 쓴다. */
 .lu-chip__slot {
-  font-size: 9px;
-  font-weight: 700;
-  padding: 0 4px;
-  border-radius: 5px;
-  color: #0b1220;
+  padding: 0 var(--sp-1);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  line-height: 1.4;
 }
-/* 적합도 경고 색: ≥0.85 초록 / ≥0.65 노랑 / 미만 빨강 */
-.lu-chip--good { border-color: #37d67a; }
-.lu-chip--good .lu-chip__slot { background: #37d67a; }
-.lu-chip--ok { border-color: #f5c542; }
-.lu-chip--ok .lu-chip__slot { background: #f5c542; }
-.lu-chip--bad { border-color: var(--bc-danger); }
-.lu-chip--bad .lu-chip__slot { background: var(--bc-danger); color: #fff; }
+.lu-chip--good { border-color: var(--good-line); }
+.lu-chip--good .lu-chip__slot { background: var(--good-weak); color: var(--good); }
+.lu-chip--ok { border-color: var(--warn-line); }
+.lu-chip--ok .lu-chip__slot { background: var(--warn-weak); color: var(--warn); }
+.lu-chip--bad { border-color: var(--danger-line); }
+.lu-chip--bad .lu-chip__slot { background: var(--danger-weak); color: var(--danger); }
 
-.lu-chip--sel { outline: 3px solid var(--bc-accent); outline-offset: 1px; }
-.lu-chip--over { box-shadow: 0 0 0 3px var(--bc-accent); }
+.lu-chip--sel { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand); }
+.lu-chip--over { box-shadow: 0 0 0 2px var(--brand); }
 .lu-chip--drag { opacity: 0.9; }
 
-/* ── 체력 미니 게이지(칩·벤치 카드) ────────────────────
-   교체·선발 판단의 1차 근거라 카드를 열지 않아도 리스트에서 바로 읽혀야 한다.
-   높이 4px·색 3단(위험/주의/양호)으로 칩 레이아웃을 밀지 않는 선에서만 얹는다. */
+/* ── 컨디션 표시(칩·벤치 행) ────────────────────────────
+   100%면 바를 그리지 않는다 — 전원 풀바는 정보량 0인데 면적만 먹는다(감사 T-9). */
 .lu-sta {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--sp-1);
   width: 100%;
 }
 .lu-sta__track {
   flex: 1 1 auto;
   display: block;
   height: 4px;
-  min-width: 0;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.16);
+  min-width: 18px;
+  border-radius: var(--r-pill);
+  background: var(--s-3);
   overflow: hidden;
 }
-.lu-sta__bar { display: block; height: 100%; border-radius: 3px; }
-.lu-sta__bar--ok { background: #37d67a; }
-.lu-sta__bar--mid { background: #f5c542; }
-.lu-sta__bar--low { background: var(--bc-danger); }
+.lu-sta__bar { display: block; height: 100%; border-radius: var(--r-pill); }
+.lu-sta__bar--ok { background: var(--good); }
+.lu-sta__bar--mid { background: var(--warn); }
+.lu-sta__bar--low { background: var(--danger); }
 .lu-sta__val {
   flex: 0 0 auto;
-  font-size: 9px;
+  margin-left: auto;
+  font-size: var(--fs-xs);
   font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: var(--bc-text-dim);
+  color: var(--t-mid);
+}
+.lu-sta--mid .lu-sta__val { color: var(--warn); }
+.lu-sta--low .lu-sta__val { color: var(--danger); }
+
+/* 선택 선수 카드 — 피치 위 팝오버가 아니라 아래 흐름. 겹치면 반드시 잘린다. */
+.lu-pop {
+  align-self: center;
+  width: 100%;
+  max-width: 440px;
 }
 
-/* ── 벤치 ─────────────────────────────────────────── */
+/* ── 벤치 — 화면에서 유일하게 허용되는 내부 스크롤 컨테이너 ── */
 .lu-bench {
-  flex: 0 0 auto;
+  min-width: 0;
 }
-.lu-bench__title {
-  margin: 0 0 8px;
-  font-size: 13px;
-  color: var(--bc-text-dim);
+.lu-bench__pane {
+  /* 스크롤 페이드가 붙을 기준 박스. */
+  position: relative;
+  min-height: 0;
 }
 .lu-bench__list {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-direction: column;
+  gap: var(--sp-2);
+  /* 4명만 보이던(73% 은닉) 문제를 없앤다. 560px면 15명 중 11명이 한 번에 보이고,
+     나머지는 가시 스크롤바·하단 페이드·헤더 총원 카운트 셋이 알린다. */
+  max-height: 560px;
+  padding-right: var(--sp-2);
+}
+.lu-bench__item { min-width: 0; }
+.lu-bench__row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--sp-2);
+  min-width: 0;
 }
 .lu-card {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 4px;
-  width: 92px;
-  padding: 8px;
-  border: 1px solid var(--bc-line);
-  border-radius: 8px;
-  background: var(--bc-panel);
-  color: var(--bc-text);
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-columns: 30px 26px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--tap-min);
+  min-width: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--s-1);
+  color: var(--t-hi);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--fs-sm);
+  text-align: left;
   cursor: grab;
   touch-action: none;
 }
 .lu-card:active { cursor: grabbing; }
-.lu-card__head { display: flex; align-items: center; gap: 5px; }
-.lu-card__radar { width: 100%; max-width: 76px; align-self: center; }
+.lu-card:hover { border-color: var(--s-line-strong); }
+/* 슬롯 ID는 고정이다(S1…Sn) — 목록이 스크롤돼도 "몇 번째를 보고 있는지"가 남는다. */
+.lu-card__slotid {
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  color: var(--t-low);
+}
+.lu-card__num { font-size: var(--fs-sm); font-weight: 800; color: var(--t-mid); }
 .lu-card__name {
-  flex: 1 1 auto;
   min-width: 0;
+  font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.lu-card__num { font-weight: 800; }
 .lu-card__pos {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 1px 5px;
-  border-radius: 5px;
-  background: var(--bc-panel-2);
-  color: var(--bc-text-dim);
+  padding: 1px var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--s-3);
+  color: var(--t-mid);
+  font-size: var(--fs-xs);
+  font-weight: 800;
 }
-.lu-card--sel { outline: 2px solid var(--bc-accent); }
-
-/* 선택 선수 카드 팝오버 — 피치 우상단 겹침. */
-.lu-pop {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 10;
-  width: 220px;
-  max-width: 70%;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
-  border-radius: 12px;
-}
-.lu-card--over { box-shadow: 0 0 0 3px var(--bc-accent); }
+.lu-card .lu-sta { width: 64px; }
+.lu-card--sel { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand) inset; }
+.lu-card--over { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand); }
 .lu-card--drag { opacity: 0.9; }
 
-/* ── 확정 ─────────────────────────────────────────── */
+/* 벤치 항목의 능력치 열람 — FM26이 이걸 막아 "CM 96/97에도 있던 기능"이라고
+   비판받았다. 행 안에 두면 교체 선택과 충돌하므로 형제 버튼으로 뺀다. */
+.lu-detail { flex: 0 0 auto; }
+.lu-bench__detail { padding: var(--sp-2) 0 0; }
+
+/* ── 확정(단독 화면) ────────────────────────────────── */
 .lu-foot {
   display: flex;
   justify-content: flex-end;
 }
-.lu-confirm {
-  padding: 12px 28px;
-  border: none;
-  border-radius: 10px;
-  background: var(--bc-accent);
-  color: #0b1220;
-  font-family: inherit;
-  font-size: 15px;
-  font-weight: 800;
-  cursor: pointer;
+
+/* ── sm(<720): 1열 세로 스택. 피치 칩은 원형 토큰으로 줄인다 ──
+   390px에서 피치 폭은 약 340px다. 칩 19%(≈65px)가 나란한 두 자리(y=40/60,
+   간격 68px)에서 서로 붙으므로, 이 폭에서는 이름을 카드 안에 넣지 않고
+   원형 토큰(등번호) + 아래 성(姓) 형태로 접는다. */
+@media (max-width: 719px) {
+  .lu-screen { padding: var(--sp-3); }
+  .lu-pitch { max-width: 340px; }
+  .lu-chip {
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    padding: 0;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    gap: 1px;
+  }
+  .lu-chip__line {
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid var(--s-line-strong);
+    background: var(--s-1);
+  }
+  .lu-chip__slot { display: none; }
+  .lu-chip__name {
+    padding: 0 2px;
+    border-radius: var(--r-sm);
+    background: var(--s-scrim);
+  }
+  .lu-chip .lu-sta { display: none; }
+  .lu-chip--good .lu-chip__line { border-color: var(--good-line); }
+  .lu-chip--ok .lu-chip__line { border-color: var(--warn-line); }
+  .lu-chip--bad .lu-chip__line { border-color: var(--danger-line); }
+  .lu-chip--sel .lu-chip__line { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand); }
+  .lu-card { grid-template-columns: 28px 24px minmax(0, 1fr) auto auto; }
+  /* 바는 접고 수치만 남긴다 — 좁은 폭에서 4px 바는 읽히지 않는데 자리는 먹는다. */
+  .lu-card .lu-sta { width: auto; }
+  .lu-card .lu-sta__track { display: none; }
 }
-.lu-confirm:hover { filter: brightness(1.05); }

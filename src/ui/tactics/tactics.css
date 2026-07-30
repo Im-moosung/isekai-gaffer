@@ -1,22 +1,26 @@
-/* 작전판(tactics 모드) — 방송 관전과 확연히 다른 시각 정체성.
-   방송=그린 피치·라이브 그래픽 / 작전판=다크 초크보드·전술 다이어그램 톤.
-   색·기하 토큰은 --bc-* 재사용, 인라인 스타일 금지(데이터 바인딩 폭 예외 없음). */
+/* 작전판(경기 중) + 확장 전술 지시(.tx-*) — 값은 전부 tokens.css. 하드코딩 hex 0.
 
-/* 다크 전술판 로컬 토큰 — 짙은 네이비 보드 + 청록 라인. */
+   ★ 감사 T-1 수정: 워룸(라임+형광초록)과 작전판(형광 블루 초크보드)이 서로 다른
+   디자인 시스템이었다. 같은 경기 안에서 전술을 만지는 두 화면인데 공통점이 색 하나
+   없었다. 로컬 토큰(--tb-*)을 전역 토큰으로 다시 묶어 한 시스템으로 만든다.
+   선택·CTA는 --brand 하나만 쓰고, 라임(--live)은 "지금 진행 중"에서만 등장한다. */
+
 .tb-root {
-  --tb-board-bg: #0a1526;      /* 보드 표면(피치 그린 대신 짙은 네이비) */
-  --tb-board-line: rgba(140, 200, 255, 0.35);
-  --tb-chalk: #7fd4ff;         /* 초크 라인/강조 */
+  /* 보드 표면·라인은 라인업 보드(.lu-pitch)와 같은 값을 쓴다 — 한 앱에 피치가
+     세 가지 시각 언어로 있던 것이 감사 W-5의 핵심 지적이다. */
+  --tb-board-bg: var(--pitch-bg);
+  --tb-board-line: var(--s-line);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--sp-4);
   width: 100%;
-  height: 100%;
-  padding: 16px;
+  min-height: 100%;
+  padding: var(--sp-4);
   box-sizing: border-box;
-  background: linear-gradient(180deg, #06101f, #0a1526 60%, #050b16);
-  color: var(--bc-text);
-  font-family: var(--bc-font);
+  background: var(--s-0);
+  color: var(--t-hi);
+  font-family: var(--f-ui);
+  overflow-y: auto;
 }
 
 /* ── 상단: "작전 타임" 라벨 + 정지 사유 ─────────────────────── */
@@ -24,142 +28,150 @@
   flex: 0 0 auto;
   display: flex;
   align-items: baseline;
-  gap: 14px;
+  gap: var(--sp-4);
 }
 .tb-head__label {
-  font-size: 20px;
+  font-size: var(--fs-h2);
   font-weight: 900;
-  letter-spacing: 0.08em;
-  color: var(--tb-chalk);
+  letter-spacing: var(--ls-caps);
+  color: var(--t-hi);
   text-transform: uppercase;
 }
 .tb-head__reason {
-  font-size: 14px;
+  font-size: var(--fs-md);
   font-weight: 700;
-  color: var(--bc-text-dim);
+  color: var(--t-mid);
 }
 
-/* ── 플랜 대비(킥오프 계획 vs 현재) ─────────────────────────── */
+/* ── 플랜 대비(킥오프 계획 vs 현재) ───────────────────────────
+   좌측 컬러 띠 금지 규칙에 따라 헤어라인 구획 + 텍스트 색으로만 말한다. */
 .tb-plan {
   flex: 0 0 auto;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 10px;
-  padding: 8px 12px;
-  border: 1px dashed var(--tb-board-line);
-  border-radius: 10px;
-  background: rgba(140, 200, 255, 0.05);
+  gap: var(--sp-2) var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--s-1);
 }
 .tb-plan__row {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--bc-danger);
+  color: var(--warn); /* 이탈은 경고지 실점이 아니다 — --danger를 쓰지 않는다 */
 }
 .tb-plan__row--ok {
-  color: var(--tb-chalk);
+  color: var(--good);
 }
 
 /* ── 터치라인 등급 안내 ────────────────────────────────────────
-   감독 타임·상황 개입에서는 교체와 외침만 가능하다. 잠긴 이유와 언제 풀리는지를
-   눈에 띄게 말해 주지 않으면 비활성 컨트롤이 '고장'으로 읽힌다. */
+   잠긴 이유와 언제 풀리는지를 말해 주지 않으면 비활성 컨트롤이 '고장'으로 읽힌다.
+   좌측 4px 띠 + 중립 카드 조합을 걷어내고 4변 색조 카드(.card--warn 규약)로 바꿨다. */
 .tb-touchline {
   flex: 0 0 auto;
   margin: 0;
-  padding: 8px 12px;
-  border: 1px solid var(--bc-accent);
-  border-left-width: 4px;
-  border-radius: 10px;
-  background: rgba(200, 245, 66, 0.08);
-  font-size: 13px;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--warn-line);
+  border-radius: var(--r-md);
+  background: color-mix(in srgb, var(--warn) 6%, var(--s-1));
+  font-size: var(--fs-sm);
   font-weight: 700;
-  color: var(--tb-chalk);
+  color: var(--t-hi);
 }
 .tb-locked {
-  margin: 0 0 10px;
-  padding: 8px 10px;
-  border: 1px dashed var(--tb-board-line);
-  border-radius: 8px;
-  font-size: 12px;
+  margin: 0 0 var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--s-2);
+  font-size: var(--fs-xs);
   font-weight: 700;
-  color: var(--bc-text-dim);
+  color: var(--t-mid);
 }
 
 /* ── 하프타임 팀토크 카드(상단) ─────────────────────────────── */
 .tb-talk {
   flex: 0 0 auto;
-  padding: 12px 14px;
-  border: 1px solid var(--tb-board-line);
-  border-radius: 10px;
-  background: rgba(127, 212, 255, 0.06);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--s-1);
 }
 
-/* ── 본체: 중앙 대형 보드 + 우측 지시 패널 ─────────────────── */
+/* ── 본체: 중앙 대형 보드 + 우측 지시 패널 ───────────────────
+   ★ 감사 T-4: 1440px에서 우측 레일이 49% 잘렸다(교체 패널 하단 "벤치" 섹션 소실).
+   레일에 자체 스크롤을 주는 대신 작전판 전체가 문서처럼 스크롤하게 두고,
+   좁으면 세로로 접는다. 높이를 예산으로 나누지 않는다. */
 .tb-main {
-  flex: 1 1 0;
+  flex: 1 1 auto;
   min-height: 0;
-  display: flex;
-  gap: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(300px, 3fr);
+  gap: var(--sp-4);
+  align-items: start;
+}
+@media (max-width: 1199px) {
+  .tb-main { grid-template-columns: minmax(0, 1fr); }
 }
 .tb-board {
-  flex: 7 1 0;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--sp-3);
 }
 .tb-board__pitch {
   position: relative;
-  flex: 1 1 0;
   min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--tb-board-line);
-  border-radius: 12px;
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-lg);
   background: var(--tb-board-bg);
-  padding: 8px;
+  padding: var(--sp-2);
   box-sizing: border-box;
 }
 
-/* 보드 옆(위) 선수 카드 팝오버 — 보드 우상단에 겹쳐 표시. */
+/* 보드 위 선수 카드 팝오버 — 보드 우상단에 겹쳐 표시. */
 .tb-pop {
   position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 5;
-  max-width: 260px;
-  padding: 6px;
-  border-radius: 12px;
-  background: rgba(6, 16, 31, 0.92);
-  border: 1px solid var(--tb-chalk);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  top: var(--sp-3);
+  right: var(--sp-3);
+  z-index: var(--z-overlay);
+  max-width: 280px;
+  padding: var(--sp-1);
+  border-radius: var(--r-md);
+  background: var(--s-1);
+  border: 1px solid var(--s-line-strong);
+  box-shadow: var(--shadow-2);
 }
 .tb-pop__compare {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-1);
 }
-.tb-pop__arrow { color: var(--tb-chalk); font-weight: 900; font-size: 18px; }
+.tb-pop__arrow { color: var(--t-mid); font-weight: 900; font-size: var(--fs-h2); }
 .tb-pop__close {
   position: absolute;
-  top: -8px;
-  right: -8px;
-  width: 22px;
-  height: 22px;
+  top: calc(var(--sp-2) * -1);
+  right: calc(var(--sp-2) * -1);
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  border: 1px solid var(--tb-board-line);
-  background: var(--bc-panel-2);
-  color: var(--bc-text);
-  font-size: 11px;
+  border: 1px solid var(--s-line-strong);
+  background: var(--s-2);
+  color: var(--t-hi);
+  font-size: var(--fs-xs);
   cursor: pointer;
-  line-height: 1;
+  /* 한글은 line-height 1이면 받침이 잘린다. flex 정렬이 세로 중앙을 잡고
+     min-height가 크기를 보장하므로 행간을 넉넉히 줘도 버튼 높이는 안 변한다. */
+  line-height: var(--lh-ui);
 }
 .tb-board__pitch > .pv-root {
   width: 100%;
   height: auto;
   max-width: 100%;
-  max-height: 100%;
   aspect-ratio: 105 / 68;
 }
 
@@ -168,205 +180,207 @@
   flex: 0 0 auto;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--sp-2);
 }
 .tb-formsel__btn {
-  padding: 8px 14px;
-  border: 1px solid var(--tb-board-line);
-  border-radius: 8px;
-  background: rgba(127, 212, 255, 0.04);
-  color: var(--bc-text-dim);
+  min-height: 40px;
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--s-2);
+  color: var(--t-mid);
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
-.tb-formsel__btn:hover {
-  border-color: var(--tb-chalk);
-  color: var(--bc-text);
+.tb-formsel__btn:hover:not(:disabled) {
+  border-color: var(--s-line-strong);
+  color: var(--t-hi);
 }
-.tb-formsel__btn--active {
-  background: var(--tb-chalk);
-  border-color: var(--tb-chalk);
-  color: #06101f;
+.tb-formsel__btn--active,
+.tb-formsel__btn[aria-pressed='true'] {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--t-on-brand);
 }
+.tb-formsel__btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 /* ── 우측 지시 패널(탭) ─────────────────────────────────────── */
 .tb-side {
-  flex: 3 1 0;
-  min-width: 260px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  overflow-y: auto;
+  gap: var(--sp-3);
 }
 .tb-tabs {
   flex: 0 0 auto;
   display: flex;
-  gap: 6px;
+  gap: var(--sp-4);
+  border-bottom: 1px solid var(--s-line);
 }
 .tb-tab {
+  position: relative;
   flex: 1;
-  padding: 10px 0;
-  border: 1px solid var(--tb-board-line);
-  border-radius: 8px;
-  background: rgba(127, 212, 255, 0.04);
-  color: var(--bc-text-dim);
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-1);
+  border: none;
+  background: transparent;
+  color: var(--t-mid);
   font-family: inherit;
-  font-size: 14px;
+  font-size: var(--fs-md);
   font-weight: 700;
   cursor: pointer;
 }
-.tb-tab--active {
-  background: rgba(127, 212, 255, 0.14);
-  color: var(--bc-text);
-  border-color: var(--tb-chalk);
+.tb-tab:hover { color: var(--t-hi); }
+.tb-tab--active { color: var(--t-hi); }
+.tb-tab--active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--brand);
+}
+/* 잠금은 이모지 자물쇠가 아니라 평문으로 말한다(감사 T-12). */
+.tb-tab__lock {
+  margin-left: var(--sp-1);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--t-low);
 }
 .tb-side__body {
-  flex: 1 1 0;
+  flex: 1 1 auto;
   min-height: 0;
 }
-/* ── 하단: 정지 사유 + [전술 확정] 대형 버튼 ───────────────── */
+
+/* ── 하단: 정지 사유 + [전술 확정] ─────────────────────────
+   화면당 primary는 하나 — 여기서는 [전술 확정]이다. 크기를 270×80까지 키우지
+   않는다(주 동작은 위계로 말하지 크기로 소리치지 않는다). */
 .tb-foot {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding-top: 4px;
+  gap: var(--sp-4);
+  padding-top: var(--sp-1);
 }
 .tb-foot__reason {
-  font-size: 14px;
+  font-size: var(--fs-md);
   font-weight: 700;
-  color: var(--bc-text-dim);
-}
-.tb-confirm {
-  padding: 16px 40px;
-  border: 1px solid var(--tb-chalk);
-  border-radius: 12px;
-  background: var(--tb-chalk);
-  color: #06101f;
-  font-family: inherit;
-  font-size: 18px;
-  font-weight: 900;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-}
-.tb-confirm:hover {
-  filter: brightness(1.08);
+  color: var(--t-mid);
 }
 
 /* ── 탭 본문: 4축 콘솔 + 확장 지시 스택 ─────────────────────── */
 .tb-tactics {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--sp-3);
 }
 
-/* ── 확장 전술 지시 패널(멘탈리티·그룹·패턴·GK·페이즈) ──────── */
+/* ── 확장 전술 지시 패널(멘탈리티·그룹·패턴·GK·페이즈) ────────
+   ★ 저대비 실측 수정: 배경이 rgba(127,212,255,0.04) 반투명 + --t-mid 텍스트라
+   대비가 무너져 있었다. 반투명을 불투명 토큰(--s-2/--s-3)으로 바꾼다. */
 .tx-panel {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--tb-board-line);
-  border-radius: 10px;
-  background: rgba(127, 212, 255, 0.04);
-  color: var(--bc-text);
-  font-family: var(--bc-font);
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--s-1);
+  color: var(--t-hi);
+  font-family: var(--f-ui);
 }
-.tx-group { display: flex; flex-direction: column; gap: 8px; }
+.tx-group { display: flex; flex-direction: column; gap: var(--sp-2); }
 .tx-group__title {
   margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--tb-chalk);
+  font-size: var(--fs-eyebrow);
+  font-weight: 800;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--t-low);
 }
-.tx-btnrow { display: flex; flex-wrap: wrap; gap: 6px; }
+.tx-btnrow { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
 .tx-btn {
   flex: 1 1 auto;
-  min-width: 56px;
-  padding: 7px 10px;
-  border: 1px solid var(--tb-board-line);
-  border-radius: 7px;
-  background: rgba(127, 212, 255, 0.04);
-  color: var(--bc-text-dim);
+  min-width: 60px;
+  min-height: 36px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-sm);
+  background: var(--s-2);
+  color: var(--t-mid);
   font-family: inherit;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 700;
   cursor: pointer;
 }
-.tx-btn--sm { min-width: 44px; padding: 5px 8px; font-size: 11px; }
-.tx-btn:hover:not(:disabled) { border-color: var(--tb-chalk); color: var(--bc-text); }
-.tx-btn--active {
-  background: var(--tb-chalk);
-  border-color: var(--tb-chalk);
-  color: #06101f;
+.tx-btn--sm { min-width: 48px; min-height: 32px; padding: 0 var(--sp-2); font-size: var(--fs-xs); }
+.tx-btn:hover:not(:disabled) { border-color: var(--s-line-strong); color: var(--t-hi); }
+.tx-btn[aria-pressed='true'] {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--t-on-brand);
 }
-.tx-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.tx-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .tx-line {
   display: grid;
-  grid-template-columns: 62px 1fr;
+  grid-template-columns: 66px minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-2);
 }
-.tx-line__label { font-size: 12px; color: var(--bc-text-dim); }
+.tx-line__label { font-size: var(--fs-sm); color: var(--t-mid); }
 
 .tx-toggle {
-  padding: 9px 14px;
-  border: 1px solid var(--tb-board-line);
-  border-radius: 8px;
-  background: rgba(127, 212, 255, 0.04);
-  color: var(--bc-text-dim);
+  align-self: flex-start;
+  min-height: 40px;
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--s-2);
+  color: var(--t-hi);
   font-family: inherit;
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 800;
   cursor: pointer;
 }
-.tx-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
-.tx-toggle--on {
-  background: var(--bc-danger);
-  border-color: var(--bc-danger);
-  color: #fff;
+.tx-toggle:disabled { opacity: 0.45; cursor: not-allowed; }
+/* 켜진 GK 파워플레이는 "도박"이라 경고색으로 말한다(실점 위험 3배). */
+.tx-toggle[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--warn) 18%, var(--s-1));
+  border-color: var(--warn-line);
+  color: var(--warn);
 }
-.tx-hint { margin: 0; font-size: 11px; line-height: 1.35; color: var(--bc-text-dim); }
+.tx-hint { margin: 0; font-size: var(--fs-xs); line-height: var(--lh-md); color: var(--t-mid); }
 
 .tx-slot {
   display: grid;
-  grid-template-columns: 62px 1fr;
+  grid-template-columns: 66px minmax(0, 1fr);
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-2);
 }
-.tx-slot__label { font-size: 12px; color: var(--bc-text-dim); }
+.tx-slot--seg { align-items: start; }
+.tx-slot__label { font-size: var(--fs-sm); color: var(--t-mid); }
 .tx-slot__base {
-  font-size: 13px;
+  font-size: var(--fs-md);
   font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: var(--bc-text);
-}
-.tx-slot__select {
-  background: var(--bc-panel-2);
-  color: var(--bc-text);
-  border: 1px solid var(--tb-board-line);
-  border-radius: 6px;
-  padding: 5px 8px;
-  font-family: inherit;
-  font-size: 12px;
+  color: var(--t-hi);
 }
 
 /* ── 다크 전술판 PitchView 오버라이드 + 실시간 도트 이동 ─────
-   그린 피치 대신 투명 보드(부모 배경 노출), 라인은 초크 톤. */
+   그린 피치 대신 투명 보드(부모 배경 노출), 라인은 라인업 보드와 같은 흰 선. */
 .pv-root--tactics {
   background: transparent;
 }
 .pv-root--tactics .pv-stripe {
-  fill: rgba(127, 212, 255, 0.03);
+  fill: color-mix(in srgb, var(--t-hi) 3%, transparent);
 }
 .pv-root--tactics .pv-line {
-  stroke: var(--tb-board-line);
+  stroke: var(--pitch-line);
 }
 /* 포메이션 변경 시 도트·번호·이름이 새 slotCoords로 0.5s 이동(변경→시각 피드백 루프). */
 .pv-root--tactics .pv-dot,
@@ -375,12 +389,16 @@
   transition: cx 0.5s ease, cy 0.5s ease, x 0.5s ease, y 0.5s ease;
 }
 .pv-name {
-  fill: var(--bc-text);
-  font-size: 2.1px;
+  fill: var(--t-hi);
+  font-size: 2.1px; /* SVG 사용자 단위(viewBox 105×68) — CSS px 토큰 대상 아님 */
   font-weight: 700;
   text-anchor: middle;
   dominant-baseline: central;
   pointer-events: none;
+  paint-order: stroke fill;
+  stroke: var(--s-scrim);
+  stroke-width: 0.6;
+  stroke-linejoin: round;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -391,35 +409,34 @@
   }
 }
 
-/* ── 코치 회의 (멀티 코치) — 작전판 최상단 카드 리스트 ─────────────
-   발동 조건을 만족한 코치만 등장한다(0~4명 가변, 상충 허용).
-   각 카드 [채택]은 부분 전술을 draft에 병합. 맨 아래 [감독 판단대로 간다]는 접기.
-   조언 0건이면 --quiet 한 줄만 남긴다(근거 없는 카드를 지어내지 않는다). */
+/* ── 코치 회의 — Dugout 카드(제목 / 본문 / [적용] [닫기]) ─────────
+   ★ 감사 T-10: 블루 좌측 띠 + 다크 카드는 금지 패턴이다. 4변 헤어라인 카드 +
+   아이브로우로 바꿨다. 텍스트를 흘리지 않고 원클릭 실행 카드로 세운다. */
 .tb-coach {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid var(--tb-board-line);
-  border-radius: 10px;
-  background: rgba(10, 21, 38, 0.6);
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--s-1);
 }
 .tb-coach--quiet {
-  padding: 8px 12px;
+  padding: var(--sp-2) var(--sp-3);
 }
 .tb-coach__quiet {
   margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  color: rgba(226, 240, 255, 0.62);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-md);
+  color: var(--t-mid);
 }
 .tb-coach__title {
   margin: 0;
-  font-size: 13px;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  color: var(--tb-chalk);
+  font-size: var(--fs-eyebrow);
+  font-weight: 800;
+  letter-spacing: var(--ls-caps);
+  color: var(--t-low);
   text-transform: uppercase;
 }
 .tb-coach__list {
@@ -427,67 +444,41 @@
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--sp-2);
 }
 .tb-coach__card {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px 10px;
-  border: 1px solid var(--tb-board-line);
-  border-left: 3px solid var(--tb-chalk);
-  border-radius: 8px;
-  background: rgba(6, 16, 31, 0.8);
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--s-2);
 }
 .tb-coach__role {
-  font-size: 12px;
-  font-weight: 900;
-  color: var(--tb-chalk);
+  font-size: var(--fs-eyebrow);
+  font-weight: 800;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--t-low);
 }
 .tb-coach__rationale {
   margin: 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--bc-text-dim);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
+  color: var(--t-mid);
 }
 .tb-coach__proposal {
   margin: 0;
-  font-size: 12.5px;
-  line-height: 1.45;
-  color: var(--bc-text);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-md);
+  color: var(--t-hi);
   font-weight: 700;
 }
-.tb-coach__adopt {
-  align-self: flex-start;
-  margin-top: 2px;
-  padding: 4px 14px;
-  border: 1px solid var(--tb-chalk);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--tb-chalk);
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  cursor: pointer;
-}
-.tb-coach__adopt:hover {
-  background: var(--tb-chalk);
-  color: #06101f;
-}
-.tb-coach__dismiss {
-  align-self: center;
-  padding: 6px 18px;
-  border: 1px dashed var(--bc-text-dim);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--bc-text-dim);
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.tb-coach__dismiss:hover {
-  color: var(--bc-text);
-  border-color: var(--bc-text);
+.tb-coach__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-top: var(--sp-1);
 }

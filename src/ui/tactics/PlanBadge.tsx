@@ -14,7 +14,8 @@ export function PlanBadge() {
   const intact = isPlanStructIntact(plan, engine.home.tactics)
   return (
     <span className={`plan-badge${intact ? ' plan-badge--ok' : ''}`} role="status">
-      {intact ? '플랜 유지 ✅ 팀 이해도 +3%' : `플랜 이탈 ${dev}축`}
+      {/* 이모지를 아이콘으로 쓰지 않는다 — 상태는 색과 평문으로 말한다. */}
+      {intact ? '플랜 유지 · 팀 이해도 +3%' : `플랜 이탈 ${dev}축`}
     </span>
   )
 }

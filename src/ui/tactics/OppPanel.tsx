@@ -54,14 +54,14 @@ export function OppPanel() {
       <MatchStatsPanel />
       <header className="op__head">
         <span className="op__name">{away.team.name.ko}</span>
-        <span className="op__form" aria-label="상대 포메이션">{oppFormation}</span>
+        <span className="op__form num" aria-label="상대 포메이션">{oppFormation}</span>
       </header>
       {preferred.length > 0 && preferred[0] !== oppFormation && (
         <p className="op__pref">선호: {preferred.join(', ')}</p>
       )}
 
       <div className={`op__matchup op__matchup--${hint.tone}`} role="note" aria-label="매치업 힌트">
-        <span className="op__matchup-vs">{myFormation} vs {oppFormation}</span>
+        <span className="op__matchup-vs num">{myFormation} vs {oppFormation}</span>
         <span className="op__matchup-text">{hint.text}</span>
       </div>
 
@@ -70,7 +70,7 @@ export function OppPanel() {
         <ul className="op__timeline" aria-label="상대 변경 이력">
           {notices.slice(-3).map(n => (
             <li key={`${n.minute}-${n.text}`} className="op__timeline-row">
-              <span className="op__timeline-min">{n.minute}&apos;</span>
+              <span className="op__timeline-min num">{n.minute}&apos;</span>
               <span className="op__timeline-text">{n.text.replace('📢 ', '')}</span>
             </li>
           ))}
@@ -95,7 +95,7 @@ export function OppPanel() {
                 aria-pressed={sel === player.id}
                 onClick={() => setSel(sel === player.id ? null : player.id)}
               >
-                <span className="op__row-num">{player.number}</span>
+                <span className="op__row-num num">{player.number}</span>
                 <span className="op__row-name">{player.name.ko}</span>
                 {star && <span className="op__row-star" aria-label="키 플레이어">★</span>}
                 <span className="op__row-slot">{slot}</span>

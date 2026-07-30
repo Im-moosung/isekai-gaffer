@@ -117,7 +117,7 @@ export function PlayerCard({ player, size = 'full', side = 'home', slot, role, s
         <span className={`pc__avatar pc__avatar--${side}`} aria-hidden="true">{avatarInitials(player)}</span>
         <span className="pc__ident">
           <span className="pc__nameline">
-            <span className="pc__num">{player.number}</span>
+            <span className="pc__num num">{player.number}</span>
             <span className="pc__name">{player.name.ko}</span>
             {star && <span className="pc__star" aria-label="키 플레이어">★</span>}
           </span>
@@ -236,17 +236,27 @@ function Radar({ axes, isGk, showLabels, className }: { axes: RadarAxis[]; isGk:
   )
 }
 
+/** 컨디션 3단 — 40 미만 위험 / 70 미만 주의 / 이상 양호.
+ *  색만으로 말하지 않도록 수치를 항상 옆에 붙인다(색맹 대응).
+ *  ★ 같은 눈금을 lineup.ts의 staminaTone도 쓴다 — 두 곳에서 임계가 갈리면
+ *  같은 선수가 화면마다 다른 색으로 보인다. 값을 바꾸면 양쪽을 함께 바꿔라. */
+function conditionTone(value: number): 'low' | 'mid' | 'ok' {
+  if (value < 40) return 'low'
+  if (value < 70) return 'mid'
+  return 'ok'
+}
+
 function Gauge({ label, value, kind }: { label: string; value: number; kind: 'stamina' | 'morale' }) {
   const pct = Math.max(0, Math.min(100, Math.round(value)))
-  const low = pct < 30
+  const tone = conditionTone(pct)
   return (
     <div className={`pc-gauge pc-gauge--${kind}`}>
       <span className="pc-gauge__label">{label}</span>
       <span className="pc-gauge__track" aria-label={`${label} ${pct}%`}>
         {/* 데이터 바인딩 폭(%)만 인라인 — pitch 기하 예외와 동일 취급. 색은 토큰. */}
-        <span className={`pc-gauge__bar${low ? ' pc-gauge__bar--low' : ''}`} style={{ width: `${pct}%` }} />
+        <span className={`pc-gauge__bar pc-gauge__bar--${tone}`} style={{ width: `${pct}%` }} />
       </span>
-      <span className="pc-gauge__val">{pct}</span>
+      <span className="pc-gauge__val num">{pct}</span>
     </div>
   )
 }

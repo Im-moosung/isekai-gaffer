@@ -69,11 +69,33 @@ describe('LineupScreen 스모크', () => {
 })
 
 describe('LineupScreen — PlayerCard 팝오버·벤치 컴팩트 카드 (Task 7)', () => {
-  it('벤치 카드에 능력치 미니 레이더(스탯 요약)를 그린다', () => {
+  // 벤치 행에 붙어 있던 60px 육각 레이더는 걷어냈다 — 축 라벨이 없고 15명 전부
+  // 수치가 100이라 정보량이 0인데 카드 면적의 절반을 먹었다(감사 W-10).
+  // 대신 능력치 열람 자체는 반드시 남아야 한다: FM26은 벤치 항목에서 능력치 조회를
+  // 막아 "CM 96/97에도 있던 기능"이라고 비판받았다. 행의 [상세]가 그 계약이다.
+  it('벤치 행에 상시 레이더는 없고, [상세]로 능력치 카드를 펼친다', () => {
+    const { container, getAllByRole } = render(
+      <LineupScreen team={team} initial={initial} onConfirm={() => {}} />,
+    )
+    const row = container.querySelector('.lu-bench__item') as HTMLElement
+    expect(row.querySelector('.pc-radar__poly')).toBeNull()
+    const detailBtn = getAllByRole('button', { name: /능력치 펼치기$/ })[0]
+    fireEvent.click(detailBtn)
+    const detail = container.querySelector('.lu-bench__detail') as HTMLElement
+    expect(detail).toBeTruthy()
+    expect(detail.querySelector('.pc-radar__poly')).toBeTruthy()
+  })
+
+  // 스크롤 어포던스: 벤치는 이 화면에서 유일하게 허용되는 내부 스크롤 컨테이너다.
+  // 가시 스크롤바(.scroll-y) + 하단 페이드 + 총원 카운트가 없으면 73%가 은닉된다.
+  it('벤치에 가시 스크롤바·하단 페이드·총원 카운트가 붙는다', () => {
     const { container } = render(<LineupScreen team={team} initial={initial} onConfirm={() => {}} />)
-    const card = container.querySelector('.lu-card') as HTMLElement
-    expect(card.querySelector('.lu-card__radar')).toBeTruthy()
-    expect(card.querySelector('.pc-radar__poly')).toBeTruthy()
+    expect(container.querySelector('.lu-bench__list.scroll-y')).toBeTruthy()
+    expect(container.querySelector('.lu-bench .scroll-pane__fade')).toBeTruthy()
+    expect(container.querySelector('.lu-bench__count')!.textContent)
+      .toContain(String(team.squad.length - 11))
+    // 슬롯 ID는 고정이다(S1…Sn).
+    expect(container.querySelector('.lu-card__slotid')!.textContent).toBe('S1')
   })
 
   it('칩 클릭(선택) → 선수 카드 팝오버 표시, 재클릭 해제 시 사라짐', () => {

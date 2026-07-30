@@ -1,284 +1,268 @@
-/* 킥오프 전 전술 센터(워룸) — 작전판(tactics.css)과 같은 다크 초크보드 톤을 쓰되,
-   오버레이가 아니라 방송 스테이지 아래에 붙는 한 판짜리 설계 화면이다.
+/* 킥오프 전 전술 센터(워룸) — 값은 전부 tokens.css. 하드코딩 hex 0.
 
-   ★ min-height: 0 / minmax(0, 1fr)을 곳곳에 넣은 이유: grid·flex 자식은 기본
-   min-width/min-height가 auto라 내용이 넘치면 축소되지 않고 부모를 밀어낸다.
-   ("어떤 기능을 켜면 어떤 부분이 쪼그라든다"는 증상의 전형적 원인) 처음부터 막아 둔다. */
-.tc-root {
-  --tc-line: rgba(140, 200, 255, 0.28);
-  /* TacticsExtras(.tx-*)는 작전판(.tb-root)의 로컬 토큰을 참조한다. 전술 센터는
-     .tb-root 밖이므로 같은 값을 여기서도 정의해야 버튼 활성색·테두리가 산다. */
-  --tb-board-line: rgba(140, 200, 255, 0.35);
-  --tb-chalk: #7fd4ff;
-  display: flex;
-  flex-direction: column;
-  /* 1440×900에서 ② 팀 전술 탭 전체가 스크롤 없이 들어가도록 여백을 깎았다.
-     헤더·본체·검토 요약 3단이 각각 고정 높이를 갖는 화면이라 gap 4px가 곧 판정선이다. */
-  gap: 8px;
-  width: 100%;
-  min-width: 0;
+   ★ 구조 재설계(감사 W-3·W-4·W-16). 이전 구조는 높이를 예산으로 배분했다:
+   .ms-root(100vh) → .ms-stage(overflow:hidden) → .ms-precenter(overflow:auto)
+   → .tc-war(max-height:38vh) → .tc-war__body(overflow:auto) → .lu-bench(overflow:auto).
+   중첩 스크롤 6단이라 뷰포트가 1px 줄면 가장 안쪽이 먼저 죽었다 — 실측으로 워룸 본문
+   63% 은닉(1440), 390px에서는 아예 미렌더였다.
+
+   이제 스크롤은 문서가 한다. 워룸은 세로로 자라고, 내부 스크롤 컨테이너는
+   벤치(.lu-bench__list) 하나뿐이다. */
+
+/* ── 킥오프 전 스테이지 정리 ───────────────────────────────────
+   'pre'에서 이 화면의 주인공은 설계다. 다음 세 가지를 내린다:
+   (1) 3D 스타디움 띠 — 1920×190 극단 레터박스. 정보가 0인데 높이의 21%를 먹었고,
+       화면에 피치를 세 번(3D 띠·상대 미니맵·라인업 보드) 서로 다른 시각 언어로
+       그리게 만든 원인이다(감사 W-5).
+   (2) 라이브 스코어버그 — 킥오프 전인데 0:0 · 0'가 떠 있었다(감사 W-12).
+   (3) 중계 티커 — 아직 중계할 경기가 없다.
+   규칙이 match.css가 아니라 여기 있는 것은 이 배치가 전술 센터의 레이아웃 문제이기
+   때문이고, 파일 로드 순서에 좌우되지 않도록 특이도를 한 단계 올려 둔다.
+   ※ 스코어버그·티커는 경기 화면 상단 바로 옮겨 갔다(스테이지 밖). 그래서 스테이지
+   하위 선택자만으로는 못 잡고 :has()로 "지금이 pre인가"를 루트에서 판정한다. */
+.ms-root:has(.ms-stage--pre) .ms-pitch-wrap,
+.ms-root:has(.ms-stage--pre) .bc-scorebug,
+.ms-root:has(.ms-stage--pre) .bc-ticker {
+  display: none;
+}
+/* 스테이지가 잘라내던 것을 문서 스크롤에 돌려준다. */
+.ms-root:has(.ms-stage--pre) {
+  height: auto;
+  min-height: 100dvh;
+}
+.ms-stage.ms-stage--pre {
+  overflow: visible;
+  padding-top: var(--sp-6); /* 스코어버그가 없으니 74px 여백도 필요 없다 */
+}
+.ms-stage.ms-stage--pre .ms-precenter {
+  overflow: visible;
   min-height: 0;
-  padding: 10px 12px;
-  box-sizing: border-box;
-  border: 1px solid var(--tc-line);
-  border-radius: 14px;
-  background: linear-gradient(180deg, #06101f, #0a1526 60%, #050b16);
-  color: var(--bc-text);
-  font-family: var(--bc-font);
 }
 
-/* ★ 킥오프 전 스테이지 높이 배분 — 이 시점 화면의 주인공은 전술 설계이므로
-   피치는 "스타디움 분위기"를 유지하는 얇은 띠로만 남기고 남은 높이를 워룸에 준다
-   (24vh → 15vh, 1440×900에서 약 +80px). 완전히 없애지 않는 이유는 방송 정체성이고,
-   토글로 접지 않는 이유는 (1) 피치가 WebGL 캔버스라 display:none 리사이즈가 위험하고
-   (2) "볼 게 너무 많다"가 문제인 화면에 컨트롤을 하나 더 얹는 셈이기 때문이다.
-   규칙이 match.css가 아니라 여기 있는 것은 이 높이 배분이 전술 센터의 레이아웃
-   문제이기 때문이며, 파일 로드 순서에 좌우되지 않도록 특이도를 한 단계 올려 둔다. */
-.ms-stage.ms-stage--pre .ms-pitch-wrap { max-height: 15vh; }
+/* ── 워룸 루트 ─────────────────────────────────────────────── */
+.tc-root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  width: 100%;
+  max-width: var(--w-wide);
+  margin: 0 auto;
+  min-width: 0;
+  color: var(--t-hi);
+  font-family: var(--f-ui);
+}
 
-/* ── 헤더: 대진 + 킥오프 ─────────────────────────────────── */
-/* 헤더·검토 요약은 스크롤 컨테이너(.ms-precenter) 안에서 상/하단에 고정한다 —
-   설계를 만지는 동안 킥오프 버튼과 검토 요약이 항상 시야에 있어야 한다.
-   sticky는 반투명이면 아래 내용이 비쳐 읽히지 않으므로 배경을 불투명으로 둔다. */
+/* ── 헤더: 대진 + 국면 ─────────────────────────────────────── */
 .tc-head {
-  position: sticky;
-  top: 0;
-  z-index: 3;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  min-width: 0;
-  padding: 10px 16px;
-  border: 1px solid var(--tc-line);
-  border-radius: 10px;
-  background: #0e1b30;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--s-line);
 }
 .tc-head__match {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
+  align-items: stretch;
+  gap: var(--sp-2);
   min-width: 0;
-  flex-wrap: wrap;
 }
-.tc-head__teams { font-size: 1.05rem; font-weight: 800; }
-.tc-head__ref { font-size: 0.82rem; color: var(--bc-text-dim); }
-.tc-kickoff {
-  flex: 0 0 auto;
-  padding: 10px 22px;
-  border: none;
-  border-radius: 8px;
-  background: var(--bc-accent);
-  color: #0b1220;
-  font-family: inherit;
-  font-size: 1rem;
+.tc-head__teams {
+  font-size: var(--fs-h1);
   font-weight: 800;
-  cursor: pointer;
+  line-height: var(--lh-tight);
 }
-.tc-kickoff:hover { filter: brightness(1.05); }
-.tc-head__actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
-}
-/* 추천은 보조 액션 — 킥오프(주 액션)와 색으로 위계를 구분한다. */
-.tc-recbtn {
-  padding: 9px 16px;
-  border: 1px solid var(--tc-line);
-  border-radius: 8px;
-  background: rgba(127, 212, 255, 0.12);
-  color: var(--tb-chalk);
-  font-family: inherit;
-  font-size: 0.9rem;
+.tc-head__state {
+  font-size: var(--fs-sm);
   font-weight: 700;
-  cursor: pointer;
-  white-space: nowrap;
+  color: var(--t-mid);
 }
-.tc-recbtn:hover { background: rgba(127, 212, 255, 0.22); }
+.tc-head__ref { margin-left: auto; font-size: var(--fs-sm); color: var(--t-low); }
 
-/* ── 코치진 권고 — 추천 적용의 근거. 닫기 전까지 남는다.
-   상대 리포트 열 안에서 최대 절반까지만 차지하고, 넘치면 자기 스크롤을 갖는다. ── */
-.tc-reasons {
-  /* 새로 뜬 정보가 우선 — 리포트(뒤에서 계속 읽는 것)가 대신 줄어든다. */
-  flex: 0 0 auto;
+/* ── 접이식 섹션 ───────────────────────────────────────────
+   ≥720px에서는 토글 자체를 렌더하지 않고 전부 펼쳐 둔다. FM25가 "한 눈에 보이던
+   정보를 클릭 뒤로 숨겨" 취소된 전례를 반복하지 않기 위해서다. sm에서만 아코디언. */
+.tc-acc {
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  max-height: 55%;
-  border: 1px solid rgba(127, 212, 255, 0.4);
-  border-radius: 10px;
-  background: rgba(18, 40, 64, 0.85);
-  padding: 8px 10px;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.tc-acc__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--s-line);
+}
+.tc-acc__title {
+  margin: 0;
+  font-size: var(--fs-h2);
+  font-weight: 800;
+  color: var(--t-hi);
+}
+.tc-acc__toggle { display: none; }
+.tc-acc__body { min-width: 0; }
+
+/* ── 본문 그리드: 상대 브리핑 | 선발 라인업(+벤치) ───────────
+   lg 이상에서 3:9. 라인업 섹션 안에서 보드와 벤치가 다시 갈라져 결과적으로 3:6:3이
+   되고, 남는 폭은 보드와 벤치가 흡수한다(감사 W-7: 430px 빈 공간). */
+.tc-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-5);
+  min-width: 0;
+}
+@media (min-width: 1200px) {
+  .tc-grid {
+    grid-template-columns: minmax(300px, 3fr) minmax(0, 9fr);
+    align-items: start;
+  }
+}
+
+/* ── 코치진 권고 ───────────────────────────────────────────── */
+.tc-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
 }
 .tc-reasons__head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: var(--sp-3);
 }
-.tc-reasons__head strong { color: var(--tb-chalk); font-size: 0.85rem; }
-.tc-reasons__note { font-size: 0.72rem; color: var(--bc-text-dim); }
-.tc-reasons__x {
-  margin-left: auto;
-  border: none;
-  background: transparent;
-  color: var(--bc-text-dim);
-  font-family: inherit;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-.tc-reasons__x:hover { color: var(--bc-text); }
+.tc-reasons__head .eyebrow { margin: 0; }
 .tc-reasons__list {
-  margin: 6px 0 0;
-  padding-left: 16px;
-  min-height: 0;
-  overflow-y: auto;
-  font-size: 0.78rem;
-  line-height: 1.4;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-md);
+  color: var(--t-mid);
 }
-.tc-reasons__list li { margin-bottom: 3px; }
 
-/* ── 본체: 좌측 상대 리포트 고정 + 우측 설계 탭 ───────────── */
-.tc-body {
-  display: grid;
-  grid-template-columns: 340px minmax(0, 1fr);
-  gap: 14px;
-  min-height: 0;
-}
-/* 상대 리포트는 어차피 내부 스크롤(선발 11 + 프로필)이다. 48vh를 차지하면 그만큼
-   본체 행 높이가 밀려 ② 팀 전술 탭이 화면 밖으로 나간다 — 읽을거리보다 조작할 것을
-   먼저 보이게 하는 편이 낫다. */
-.tc-war {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-  max-height: 38vh;
-  overflow: hidden;
-  padding: 12px;
-  border: 1px solid var(--tc-line);
-  border-radius: 10px;
-  background: rgba(10, 21, 38, 0.6);
-}
-/* 권고가 떠도 열 높이는 그대로 — 리포트 쪽이 줄고 자기 스크롤을 갖는다. */
-.tc-war__body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-}
-.tc-main {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-}
-.tc-tabs {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-  border-bottom: 1px solid var(--tc-line);
-}
-.tc-tab {
-  padding: 8px 18px;
-  border: none;
-  background: transparent;
-  color: var(--bc-text-dim);
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.tc-tab:hover { color: var(--bc-text); }
-.tc-tab--active {
-  color: var(--bc-accent);
-  font-weight: 800;
-  box-shadow: inset 0 -2px 0 currentColor;
-}
-/* 탭 본문은 자체 스크롤을 갖지 않는다. 스크롤 컨테이너를 겹치면 "슬라이더를 보려면
-   안쪽을 스크롤하고 킥오프 버튼을 보려면 바깥을 스크롤"하는 이중 스크롤이 된다.
-   넘칠 때의 스크롤은 바깥 하나(.ms-precenter)에 맡긴다. */
-.tc-tabbody {
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-  padding-top: 10px;
-}
+/* ── 팀 전술 ───────────────────────────────────────────────
+   "라인을 내리면서 수비적으로 간다"는 하나의 결정이다. 슬라이더(ConsolePanel)와
+   멘탈리티·그룹·패턴(TacticsExtras)을 나란히 두어 동시에 판단하게 한다. */
 .tc-team {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
   min-width: 0;
 }
-
-/* ★ ② 팀 전술 탭 2열 — "라인을 내리면서 수비적 멘탈리티로 간다"는 하나의 결정인데
-   슬라이더(ConsolePanel)와 멘탈리티·그룹·패턴(TacticsExtras)이 세로로 쌓이면
-   1440px에서 스크롤해야 둘 다 볼 수 있다. 한 화면에 담아 동시에 판단하게 한다.
-   TacticsExtras 내부도 2열로 접어 세로 길이를 절반으로 줄인다(작전판 쪽은 .tc-team
-   스코프 밖이라 영향 없음 — 오버레이는 세로가 길어도 되는 화면이다). */
-@media (min-width: 1200px) {
+@media (min-width: 900px) {
   .tc-team {
-    display: grid;
-    grid-template-columns: minmax(320px, 0.85fr) minmax(0, 1.15fr);
+    grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.15fr);
     align-items: start;
   }
-  /* 그리드 대신 멀티컬럼: 그룹 높이가 제각각(65~133px)이라 2×N 그리드는 행 높이가
-     가장 큰 그룹에 맞춰져 빈 공간이 생긴다. 멀티컬럼은 두 열의 높이를 스스로 맞춘다. */
-  .tc-team .tx-panel {
-    display: block;
-    columns: 2;
-    column-gap: 16px;
-  }
-  .tc-team .tx-group {
-    break-inside: avoid;
-    margin-bottom: 12px;
-  }
-  .tc-team .tx-group:last-child { margin-bottom: 0; }
 }
 
-/* ── 하단 검토 요약 ──────────────────────────────────────── */
+/* ── 검토 ──────────────────────────────────────────────────
+   4열 표를 문장 리스트로 바꿨다. 색은 텍스트에만 얹는다. */
 .tc-summary {
-  position: sticky;
-  bottom: 0;
-  z-index: 3;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 10px;
-  padding: 12px 16px;
-  border: 1px solid var(--tc-line);
-  border-radius: 10px;
-  background: #0e1b30;
-}
-.tc-card {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
   min-width: 0;
 }
-.tc-card__label { font-size: 0.75rem; color: var(--bc-text-dim); }
-.tc-card__value { font-size: 1rem; font-weight: 800; }
-.tc-card__sub { font-size: 0.8rem; color: var(--bc-text-dim); }
-
-/* 리스크 카드 — 항목이 늘어나도 검토 요약 전체 높이를 밀지 않도록 자체 스크롤. */
-.tc-card--risk { grid-column: span 2; }
+@media (min-width: 900px) {
+  .tc-summary { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+.tc-facts,
 .tc-risks {
-  margin: 2px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin: 0;
   padding: 0;
   list-style: none;
-  max-height: 44px;
-  overflow-y: auto;
 }
+.tc-fact {
+  display: flex;
+  gap: var(--sp-3);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-md);
+}
+.tc-fact__label {
+  flex: 0 0 68px;
+  color: var(--t-low);
+  font-weight: 700;
+}
+.tc-fact__value { color: var(--t-hi); font-weight: 700; }
 .tc-risk {
-  font-size: 0.8rem;
-  line-height: 1.4;
-  color: var(--bc-text-dim);
+  display: flex;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-md);
+  color: var(--t-mid);
 }
-.tc-risk--warn { color: #f5c542; font-weight: 600; }
+.tc-risk__mark { flex: 0 0 auto; font-weight: 900; }
+.tc-risk--ok .tc-risk__mark { color: var(--good); }
+.tc-risk--warn { color: var(--t-hi); }
+.tc-risk--warn .tc-risk__mark { color: var(--warn); }
 
-@media (max-width: 1100px) {
-  .tc-card--risk { grid-column: span 1; }
+/* ── 하단 고정 액션 바 ─────────────────────────────────────
+   화면당 primary 하나. 문서 스크롤 기준 sticky라 설계를 만지는 동안 늘 시야에 있다. */
+.tc-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--z-furniture);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: var(--h-bottombar);
+  margin-top: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  border-top: 1px solid var(--s-line);
+  background: var(--s-0);
+}
+.tc-actions__status {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  color: var(--t-mid);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-@media (max-width: 900px) {
-  .tc-body { grid-template-columns: minmax(0, 1fr); }
-  .tc-war { max-height: 240px; }
+/* ── sm(<720): 1열 세로 스택 + 아코디언 + 하단 고정 CTA ────── */
+@media (max-width: 719px) {
+  .tc-root { gap: var(--sp-4); }
+  .tc-head__teams { font-size: var(--fs-h2); }
+  .tc-head__ref { margin-left: 0; }
+
+  /* 토글이 제목을 겸한다 — 제목을 두 벌 그리지 않는다. */
+  .tc-acc__static { display: none; }
+  .tc-acc__toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    min-height: var(--tap-min);
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+  .tc-acc__toggle::before {
+    content: '▸';
+    color: var(--t-low);
+    font-size: var(--fs-sm);
+  }
+  .tc-acc--open .tc-acc__toggle::before { content: '▾'; }
+  .tc-acc:not(.tc-acc--open) .tc-acc__body { display: none; }
+
+  .tc-actions {
+    flex-wrap: wrap;
+    padding: var(--sp-2) var(--sp-3);
+  }
+  /* 좁은 폭에서 주 동작이 줄바꿈에 밀려 화면 밖으로 나가지 않게 한다. */
+  .tc-actions .btn--primary { flex: 1 1 100%; order: -1; }
+  .tc-actions__status { flex: 1 1 100%; white-space: normal; }
 }
