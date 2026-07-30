@@ -7,9 +7,10 @@
 // "월드 좌표"로 삼고 toWorld()로 변환한다(카메라 클램프는 피치 실측 경계 기준).
 import type { ChoreoStep } from '../choreography'
 
-/** 실측 피치 크기(m) — 월드 좌표 단위. SVG PitchView와 동일 비율(105:68). */
-export const PITCH_W = 105
-export const PITCH_H = 68
+/** 실측 피치 크기(m) — 월드 좌표 단위. SVG PitchView와 동일 비율(105:68).
+ *  정본은 ../geometry — 재수출해 기존 import 경로(`from './stage'`)를 유지한다. */
+export { PITCH_W, PITCH_H } from '../geometry'
+import { PITCH_W, PITCH_H } from '../geometry'
 
 /** 하이라이트 카메라 줌 배율(액션 존 확대). */
 export const ZOOM = 1.6

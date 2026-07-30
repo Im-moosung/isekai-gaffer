@@ -6,8 +6,10 @@
  * 이 파일은 표시 전용 계층의 계약이며 엔진 로직에 영향을 주지 않는다.
  */
 
-export const PITCH_W = 105
-export const PITCH_H = 68
+// 치수 정본은 ../geometry(렌더러 3종 공용). 여기서는 기존 import 경로를 지키기 위해
+// 그대로 재수출한다 — 3D 계층은 계속 './types'에서 가져다 쓴다.
+export { PITCH_W, PITCH_H } from '../geometry'
+import { PITCH_W, PITCH_H } from '../geometry'
 
 /** 엔진 slotCoords(0~100, 0~100) → 월드 XZ */
 export function toWorld(x: number, y: number): { x: number; z: number } {

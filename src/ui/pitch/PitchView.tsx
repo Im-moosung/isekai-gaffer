@@ -3,11 +3,12 @@ import type { MatchState, MatchEvent, SideState } from '../../engine/types'
 import { tacticalCoords } from './shape'
 import type { ChoreoStep } from './choreography'
 import { AnalysisLayer } from './AnalysisLayer'
+import { PITCH_W, PITCH_H, CENTER_CIRCLE_R, PENALTY_BOX_D, GOAL_AREA_D } from './geometry'
 import './pitch.css'
 
-// 피치 실측 비율(m) — viewBox 0 0 105 68.
-const W = 105
-const H = 68
+// 피치 실측 비율(m) — viewBox 0 0 105 68. 치수 정본은 ./geometry(3개 렌더러 공용).
+const W = PITCH_W
+const H = PITCH_H
 // slotCoords의 0~100 좌표를 viewBox 좌표로 스케일.
 const sx = (x: number) => (x / 100) * W
 const sy = (y: number) => (y / 100) * H
@@ -112,7 +113,10 @@ function GhostDot({ side, slotIndex, number }: { side: SideState; slotIndex: num
 
 function PitchMarkings() {
   const cy = H / 2
-  // 페널티박스: 깊이 16.5m, 폭 40.3m / 골박스: 깊이 5.5m, 폭 18.3m.
+  // 페널티박스: 깊이 PENALTY_BOX_D / 골박스: 깊이 GOAL_AREA_D (geometry.ts 정본).
+  // 폭만 리터럴로 남긴다 — 3D는 규칙값 40.32/18.32를 쓰는데 2D는 예전부터 40.3/18.3이다.
+  // 서브픽셀 차이지만 리팩터링 커밋에서 렌더 결과를 바꾸지 않기로 해 통일하지 않았다
+  // (geometry.PENALTY_BOX_W 주석 참조).
   const penH = 40.3
   const penTop = (H - penH) / 2
   const goalH = 18.3
@@ -125,14 +129,14 @@ function PitchMarkings() {
       {/* 하프라인 */}
       <line className="pv-line" x1={W / 2} y1={0.5} x2={W / 2} y2={H - 0.5} />
       {/* 센터서클 + 킥오프 점 */}
-      <circle className="pv-line" cx={W / 2} cy={cy} r={9.15} />
+      <circle className="pv-line" cx={W / 2} cy={cy} r={CENTER_CIRCLE_R} />
       <circle cx={W / 2} cy={cy} r={0.5} fill="var(--bc-pitch-line)" />
       {/* 좌측(홈) 페널티/골 박스 */}
-      <rect className="pv-line" x={0.5} y={penTop} width={16.5} height={penH} />
-      <rect className="pv-line" x={0.5} y={goalTop} width={5.5} height={goalH} />
+      <rect className="pv-line" x={0.5} y={penTop} width={PENALTY_BOX_D} height={penH} />
+      <rect className="pv-line" x={0.5} y={goalTop} width={GOAL_AREA_D} height={goalH} />
       {/* 우측(어웨이) 페널티/골 박스 */}
-      <rect className="pv-line" x={W - 0.5 - 16.5} y={penTop} width={16.5} height={penH} />
-      <rect className="pv-line" x={W - 0.5 - 5.5} y={goalTop} width={5.5} height={goalH} />
+      <rect className="pv-line" x={W - 0.5 - PENALTY_BOX_D} y={penTop} width={PENALTY_BOX_D} height={penH} />
+      <rect className="pv-line" x={W - 0.5 - GOAL_AREA_D} y={goalTop} width={GOAL_AREA_D} height={goalH} />
     </g>
   )
 }

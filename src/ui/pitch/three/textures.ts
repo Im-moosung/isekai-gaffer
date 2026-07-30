@@ -13,18 +13,18 @@
 // PlaneGeometry(105,68).rotateX(-PI/2) + CanvasTexture(flipY=true) 조합에서
 // 캔버스 위쪽 행이 v=1 = 월드 z=-34에 대응하므로 위 매핑이 그대로 맞다.
 import { PITCH_W, PITCH_H } from './types'
+import {
+  CENTER_CIRCLE_R, PENALTY_BOX_D, PENALTY_BOX_W, GOAL_AREA_D, GOAL_AREA_W,
+} from '../geometry'
 
-// ── 축구 규격(m) — 라인 마킹·골대 치수의 정본 ────────────────────
+// ── 축구 규격(m) — 라인 마킹·골대 치수 ───────────────────────────
+// 피치·박스 치수의 정본은 ../../pitch/geometry로 옮겼다(2D 렌더러와 공용).
+// 여기서는 기존 import 경로(`from './textures'`)를 지키려 재수출한다.
+export {
+  CENTER_CIRCLE_R, PENALTY_BOX_D, PENALTY_BOX_W, GOAL_AREA_D, GOAL_AREA_W,
+} from '../geometry'
 /** 라인 폭(경기 규칙: 최대 12cm). */
 export const LINE_W = 0.12
-/** 센터서클 반지름 = 페널티 아크 반지름. */
-export const CENTER_CIRCLE_R = 9.15
-/** 페널티 에어리어: 골라인에서 16.5m, 폭 40.32m. */
-export const PENALTY_BOX_D = 16.5
-export const PENALTY_BOX_W = 40.32
-/** 골 에어리어: 골라인에서 5.5m, 폭 18.32m. */
-export const GOAL_AREA_D = 5.5
-export const GOAL_AREA_W = 18.32
 /** 페널티 스팟: 골라인에서 11m. */
 export const PENALTY_SPOT_D = 11
 /** 코너 아크 반지름. */

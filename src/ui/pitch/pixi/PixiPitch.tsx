@@ -8,6 +8,7 @@ import {
   PITCH_W, PITCH_H, ZOOM, toWorld, clamp, lerp, clampFocus,
   bezierAt, controlFor, easeFor, shakeOffset,
 } from './stage'
+import { CENTER_CIRCLE_R, PENALTY_BOX_D, GOAL_AREA_D } from '../geometry'
 import { spawnBurst, stepParticles, particleAlpha, type Particle } from './fx'
 import './pixi.css'
 
@@ -177,6 +178,8 @@ export function PixiPitch(props: PixiPitchProps) {
         const lineW = Math.max(1, scale * 0.28)
         const stroke = { width: lineW, color: 0xffffff, alpha: 0.72 }
         const cy = PITCH_H / 2
+        // 박스 폭만 리터럴 — 3D는 규칙값 40.32/18.32, 2D는 예전부터 40.3/18.3이다.
+        // 서브픽셀 차이라 통일하지 않고 보고만 했다(geometry.PENALTY_BOX_W 주석 참조).
         const penH = 40.3, penTop = (PITCH_H - penH) / 2
         const goalH = 18.3, goalTop = (PITCH_H - goalH) / 2
         // 외곽선
@@ -186,14 +189,14 @@ export function PixiPitch(props: PixiPitchProps) {
         pitchG.moveTo(hl0.x, hl0.y).lineTo(hl1.x, hl1.y).stroke(stroke)
         // 센터서클 + 킥오프 점
         const cc = px(PITCH_W / 2, cy)
-        pitchG.circle(cc.x, cc.y, 9.15 * scale).stroke(stroke)
+        pitchG.circle(cc.x, cc.y, CENTER_CIRCLE_R * scale).stroke(stroke)
         pitchG.circle(cc.x, cc.y, Math.max(1, scale * 0.5)).fill({ color: 0xffffff, alpha: 0.8 })
         // 좌(홈) 박스
-        pitchG.rect(...r(0.6, penTop, 16.5, penH)).stroke(stroke)
-        pitchG.rect(...r(0.6, goalTop, 5.5, goalH)).stroke(stroke)
+        pitchG.rect(...r(0.6, penTop, PENALTY_BOX_D, penH)).stroke(stroke)
+        pitchG.rect(...r(0.6, goalTop, GOAL_AREA_D, goalH)).stroke(stroke)
         // 우(어웨이) 박스
-        pitchG.rect(...r(PITCH_W - 0.6 - 16.5, penTop, 16.5, penH)).stroke(stroke)
-        pitchG.rect(...r(PITCH_W - 0.6 - 5.5, goalTop, 5.5, goalH)).stroke(stroke)
+        pitchG.rect(...r(PITCH_W - 0.6 - PENALTY_BOX_D, penTop, PENALTY_BOX_D, penH)).stroke(stroke)
+        pitchG.rect(...r(PITCH_W - 0.6 - GOAL_AREA_D, goalTop, GOAL_AREA_D, goalH)).stroke(stroke)
       }
 
       // ── 애니메이션 상태 ────────────────────────────────────────
