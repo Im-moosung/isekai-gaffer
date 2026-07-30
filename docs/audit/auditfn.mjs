@@ -5,6 +5,20 @@ export const AUDIT = () => {
   const effBg = el => { let n=el, acc=null; while(n && n!==document.documentElement){ const c=px(getComputedStyle(n).backgroundColor); if(c[3]>0){ if(!acc) acc=c; else acc=[...over(acc,c),1]; if(acc[3]>=0.99||c[3]>=0.99) return acc.slice(0,3);} n=n.parentElement;} return acc?acc.slice(0,3):[11,18,32]; };
   const contrast=(a,b)=>{const l1=lum(a),l2=lum(b);return (Math.max(l1,l2)+0.05)/(Math.min(l1,l2)+0.05);};
   const sel=el=>{let s=el.tagName.toLowerCase(); const c=String(el.className&&el.className.baseVal!==undefined?el.className.baseVal:el.className||'').trim().split(/\s+/).filter(Boolean).slice(0,3); if(c.length)s+='.'+c.join('.'); return s;};
+  // 조상이 overflow를 자르면 요소는 그 교집합만큼만 실제로 보인다.
+  // 이걸 모르면 클립되어 안 보이는 요소가 겹침으로 잡힌다(티커 퇴장 애니메이션 등).
+  const clipRect = el => {
+    let r = el.getBoundingClientRect();
+    let t = r.top, l = r.left, b = r.bottom, rt = r.right;
+    for (let n = el.parentElement; n && n !== document.documentElement; n = n.parentElement) {
+      const cs = getComputedStyle(n);
+      if (cs.overflow === 'visible' && cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
+      const pr = n.getBoundingClientRect();
+      t = Math.max(t, pr.top); l = Math.max(l, pr.left);
+      b = Math.min(b, pr.bottom); rt = Math.min(rt, pr.right);
+    }
+    return { top: t, left: l, bottom: b, right: rt, width: Math.max(0, rt - l), height: Math.max(0, b - t) };
+  };
   const vw=innerWidth, vh=innerHeight;
   const lowContrast=[],hOverflow=[],hidScroll=[],tinyTap=[],clippedLH=[];
   document.querySelectorAll('body *').forEach(el=>{
@@ -29,7 +43,7 @@ export const AUDIT = () => {
     }
     if((el.tagName==='BUTTON'||el.tagName==='A'||el.getAttribute('role')==='button')&&(r.height<32||r.width<32)) tinyTap.push({sel:sel(el),text:(el.textContent||'').trim().slice(0,16),w:Math.round(r.width),h:Math.round(r.height)});
   });
-  const boxes=[...document.querySelectorAll('body *')].filter(el=>{const cs=getComputedStyle(el); if(cs.display==='none'||cs.visibility==='hidden'||cs.opacity==='0')return false; const r=el.getBoundingClientRect(); if(r.width<8||r.height<8||r.bottom<0||r.top>innerHeight)return false; return [...el.childNodes].some(n=>n.nodeType===3&&n.textContent.trim());}).map(el=>({el,r:el.getBoundingClientRect()}));
+  const boxes=[...document.querySelectorAll('body *')].filter(el=>{const cs=getComputedStyle(el); if(cs.display==='none'||cs.visibility==='hidden'||cs.opacity==='0')return false; const r=el.getBoundingClientRect(); if(r.width<8||r.height<8||r.bottom<0||r.top>innerHeight)return false; return [...el.childNodes].some(n=>n.nodeType===3&&n.textContent.trim());}).map(el=>({el,r:clipRect(el)})).filter(o=>o.r.width>4&&o.r.height>4);
   const overlaps=[];
   for(let i=0;i<boxes.length;i++)for(let j=i+1;j<boxes.length;j++){
     const a=boxes[i],b=boxes[j];

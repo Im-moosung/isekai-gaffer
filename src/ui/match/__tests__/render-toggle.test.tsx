@@ -34,6 +34,15 @@ function installLocalStorage() {
 }
 let ls: ReturnType<typeof installLocalStorage>
 
+/** 재생 관련 furniture(2D/3D·속도·해설)는 **킥오프 이후에만** 렌더된다.
+ *  킥오프 전 워룸에는 되감을 경기도 바꿀 배속도 없어 컨트롤이 의미가 없고,
+ *  남아 있으면 "이미 경기가 돌아가고 있다"는 잘못된 신호를 준다(감사 W-12).
+ *  따라서 토글을 검증하려면 먼저 경기를 시작시켜야 한다. */
+function kickoff(getByRole: (role: string, opts: { name: string }) => HTMLElement) {
+  fireEvent.click(getByRole('button', { name: '킥오프' }))
+  fireEvent.click(getByRole('button', { name: '입장 연출 건너뛰고 바로 킥오프' }))
+}
+
 beforeEach(() => { ls = installLocalStorage() })
 afterEach(() => { cleanup(); useMatchStore.getState().reset(); ls.clear() })
 
@@ -43,6 +52,7 @@ describe('MatchScreen — 2D/3D 렌더러 토글', () => {
   //   세그먼트는 두 선택지를 다 보여주고 현재 모드에 aria-pressed=true를 준다.
   it('기본값은 3D(저장값 없음) — [3D] 알약이 눌린 상태', async () => {
     const { getByRole } = render(<MatchScreen home={home} away={away} seed={7} />)
+    kickoff(getByRole)
     await flush()
     expect(getByRole('button', { name: '3D' }).getAttribute('aria-pressed')).toBe('true')
     expect(getByRole('button', { name: '2D' }).getAttribute('aria-pressed')).toBe('false')
@@ -50,6 +60,7 @@ describe('MatchScreen — 2D/3D 렌더러 토글', () => {
 
   it('[2D] 선택 → 2D로 내려가고 localStorage에 기억된다', async () => {
     const { getByRole } = render(<MatchScreen home={home} away={away} seed={7} />)
+    kickoff(getByRole)
     await flush()
     fireEvent.click(getByRole('button', { name: '2D' }))
     expect(getByRole('button', { name: '2D' }).getAttribute('aria-pressed')).toBe('true')
@@ -60,6 +71,7 @@ describe('MatchScreen — 2D/3D 렌더러 토글', () => {
   it('저장값 0이면 마운트부터 2D로 시작한다', async () => {
     ls.setItem('rematch-render3d', '0')
     const { getByRole } = render(<MatchScreen home={home} away={away} seed={7} />)
+    kickoff(getByRole)
     await flush()
     expect(getByRole('button', { name: '2D' }).getAttribute('aria-pressed')).toBe('true')
   })
@@ -73,6 +85,7 @@ describe('MatchScreen — 2D/3D 렌더러 토글', () => {
 
   it('2D로 토글해도 피치는 계속 보인다(전환 중 백지 금지)', async () => {
     const { container, getByRole } = render(<MatchScreen home={home} away={away} seed={7} />)
+    kickoff(getByRole)
     await flush()
     fireEvent.click(getByRole('button', { name: '2D' }))
     await flush()
@@ -81,6 +94,7 @@ describe('MatchScreen — 2D/3D 렌더러 토글', () => {
 
   it('기존 방송 DOM 레이어(스코어버그·티커·음소거·TTS)는 3D 도입 후에도 그대로다', async () => {
     const { container, getByRole } = render(<MatchScreen home={home} away={away} seed={7} />)
+    kickoff(getByRole)
     await flush()
     expect(getByRole('button', { name: '음소거' })).toBeTruthy()
     expect(getByRole('button', { name: '해설 음성 끄기' })).toBeTruthy()
