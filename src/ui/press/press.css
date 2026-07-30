@@ -2,7 +2,9 @@
 
 /* ── 기자회견: 어두운 스튜디오 + 마이크 느낌(CSS만) ────────── */
 .pc-root {
-  min-height: 100%;
+  /* 100%는 부모가 높이를 갖지 않으면 0으로 접힌다. 그때 화면 하단이 그대로
+     뚫려 스캐폴드 배경이 드러났다(하단 30~43% 순백). 뷰포트를 직접 채운다. */
+  min-height: 100dvh;
   display: flex;
   justify-content: center;
   padding: 24px 16px;
@@ -121,6 +123,7 @@
 
 /* ── 신문 1면 카드 ─────────────────────────────────────────── */
 .np-wrap {
+  min-height: 100dvh; /* 신문 카드 아래가 뚫려 흰 띠가 드러나던 문제 */
   display: flex;
   flex-direction: column;
   align-items: center;

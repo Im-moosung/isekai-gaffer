@@ -5,7 +5,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
+  min-height: 100dvh;
   padding: 24px;
   box-sizing: border-box;
   overflow: hidden; /* 3D 캔버스가 어떤 상황에서도 가로 스크롤을 만들지 않게 */
@@ -158,7 +158,7 @@
 
 /* 데모 배너 — 리더보드 미반영 안내(경기·신문 상단 고정). */
 .demo-wrap {
-  min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bc-bg);
 }
 .demo-banner {

@@ -1,16 +1,232 @@
-/* 방송 중계 다크 테마 — 오리지널 디자인 (스펙 §9.1) */
+/* ============================================================================
+   디자인 토큰 — 단일 소스
+   ----------------------------------------------------------------------------
+   톤앤매너: "화면은 FIFA 월드피드처럼 생기고, 말은 라노벨처럼 한다."
+   이세계 요소는 레이아웃·색·그래픽에 넣지 않는다. 제목 문안·중계 대사·
+   전환 문장 카드 세 곳에만 둔다. 근거: 2026 월드컵 브랜드는 역대 최고 채도인데도
+   상시 노출되는 스코어버그는 검정 + 흰 타입뿐이다. 정보 그래픽은 뉴트럴로 후퇴한다.
+
+   가장 중요한 규칙: **색 하나에 뜻 하나.**
+   이전 팔레트는 라임 하나가 CTA·선택·탭·체력바·수비라인·압박존·데모배너를
+   전부 겸했다. 색이 1:1이 아니면 범례를 붙여도 화면을 설명할 수 없다.
+   ========================================================================== */
+
 :root {
-  --bc-bg: #0b1220;          /* 스튜디오 배경 */
-  --bc-panel: #121c30;       /* 패널 */
-  --bc-panel-2: #1a2742;
-  --bc-line: #2a3a5c;
-  --bc-text: #e8edf6;
-  --bc-text-dim: #8fa0bd;
-  --bc-accent: #c8f542;      /* 라이브 라임 (경기 화면 한정) */
-  --bc-danger: #ff5d5d;
-  --bc-pitch: #1e7a3c;       /* 피치 그린 */
-  --bc-pitch-line: rgba(255,255,255,0.55);
-  --bc-home: #e63946;        /* 홈 도트 */
-  --bc-away: #4895ef;        /* 어웨이 도트 */
-  --bc-font: "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", sans-serif;
+  /* ---- 표면 (야간 경기장) --------------------------------------------- */
+  --s-0: #070c15; /* 페이지 배경 */
+  --s-1: #0e1626; /* 기본 패널 */
+  --s-2: #162034; /* 패널 위 패널. 3단 이상 중첩 금지 */
+  --s-3: #1e2b45; /* 인풋·칩 등 인터랙션 표면 */
+  --s-line: #243350; /* 헤어라인 */
+  --s-line-strong: #38507c; /* 활성 테두리·스크롤바 */
+  --s-scrim: rgba(4, 8, 16, 0.72); /* 3D/2D 캔버스 위 텍스트 스크림 */
+  --s-scrim-soft: rgba(4, 8, 16, 0.45);
+
+  /* ---- 텍스트 (대비는 --s-1 기준) ------------------------------------- */
+  --t-hi: #f2f6ff; /* 16.9:1 */
+  --t-mid: #aebed8; /* 8.4:1 */
+  --t-low: #7387a8; /* 4.6:1 — 캡션 최소선. 이보다 흐린 텍스트 금지 */
+  --t-on-brand: #061020; /* --brand 채움 위 텍스트 */
+  --t-on-live: #101a06; /* --live 채움 위 텍스트 */
+
+  /* ---- 브랜드 / 상태 — 각 색은 뜻이 하나다 ---------------------------- */
+  /* --brand: 감독의 행동. 주 CTA·선택된 옵션·탭 인디케이터·포커스 링.
+     데이터 시각화에 쓰지 않는다. 팀 파랑(--team-them)과는 등장 맥락이
+     겹치지 않는다 — 팀 색은 피치 위 도트·킷 스트립·점유율 바에만 나온다. */
+  --brand: #3b82f6;
+  --brand-weak: rgba(59, 130, 246, 0.16);
+  --brand-line: rgba(59, 130, 246, 0.42);
+
+  /* --live: "지금 진행 중"만. LIVE 도트, 경과 시계, 재생 중 표시.
+     CTA·선택 상태·데이터 색으로 쓰는 것은 금지다(예전 라임의 과부하 원인). */
+  --live: #c8f542;
+
+  --warn: #f5b830; /* 경고, 옐로카드, 체력 저하 */
+  --warn-weak: rgba(245, 184, 48, 0.1);
+  --warn-line: rgba(245, 184, 48, 0.36);
+
+  /* --danger: 레드카드·실점·부상만. 방송 관례대로 "경기 중 가장 큰 소리".
+     팀 색이나 일반 오류에 쓰지 않는다. */
+  --danger: #ff4d4d;
+  --danger-weak: rgba(255, 77, 77, 0.1);
+  --danger-line: rgba(255, 77, 77, 0.36);
+
+  --good: #2ed573; /* 득점, 개선, 성공 */
+  --good-weak: rgba(46, 213, 115, 0.1);
+  --good-line: rgba(46, 213, 115, 0.36);
+
+  --gold: #e6b450; /* 대회 상태 — 우승, 진출 확정, 트로피 */
+
+  /* ---- 팀 색 — 경기별 런타임 값 --------------------------------------- */
+  /* 상수가 아니다. 경기 시작 시 팀 데이터에서 주입한다(기본값은 대한민국 기준).
+     쓰는 곳은 세 군데뿐: 선수 도트 / 스코어버그 킷 스트립 3px / 점유율 바.
+     팀 색을 텍스트 색으로 쓰지 않는다 — 빨간 숫자는 "나쁨"으로 읽힌다. */
+  --team-us: #f2383d;
+  --team-them: #147df5;
+  --team-us-ink: #ffffff;
+  --team-them-ink: #ffffff;
+
+  /* ---- 피치 -------------------------------------------------------------
+     피치 표현은 한 종류다. FM26이 포메이션 보드를 초록이 아니라 다크 네이비 +
+     얇은 흰 선으로 그리는 이유와 같다 — 배경 대비를 낮춰야 그 위 텍스트가 이긴다. */
+  --pitch-bg: #0c1a2a;
+  --pitch-bg-2: #102135;
+  --pitch-line: rgba(255, 255, 255, 0.34);
+  --pitch-grass: #16603a; /* 3D 잔디만 */
+
+  /* ---- 타이포 -----------------------------------------------------------
+     Apple SD Gothic Neo 단독은 macOS 전용이라 Windows에서 자간·굵기가 통째로
+     달라진다. Pretendard를 앞에 두고 시스템 폰트로 폴백한다. */
+  --f-ui: Pretendard, 'Pretendard Variable', 'Apple SD Gothic Neo',
+    'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif;
+  --f-display: var(--f-ui);
+  --f-num: 'SF Mono', ui-monospace, 'Roboto Mono', Menlo, monospace;
+  --f-serif: 'Nanum Myeongjo', 'Apple SD Gothic Neo', 'Times New Roman', serif;
+
+  /* 26종 → 9종. 전부 px(rem 금지 — 루트 폰트 변경 시 px 형제와 순서가 뒤집힌다). */
+  --fs-display: clamp(32px, 4vw, 56px);
+  --fs-score: clamp(28px, 2.6vw, 44px);
+  --fs-h1: 24px;
+  --fs-h2: 18px;
+  --fs-lg: 16px;
+  --fs-md: 14px; /* 기본 본문 */
+  --fs-sm: 13px;
+  --fs-xs: 12px; /* 최소값 — 이하 금지. "바에서 읽히는가" 테스트 */
+  --fs-eyebrow: 12px;
+
+  /* 한글 line-height 최소 1.4 — 1.1배 이하는 받침이 잘린다. */
+  --lh-tight: 1.2;
+  --lh-md: 1.6;
+  --lh-loose: 1.7;
+  --ls-caps: 0.08em;
+  --ls-display: -0.02em;
+
+  /* ---- 간격 — 4px 베이스 8단 ------------------------------------------ */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+
+  /* ---- radius — 4단. 비대칭 radius 금지 ------------------------------- */
+  --r-sm: 6px; /* 칩·배지·인풋 */
+  --r-md: 10px; /* 카드·버튼 */
+  --r-lg: 16px; /* 패널·모달 */
+  --r-pill: 999px;
+
+  /* ---- 모션 ------------------------------------------------------------ */
+  --dur-1: 120ms; /* 마이크로(호버·포커스) */
+  --dur-2: 220ms; /* 컴포넌트 진입/퇴장 */
+  --dur-3: 400ms; /* 화면 전환 */
+  --dur-4: 800ms; /* 연출(입장·득점) */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-io: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* ---- 레이아웃 -------------------------------------------------------- */
+  --w-content: 1440px; /* 텍스트 위주 화면 */
+  --w-wide: 1760px; /* 워룸·경기 등 밀도 높은 화면 */
+  --w-read: 780px; /* 단일 컬럼 읽기 폭 */
+  --h-topbar: 56px;
+  --h-bottombar: 64px;
+  --tap-min: 44px; /* WCAG 2.5.5 권장 터치 타깃 */
+
+  /* ---- z-index — 정수 리터럴 금지, 이 5단만 쓴다 ---------------------- */
+  --z-base: 0;
+  --z-furniture: 10;
+  --z-overlay: 40;
+  --z-modal: 60;
+  --z-toast: 80;
+
+  /* ---- 그림자 ---------------------------------------------------------- */
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-3: 0 24px 64px rgba(0, 0, 0, 0.55);
+
+  /* ======================================================================
+     하위 호환 alias — 기존 --bc-* 참조가 남아 있는 동안만 유지한다.
+     새 코드에서 --bc-*를 쓰지 마라. 특히 --bc-accent는 라임의 과부하 그 자체라
+     의도적으로 브랜드 파랑에 연결해 두었다(라임은 --live 전용으로 강등).
+     ==================================================================== */
+  --bc-bg: var(--s-0);
+  --bc-panel: var(--s-1);
+  --bc-panel-2: var(--s-2);
+  --bc-line: var(--s-line);
+  --bc-text: var(--t-hi);
+  --bc-text-dim: var(--t-mid);
+  --bc-accent: var(--brand);
+  --bc-danger: var(--danger);
+  --bc-pitch: var(--pitch-grass);
+  --bc-pitch-line: var(--pitch-line);
+  --bc-home: var(--team-us);
+  --bc-away: var(--team-them);
+  --bc-font: var(--f-ui);
+}
+
+/* 모션 최소화 — 파일마다 개별 대응하면 반드시 누락이 생긴다. 토큰에서 한 번에 끈다. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-1: 1ms;
+    --dur-2: 1ms;
+    --dur-3: 1ms;
+    --dur-4: 1ms;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================================
+   유틸리티 — 토큰만으로는 못 막는 반복 결함 세 가지를 클래스로 고정한다.
+   ========================================================================== */
+
+/* 숫자는 전부 tabular. 프로포셔널 숫자를 시계에 쓰면 1이 나올 때마다
+   컨테이너 폭이 흔들린다. 대상: 스코어·시계·분 배지·스탯·순위·등번호. */
+.num {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: 'tnum' 1, 'lnum' 1;
+}
+
+/* SVG 위 텍스트는 항상 후광을 갖는다. 피치 위 라벨이 라인·다른 라벨과
+   충돌해도 최소한 읽히게 하는 마지막 방어선이다. */
+.on-pitch-label {
+  paint-order: stroke fill;
+  stroke: rgba(4, 8, 16, 0.85);
+  stroke-width: 0.6;
+  stroke-linejoin: round;
+}
+
+/* 시각적으로는 작아도 되지만 손가락에는 44px가 필요한 컨트롤용.
+   요소 크기를 키우지 않고 히트 영역만 확장한다. */
+.tap-44 {
+  position: relative;
+}
+.tap-44::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100%, var(--tap-min));
+  height: max(100%, var(--tap-min));
+  transform: translate(-50%, -50%);
+}
+
+/* 스크린리더 전용 텍스트 */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

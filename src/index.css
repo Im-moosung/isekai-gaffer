@@ -1,112 +1,119 @@
+/* 전역 리셋 — 앱은 야간 경기 중계를 상정한 다크 UI 하나만 쓴다.
+   [2026-07-30] Vite 스캐폴드(라이트 팔레트 --bg:#fff / --text-h:#08060d,
+   전역 h1,h2 { color }, :root { font: 18px/145% }, --accent:#aa3bff, code/.counter)를
+   전부 제거했다. 이유: 라이트 OS 테마에서 전역 h1,h2 규칙이 화면 제목의 상속색을 이겨
+   대비비 1.08:1(사실상 비가시)을 만들었고, --bg:#fff가 min-height를 못 채운 화면 하단에
+   순백 띠로 드러났다. 색 체계는 tokens.css 하나로 단일화한다. */
+@import './ui/tokens.css';
+
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
-
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
+  /* 다크 단일 테마 고정. light dark를 선언하면 OS 테마가 폼 컨트롤·스크롤바·
+     캔버스 기본색에 개입해 화면마다 다른 색이 나온다. */
+  color-scheme: dark;
+  color: var(--t-hi);
+  background: var(--s-0);
+  font-family: var(--f-ui);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+  /* rem 금지의 근거: 루트 폰트를 뷰포트 폭에 따라 바꾸면 px 형제 요소와
+     상대 크기가 뒤집힌다. 루트는 16px로 고정하고 스케일은 --fs-* 토큰이 담당한다. */
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
-
-/* 게임 화면은 뷰포트 가로를 꽉 채운다(랜딩·허브·라인업·경기·작전판 공통).
-   극단 와이드(>1920px)에선 1920px 상한으로 중앙 정렬. Vite 템플릿 잔재
-   (1126px 고정폭·text-align:center·border-inline)는 제거. */
-#root {
-  width: 100%;
-  max-width: 1920px;
-  margin: 0 auto;
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
+* {
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
+  padding: 0;
+  /* 100vh가 아니라 min-height: 문서가 세로로 자랄 수 있어야 한다.
+     높이를 예산으로 배분하면 뷰포트가 1px만 달라져도 안쪽 콘텐츠가 잘린다. */
+  min-height: 100dvh;
+  background: var(--s-0);
 }
 
+body {
+  color: var(--t-hi);
+  font-family: var(--f-ui);
+  overflow-x: hidden; /* 가로 스크롤은 어떤 화면에서도 허용하지 않는다 */
+}
+
+/* 화면 루트 — 폭 상한은 화면별 컨테이너(--w-content/--w-wide)가 정한다.
+   여기서 max-width를 걸면 초광폭에서 좌우가 통째로 검은 여백이 된다. */
+#root {
+  width: 100%;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 제목 요소의 기본 여백·굵기만 정리한다. 색은 절대 지정하지 않는다 —
+   전역 색 지정이 컴포넌트 클래스를 이기면서 G-1(제목 비가시)이 생겼다. */
 h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: 700;
+  line-height: var(--lh-tight);
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
-  }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
-  }
-}
-p {
+p,
+figure,
+blockquote,
+ul,
+ol {
   margin: 0;
 }
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
+ul,
+ol {
+  padding: 0;
+  list-style: none;
 }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+svg {
+  display: block;
+}
+
+img,
+canvas {
+  max-width: 100%;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+/* 내부 스크롤 컨테이너는 화면당 하나만 허용하고, 그 하나에는 반드시
+   보이는 스크롤바를 붙인다. 다크 테마 기본 스크롤바는 사실상 투명해
+   "스크롤할 수 있다"는 사실 자체가 전달되지 않았다(벤치 73% 은닉의 원인). */
+.scroll-y {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--s-line-strong) transparent;
+  overscroll-behavior: contain;
+}
+.scroll-y::-webkit-scrollbar {
+  width: 10px;
+}
+.scroll-y::-webkit-scrollbar-thumb {
+  background: var(--s-line-strong);
+  border-radius: var(--r-pill);
+  border: 3px solid transparent;
+  background-clip: padding-box;
 }
