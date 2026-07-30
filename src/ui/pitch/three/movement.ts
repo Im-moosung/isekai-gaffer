@@ -20,7 +20,8 @@ import { possessingSide } from '../flow'
 import { tacticalCoords } from '../shape'
 // 보폭 모델은 표시 계층 전체가 **하나**를 공유한다(player3d가 정본).
 // player3d는 three를 정적 import하지 않으므로 이 import로 번들이 커지지 않는다.
-import { MIN_GAIT_SPEED, strideLength } from './player3d'
+// 공유 보폭 모델은 순수 계층(pose.ts)에서 온다 — 리그 빌더(player3d)를 거치지 않는다.
+import { MIN_GAIT_SPEED, strideLength } from './pose'
 import {
   PITCH_H, PITCH_W, toWorld,
   type BallPose, type FrameEvent, type FrameState, type PlayerAction, type PlayerPose,

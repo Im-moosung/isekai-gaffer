@@ -17,7 +17,8 @@
 import type { FormationId, Instructions, MatchState, Position, SideState } from '../../../engine/types'
 import { tacticalCoords } from '../shape'
 // 보폭 모델은 표시 계층 전체가 **하나**를 공유한다(player3d가 정본).
-import { MIN_GAIT_SPEED, strideLength } from './player3d'
+// 공유 보폭 모델은 순수 계층(pose.ts)에서 온다 — 리그 빌더(player3d)를 거치지 않는다.
+import { MIN_GAIT_SPEED, strideLength } from './pose'
 import { toWorld, type BallPose, type FrameState, type PlayerPose } from './types'
 
 // ── 타임라인 ────────────────────────────────────────────────────────────────
