@@ -14,6 +14,15 @@ const TONES: { tone: TeamTalkTone; label: string }[] = [
   { tone: 'trust', label: '신뢰' },
 ]
 
+/** 선수 반응 아이콘(스토어가 이모지로 준다) → 평문 한글 라벨.
+ *  이모지는 OS마다 모양·크기가 달라 톤이 무너지고, 무엇보다 "🔥가 좋은 건가"를
+ *  설명해 주지 않는다. 방송도 픽토그램 대신 평문 배너를 쓴다. */
+const REACTION_KO: Record<string, string> = {
+  '🔥': '불붙음',
+  '😐': '미지근함',
+  '😰': '위축됨',
+}
+
 /** 팀 사기 평균 → 구간별 상태 문구(사전 정보). */
 function moraleStatus(avg: number): string {
   if (avg >= 75) return '선수들이 자신감에 차 있습니다'
@@ -97,9 +106,6 @@ export function TeamTalk({ side }: { side: 'home' }) {
           role="status"
         >
           <p className="tt-banner__head">
-            <span className="tt-banner__icon" aria-hidden="true">
-              {result.delta > 0 ? '🔥' : result.delta < 0 ? '💥' : '😐'}
-            </span>
             <span className="tt-banner__text">
               {result.delta > 0
                 ? `선수단 사기 상승 (+${result.delta})`
@@ -114,8 +120,8 @@ export function TeamTalk({ side }: { side: 'home' }) {
           <ul className="tt-reactions">
             {result.reactions.map(r => (
               <li key={r.playerId} className="tt-reactions__item">
-                <span className="tt-reactions__icon" aria-hidden="true">{r.icon}</span>
                 <span className="tt-reactions__name">{nameOf(r.playerId)}</span>
+                <span className="badge">{REACTION_KO[r.icon] ?? r.icon}</span>
               </li>
             ))}
           </ul>

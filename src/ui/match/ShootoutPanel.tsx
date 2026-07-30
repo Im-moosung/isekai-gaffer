@@ -53,10 +53,10 @@ export function ShootoutPanel({ home, away, seed, onDone }: {
     })
   }
 
-  function cycleDir(slot: number) {
+  function setDir(slot: number, dir: Dir) {
     setDirs(prev => {
       const next = [...prev]
-      next[slot] = DIRS[(DIRS.indexOf(next[slot]) + 1) % 3]
+      next[slot] = dir
       return next
     })
   }
@@ -75,7 +75,8 @@ export function ShootoutPanel({ home, away, seed, onDone }: {
           <ol className="so-setup" aria-label="키커 순서">
             {kickerIds.map((id, i) => (
               <li key={i} className="so-slot">
-                <span className="so-slot__no">{i + 1}</span>
+                <span className="so-slot__no num">{i + 1}</span>
+                {/* 후보가 10인 이상이라 세그먼트로 표현할 수 없는 자리 — select 유지(명시적 예외). */}
                 <select
                   className="so-slot__pick"
                   aria-label={`${i + 1}번 키커`}
@@ -88,27 +89,40 @@ export function ShootoutPanel({ home, away, seed, onDone }: {
                     </option>
                   ))}
                 </select>
-                <button
-                  type="button"
-                  className="so-slot__dir"
-                  aria-label={`${i + 1}번 방향 ${DIR_LABEL[dirs[i]]}`}
-                  onClick={() => cycleDir(i)}
-                >
-                  {DIR_LABEL[dirs[i]]}
-                </button>
+                {/* 방향은 3택 배타 선택 — 순환 버튼(누를 때마다 값이 바뀌는 blind toggle)
+                    대신 세 알약을 다 보여준다. 현재 값이 눌린 상태로 보인다. */}
+                <span className="seg" role="group" aria-label={`${i + 1}번 슛 방향`}>
+                  {DIRS.map(d => (
+                    <button
+                      key={d}
+                      type="button"
+                      className="seg__item"
+                      aria-pressed={dirs[i] === d}
+                      onClick={() => setDir(i, d)}
+                    >
+                      {DIR_LABEL[d]}
+                    </button>
+                  ))}
+                </span>
               </li>
             ))}
           </ol>
-          <button type="button" className="ms-btn ms-btn--primary" onClick={start}>
+          <button type="button" className="btn btn--primary btn--lg" onClick={start}>
             승부차기 시작
           </button>
         </>
       ) : (
         <>
           <div className="ms-final">
-            <span className="ms-final__code">{home.fifaCode}</span>
-            <span className="ms-final__score">{homeScore} : {awayScore}</span>
-            <span className="ms-final__code">{away.fifaCode}</span>
+            <span className="ms-final__team">
+              <span className="kit-strip kit-strip--us" aria-hidden="true" />
+              <span className="num">{home.fifaCode}</span>
+            </span>
+            <span className="ms-final__score num">{homeScore} : {awayScore}</span>
+            <span className="ms-final__team ms-final__team--away">
+              <span className="num">{away.fifaCode}</span>
+              <span className="kit-strip kit-strip--them" aria-hidden="true" />
+            </span>
           </div>
           <ul className="so-kicks" aria-label="승부차기 진행">
             {shown.map((k, i) => {
@@ -117,8 +131,14 @@ export function ShootoutPanel({ home, away, seed, onDone }: {
                 : away.name.ko
               return (
                 <li key={i} className={`so-kick so-kick--${k.side} so-kick--${k.scored ? 'goal' : 'miss'}`}>
+                  {/* 소속은 킷 스트립이 말한다(좌측 컬러 띠 폐지). 결과는 평문 — 이모지는
+                      OS마다 모양·크기가 달라 목록의 행 높이까지 흔든다. */}
+                  <span
+                    className={`kit-strip kit-strip--${k.side === 'home' ? 'us' : 'them'}`}
+                    aria-hidden="true"
+                  />
                   <span className="so-kick__who">{label}</span>
-                  <span className="so-kick__mark">{k.scored ? '⚽ 성공' : '✕ 실패'}</span>
+                  <span className="so-kick__mark">{k.scored ? '성공' : '실패'}</span>
                 </li>
               )
             })}

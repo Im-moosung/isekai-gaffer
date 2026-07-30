@@ -47,10 +47,16 @@ describe('ShoutBar — 터치라인 외침', () => {
     expect((getByRole('button', { name: '침착' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('쿨다운 진행 바(progressbar)를 노출한다', () => {
+  // 진행 바는 폐지했다 — "외침 준비 완료" 라벨이 붙은 350px 바는 진행률처럼 보이지만
+  // 실제로는 boolean이었다. 지금은 쿨다운 **중에만** 남은 시간이 나오고, 준비 완료
+  // 상태는 버튼이 눌린다는 사실로 말한다. 검증 의도(쿨다운 진행 노출)는 그대로다.
+  it('쿨다운 중에만 남은 시간(progressbar)을 노출한다', () => {
     playing(20)
-    const { getByRole } = render(<ShoutBar />)
-    expect(getByRole('progressbar', { name: '외침 재사용 대기' })).toBeTruthy()
+    const { getByRole, queryByRole } = render(<ShoutBar />)
+    expect(queryByRole('progressbar')).toBeNull()
+    fireEvent.click(getByRole('button', { name: '독려' }))
+    const bar = getByRole('progressbar', { name: '외침 재사용 대기' })
+    expect(bar.textContent).toContain('재사용까지')
   })
 
   it('재생 중이 아니면(halftime) 렌더하지 않는다', () => {

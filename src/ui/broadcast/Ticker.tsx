@@ -30,13 +30,15 @@ function TickerRow({ line, variant }: { line: TickerLine; variant: 'prev' | 'cur
   )
 }
 
-/** 방송 티커 — 하단 얇은 바. 마지막 해설 1줄 표시, 이전 줄은 페이드. */
+/** 방송 티커 — 하단 액션 바 **안**에 들어가는 한 줄(별도 레이어로 띄우면 오버레이와
+ *  겹쳐 텍스트가 쌓인다). 마지막 해설 1줄 표시, 이전 줄은 페이드.
+ *  `중계` 배지는 중립색이다 — 빨강은 카드·실점 전용이라 상시 노출 배지에 쓸 수 없다. */
 export function Ticker({ lines, emphasis }: TickerProps) {
   const last = lines[lines.length - 1]
   const prev = lines.length > 1 ? lines[lines.length - 2] : undefined
   return (
-    <div className={`bc-ticker${emphasis ? ' bc-ticker--danger' : ''}`} role="log" aria-live="polite" aria-label="해설">
-      <span className="bc-ticker__tag" aria-hidden="true">중계</span>
+    <div className={`bc-ticker${emphasis ? ' bc-ticker--emphasis' : ''}`} role="log" aria-live="polite" aria-label="해설">
+      <span className="badge bc-ticker__tag" aria-hidden="true">중계</span>
       <div className="bc-ticker__stack">
         {prev !== undefined && <TickerRow key={`${lines.length}-prev`} line={prev} variant="prev" />}
         {last !== undefined && <TickerRow key={`${lines.length}-last`} line={last} variant="current" />}

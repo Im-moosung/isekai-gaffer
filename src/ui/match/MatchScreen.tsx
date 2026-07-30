@@ -17,6 +17,7 @@ import { ShootoutPanel } from './ShootoutPanel'
 // 스탯 표는 워룸·작전판과 공유하기 위해 별도 모듈로 뽑았다(StatsTable.tsx).
 import { StatsTable } from './StatsTable'
 import { ShoutBar } from './ShoutBar'
+import { LiveStats } from './LiveStats'
 // 입장 연출 — three 무의존이라 정적 import여도 3D 청크 분리가 깨지지 않는다.
 // (entrance.ts/EntranceOverlay.tsx 모두 three를 타입으로도 import하지 않는다.)
 import { EntranceOverlay } from '../pitch/three/EntranceOverlay'
@@ -115,6 +116,12 @@ interface MatchScreenProps {
   referenceScore?: [number, number]
   /** 토너먼트: 무승부 시 승부차기로 승자를 가려야 한다. */
   requireWinner?: boolean
+  /** 스코어버그 컨텍스트 스트립(대회 · 라운드). 미지정 시 대회명만. */
+  context?: string
+  /** 상단 바에 흡수할 데모 고지. 전폭 라임 띠 대신 중립 칩으로 노출한다.
+   *  ★ `.demo-banner`/`.demo-wrap`(App.css)은 다른 작업자 담당이라 여기서 손대지 않는다 —
+   *  대신 이 prop을 열어 두어, App이 준비되면 배너를 상단 바 안으로 옮길 수 있게 한다. */
+  demoNote?: string
   /** 캠페인: 경기 종료 시 결과 콜백. 미지정 시 데모 동작([다시 보기]).
    *  4번째 인자 decisionLog는 이 경기의 감독 개입 기록(기자회견 근거).
    *  5번째 인자 finalTactics는 종료 시점 홈 전술 — 다음 경기 초기값 이월용
@@ -131,11 +138,12 @@ interface MatchScreenProps {
 /** 경기 화면 조립 — ★ 2모드 분리(스펙 §17 Task 4): "시뮬 관전 중인지 작전 지시
  *  중인지" 절대 헷갈리지 않도록 시각 정체성을 분리한다.
  *  - **broadcast**(playing/pre/fulltime): 그린 피치 와이드 관전. 스코어버그·티커·
- *    속도 토글·[⏸ 감독 타임]·재생 중 순간 배너만. 콘솔 없음.
+ *    속도·[감독 타임]·라이브 스탯 HUD·재생 중 순간 배너만. 콘솔 없음.
  *  - **tactics**(정지·하프타임): 다크 전술판(TacticsBoard) — 포메이션 셀렉터·
  *    지시/교체/상대 탭·[전술 확정]. 방송 위로 슬라이드 업(0.6s 전환 연출, 방송은 디밍).
  *  전환은 CSS transition/animation(reduced-motion 대응). 복귀는 역연출 후 언마운트.
- *  ★ 오버레이 폐지 원칙은 broadcast 내에서 유지 — 피치 SVG는 관전 중 언제나 보인다.
+ *  ★ 오버레이 폐지 원칙은 broadcast 내에서 유지 — 피치는 관전 중 언제나 보인다.
+ *    반대로 작전판·입장 연출이 뜨면 방송 furniture를 **언마운트**한다(겹침의 근본 해결).
  *
  *  재생은 매치데이 2.0 세션(matchStore): advanceMinute()로 1분씩 전진하며
  *  engine.minute가 곧 표시 분이다(엔진이 앞서 달리지 않아 스포일러 없음).
@@ -146,6 +154,7 @@ interface MatchScreenProps {
 export function MatchScreen({
   home, away, seed,
   initialTactics, firstHalfScript, staminaOverride, referenceScore, requireWinner, onMatchEnd,
+  context = 'FIFA 월드컵 2026', demoNote,
 }: MatchScreenProps) {
   const phase = useMatchStore(s => s.phase)
   const engine = useMatchStore(s => s.engine)
@@ -168,7 +177,7 @@ export function MatchScreen({
   const [render3d, setRender3d] = useState(read3dPref)
   // 사운드 — 음소거 상태(sfx 모듈 = localStorage 진실원)와 관중 스웰(골 직후 4초).
   const [muted, setMutedUi] = useState(() => sfx.isMuted())
-  // 한국어 TTS 해설 토글(음소거와 별개, localStorage 기억) — 스코어버그 옆 [🎙].
+  // 한국어 TTS 해설 토글(음소거와 별개, localStorage 기억) — 상단 제어 그룹의 [해설 끄기].
   const [ttsOn, setTtsOnUi] = useState(() => ctts.isTtsEnabled())
   const [crowdSwell, setCrowdSwell] = useState(false)
   const swellTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
@@ -394,9 +403,12 @@ export function MatchScreen({
     setTtsOnUi(ctts.toggleTts())
   }
 
-  // 2D/3D 렌더러 토글 — 선택을 localStorage에 기억한다(저사양·심사 환경 배려).
-  function toggleRender3d() {
-    const next = !render3d
+  // 2D/3D 렌더러 선택 — localStorage에 기억한다(저사양·심사 환경 배려).
+  // ★ 토글이 아니라 **세그먼트**다. 예전 단일 버튼은 표시 텍스트가 현재 모드,
+  //   aria-label이 전환 대상이라 시각 사용자와 스크린리더 사용자가 반대로 이해했다.
+  //   두 알약 중 현재 모드가 눌린 상태로 보이면 그 불일치가 구조적으로 사라진다.
+  function selectRenderer(next: boolean) {
+    if (next === render3d) return
     setRender3d(next)
     write3dPref(next)
   }
@@ -483,7 +495,7 @@ export function MatchScreen({
   // 제안이 없을 때만 상대 감독의 최근 변경 통보를 3분간 흘려보낸다(슬롯 1개를 공유하므로
   // 감독의 결정 기회를 상대 통보가 가리면 안 된다).
   const momentBanner = replaying && momentPrompt
-    ? `⚡ ${MOMENT_PHRASE[momentPrompt.kind]} — 감독 타임을 쓰시겠습니까?`
+    ? `${MOMENT_PHRASE[momentPrompt.kind]} — 감독 타임을 쓰시겠습니까?`
     : null
   const lastNotice = oppNotices.length > 0 ? oppNotices[oppNotices.length - 1] : null
   const recentNotice = lastNotice && displayMinute - lastNotice.minute < 3 ? lastNotice.text : null
@@ -508,62 +520,112 @@ export function MatchScreen({
     </PitchBoundary>
   )
 
-  return (
-    <div className={`ms-root ms-root--broadcast${tacticsMounted && !tacticsExiting ? ' ms-root--tactics' : ''}`}>
-      <div className={`ms-stage${tacticsMounted && !tacticsExiting ? ' ms-stage--dim' : ''}${phase === 'pre' && !entranceCast ? ' ms-stage--pre' : ''}`}>
-        <Scorebug
-          home={home}
-          away={away}
-          score={shownScore}
-          minute={displayMinute}
-          live={replaying}
-          fastForward={fastForward}
-          pulse={goalDrama}
-        />
-        {/* 플랜 상태 배지 — 스코어버그 옆(우측). 킥오프 후에만 나타난다.
-            "계획을 지키면 팀 이해도 +3%, 버리면 몇 축을 버렸는지"를 상시 노출해
-            하프타임에 전부 갈아엎는 선택에 눈에 보이는 값을 붙인다. */}
-        <PlanBadge />
-        {/* 음소거 토글 — 스코어버그 옆. 항상 노출(localStorage 기억). */}
-        <button
-          type="button"
-          className="ms-mute"
-          aria-label={muted ? '소리 켜기' : '음소거'}
-          aria-pressed={muted}
-          onClick={toggleMute}
-        >
-          {muted ? '🔇' : '🔊'}
-        </button>
-        {/* 한국어 TTS 해설 토글 — 음소거 옆. 음소거와 별개(localStorage 'rematch-tts'). */}
-        <button
-          type="button"
-          className="ms-tts"
-          aria-label={ttsOn ? '해설 음성 끄기' : '해설 음성 켜기'}
-          aria-pressed={ttsOn}
-          onClick={toggleTts}
-        >
-          🎙
-        </button>
-        {/* 2D/3D 렌더러 토글 — TTS 옆. 현재 모드를 표시하고, 누르면 반대로 전환된다. */}
-        <button
-          type="button"
-          className="ms-r3d"
-          aria-label={render3d ? '2D 화면으로 전환' : '3D 화면으로 전환'}
-          aria-pressed={render3d}
-          onClick={toggleRender3d}
-        >
-          {render3d ? '3D' : '2D'}
-        </button>
-        {/* 재생 중 감독 타임 버튼 — 스코어버그 옆. pauseByUser로 자유 일시정지. */}
-        {replaying && (
-          <div className="ms-live-controls">
-            <button type="button" className="ms-btn ms-btn--sm" onClick={pauseByUser}>⏸ 감독 타임</button>
-          </div>
-        )}
-        <SpeedToggle speed={speed} onChange={setSpeed} />
+  // ── 방송 furniture 노출 판정 ──────────────────────────────────────
+  // 원칙: **오버레이가 뜨면 그 아래 furniture는 실제로 언마운트한다.**
+  // opacity·pointer-events로 죽이면 텍스트가 겹쳐 쌓인다(실측: 작전판 터치라인 문구가
+  // 스코어버그 시계와 92%, 플랜 배지와 100% 겹쳤다).
+  //  · 작전판(정지·하프타임) — 작전판이 자체 헤더를 갖는다.
+  //  · 입장 연출 — 0:0 0' 스코어버그와 중계 티커가 돌면 "아직 시작 전"이 무너진다.
+  //    대신 프리매치 스트립 한 줄만 남긴다.
+  const finished = phase === 'fulltime'
+  const overlayOpen = tacticsMounted || !!entranceCast
+  const chromeOn = !overlayOpen
+  // 킥오프 전 전술 설계 화면(워룸)에서는 재생 관련 furniture가 전부 의미가 없다.
+  // 되감을 경기도, 바꿀 배속도, 전환할 렌더러도 아직 없다. 남아 있으면
+  // "이미 경기가 돌아가고 있다"는 잘못된 신호를 준다(감사 W-12).
+  const preDesign = phase === 'pre' && !entranceCast
 
-        {/* ── 상단 방송 배너(피치 밖, 스코어버그 아래 얇은 바) ── */}
-        {bannerText && (
+  return (
+    <div className={`ms-root${overlayOpen ? ' ms-root--overlay' : ''}`}>
+      {/* ── 상단 방송 furniture — 스코어버그 + 제어 그룹 하나.
+          예전엔 음소거·TTS·2D/3D·속도·감독 타임·플랜 배지가 컨테이너 없이
+          여섯 군데에 떠 있었다. 부유 요소를 한 줄로 모으면 노치도 겹침도 생기지 않는다. ── */}
+      {chromeOn && (
+        <header className="ms-topbar">
+          <Scorebug
+            home={home}
+            away={away}
+            score={shownScore}
+            minute={displayMinute}
+            live={replaying}
+            fastForward={fastForward}
+            pulse={goalDrama}
+            context={context}
+          />
+          <div className="ms-controls">
+            {demoNote && <span className="badge">{demoNote}</span>}
+            {/* 2차 정보(플랜 상태)는 스코어버그 본체에 얹지 않고 별도 슬롯으로 둔다.
+                종료 후에는 조정할 전술이 없으므로 사라진다. */}
+            {!finished && !preDesign && (
+              <span className="ms-plan-slot">
+                <PlanBadge />
+              </span>
+            )}
+            {!finished && !preDesign && (
+              <div className="seg" role="group" aria-label="화면 렌더러">
+                <button
+                  type="button"
+                  className="seg__item"
+                  aria-pressed={!render3d}
+                  onClick={() => selectRenderer(false)}
+                >
+                  2D
+                </button>
+                <button
+                  type="button"
+                  className="seg__item"
+                  aria-pressed={render3d}
+                  onClick={() => selectRenderer(true)}
+                >
+                  3D
+                </button>
+              </div>
+            )}
+            {!finished && !preDesign && <SpeedToggle speed={speed} onChange={setSpeed} />}
+            {/* 아이콘 대신 평문 한글 — 이모지는 OS마다 모양·크기가 달라 톤이 무너진다.
+                방송도 레드카드 픽토그램 대신 "DOWN TO 10 PLAYERS" 평문 배너를 쓴다. */}
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              aria-label={muted ? '소리 켜기' : '음소거'}
+              aria-pressed={muted}
+              onClick={toggleMute}
+            >
+              {muted ? '소리 켜기' : '음소거'}
+            </button>
+            {!preDesign && (
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              aria-label={ttsOn ? '해설 음성 끄기' : '해설 음성 켜기'}
+              aria-pressed={ttsOn}
+              onClick={toggleTts}
+            >
+              {ttsOn ? '해설 끄기' : '해설 켜기'}
+            </button>
+            )}
+            {replaying && (
+              <button type="button" className="btn btn--primary btn--sm" onClick={pauseByUser}>
+                감독 타임
+              </button>
+            )}
+          </div>
+        </header>
+      )}
+
+      {/* 입장 연출 중 유일한 furniture — 대진 한 줄. 시계도 스코어도 없다. */}
+      {entranceCast && (
+        <header className="ms-topbar ms-topbar--prematch">
+          <p className="ms-prematch">
+            <span className="ms-prematch__teams">{home.name.ko} vs {away.name.ko}</span>
+            <span className="ms-prematch__ctx">{context}</span>
+          </p>
+        </header>
+      )}
+
+      <main className={`ms-stage${phase === 'pre' && !entranceCast ? ' ms-stage--pre' : ''}`}>
+        {/* ── 방송 배너(피치 위, in-flow) — 피치를 밀어낼 뿐 덮지 않는다. ── */}
+        {bannerText && !finished && (
           <div
             className={`ms-banner${momentBanner ? ' ms-banner--moment' : ' ms-banner--opp'}`}
             role="status"
@@ -571,148 +633,175 @@ export function MatchScreen({
             <span className="ms-banner__text">{bannerText}</span>
             {replaying && momentPrompt && (
               <span className="ms-banner__actions">
-                <button type="button" className="ms-btn ms-btn--sm" onClick={acceptMoment}>사용</button>
-                <button type="button" className="ms-btn ms-btn--sm ms-btn--ghost" onClick={dismissMoment}>흘려보낸다</button>
+                <button type="button" className="btn btn--primary btn--sm" onClick={acceptMoment}>사용</button>
+                <button type="button" className="btn btn--ghost btn--sm" onClick={dismissMoment}>흘려보낸다</button>
               </span>
             )}
           </div>
         )}
 
-        {/* ── 피치 — 언제나 보인다(가리는 오버레이 없음).
+        {/* ── 피치 — 관전 중 언제나 보인다(가리는 오버레이 없음).
             렌더러 체인: Match3D(three) → PixiPitch(pixi) → PitchView(SVG).
             각 단계는 청크 로드 실패를 PitchBoundary가, 런타임 미지원(WebGL 불가·
             컨텍스트 로스)을 컴포넌트 내부 폴백이 받아 다음 단계로 넘긴다.
-            토글로 3D를 끄면 2D 체인만 남는다(key로 바운더리 상태까지 리셋). ── */}
-        {/* data-mode/data-scene: 지금 무엇을 재생 중인지 DOM에 남긴다. 렌더에는 영향이
-            없고, 브라우저 QA(패턴별 스크린샷·반복 측정)와 회귀 테스트가 이걸로 조준한다. */}
-        <div
-          className="ms-pitch-wrap"
-          data-mode={live3d ? '3d' : '2d'}
-          data-scene={highlight ? (sceneKeyFor(highlight.event, engine.home, engine.away) ?? 'none') : 'flow'}
-        >
-          {render3d ? (
-            <PitchBoundary key="chain-3d" fallback={pitch2d}>
-              <Suspense fallback={pitchSvg}>
-                {/* event: 하이라이트가 아닌 분엔 null — movement가 그 분의 코너·파울을
-                    역추적해 엉뚱한 궤적·카메라를 붙이지 않게 명시적으로 끊는다. */}
-                <Match3D
-                  {...pitchProps}
-                  event={live3d ? highlight!.event : null}
-                  fallback={pitch2d}
-                  entrance={entranceCast}
-                  entranceClock={entranceClock}
-                />
-              </Suspense>
-            </PitchBoundary>
-          ) : (
-            pitch2d
-          )}
-          {/* ── 2D 작전판: 라이브 위에 겹쳐 두고 opacity로 오간다. ──
-              전환 방향이 비대칭이다(match.css):
-               · 라이브 → 분석: 0.26s 디졸브. 분석 화면은 "다른 카메라"가 아니라 다른
-                 매체라 컷으로 바꾸면 렌더러 고장처럼 읽힌다. 실중계도 여기서 디졸브한다.
-               · 분석 → 라이브: **하드 컷**. 사건은 이미 시작됐고, 디졸브 0.26s는 슛 모션의
-                 앞부분을 먹는다. 컷 자체가 "지금 무슨 일이 난다"는 신호다.
-              3D는 언마운트하지 않는다 — WebGL 컨텍스트 재생성이 매번 히치를 만든다. */}
-          {replaying && (
-            <AnalysisBoard
-              state={engine}
-              sequence={playSequence ? activeSeq : undefined}
-              dwellMs={seqDwell}
-              sequenceSide={activeSide}
-              caption={analysisCaption}
-              visible={analysisOn}
-            />
-          )}
-          {/* 입장 연출 오버레이 — 자막·선수 소개 카드·건너뛰기.
-              피치 위에 겹치지만 연출이 끝나면 즉시 사라지므로 "피치 상시 노출" 원칙과
-              충돌하지 않는다(경기는 아직 시작 전이다). */}
-          {entranceCast && (
-            <EntranceOverlay
-              cast={entranceCast}
-              onDone={handleEntranceDone}
-              onProgress={ms => { entranceClock.current = ms }}
-            />
-          )}
-        </div>
 
-        <Ticker lines={tickerLines} emphasis={dangerMoment} />
-
-        {/* ── 골 드라마: 대형 타이포 + 득점자 배너 + (스코어버그 펄스) ──
-            풀스크린 플래시·파티클·카메라 셰이크는 PixiPitch(WebGL)가 담당한다
-            (중복이던 DOM ms-drama__flash 제거 — Task 13 보고). GOAL 타이포는 DOM 유지.
-            피치를 가리지 않는 순간 이펙트(pointer-events 없음). key=분으로 골마다 재발동. */}
-        {goalDrama && (
+            ★ 종료(fulltime)에는 통째로 언마운트한다 — 빈 피치가 화면의 47%를 먹고
+            있을 이유가 없다. 그 자리는 기록 리포트가 가져간다. ── */}
+        {!finished && (
           <div
-            key={`drama-${displayMinute}`}
-            className={`ms-drama ms-drama--${conceded ? 'concede' : 'score'}`}
-            aria-hidden="true"
+            className="ms-pitch-wrap"
+            data-mode={live3d ? '3d' : '2d'}
+            data-scene={highlight ? (sceneKeyFor(highlight.event, engine.home, engine.away) ?? 'none') : 'flow'}
           >
-            <span className="ms-drama__word">{conceded ? '실점…' : 'GOAL!'}</span>
+            {render3d ? (
+              <PitchBoundary key="chain-3d" fallback={pitch2d}>
+                <Suspense fallback={pitchSvg}>
+                  {/* event: 하이라이트가 아닌 분엔 null — movement가 그 분의 코너·파울을
+                      역추적해 엉뚱한 궤적·카메라를 붙이지 않게 명시적으로 끊는다. */}
+                  <Match3D
+                    {...pitchProps}
+                    event={live3d ? highlight!.event : null}
+                    fallback={pitch2d}
+                    entrance={entranceCast}
+                    entranceClock={entranceClock}
+                  />
+                </Suspense>
+              </PitchBoundary>
+            ) : (
+              pitch2d
+            )}
+            {/* ── 2D 작전판: 라이브 위에 겹쳐 두고 opacity로 오간다(match.css의 비대칭 전환).
+                3D는 언마운트하지 않는다 — WebGL 컨텍스트 재생성이 매번 히치를 만든다. ── */}
+            {replaying && (
+              <AnalysisBoard
+                state={engine}
+                sequence={playSequence ? activeSeq : undefined}
+                dwellMs={seqDwell}
+                sequenceSide={activeSide}
+                caption={analysisCaption}
+                visible={analysisOn}
+              />
+            )}
+            {/* 입장 연출 오버레이 — 자막·선수 소개 카드·건너뛰기. */}
+            {entranceCast && (
+              <EntranceOverlay
+                cast={entranceCast}
+                onDone={handleEntranceDone}
+                onProgress={ms => { entranceClock.current = ms }}
+              />
+            )}
+            {/* ── 골 드라마: 대형 타이포 + 득점자 배너(스코어버그 펄스는 별도) ──
+                풀스크린 플래시·파티클·카메라 셰이크는 PixiPitch(WebGL)가 담당한다.
+                피치를 가리지 않는 순간 이펙트(pointer-events 없음). key=분으로 골마다 재발동. */}
+            {goalDrama && (
+              <div
+                key={`drama-${displayMinute}`}
+                className={`ms-drama ms-drama--${conceded ? 'concede' : 'score'}`}
+                aria-hidden="true"
+              >
+                <span className="ms-drama__word">{conceded ? '실점' : 'GOAL'}</span>
+              </div>
+            )}
+            {goalDrama && (
+              <div key={`scorer-${displayMinute}`} className="ms-scorer" role="status">
+                <span className={`badge${conceded ? ' badge--danger' : ' badge--good'} ms-scorer__tag`}>
+                  {conceded ? '실점' : '골'}
+                </span>
+                <span className="ms-scorer__name">{scorerName ?? scorerTeam?.name.ko ?? ''}</span>
+                <span className="ms-scorer__min num">{displayMinute}&apos;</span>
+              </div>
+            )}
+            {/* ── 위험 순간: 비네팅(가장자리 어두워짐) 0.5s ── */}
+            {dangerMoment && <span key={`vig-${displayMinute}`} className="ms-vignette" aria-hidden="true" />}
           </div>
         )}
-        {goalDrama && (
-          <div key={`scorer-${displayMinute}`} className="ms-scorer" role="status">
-            <span className={`ms-scorer__tag${conceded ? ' ms-scorer__tag--concede' : ''}`}>
-              {conceded ? '실점' : '골'}
-            </span>
-            <span className="ms-scorer__name">{scorerName ?? scorerTeam?.name.ko ?? ''}</span>
-            <span className="ms-scorer__min">{displayMinute}&apos;</span>
-          </div>
+
+        {/* ── 라이브 스탯 HUD(좌하단 game assist 슬롯) ──
+            관전 중 감독이 답을 알아야 하는 질문은 둘뿐이다 — 공을 갖고 있나,
+            더 만들고 있나. 나머지 기록은 정지·하프타임의 작전판이 답한다.
+            ★ 피치 래퍼 **밖**에 둔다: 안에 두면 sm에서 흐름 요소로 내렸을 때
+            피치와 나란히 서서 피치 폭을 반으로 깎는다(실측 366 → 123px). */}
+        {replaying && (
+          <LiveStats
+            us={engine.stats[0]}
+            them={engine.stats[1]}
+            minute={displayMinute}
+            usCode={home.fifaCode}
+            themCode={away.fifaCode}
+          />
         )}
-        {/* ── 위험 순간: 비네팅(가장자리 어두워짐) 0.5s ── */}
-        {dangerMoment && <span key={`vig-${displayMinute}`} className="ms-vignette" aria-hidden="true" />}
 
-        {/* ── 터치라인 외침 바(broadcast 하단) — 재생 중에만. 정지 없이 즉시 사기 보정. ── */}
-        {replaying && <ShoutBar />}
-
-        {/* ── 킥오프 전 전술 센터 — 예전 [킥오프] 하단 바를 대체한다.
-            방송 스테이지(피치)는 배경으로 남고, 워룸이 그 아래에 붙는다.
-            tacticsMode에 'pre'를 넣지 않는 이유: TacticsBoard 오버레이가 전술 센터
-            위에 이중으로 뜬다. 'pre'의 지휘 UI는 전술 센터 하나뿐이다. ── */}
-        {/* 입장 연출 중에는 워룸을 내린다 — 킥오프를 이미 눌렀으므로 설계는 끝났고,
-            남겨두면 연출이 상단 24vh 띠에서 재생돼 "진짜 경기처럼"이 무너진다. */}
+        {/* ── 킥오프 전 전술 센터 — 방송 스테이지 아래에 붙는 워룸.
+            입장 연출 중에는 내린다 — 킥오프를 이미 눌렀으므로 설계는 끝났다. ── */}
         {phase === 'pre' && !entranceCast && (
           <div className="ms-precenter">
             <TacticsCenter onKickoff={handleKickoff} referenceScore={referenceScore} />
           </div>
         )}
 
-        {phase === 'fulltime' && (
-          <div className="ms-bottom ms-bottom--full">
+        {/* ── 풀타임 리포트 — 전체 화면. 3D·속도 토글·플랜 배지는 이미 언마운트됐다. ── */}
+        {finished && (
+          <section className="ms-report" aria-label="경기 결과">
             {shootoutOpen ? (
               <ShootoutPanel home={home} away={away} seed={seed} onDone={result => finishMatch(result)} />
             ) : (
               <>
-                <div className="ms-final">
-                  <span className="ms-final__code">{home.fifaCode}</span>
-                  <span className="ms-final__score">{engine.score[0]} : {engine.score[1]}</span>
-                  <span className="ms-final__code">{away.fifaCode}</span>
+                <header className="ms-report__head">
+                  <span className="eyebrow">경기 종료</span>
+                  <div className="ms-final">
+                    <span className="ms-final__team">
+                      <span className="kit-strip kit-strip--us" aria-hidden="true" />
+                      <span className="num">{home.fifaCode}</span>
+                    </span>
+                    <span className="ms-final__score num">{engine.score[0]} : {engine.score[1]}</span>
+                    <span className="ms-final__team ms-final__team--away">
+                      <span className="num">{away.fifaCode}</span>
+                      <span className="kit-strip kit-strip--them" aria-hidden="true" />
+                    </span>
+                  </div>
+                </header>
+                <StatsTable
+                  home={engine.stats[0]}
+                  away={engine.stats[1]}
+                  homeCode={home.fifaCode}
+                  awayCode={away.fifaCode}
+                />
+                <div className="ms-report__actions">
+                  {!onMatchEnd ? (
+                    <button
+                      type="button"
+                      className="btn btn--primary btn--lg"
+                      onClick={() => { reset(); startMatch(home, away, seed) }}
+                    >
+                      다시 보기
+                    </button>
+                  ) : needsShootout ? (
+                    <button type="button" className="btn btn--primary btn--lg" onClick={openShootout}>승부차기로</button>
+                  ) : (
+                    <button type="button" className="btn btn--primary btn--lg" onClick={() => finishMatch()}>결과 확정</button>
+                  )}
                 </div>
-                <StatsTable home={engine.stats[0]} away={engine.stats[1]} />
-                {!onMatchEnd ? (
-                  <button
-                    type="button"
-                    className="ms-btn ms-btn--primary"
-                    onClick={() => { reset(); startMatch(home, away, seed) }}
-                  >
-                    다시 보기
-                  </button>
-                ) : needsShootout ? (
-                  <button type="button" className="ms-btn ms-btn--primary" onClick={openShootout}>승부차기로</button>
-                ) : (
-                  <button type="button" className="ms-btn ms-btn--primary" onClick={() => finishMatch()}>결과 확정</button>
-                )}
               </>
             )}
-          </div>
+          </section>
         )}
-      </div>
+      </main>
 
-      {/* ── 작전판 오버레이(tactics 모드) — 방송 위로 슬라이드 업. 이탈 시 역연출. ──
-          broadcast 순수 상태에선 마운트되지 않아 콘솔이 DOM에 존재하지 않는다. */}
+      {/* ── 하단 액션 바 — 외침 + 중계 티커. 둘 다 바 **안**에 들어간다.
+          티커를 별도 절대배치 레이어로 띄우면 오버레이·득점자 배너와 겹쳐 쌓인다. ── */}
+      {chromeOn && !finished && (
+        <footer className="ms-bottombar">
+          {replaying && <ShoutBar />}
+          <Ticker lines={tickerLines} emphasis={dangerMoment} />
+        </footer>
+      )}
+
+      {/* ── 작전판 오버레이(tactics 모드) — 전체 화면 시트.
+          예전엔 inset:12px + overflow:hidden이라 390px에서 572px 중 79%가 하드클립됐고
+          (모바일에서 교체 불가), 그 아래 방송 furniture가 살아 있어 텍스트가 겹쳐 쌓였다.
+          지금은 화면을 통째로 덮고 넘치는 만큼 스크롤한다. ── */}
       {tacticsMounted && (
-        <div className={`ms-tactics-layer${tacticsExiting ? ' ms-tactics-layer--exiting' : ''}`}>
+        <div className={`ms-tactics-layer scroll-y${tacticsExiting ? ' ms-tactics-layer--exiting' : ''}`}>
           <TacticsBoard />
         </div>
       )}
@@ -722,16 +811,16 @@ export function MatchScreen({
 
 const SPEEDS: PlaybackSpeed[] = [1, 1.5, 2]
 
-/** 재생 속도 토글 — 스코어버그 맞은편(우상단). 선택 상태 하이라이트, 재생 중 변경 즉시 반영. */
+/** 재생 속도 — 상단 제어 그룹 안의 세그먼트. 배타 선택이므로 `.seg`가 정확한 형태다. */
 function SpeedToggle({ speed, onChange }: { speed: PlaybackSpeed; onChange(s: PlaybackSpeed): void }) {
   return (
-    <div className="ms-speed" role="group" aria-label="재생 속도">
+    <div className="seg" role="group" aria-label="재생 속도">
       {SPEEDS.map(s => (
         <button
           key={s}
           type="button"
           aria-pressed={speed === s}
-          className={`ms-speed__btn${speed === s ? ' ms-speed__btn--active' : ''}`}
+          className="seg__item num"
           onClick={() => onChange(s)}
         >
           {s}x

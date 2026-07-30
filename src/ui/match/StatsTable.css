@@ -1,80 +1,187 @@
-/* 워룸·작전판 공용 팀 경기 스탯 패널(.mst-*).
-   풀타임 표(.ms-stats, match.css)와 달리 좁은 사이드 열에 들어가므로
-   행 높이 18px·폰트 11~12px로 조인다 — 전술 센터 1440px 무스크롤이 판정선이다. */
+/* 경기 기록 표시 — 두 컴포넌트가 한 파일을 쓴다.
+   · .ms-stats : 풀타임·하프타임 리포트(대칭 발산 바)
+   · .mst      : 워룸·작전판 사이드 패널(좁은 열, 행 높이 최소)
+
+   공통 규칙: **숫자에 팀 색을 칠하지 않는다.** 빨간 숫자는 "나쁨"으로 읽힌다.
+   소속은 좌우 위치와 킷 스트립(3px)이 말한다 — 팀 색이 나오는 자리는 바와 스트립뿐이다. */
+
+/* ============================================================================
+   리포트 — 대칭 발산 바. 숫자는 바 바깥.
+   ========================================================================== */
+.ms-stats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  width: 100%;
+  min-width: 0;
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+.ms-stats__legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--s-line);
+}
+.ms-stats__team {
+  display: inline-flex;
+  align-items: stretch;
+  gap: var(--sp-2);
+  font-size: var(--fs-sm);
+  font-weight: 800;
+  letter-spacing: var(--ls-caps);
+  color: var(--t-mid);
+}
+
+.ms-stats__row {
+  display: grid;
+  grid-template-columns: 4.5em minmax(0, 1fr) 4.5em;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.ms-stats__val {
+  font-size: var(--fs-md);
+  font-weight: 800;
+  color: var(--t-hi);
+}
+.ms-stats__row > .ms-stats__val:first-child {
+  text-align: right;
+}
+.ms-stats__mid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+.ms-stats__label {
+  font-size: var(--fs-xs);
+  color: var(--t-low);
+  text-align: center;
+  line-height: var(--lh-md);
+}
+/* 발산 바 — 가운데(50%)를 기준으로 양쪽이 밀고 당긴다. 두 조각의 합은 언제나 100%다. */
+.ms-stats__bar {
+  display: flex;
+  height: 8px;
+  border-radius: var(--r-pill);
+  overflow: hidden;
+  background: var(--s-2);
+}
+.ms-stats__bar-us {
+  background: var(--team-us);
+}
+.ms-stats__bar-them {
+  background: var(--team-them);
+}
+
+/* ============================================================================
+   사이드 패널 — 좁은 열. 행 높이가 판정선이라 폰트를 --fs-xs로 조인다.
+   ========================================================================== */
 .mst {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 8px 10px;
-  border: 1px solid var(--bc-line);
-  border-radius: 8px;
-  background: rgba(10, 21, 38, 0.55);
-  color: var(--bc-text);
-  font-family: var(--bc-font);
-  font-variant-numeric: tabular-nums;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--s-1);
+  color: var(--t-hi);
+  font-family: var(--f-ui);
+  font-variant-numeric: tabular-nums lining-nums;
 }
 .mst__head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--sp-2);
 }
 .mst__title {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--ls-caps);
 }
-.mst__minute { font-size: 11px; color: var(--bc-text-dim); }
+.mst__minute {
+  font-size: var(--fs-xs);
+  color: var(--t-low);
+}
 
 /* 킥오프 전 — 0을 늘어놓는 대신 이 한 줄만 둔다. */
 .mst__empty {
-  margin: 2px 0 0;
-  font-size: 11px;
-  line-height: 1.4;
-  color: var(--bc-text-dim);
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
+  color: var(--t-mid);
 }
 
 .mst__teams {
   display: flex;
   justify-content: space-between;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 800;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--ls-caps);
+  color: var(--t-mid);
 }
-.mst__code--home { color: var(--bc-home); }
-.mst__code--away { color: var(--bc-away); }
+.mst__code {
+  display: inline-flex;
+  align-items: stretch;
+  gap: var(--sp-1);
+}
 
-.mst__rows { margin: 0; padding: 0; list-style: none; }
+.mst__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
 .mst__row {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 34px;
+  grid-template-columns: 3.4em minmax(0, 1fr) 3.4em;
   align-items: center;
-  gap: 6px;
+  gap: var(--sp-2);
 }
-.mst__val { font-size: 11px; font-weight: 800; }
-.mst__val--home { text-align: right; color: var(--bc-home); }
-.mst__val--away { text-align: left; color: var(--bc-away); }
-.mst__mid { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.mst__val {
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  color: var(--t-hi);
+}
+.mst__row > .mst__val:first-child {
+  text-align: right;
+}
+.mst__mid {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
 .mst__label {
-  font-size: 10px;
-  color: var(--bc-text-dim);
+  font-size: var(--fs-xs);
+  color: var(--t-low);
   text-align: center;
-  line-height: 1.1;
+  line-height: var(--lh-tight);
 }
-/* 막대는 원정색 트랙 위에 홈색을 왼쪽부터 채우는 대비 막대다 —
-   두 팀 값을 따로 두 줄 그리는 것보다 세로를 절반만 쓴다. */
+/* 원정색 트랙 위에 홈색을 왼쪽부터 채우는 대비 막대 — 두 줄로 그리는 것보다 세로가 절반이다. */
 .mst__bar {
   display: block;
   height: 4px;
-  border-radius: 3px;
-  background: var(--bc-away);
+  border-radius: var(--r-pill);
+  background: var(--team-them);
   overflow: hidden;
 }
-/* .mst__note(각주)는 제거했다 — 패스 성공률이 엔진 집계값이 되어 출처를 밝힐 이유가 없다. */
 .mst__bar-home {
   display: block;
   height: 100%;
-  border-radius: 3px 0 0 3px;
-  background: var(--bc-home);
+  background: var(--team-us);
+}
+/* 표본이 모자라 억제 중 — 팀 색을 쓰지 않는다. 색을 칠하는 순간 "값이 있다"는 주장이 된다. */
+.mst__bar--muted {
+  background: var(--s-3);
+}
+.mst__bar--muted .mst__bar-home {
+  background: var(--s-line-strong);
+}
+.mst__caption {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--t-low);
 }

@@ -1,186 +1,184 @@
-/* 방송 컴포넌트 스킨 — 다크 방송 테마 (tokens.css --bc-* 사용). 인라인 스타일 금지. */
+/* 방송 컴포넌트 스킨 — 토큰(tokens.css)만 쓴다. 하드코딩 hex·인라인 스타일 금지.
+   근거: 2026 월드컵 브랜드는 역대 최고 채도인데도 상시 노출되는 스코어버그는
+   검정 + 흰 타입뿐이다. 정보 그래픽은 뉴트럴로 후퇴한다. */
 
-/* ── Scorebug: 좌상단 고정 컴팩트 가로 바 ─────────────────── */
+/* ============================================================================
+   Scorebug — 3단 데크(컨텍스트 / 팀·스코어 / 시계 pill)
+   ----------------------------------------------------------------------------
+   절대배치를 하지 않는다. 상단 furniture 바 안의 in-flow 요소다 —
+   피치 위에 떠 있으면 오버레이가 열릴 때 텍스트가 겹쳐 쌓인다(T-2).
+   ========================================================================== */
 .bc-scorebug {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  z-index: 20;
   display: inline-flex;
+  flex-direction: column;
   align-items: stretch;
-  gap: 2px;
-  padding: 6px;
-  border: 1px solid var(--bc-line);
-  border-radius: 10px;
-  background: linear-gradient(180deg, var(--bc-panel-2), var(--bc-panel));
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
-  font-family: var(--bc-font);
-  color: var(--bc-text);
+  min-width: 0;
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--s-1);
+  box-shadow: var(--shadow-1);
+  font-family: var(--f-ui);
+  color: var(--t-hi);
   user-select: none;
+  overflow: hidden;
+}
+
+/* 1단 — 컨텍스트 스트립. 대회·라운드. 가장 조용한 층. */
+.bc-scorebug__ctx {
+  padding: var(--sp-1) var(--sp-3);
+  border-bottom: 1px solid var(--s-line);
+  background: var(--s-2);
+  color: var(--t-low);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: var(--ls-caps);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 2단 — 팀 · 스코어. 이 층만 크다. */
+.bc-scorebug__deck {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
 }
 
 .bc-chip {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 7px;
-  background: var(--bc-panel);
-  font-weight: 700;
-  letter-spacing: 0.06em;
+  align-items: stretch;
+  gap: var(--sp-2);
+  font-weight: 800;
+  letter-spacing: var(--ls-caps);
 }
-
-.bc-chip__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-.bc-chip__dot--home { background: var(--bc-home); }
-.bc-chip__dot--away { background: var(--bc-away); }
-
-.bc-chip__flag {
-  font-size: 18px;
-  line-height: 1;
+.bc-chip--away {
+  flex-direction: row;
 }
 
 .bc-chip__code {
-  font-size: 15px;
-  font-variant-numeric: tabular-nums;
-}
-
-.bc-scorebug__center {
-  display: flex;
-  flex-direction: column;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 0 10px;
-  min-width: 76px;
+  font-size: var(--fs-lg);
 }
 
 .bc-scorebug__score {
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  font-weight: 800;
-  line-height: 1;
+  gap: var(--sp-2);
+  margin: 0 auto;
+  font-weight: 900;
+  line-height: var(--lh-tight);
 }
 
 .bc-scorebug__num {
-  font-size: 26px;
-  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-score);
 }
 
 .bc-scorebug__dash {
-  font-size: 20px;
-  color: var(--bc-text-dim);
+  font-size: var(--fs-h2);
+  color: var(--t-low);
 }
 
+/* 3단 — 시계 pill. 배경을 달리해 본체와 물리적으로 분리한다.
+   시계는 초 단위, 스코어는 이벤트 단위로 갱신 주기가 다르다. */
 .bc-scorebug__meta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-  font-size: 11px;
-  font-weight: 700;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  padding: var(--sp-1) var(--sp-3) var(--sp-2);
+  border-top: 1px solid var(--s-line);
+  background: var(--s-2);
 }
 
 .bc-scorebug__clock {
-  color: var(--bc-accent);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.04em;
+  color: var(--t-hi);
+  font-size: var(--fs-h1);
+  font-weight: 800;
+  letter-spacing: var(--ls-caps);
+  line-height: var(--lh-tight);
 }
 
+/* "지금 진행 중" — 라임(--live)이 허용되는 유일한 자리. */
 .bc-scorebug__live {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  color: var(--bc-danger);
-  letter-spacing: 0.1em;
+  gap: var(--sp-2);
+  color: var(--live);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  letter-spacing: var(--ls-caps);
 }
 
 .bc-scorebug__live-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--bc-danger);
   animation: bc-live-pulse 1.4s ease-in-out infinite;
 }
 
 @keyframes bc-live-pulse {
-  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255, 93, 93, 0.55); }
-  50% { opacity: 0.45; box-shadow: 0 0 0 5px rgba(255, 93, 93, 0); }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
 
-/* 무사건 분 빨리감기 — 분 숫자가 빠르게 넘어가는 틱 느낌(scale/opacity 펄스). */
+/* 무사건 분 빨리감기 — 분 숫자가 빠르게 넘어가는 틱 느낌.
+   폭이 흔들리지 않게 scale이 아니라 opacity만 건드린다(.num tabular와 함께). */
 .bc-scorebug__clock--ff {
   animation: bc-clock-ff 0.5s ease-out infinite;
 }
 
 @keyframes bc-clock-ff {
-  0% { opacity: 0.55; transform: scale(0.9); }
-  40% { opacity: 1; transform: scale(1.12); }
-  100% { opacity: 0.85; transform: scale(1); }
+  0% { opacity: 0.55; }
+  40% { opacity: 1; }
+  100% { opacity: 0.85; }
 }
 
-/* 득점 순간 스코어 펄스(골 드라마 연동) — 스코어가 크게 튀었다 가라앉는다. */
+/* 득점 순간 — **숫자는 애니메이션하지 않는다.** 데크 테두리만 한 번 밝아진다.
+   숫자를 키우면 tabular 정렬이 깨지고 "지금 몇 대 몇인가"를 읽는 데 방해가 된다. */
 .bc-scorebug__score--pulse {
-  animation: bc-score-pulse 0.7s ease-out;
+  animation: bc-score-pulse 0.7s var(--ease-out);
 }
 @keyframes bc-score-pulse {
-  0% { transform: scale(1); }
-  30% { transform: scale(1.35); color: var(--bc-accent); text-shadow: 0 0 12px var(--bc-accent); }
-  100% { transform: scale(1); }
+  0% { background: transparent; }
+  30% { background: color-mix(in srgb, var(--good) 22%, transparent); }
+  100% { background: transparent; }
 }
 
-/* ── Ticker: 하단 얇은 바 ──────────────────────────────── */
+/* ============================================================================
+   Ticker — 하단 액션 바 안의 한 줄. 절대배치하지 않는다.
+   ========================================================================== */
 .bc-ticker {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 20;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
-  border-top: 1px solid var(--bc-line);
-  background: linear-gradient(180deg, rgba(18, 28, 48, 0.85), var(--bc-bg));
-  backdrop-filter: blur(6px);
-  font-family: var(--bc-font);
-  color: var(--bc-text);
+  gap: var(--sp-3);
+  min-width: 0;
+  flex: 1 1 auto;
+  font-family: var(--f-ui);
+  color: var(--t-hi);
 }
 
+/* `.badge` 기본형(중립). 예전엔 danger red였는데 상시 노출 배지에 빨강을 쓰면
+   진짜 위험(카드·실점)을 말할 색이 남지 않는다. 대비도 3.01:1로 미달이었다. */
 .bc-ticker__tag {
   flex: 0 0 auto;
-  padding: 3px 9px;
-  border-radius: 5px;
-  background: var(--bc-accent);
-  color: var(--bc-bg);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
 }
 
-/* 위험 순간 강조(xG 0.25+ 세이브·미스) — 상단 테두리·태그가 위험 톤으로. */
-.bc-ticker--danger {
-  border-top-color: var(--bc-danger);
-  box-shadow: 0 -1px 16px -4px var(--bc-danger);
-}
-.bc-ticker--danger .bc-ticker__tag {
-  background: var(--bc-danger);
-  color: #fff;
-}
-.bc-ticker--danger .bc-ticker__line--current {
-  color: #ffd9d9;
-  font-weight: 700;
+/* 큰 장면 강조(xG 임계 이상 세이브·미스).
+   [수정] 예전엔 --danger로 문장을 붉게 칠했다. 그러나 결정적 찬스를 놓친 것은
+   "위험 상태"가 아니라 "주목할 순간"이다. 빨강을 여기 쓰면 정작 실점·퇴장을
+   말할 색이 남지 않는다(색 하나에 뜻 하나). 색이 아니라 **굵기와 밝기**로 올린다. */
+.bc-ticker--emphasis .bc-ticker__line--current {
+  color: var(--t-hi);
+  font-weight: 800;
 }
 
 .bc-ticker__stack {
   position: relative;
   flex: 1 1 auto;
   min-width: 0;
-  height: 1.4em;
+  height: 1.6em;
+  /* 들어오고 나가는 줄이 translateY로 움직인다. 클립하지 않으면 애니메이션 도중
+     줄이 티커 행 밖으로 삐져나와 위쪽 외침 버튼과 겹친다(390px 실측). */
+  overflow: hidden;
   overflow: hidden;
 }
 
@@ -191,59 +189,56 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 14px;
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
 }
 
-/* 분 타임스탬프 — 문장에서 걷어낸 분을 크롬으로 옮긴 자리(리서치 §4.1 #1).
-   등폭 숫자로 고정폭을 만들어 줄이 바뀌어도 문장 시작 위치가 흔들리지 않게 한다. */
+/* 분 타임스탬프 — 문장에서 걷어낸 분을 크롬으로 옮긴 자리.
+   등폭 숫자 고정폭이라 줄이 바뀌어도 문장 시작 위치가 흔들리지 않는다. */
 .bc-ticker__min {
   display: inline-block;
   min-width: 3.2em;
-  margin-right: 6px;
-  color: var(--bc-accent);
-  font-variant-numeric: tabular-nums;
+  margin-right: var(--sp-2);
+  color: var(--t-low);
+  font-variant-numeric: tabular-nums lining-nums;
   font-weight: 700;
-  font-size: 12px;
+  font-size: var(--fs-xs);
 }
 
 .bc-ticker__line--current {
-  color: var(--bc-text);
-  animation: bc-ticker-in 0.35s ease-out;
-}
-.bc-ticker__line--prev .bc-ticker__min {
-  color: var(--bc-text-dim);
+  color: var(--t-hi);
+  animation: bc-ticker-in 0.35s var(--ease-out);
 }
 
 /* 해설위원 라인 — 캐스터와 눈으로도 갈리게. 소리(pitch 0.75)만으로 나누면
-   음소거·해설 OFF에서 두 사람이 한 사람으로 합쳐진다. 배지 + 이탤릭 + 낮은 채도. */
+   음소거·해설 OFF에서 두 사람이 한 사람으로 합쳐진다. */
 .bc-ticker__who {
   display: inline-block;
-  margin-right: 6px;
-  padding: 1px 6px;
+  margin-right: var(--sp-2);
+  padding: 0 var(--sp-1);
   border: 1px solid currentcolor;
-  border-radius: 4px;
+  border-radius: var(--r-sm);
   opacity: 0.75;
-  font-size: 10px;
+  font-size: var(--fs-xs);
   font-weight: 700;
   font-style: normal;
-  letter-spacing: 0.06em;
-  vertical-align: 1px;
+  letter-spacing: var(--ls-caps);
 }
 
 .bc-ticker__line--analyst {
   font-style: italic;
-  color: var(--bc-text-dim);
+  color: var(--t-mid);
 }
 
 .bc-ticker__line--analyst.bc-ticker__line--current {
-  color: color-mix(in srgb, var(--bc-text) 78%, var(--bc-accent));
+  color: var(--t-mid);
 }
 
 .bc-ticker__line--prev {
-  color: var(--bc-text-dim);
+  color: var(--t-low);
   opacity: 0;
   transform: translateY(-100%);
-  animation: bc-ticker-out 0.35s ease-out;
+  animation: bc-ticker-out 0.35s var(--ease-out);
 }
 
 @keyframes bc-ticker-in {
@@ -254,6 +249,19 @@
 @keyframes bc-ticker-out {
   from { opacity: 0.7; transform: translateY(0); }
   to { opacity: 0; transform: translateY(-100%); }
+}
+
+/* sm — 390px에서 스코어버그가 상단 바 폭을 다 쓴다. */
+@media (max-width: 719px) {
+  .bc-scorebug {
+    width: 100%;
+  }
+  .bc-scorebug__deck {
+    gap: var(--sp-2);
+  }
+  .bc-ticker__min {
+    min-width: 2.6em;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -35,7 +35,17 @@ function replayTo(target: string) {
   }
 }
 
-beforeEach(() => { vi.useFakeTimers(); store().reset() })
+// PitchView의 라이브 무브먼트 클럭은 setInterval로 계속 돈다. 가짜 타이머 환경에서
+// advanceTimersToNextTimer가 그 인터벌만 소진해 재생 체인(분 전진)이 굶는다.
+// 이 파일이 검증하는 것은 재생 루프·모드 전환이므로 reduced-motion으로 클럭을 끈다
+// (라이브 클럭 자체는 pitch/__tests__/live-motion.test.ts가 검증한다).
+beforeEach(() => {
+  Object.defineProperty(window, 'matchMedia', {
+    value: () => ({ matches: true, addEventListener() {}, removeEventListener() {} }),
+    configurable: true, writable: true,
+  })
+  vi.useFakeTimers(); store().reset()
+})
 afterEach(() => { cleanup(); vi.useRealTimers() })
 
 const clock = (c: HTMLElement) =>
@@ -64,6 +74,11 @@ describe('MatchScreen 조립 — 오버레이 폐지(피치 상시 노출)', () 
     // 연출 중에는 phase가 'pre' 그대로다 — 선수가 자리를 잡기 전에 시계가 돌면 안 된다.
     expect(store().phase).toBe('pre')
     expect(container.querySelector('.ent')).toBeTruthy()
+    // ★ E-4: 입장 중에는 스코어버그(0:0 0')도 중계 티커도 없다 — 아직 경기 전이다.
+    //   대신 프리매치 스트립 한 줄만 남는다.
+    expect(container.querySelector('.bc-scorebug')).toBeNull()
+    expect(container.querySelector('.bc-ticker')).toBeNull()
+    expect(container.querySelector('.ms-prematch')).toBeTruthy()
     // 건너뛰면 비로소 킥오프.
     fireEvent.click(getByRole('button', { name: '입장 연출 건너뛰고 바로 킥오프' }))
     expect(store().phase).toBe('playing')
@@ -143,17 +158,23 @@ describe('MatchScreen 개입 허브 — 브레이크·순간 제안·풀타임',
     expect(store().phase).toBe('paused-moment')
   })
 
-  it('(j) fulltime: 피치 유지 + 하단 바 스탯(점유율) + 액션 버튼', () => {
+  // ★ 계약 변경: 종료 화면은 **리포트가 전부**다. 예전엔 빈 3D 피치가 화면의 47%를
+  //   차지한 채 속도 토글·플랜 배지까지 남아 있었다. 볼 경기가 없으면 피치도 없다.
+  it('(j) fulltime: 피치·재생 크롬 언마운트 + 기록 리포트(점유율) + 액션 버튼', () => {
     const onMatchEnd = vi.fn()
-    const { container } = render(<MatchScreen home={home} away={away} seed={20260724} onMatchEnd={onMatchEnd} />)
+    const { container, getByRole } = render(<MatchScreen home={home} away={away} seed={20260724} onMatchEnd={onMatchEnd} />)
     act(() => { store().kickoff() })
     replayTo('fulltime')
+    act(() => { vi.advanceTimersByTime(1000) }) // 작전판 역연출 종료
     expect(store().phase).toBe('fulltime')
-    // 피치는 종료 화면에서도 가려지지 않는다.
-    expect(svg(container as HTMLElement)).toBeTruthy()
-    // 하단 바 확장 + 스탯 표.
-    expect(container.querySelector('.ms-bottom--full')).toBeTruthy()
+    // 피치(3D/2D)와 재생 전용 크롬이 사라진다.
+    expect(container.querySelector('.ms-pitch-wrap')).toBeNull()
+    expect(svg(container as HTMLElement)).toBeNull()
+    expect(container.querySelector('.plan-badge')).toBeNull()
+    // 기록 리포트 + 액션.
+    expect(container.querySelector('.ms-report')).toBeTruthy()
     expect(container.querySelector('.ms-stats')!.textContent).toContain('점유율')
+    expect(getByRole('button', { name: '결과 확정' })).toBeTruthy()
   })
 })
 
@@ -166,8 +187,9 @@ describe('MatchScreen 재생 루프 — 정지·재개·속도', () => {
     const before = store().engine!.minute
     expect(before).toBeGreaterThan(0)
 
-    // [⏸ 감독 타임] → 체인 정지. 이후 시간을 크게 흘려도 분이 전진하지 않아야 한다.
-    fireEvent.click(getByRole('button', { name: '⏸ 감독 타임' }))
+    // [감독 타임] → 체인 정지. 이후 시간을 크게 흘려도 분이 전진하지 않아야 한다.
+    // (이모지 ⏸는 걷어냈다 — OS마다 모양·크기가 달라 버튼 폭이 흔들린다.)
+    fireEvent.click(getByRole('button', { name: '감독 타임' }))
     expect(store().phase).toBe('paused-user')
     act(() => { vi.advanceTimersByTime(60_000) })
     expect(store().engine!.minute).toBe(before)
@@ -233,27 +255,29 @@ describe('MatchScreen 연출 — 골 드라마·안무·위험 순간', () => {
     const eng = store().engine!
     inject([{ minute: eng.minute, type: 'goal', teamId: away.id }])
     expect(container.querySelector('.ms-drama--concede')).toBeTruthy()
-    expect(container.querySelector('.ms-scorer__tag--concede')).toBeTruthy()
+    // 실점 태그는 공용 배지(.badge--danger)로 통일했다 — 색 하나에 뜻 하나.
+    expect(container.querySelector('.ms-scorer__tag.badge--danger')).toBeTruthy()
   })
 
-  it('(o) 위험 순간(xG 0.25+ 세이브) → 비네팅 + 티커 위험 강조', () => {
+  it('(o) 큰 장면(xG 0.25+ 세이브) → 비네팅 + 티커 강조', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
     kickoffNow(getByRole)
     step(3)
     const eng = store().engine!
     inject([{ minute: eng.minute, type: 'save', teamId: home.id, xg: 0.4 }])
     expect(container.querySelector('.ms-vignette')).toBeTruthy()
-    expect(container.querySelector('.bc-ticker--danger')).toBeTruthy()
+    expect(container.querySelector('.bc-ticker--emphasis')).toBeTruthy()
   })
 })
 
 describe('MatchScreen 모드 분리 — 방송 관전 ↔ 작전 지시', () => {
   it('(k) broadcast(pre·재생)엔 콘솔·작전판이 DOM에 없다', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
-    // pre = 방송 모드.
+    // pre = 방송 모드. 작전판 오버레이는 없다.
+    // (킥오프 전 워룸은 '설계' 화면이라 그 안에 콘솔이 있을 수 있다 — 여기서 고정하는
+    //  계약은 "관전 중에는 지휘 UI가 DOM에 없다"이므로 재생 중 상태로 판정한다.)
     expect(container.querySelector('.tb-root')).toBeNull()
-    expect(container.querySelector('.cs-panel')).toBeNull()
-    // 재생 중에도 작전판·콘솔 부재.
+    // 재생 중에는 작전판·콘솔 모두 부재.
     kickoffNow(getByRole)
     step(3)
     expect(store().phase).toBe('playing')
@@ -268,6 +292,12 @@ describe('MatchScreen 모드 분리 — 방송 관전 ↔ 작전 지시', () => 
     // 작전판 진입 — 보드 + 콘솔이 작전판 안으로 이관됨.
     expect(container.querySelector('.tb-root')).toBeTruthy()
     expect(container.querySelector('.cs-panel')).toBeTruthy()
+
+    // ★ T-2: 오버레이가 뜨면 그 아래 방송 furniture는 **실제로 언마운트**된다.
+    //   숨기기만 하면 작전판 문구와 스코어버그·플랜 배지가 겹쳐 쌓인다(실측 92~100%).
+    expect(container.querySelector('.bc-scorebug')).toBeNull()
+    expect(container.querySelector('.plan-badge')).toBeNull()
+    expect(container.querySelector('.bc-ticker')).toBeNull()
 
     // 전술 확정 → 방송 복귀. 역연출 시간 경과 후 작전판 언마운트.
     fireEvent.click(getByRole('button', { name: '전술 확정' }))
@@ -292,11 +322,15 @@ describe('MatchScreen — 플랜 배지(PlanBadge)', () => {
     expect(b.className).toContain('plan-badge--ok')
   })
 
+  // ★ 작전판(오버레이) 진입 중에는 배지가 언마운트된다(T-2) — 배지는 **방송 복귀 후**
+  //   상태를 말한다. 그래서 전술을 바꾼 뒤 확정하고 돌아와서 읽는다.
   it('구조(포메이션)를 바꾸면 "플랜 이탈 N축"으로 전환된다', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
     kickoffNow(getByRole)
     replayTo('paused-break')
     fireEvent.click(getByRole('button', { name: '5-4-1' }))
+    fireEvent.click(getByRole('button', { name: '전술 확정' }))
+    act(() => { vi.advanceTimersByTime(700) })
     const b = badge(container as HTMLElement)!
     expect(b.textContent).toContain('플랜 이탈')
     expect(b.textContent).toContain('1축')
@@ -311,6 +345,8 @@ describe('MatchScreen — 플랜 배지(PlanBadge)', () => {
     act(() => {
       store().submitCommand('home', { type: 'instructions', instructions: { ...before, pressing: 95 } })
     })
+    fireEvent.click(getByRole('button', { name: '전술 확정' }))
+    act(() => { vi.advanceTimersByTime(700) })
     expect(badge(container as HTMLElement)!.textContent).toContain('플랜 유지')
   })
 })

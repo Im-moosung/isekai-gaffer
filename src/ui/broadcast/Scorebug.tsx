@@ -11,43 +11,69 @@ interface ScorebugProps {
   fastForward?: boolean
   /** 득점 순간 스코어 펄스(골 드라마 연동). */
   pulse?: boolean
+  /** 컨텍스트 스트립 문구(대회·라운드). 방송 스코어버그의 최상단 한 줄. */
+  context?: string
 }
 
-/** 방송 스코어버그 — 좌상단 고정 컴팩트 바.
- *  팀 칩 2개(국기 이모지 optional + FIFA 코드) + 가운데 스코어 + 분 표시 + LIVE 도트 펄스. */
-export function Scorebug({ home, away, score, minute, live, fastForward, pulse }: ScorebugProps) {
+/**
+ * 방송 스코어버그 — 2026 월드피드 구조의 **3단 데크**.
+ *
+ *   ┌ 컨텍스트 스트립 (대회 · 라운드)      ← --fs-xs, --t-low
+ *   ├ ▌KOR   3 : 2   CZE▐                 ← 킷 스트립 3px + 코드 + 스코어
+ *   └                    ● LIVE 67'       ← 시계 pill(다른 배경색)
+ *
+ * ★ 시계를 본체와 물리적으로 분리한 이유: 시계는 초 단위, 스코어는 이벤트 단위로
+ *   갱신 주기가 다르다. 같은 컨테이너에 두면 시계가 바뀔 때마다 눈이 스코어 영역까지
+ *   다시 훑는다. 방송이 시계를 별도 슬래브에 두는 것도 같은 이유다.
+ * ★ 킷 스트립 색(--team-us/--team-them)은 피치 위 도트 색과 같은 토큰이다. 이 일치가
+ *   깨지면 스코어버그가 피치를 설명하지 못한다.
+ * ★ 스코어 숫자 자체는 애니메이션하지 않는다(펄스는 컨테이너에만).
+ */
+export function Scorebug({
+  home, away, score, minute, live, fastForward, pulse, context = 'FIFA 월드컵 2026',
+}: ScorebugProps) {
   return (
     <div className="bc-scorebug" role="status" aria-label="스코어">
-      <TeamChip team={home} side="home" />
-      <div className="bc-scorebug__center">
-        <div className={`bc-scorebug__score${pulse ? ' bc-scorebug__score--pulse' : ''}`}>
-          <span className="bc-scorebug__num">{score[0]}</span>
+      <div className="bc-scorebug__ctx">{context}</div>
+
+      <div className={`bc-scorebug__deck${pulse ? ' bc-scorebug__score--pulse' : ''}`}>
+        <TeamChip team={home} side="home" />
+        <div className="bc-scorebug__score">
+          <span className="bc-scorebug__num num">{score[0]}</span>
           <span className="bc-scorebug__dash">:</span>
-          <span className="bc-scorebug__num">{score[1]}</span>
+          <span className="bc-scorebug__num num">{score[1]}</span>
         </div>
-        <div className="bc-scorebug__meta">
-          {live && (
-            <span className="bc-scorebug__live">
-              <span className="bc-scorebug__live-dot" aria-hidden="true" />
-              LIVE
-            </span>
-          )}
-          <span className={`bc-scorebug__clock${fastForward ? ' bc-scorebug__clock--ff' : ''}`}>{minute}&apos;</span>
-        </div>
+        <TeamChip team={away} side="away" />
       </div>
-      <TeamChip team={away} side="away" />
+
+      <div className="bc-scorebug__meta">
+        {live && (
+          <span className="bc-scorebug__live">
+            <span className="live-dot bc-scorebug__live-dot" aria-hidden="true" />
+            LIVE
+          </span>
+        )}
+        <span className={`bc-scorebug__clock num${fastForward ? ' bc-scorebug__clock--ff' : ''}`}>
+          {minute}&apos;
+        </span>
+      </div>
     </div>
   )
 }
 
+/** 팀 칩 — 킷 스트립 3px + FIFA 코드. 스트립은 홈이 왼쪽, 원정이 오른쪽 바깥으로 간다. */
 function TeamChip({ team, side }: { team: Team; side: 'home' | 'away' }) {
-  // Team 타입에 flag 필드가 없어 fifaCode만 사용(옵셔널 flag가 있으면 노출).
-  const flag = (team as { flag?: string }).flag
+  const strip = (
+    <span
+      className={`kit-strip kit-strip--${side === 'home' ? 'us' : 'them'}`}
+      aria-hidden="true"
+    />
+  )
   return (
     <div className={`bc-chip bc-chip--${side}`}>
-      <span className={`bc-chip__dot bc-chip__dot--${side}`} aria-hidden="true" />
-      {flag && <span className="bc-chip__flag" aria-hidden="true">{flag}</span>}
-      <span className="bc-chip__code">{team.fifaCode}</span>
+      {side === 'home' && strip}
+      <span className="bc-chip__code num">{team.fifaCode}</span>
+      {side === 'away' && strip}
     </div>
   )
 }

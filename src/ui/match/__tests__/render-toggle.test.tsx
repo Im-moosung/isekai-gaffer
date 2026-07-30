@@ -38,21 +38,22 @@ beforeEach(() => { ls = installLocalStorage() })
 afterEach(() => { cleanup(); useMatchStore.getState().reset(); ls.clear() })
 
 describe('MatchScreen — 2D/3D 렌더러 토글', () => {
-  it('기본값은 3D(저장값 없음) — 버튼이 [3D]·aria-pressed=true', async () => {
+  // ★ 단일 토글 → 세그먼트 [2D][3D]로 바뀌었다. 예전 버튼은 표시 텍스트가 현재 모드,
+  //   aria-label이 전환 대상이라 시각 사용자와 스크린리더 사용자가 반대로 이해했다.
+  //   세그먼트는 두 선택지를 다 보여주고 현재 모드에 aria-pressed=true를 준다.
+  it('기본값은 3D(저장값 없음) — [3D] 알약이 눌린 상태', async () => {
     const { getByRole } = render(<MatchScreen home={home} away={away} seed={7} />)
     await flush()
-    const btn = getByRole('button', { name: '2D 화면으로 전환' })
-    expect(btn.textContent).toBe('3D')
-    expect(btn.getAttribute('aria-pressed')).toBe('true')
+    expect(getByRole('button', { name: '3D' }).getAttribute('aria-pressed')).toBe('true')
+    expect(getByRole('button', { name: '2D' }).getAttribute('aria-pressed')).toBe('false')
   })
 
-  it('토글 클릭 → 2D로 내려가고 localStorage에 기억된다', async () => {
+  it('[2D] 선택 → 2D로 내려가고 localStorage에 기억된다', async () => {
     const { getByRole } = render(<MatchScreen home={home} away={away} seed={7} />)
     await flush()
-    fireEvent.click(getByRole('button', { name: '2D 화면으로 전환' }))
-    const btn = getByRole('button', { name: '3D 화면으로 전환' })
-    expect(btn.textContent).toBe('2D')
-    expect(btn.getAttribute('aria-pressed')).toBe('false')
+    fireEvent.click(getByRole('button', { name: '2D' }))
+    expect(getByRole('button', { name: '2D' }).getAttribute('aria-pressed')).toBe('true')
+    expect(getByRole('button', { name: '3D' }).getAttribute('aria-pressed')).toBe('false')
     expect(ls.getItem('rematch-render3d')).toBe('0')
   })
 
@@ -60,7 +61,7 @@ describe('MatchScreen — 2D/3D 렌더러 토글', () => {
     ls.setItem('rematch-render3d', '0')
     const { getByRole } = render(<MatchScreen home={home} away={away} seed={7} />)
     await flush()
-    expect(getByRole('button', { name: '3D 화면으로 전환' }).textContent).toBe('2D')
+    expect(getByRole('button', { name: '2D' }).getAttribute('aria-pressed')).toBe('true')
   })
 
   it('3D 모드에서도 WebGL 불가 환경이면 체인이 끝까지 내려가 SVG 피치가 보인다', async () => {
@@ -73,7 +74,7 @@ describe('MatchScreen — 2D/3D 렌더러 토글', () => {
   it('2D로 토글해도 피치는 계속 보인다(전환 중 백지 금지)', async () => {
     const { container, getByRole } = render(<MatchScreen home={home} away={away} seed={7} />)
     await flush()
-    fireEvent.click(getByRole('button', { name: '2D 화면으로 전환' }))
+    fireEvent.click(getByRole('button', { name: '2D' }))
     await flush()
     expect(container.querySelector('.pv-root')).toBeTruthy()
   })

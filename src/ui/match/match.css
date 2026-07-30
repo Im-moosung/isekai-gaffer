@@ -1,47 +1,119 @@
-/* 경기 화면 조립 레이아웃 — 방송 토큰(--bc-*) 사용, 인라인 스타일 금지. */
+/* ============================================================================
+   경기 화면 — "보는 모드"와 "읽는 모드"를 **시간축으로** 분리한다.
+   ----------------------------------------------------------------------------
+   진단: 예전 구조는 `.ms-root{height:100vh}` → `.ms-stage{overflow:hidden}` →
+   `.ms-precenter{overflow-y:auto}`로 높이를 예산처럼 나눠 가졌다. 뷰포트가 1px
+   줄면 가장 안쪽이 먼저 죽는다 — 390px에서 `.ms-pitch-wrap` 높이가 실제로 0px였다.
+
+   해법:
+    1. **스크롤은 문서가 한다.** min-height:100dvh. 페이지는 세로로 자란다.
+    2. 피치는 **고정 종횡비**를 갖는다. 남는 높이를 나눠 받지 않으므로 0이 될 수 없다.
+    3. 절대배치는 피치 캔버스 위 오버레이(HUD·드라마·비네팅)에만. 나머지는 flow.
+    4. **오버레이가 뜨면 그 아래 furniture는 언마운트**한다(MatchScreen.tsx).
+       CSS로 숨기지 않는다 — opacity로 죽인 텍스트는 스크린리더와 스크린샷에 남는다.
+
+   색은 전부 토큰. 라임(--live)은 "지금 진행 중"에만 나온다 — CTA도 데이터도 아니다.
+   ========================================================================== */
+
 .ms-root {
   display: flex;
-  gap: 12px;
+  flex-direction: column;
+  min-height: 100dvh;
   width: 100%;
-  height: 100vh;
-  padding: 12px;
-  box-sizing: border-box;
-  background: var(--bc-bg);
-  color: var(--bc-text);
-  font-family: var(--bc-font);
+  background: var(--s-0);
+  color: var(--t-hi);
+  font-family: var(--f-ui);
 }
 .ms-root--empty {
   display: block;
 }
-
-/* ── 좌: 경기 뷰 스테이지 (스코어버그·배너·피치·티커·하단 바) ───────
-   ★ 오버레이 폐지: 스테이지는 세로 flex. 스코어버그·속도·티커는 얇은 방송
-   furniture로 절대배치(코너/가장자리)하고, 그 여백(상 60 / 하 44)만큼만 패딩으로
-   비운다. 배너·피치·하단 바는 in-flow로 쌓여 피치(flex:1)는 언제나 남는 공간을
-   채운다 — 어떤 상태에서도 피치 SVG가 가려지지 않는다. */
-.ms-stage {
-  position: relative;
-  flex: 7 1 0;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 74px 16px 44px;
-  box-sizing: border-box;
-  border: 1px solid var(--bc-line);
-  border-radius: 12px;
-  background: radial-gradient(120% 120% at 50% 0%, var(--bc-panel-2), var(--bc-bg));
+/* 오버레이(작전판·입장 연출)가 열린 동안 배경 스크롤을 잠근다. */
+.ms-root--overlay {
   overflow: hidden;
 }
+
+/* ── 상단 방송 furniture ─────────────────────────────────────────────
+   스코어버그(좌) + 제어 그룹(우) 두 덩어리뿐이다. 예전엔 음소거·TTS·2D/3D·속도·
+   감독 타임·플랜 배지가 컨테이너 없이 여섯 군데에 절대배치돼 서로 다른 폭·정렬로
+   떠 있었고, 스코어버그 아래로 삐져나와 노치를 만들었다. */
+.ms-topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-furniture);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  background: color-mix(in srgb, var(--s-0) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--s-line);
+}
+.ms-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+/* 플랜 배지는 별도 컴포넌트(plan-badge.css)가 절대배치를 갖고 있다.
+   슬롯 안에서는 흐름 요소여야 하므로 여기서 되돌린다 — 배지 파일은 다른 화면도 쓴다. */
+.ms-plan-slot {
+  display: inline-flex;
+}
+.ms-plan-slot .plan-badge {
+  position: static;
+  box-shadow: none;
+}
+
+/* 입장 연출 중의 유일한 furniture — 대진 한 줄(시계·스코어 없음). */
+.ms-topbar--prematch {
+  justify-content: center;
+}
+.ms-prematch {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin: 0;
+}
+.ms-prematch__teams {
+  font-size: var(--fs-h2);
+  font-weight: 800;
+  color: var(--t-hi);
+}
+.ms-prematch__ctx {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: var(--ls-caps);
+  color: var(--t-low);
+}
+
+/* ── 스테이지 ─────────────────────────────────────────────────────── */
+.ms-stage {
+  position: relative; /* 라이브 스탯 HUD의 위치 기준 */
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  width: 100%;
+  max-width: var(--w-wide);
+  margin: 0 auto;
+  padding: var(--sp-4);
+  min-width: 0;
+}
+
+/* 피치 — **고정 종횡비**. 남는 높이를 배분받지 않으므로 0px가 될 수 없다.
+   3D/2D 캔버스는 풀블리드다(테두리·radius 없음) — 방송에 "창 안의 창"은 없다. */
 .ms-pitch-wrap {
-  flex: 1 1 0;
-  min-height: 0;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
+  aspect-ratio: 105 / 68;
+  max-height: 64vh;
 }
-/* 피치는 105:68 비율을 유지하며 가용 폭을 최대한 쓴다. width:100%로 넓게 펴되
-   높이가 넘치면 max-height로 캡되며 비율 유지(세로 녹색 여백 최소화). */
 .ms-pitch-wrap > .pv-root {
   width: 100%;
   height: auto;
@@ -49,187 +121,175 @@
   max-height: 100%;
   aspect-ratio: 105 / 68;
 }
+/* 킥오프 전에는 설계가 주인공이다 — 피치를 배경 띠로 줄이고 워룸에 자리를 준다. */
+.ms-stage--pre .ms-pitch-wrap {
+  max-height: 30vh;
+}
 
-/* ── 모드 전환: 방송 디밍 + 작전판 슬라이드 업 ────────────────
-   ★ Task 4: 방송(broadcast)과 작전판(tactics)을 확연히 다른 화면으로 분리한다.
-   tacticsMode 진입 시 스테이지가 어두워지고(dim) 작전판 레이어가 아래에서 올라온다.
-   이탈(--exiting) 시 역방향으로 내려가며 사라진다. reduced-motion 시 즉시 전환. */
-.ms-stage {
-  transition: filter 0.6s ease, opacity 0.6s ease;
-}
-.ms-stage--dim {
-  filter: brightness(0.4) saturate(0.7);
-  opacity: 0.6;
-}
-/* 작전판 오버레이 — 방송 위 전면. entrance 애니메이션(슬라이드 업 + 페이드). */
-.ms-tactics-layer {
+/* ── 라이브 스탯 HUD — 좌하단 game assist 슬롯 ───────────────────────
+   스코어버그와 물리적으로 떨어져 있어야 한다. 스코어(이벤트 단위)와 스탯(분 단위)은
+   갱신 주기가 다르고, 한 덩어리로 묶으면 매 분 스코어까지 다시 읽게 된다.
+   기준은 `.ms-stage`다 — 재생 중 스테이지의 유일한 흐름 자식이 피치이므로
+   스테이지 좌하단이 곧 피치 좌하단이다. */
+.ms-hud {
   position: absolute;
-  inset: 12px;
-  z-index: 40;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 -12px 48px -8px rgba(0, 0, 0, 0.7);
-  animation: ms-tactics-in 0.6s ease both;
+  left: var(--sp-4);
+  bottom: var(--sp-4);
+  z-index: var(--z-furniture);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 224px;
+  max-width: 40%;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--s-scrim);
+  backdrop-filter: blur(8px);
 }
-/* 이탈 — 역연출(아래로 내려가며 페이드 아웃). */
-.ms-tactics-layer--exiting {
-  animation: ms-tactics-out 0.6s ease both;
-  pointer-events: none;
+.ms-hud__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  letter-spacing: var(--ls-caps);
+  color: var(--t-mid);
 }
-@keyframes ms-tactics-in {
-  from { transform: translateY(6%); opacity: 0; }
-  to   { transform: translateY(0);  opacity: 1; }
+.ms-hud__title {
+  color: var(--t-low);
+  font-weight: 700;
 }
-@keyframes ms-tactics-out {
-  from { transform: translateY(0);  opacity: 1; }
-  to   { transform: translateY(6%); opacity: 0; }
+.ms-hud__counts {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--t-hi);
 }
-/* ms-root는 작전판 오버레이의 위치 기준(absolute inset). */
-.ms-root--broadcast {
-  position: relative;
+.ms-hud__caption {
+  margin: 0;
+  font-size: var(--fs-xs);
+  color: var(--t-low);
+}
+/* 표본이 모자라 억제 중 — 팀 색을 쓰지 않는다. 색은 "값이 있다"는 주장이다. */
+.statbar__track--muted .statbar__us,
+.statbar__track--muted .statbar__them {
+  background: var(--s-3);
+}
+.statbar__track--muted .statbar__them {
+  background: var(--s-line-strong);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .ms-stage {
-    transition: none;
-  }
-  .ms-tactics-layer,
-  .ms-tactics-layer--exiting {
-    animation-duration: 0.01s;
-  }
-}
-
-/* ── 상단 방송 배너 (피치 밖, 스코어버그 아래 얇은 바) ──────────────
-   in-flow 요소이므로 피치를 밀어낼 뿐 덮지 않는다. */
+/* ── 방송 배너(순간 제안 · 상대 감독 통보) ──────────────────────────── */
 .ms-banner {
-  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 8px 14px;
-  border: 1px solid var(--bc-line);
-  border-radius: 10px;
-  background: linear-gradient(180deg, var(--bc-panel-2), var(--bc-panel));
-  font-size: 13px;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-4);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--s-1);
+  font-size: var(--fs-sm);
   font-weight: 700;
+  line-height: var(--lh-md);
 }
+/* 감독의 결정을 요구하는 배너 — 4변 테두리 색조로 말한다(좌측 띠 금지). */
 .ms-banner--moment {
-  border-color: var(--bc-accent);
-  box-shadow: 0 0 18px -6px var(--bc-accent);
+  border-color: var(--brand-line);
+  background: color-mix(in srgb, var(--brand) 6%, var(--s-1));
 }
-/* 상대 감독 통보 — 감독의 결정을 요구하지 않는 정보성 배너라 순간 제안보다 조용하게. */
+/* 상대 감독 통보 — 결정을 요구하지 않는 정보성이라 조용하게. */
 .ms-banner--opp {
-  border-color: var(--bc-line);
-  opacity: 0.92;
   font-weight: 600;
+  color: var(--t-mid);
 }
 .ms-banner__text {
-  color: var(--bc-text);
+  color: var(--t-hi);
 }
 .ms-banner__actions {
   display: inline-flex;
-  gap: 6px;
+  gap: var(--sp-2);
   flex: 0 0 auto;
 }
 
-/* ── 골 드라마 오버레이 (플래시 + 대형 GOAL! 타이포) ──────────────
-   피치 위 순간 이펙트: pointer-events 없음(상호작용 차단 안 함), 애니메이션 후 사라짐.
-   score(홈 득점)=밝은 라임 폭발 / concede(실점)=어두운 침묵 연출로 차별화. */
+/* ── 골 드라마 — 피치 위 순간 이펙트(pointer-events 없음) ───────────── */
 .ms-drama {
   position: absolute;
   inset: 0;
-  z-index: 30;
+  z-index: var(--z-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   pointer-events: none;
 }
-.ms-drama__flash {
-  position: absolute;
-  inset: 0;
-  animation: ms-flash 0.3s ease-out forwards;
-}
-.ms-drama--score .ms-drama__flash {
-  background: radial-gradient(circle at 50% 44%, rgba(200, 245, 66, 0.55), rgba(255, 255, 255, 0.14) 55%, transparent 72%);
-}
-.ms-drama--concede .ms-drama__flash {
-  background: radial-gradient(circle at 50% 44%, rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.28) 55%, transparent 74%);
-}
-@keyframes ms-flash {
-  from { opacity: 1; }
-  to   { opacity: 0; }
-}
 .ms-drama__word {
-  position: relative;
+  font-size: var(--fs-display);
   font-weight: 900;
-  letter-spacing: 0.03em;
-  font-size: clamp(48px, 12vw, 132px);
-  animation: ms-goalword 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  letter-spacing: var(--ls-display);
+  animation: ms-goalword 1.2s var(--ease-out) forwards;
 }
+/* 득점 = --good, 실점 = --danger. 방송 관례 그대로 "경기 중 가장 큰 소리". */
 .ms-drama--score .ms-drama__word {
-  color: var(--bc-accent);
-  text-shadow: 0 4px 32px rgba(200, 245, 66, 0.6), 0 2px 5px rgba(0, 0, 0, 0.55);
+  color: var(--good);
+  text-shadow: 0 2px 24px color-mix(in srgb, var(--good) 45%, transparent);
 }
 .ms-drama--concede .ms-drama__word {
-  color: #cdd6e6;
-  font-size: clamp(30px, 7vw, 70px);
-  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.75);
+  color: var(--t-mid);
+  font-size: var(--fs-h1);
 }
 @keyframes ms-goalword {
-  0%   { opacity: 0; transform: translateX(-14%) scale(0.82); }
-  18%  { opacity: 1; transform: translateX(0) scale(1.06); }
-  70%  { opacity: 1; transform: translateX(0) scale(1); }
-  100% { opacity: 0; transform: translateX(7%) scale(1); }
+  0%   { opacity: 0; transform: translateX(-8%); }
+  18%  { opacity: 1; transform: translateX(0); }
+  70%  { opacity: 1; transform: translateX(0); }
+  100% { opacity: 0; transform: translateX(4%); }
 }
 
-/* 득점자 배너 — 하단(티커 위), 이름 + 분. 순간 노출 후 dwell 동안 유지. */
+/* 득점자 배너 — 피치 하단 중앙. 티커는 이제 하단 바 안에 있어 겹치지 않는다. */
 .ms-scorer {
   position: absolute;
   left: 50%;
-  bottom: 58px;
+  bottom: var(--sp-4);
   transform: translateX(-50%);
-  z-index: 25;
+  z-index: var(--z-overlay);
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 16px;
-  border-radius: 999px;
-  border: 1px solid var(--bc-accent);
-  background: rgba(10, 18, 32, 0.82);
-  box-shadow: 0 8px 30px -6px rgba(0, 0, 0, 0.7);
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--s-line);
+  background: var(--s-scrim);
+  backdrop-filter: blur(8px);
   pointer-events: none;
-  animation: ms-scorer-in 0.4s ease-out;
+  animation: ms-scorer-in var(--dur-2) var(--ease-out);
 }
 .ms-scorer__tag {
-  padding: 2px 10px;
-  border-radius: 999px;
-  background: var(--bc-accent);
-  color: #06131f;
-  font-size: 12px;
-  font-weight: 800;
+  flex: 0 0 auto;
 }
-.ms-scorer__tag--concede { background: var(--bc-danger); color: #fff; }
-.ms-scorer__name { font-size: 15px; font-weight: 800; color: var(--bc-text); }
+.ms-scorer__name {
+  font-size: var(--fs-lg);
+  font-weight: 800;
+  color: var(--t-hi);
+}
 .ms-scorer__min {
-  font-size: 13px;
-  color: var(--bc-text-dim);
-  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-sm);
+  color: var(--t-mid);
 }
 @keyframes ms-scorer-in {
   from { opacity: 0; transform: translate(-50%, 12px); }
   to   { opacity: 1; transform: translate(-50%, 0); }
 }
 
-/* 위험 순간 비네팅 — 가장자리가 붉게 어두워졌다 사라진다(xG 0.25+ 찬스). */
+/* 위험 순간 비네팅 — 가장자리가 붉게 어두워졌다 사라진다. */
 .ms-vignette {
   position: absolute;
   inset: 0;
-  z-index: 24;
+  z-index: var(--z-overlay);
   pointer-events: none;
-  box-shadow: inset 0 0 110px 18px rgba(255, 93, 93, 0.5);
-  animation: ms-vignette 0.5s ease-out forwards;
+  box-shadow: inset 0 0 110px 18px color-mix(in srgb, var(--danger) 42%, transparent);
+  animation: ms-vignette 0.5s var(--ease-out) forwards;
 }
 @keyframes ms-vignette {
   0%   { opacity: 0; }
@@ -238,193 +298,438 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  /* 동작 최소화: 순간 이펙트는 생략(플래시·타이포·비네팅), 배너는 정적 노출. */
   .ms-drama,
   .ms-vignette { display: none; }
   .ms-scorer { animation: none; }
 }
 
-/* ── 킥오프 전 전술 센터 — 방송 스테이지 아래에 붙는 워룸. 피치를 가리지 않는다.
-   'pre'에선 피치를 얇은 배경 띠로 줄이고 남은 높이를 전부 워룸에 준다
-   (설계가 주인공인 시점). min-height:0이 없으면 flex 자식이 축소되지 않아
-   스테이지(overflow:hidden) 밖으로 내용이 잘려 나간다. ── */
+/* ── 킥오프 전 워룸 ─────────────────────────────────────────────────
+   내부 스크롤을 걸지 않는다. 문서가 자라고 문서가 스크롤한다. */
 .ms-precenter {
-  flex: 1 1 auto;
   width: 100%;
   min-width: 0;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 8px 0 4px;
-}
-.ms-stage--pre .ms-pitch-wrap {
-  flex: 0 0 auto;
-  max-height: 24vh;
 }
 
-/* ── 하단 바 (킥오프 / 풀타임 스탯·액션) — 피치 아래, 덮지 않음 ────── */
-.ms-bottom {
-  flex: 0 0 auto;
+/* ── 하단 액션 바 — 외침 + 중계 티커 ────────────────────────────────── */
+.ms-bottombar {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--z-furniture);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 14px;
-  border: 1px solid var(--bc-line);
-  border-radius: 10px;
-  background: var(--bc-panel);
-}
-.ms-bottom--full {
-  flex-direction: column;
-  max-height: 52%;
-  overflow-y: auto;
-  text-align: center;
-}
-.ms-bottom__info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.ms-bottom__title {
-  font-size: 14px;
-  font-weight: 800;
-}
-.ms-bottom__note {
-  font-size: 12px;
-  color: var(--bc-text-dim);
+  gap: var(--sp-4);
+  min-height: var(--h-bottombar);
+  padding: var(--sp-2) var(--sp-4);
+  /* 완전 불투명 — 반투명이면 아래로 흐르는 콘텐츠가 비쳐 두 겹으로 읽힌다. */
+  background: var(--s-0);
+  border-top: 1px solid var(--s-line);
 }
 
-/* ── 버튼 ─────────────────────────────────────────── */
-.ms-btn {
-  padding: 12px 24px;
-  border: 1px solid var(--bc-line);
-  border-radius: 10px;
-  background: var(--bc-panel-2);
-  color: var(--bc-text);
+/* 터치라인 외침 — 진행 바를 없앴다. 상태는 버튼 자신이 말한다
+   (disabled + 원형 쿨다운 링). 라임 채움 버튼도 폐지 — 라임은 CTA 색이 아니다. */
+.sb-root {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  flex: 0 0 auto;
+}
+.sb-btn {
+  gap: var(--sp-1);
+}
+.sb-ring {
+  flex: 0 0 auto;
+  /* 12시 방향에서 시계방향으로 줄어드는 호 */
+  transform: rotate(-90deg);
+}
+.sb-ring__track {
+  fill: none;
+  stroke: var(--s-3);
+  stroke-width: 3;
+}
+.sb-ring__arc {
+  fill: none;
+  stroke: var(--t-mid);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.sb-cool {
+  font-size: var(--fs-xs);
+  color: var(--t-low);
+  white-space: nowrap;
+}
+
+/* ── 풀타임 리포트 ─────────────────────────────────────────────────── */
+.ms-report {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  width: 100%;
+  max-width: var(--w-read);
+  margin: 0 auto;
+  padding: var(--sp-5) 0;
+}
+.ms-report__head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.ms-report__actions {
+  display: flex;
+  justify-content: center;
+}
+.ms-final {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-5);
+}
+.ms-final__team {
+  display: inline-flex;
+  align-items: stretch;
+  gap: var(--sp-2);
+  font-size: var(--fs-lg);
+  font-weight: 800;
+  letter-spacing: var(--ls-caps);
+  color: var(--t-mid);
+}
+.ms-final__score {
+  font-size: var(--fs-score);
+  font-weight: 900;
+  line-height: var(--lh-tight);
+  color: var(--t-hi);
+}
+
+/* ── 모드 전환: 작전판 오버레이 ─────────────────────────────────────
+   전체 화면 시트다. 예전 inset:12px + overflow:hidden은 390px에서 572px 중 79%를
+   하드클립해 모바일에서 교체가 불가능했다.
+   문서 스크롤을 쓸 수 없는 유일한 자리라(고정 시트) `.scroll-y`로 보이는 스크롤바를
+   반드시 붙인다 — 스크롤 가능하다는 사실 자체가 전달되지 않으면 다시 은닉이 된다. */
+.ms-tactics-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  background: var(--s-0);
+  animation: ms-tactics-in var(--dur-3) var(--ease-out) both;
+}
+.ms-tactics-layer--exiting {
+  animation: ms-tactics-out var(--dur-3) var(--ease-in) both;
+  pointer-events: none;
+}
+@keyframes ms-tactics-in {
+  from { transform: translateY(2%); opacity: 0; }
+  to   { transform: translateY(0);  opacity: 1; }
+}
+@keyframes ms-tactics-out {
+  from { transform: translateY(0);  opacity: 1; }
+  to   { transform: translateY(2%); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ms-tactics-layer,
+  .ms-tactics-layer--exiting {
+    animation-duration: 1ms;
+  }
+}
+
+/* ============================================================================
+   sm(<720px) — **여기서 게임이 실제로 플레이 가능해야 한다.**
+   세로 스택: 스코어버그 → 제어 → 피치(고정 종횡비) → 스탯 → 하단 고정 액션 바.
+   ========================================================================== */
+@media (max-width: 719px) {
+  .ms-topbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-3);
+  }
+  .ms-controls {
+    justify-content: flex-start;
+  }
+  .ms-stage {
+    padding: var(--sp-3);
+    gap: var(--sp-3);
+  }
+  /* 세로 화면에서는 피치가 뷰포트를 독차지하지 않게 조금 더 조인다. */
+  .ms-pitch-wrap,
+  .ms-stage--pre .ms-pitch-wrap {
+    max-height: 48vh;
+  }
+  /* HUD를 피치 위에 겹치면 도트를 덮는다 — 아래로 내려 흐름 요소로 만든다. */
+  .ms-hud {
+    position: static;
+    max-width: none;
+    background: var(--s-1);
+  }
+  .ms-bottombar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sp-2);
+    padding: var(--sp-2) var(--sp-3);
+  }
+  .sb-root {
+    flex-wrap: wrap;
+  }
+}
+
+/* ============================================================================
+   팀 토크 (하프타임 작전판 상단 카드)
+   ========================================================================== */
+.tt-root {
+  margin: 0;
+}
+.tt-label {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-eyebrow);
+  font-weight: 800;
+  letter-spacing: var(--ls-caps);
+  color: var(--t-low);
+}
+.tt-morale {
+  margin: 0 0 var(--sp-3);
+}
+.tt-morale__bar {
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--s-2);
+  overflow: hidden;
+  border: 1px solid var(--s-line);
+}
+/* 사기는 낮음→높음 한 축이다. 구간 색(경고→성공)만 쓰고 그라디언트는 두 색으로 줄인다. */
+.tt-morale__fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--danger), var(--warn) 50%, var(--good));
+  transition: width var(--dur-2) var(--ease-out);
+}
+.tt-morale__status {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
+  color: var(--t-mid);
+}
+.tt-btns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sp-2);
+}
+.tt-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-height: var(--tap-min);
+  padding: var(--sp-3);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--s-2);
+  color: var(--t-hi);
   font-family: inherit;
-  font-size: 15px;
-  font-weight: 700;
+  text-align: left;
   cursor: pointer;
 }
-.ms-btn--primary {
-  background: var(--bc-accent);
-  border-color: var(--bc-accent);
-  color: #0b1220;
-}
-.ms-btn--primary:hover {
-  filter: brightness(1.05);
-}
-.ms-btn--sm {
-  padding: 6px 12px;
-  font-size: 13px;
-  border-radius: 8px;
-}
-.ms-btn--ghost {
-  background: transparent;
-}
-/* 재생 중 [⏸ 감독 타임] — 스코어버그 옆(상단 furniture 영역, 우상단 속도 토글과 안 겹침). */
-.ms-live-controls {
-  position: absolute;
-  top: 18px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 21;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-/* ── 음소거 토글 — 스코어버그 바로 아래(좌상단) ────────────── */
-.ms-mute {
-  position: absolute;
-  top: 62px;
-  left: 16px;
-  z-index: 21;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  border: 1px solid var(--bc-line);
-  border-radius: 9px;
-  background: linear-gradient(180deg, var(--bc-panel-2), var(--bc-panel));
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-}
-.ms-mute[aria-pressed='true'] {
-  opacity: 0.65;
-}
-
-/* ── TTS 해설 토글 — 음소거 바로 오른쪽 ──────────────────────── */
-.ms-tts {
-  position: absolute;
-  top: 62px;
-  left: 58px;
-  z-index: 21;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  padding: 0;
-  border: 1px solid var(--bc-line);
-  border-radius: 9px;
-  background: linear-gradient(180deg, var(--bc-panel-2), var(--bc-panel));
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-}
-/* OFF일 때 흐리게 표시(음소거 버튼과 반대 방향 — 여기선 aria-pressed=false가 꺼짐). */
-.ms-tts[aria-pressed='false'] {
-  opacity: 0.5;
-}
-
-/* ── 2D/3D 렌더러 토글 — TTS 바로 오른쪽. 현재 모드를 글자로 표시한다. ── */
-.ms-r3d {
-  position: absolute;
-  top: 62px;
-  left: 100px;
-  z-index: 21;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 36px;
-  height: 34px;
-  padding: 0 8px;
-  border: 1px solid var(--bc-line);
-  border-radius: 9px;
-  background: linear-gradient(180deg, var(--bc-panel-2), var(--bc-panel));
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
-  color: var(--bc-text-dim);
-  font-family: var(--bc-font);
-  font-size: 12px;
+.tt-btn__tone {
+  font-size: var(--fs-md);
   font-weight: 800;
-  letter-spacing: 0.04em;
-  line-height: 1;
-  cursor: pointer;
 }
-/* 3D일 때 강조(현재 모드가 한눈에 보이게). */
-.ms-r3d[aria-pressed='true'] {
-  color: var(--bc-text);
-  border-color: color-mix(in srgb, var(--bc-home) 55%, var(--bc-line));
+.tt-btn__line {
+  font-size: var(--fs-xs);
+  font-weight: 500;
+  line-height: var(--lh-md);
+  color: var(--t-mid);
+}
+.tt-btn__badge {
+  position: absolute;
+  top: calc(-1 * var(--sp-2));
+  right: var(--sp-2);
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--brand);
+  color: var(--t-on-brand);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  letter-spacing: var(--ls-caps);
+}
+.tt-btn--rec {
+  border-color: var(--brand-line);
+  background: color-mix(in srgb, var(--brand) 6%, var(--s-2));
+}
+.tt-btn:hover:not(:disabled) {
+  border-color: var(--brand);
+}
+.tt-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
-/* ── 3D 매치 뷰 호스트 — SVG pv-root·pixi-pitch와 동일 비율 규칙 ── */
+/* 선택 즉시 효과 배너 — 4변 테두리 색조 + 배경 틴트(좌측 띠 금지). */
+.tt-banner {
+  margin: var(--sp-3) 0 0;
+  padding: var(--sp-4);
+  border-radius: var(--r-md);
+  border: 1px solid var(--s-line);
+  background: var(--s-1);
+  animation: tt-banner-pop var(--dur-2) var(--ease-out);
+}
+@keyframes tt-banner-pop {
+  from { transform: scale(0.96); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tt-banner { animation: none; }
+  .tt-morale__fill { transition: none; }
+}
+.tt-banner--up {
+  border-color: var(--good-line);
+  background: color-mix(in srgb, var(--good) 6%, var(--s-1));
+}
+.tt-banner--down {
+  border-color: var(--danger-line);
+  background: color-mix(in srgb, var(--danger) 6%, var(--s-1));
+}
+.tt-banner__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: 0;
+}
+.tt-banner__text {
+  font-size: var(--fs-h2);
+  font-weight: 800;
+}
+.tt-banner--up .tt-banner__text { color: var(--good); }
+.tt-banner--down .tt-banner__text { color: var(--danger); }
+.tt-banner__note {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
+  color: var(--t-mid);
+}
+.tt-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+  margin: var(--sp-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+.tt-reactions__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+.tt-reactions__name {
+  font-size: var(--fs-xs);
+  color: var(--t-mid);
+}
+.tt-done {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--t-mid);
+  font-weight: 700;
+}
+
+/* ============================================================================
+   승부차기 패널 (풀타임 리포트 안)
+   ========================================================================== */
+.so-panel {
+  text-align: center;
+  width: 100%;
+}
+.so-title {
+  margin: 0 0 var(--sp-3);
+  font-size: var(--fs-h1);
+  font-weight: 800;
+  line-height: var(--lh-tight);
+}
+.so-note {
+  margin: 0 0 var(--sp-4);
+  color: var(--t-mid);
+  font-size: var(--fs-md);
+  line-height: var(--lh-md);
+}
+.so-setup {
+  list-style: none;
+  margin: 0 0 var(--sp-4);
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.so-slot {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.so-slot__no {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: var(--r-pill);
+  background: var(--s-2);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  color: var(--t-mid);
+}
+/* 네이티브 select는 원칙적으로 쓰지 않지만, 후보가 10인 이상인 목록은
+   세그먼트로 표현할 수 없다. 명시적 예외로 남기고 토큰으로 스킨만 맞춘다. */
+.so-slot__pick {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--s-2);
+  color: var(--t-hi);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+}
+.so-kicks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+/* 소속은 킷 스트립이 말한다 — 좌측 컬러 띠 금지. */
+.so-kick {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-md);
+  border: 1px solid var(--s-line);
+  background: var(--s-1);
+  font-size: var(--fs-sm);
+}
+.so-kick__who {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+}
+.so-kick--goal .so-kick__mark {
+  color: var(--good);
+  font-weight: 800;
+}
+.so-kick--miss .so-kick__mark {
+  color: var(--danger);
+  font-weight: 800;
+}
+
+/* ============================================================================
+   3D 매치 뷰 호스트 — SVG pv-root·pixi-pitch와 동일 비율 규칙
+   ========================================================================== */
 .m3d-host {
   width: 100%;
   max-width: 100%;
   max-height: 100%;
   aspect-ratio: 105 / 68;
-  border-radius: 8px;
   overflow: hidden;
-  /* three 청크(724kB)를 await import 하는 동안 이 빈 div가 이미 마운트돼 있다.
-     Suspense 폴백은 Match3D 청크까지만 가려주므로, 그 사이 검은 사각형이 뜨지 않게
-     pixi-pitch·SVG 피치와 같은 잔디색을 깔아 "피치 상시 노출" 원칙을 지킨다. */
-  background: var(--bc-pitch);
+  /* three 청크를 await import 하는 동안 이 빈 div가 이미 마운트돼 있다.
+     그 사이 검은 사각형이 뜨지 않게 피치와 같은 잔디색을 깐다. */
+  background: var(--pitch-grass);
   position: relative;
   line-height: 0;
 }
@@ -434,464 +739,91 @@
   height: 100%;
 }
 
-/* ── 재생 속도 토글 — 스코어버그 맞은편(우상단) ────────────── */
-.ms-speed {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 20;
-  display: inline-flex;
-  gap: 2px;
-  padding: 4px;
-  border: 1px solid var(--bc-line);
-  border-radius: 10px;
-  background: linear-gradient(180deg, var(--bc-panel-2), var(--bc-panel));
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
-}
-.ms-speed__btn {
-  min-width: 34px;
-  padding: 5px 8px;
-  border: 0;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--bc-text-dim);
-  font-family: var(--bc-font);
-  font-size: 12px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  cursor: pointer;
-}
-.ms-speed__btn--active {
-  background: var(--bc-accent);
-  color: var(--bc-bg);
-}
-
-/* ── 최종 스코어 + 스탯 표 ─────────────────────────────── */
-.ms-final {
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-.ms-final__code {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--bc-text-dim);
-}
-.ms-final__score {
-  font-size: 36px;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-}
-.ms-stats {
-  width: 100%;
-  margin: 0 0 18px;
-  border-collapse: collapse;
-  font-variant-numeric: tabular-nums;
-}
-.ms-stats td,
-.ms-stats th {
-  padding: 6px 8px;
-  font-size: 14px;
-  border-bottom: 1px solid var(--bc-line);
-}
-.ms-stats__label {
-  color: var(--bc-text-dim);
-  font-weight: 600;
-  font-size: 12px;
-  letter-spacing: 0.04em;
-}
-.ms-stats__home {
-  text-align: right;
-  color: var(--bc-home);
-  font-weight: 700;
-}
-.ms-stats__away {
-  text-align: left;
-  color: var(--bc-away);
-  font-weight: 700;
-}
-
-/* ── 팀 토크 (하프타임 콘솔 상단 카드) ─────────────────────── */
-.tt-root {
-  margin: 0;
-}
-.tt-label {
-  margin: 0 0 8px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  color: var(--bc-text-dim);
-}
-/* 사전 정보 — 팀 사기 게이지 */
-.tt-morale {
-  margin: 0 0 10px;
-}
-.tt-morale__bar {
-  height: 8px;
-  border-radius: 999px;
-  background: var(--bc-panel-2);
-  overflow: hidden;
-  border: 1px solid var(--bc-line);
-}
-.tt-morale__fill {
-  height: 100%;
-  background: linear-gradient(90deg, #d9534f 0%, #f0ad4e 50%, #5cb85c 100%);
-  transition: width 0.4s ease;
-}
-.tt-morale__status {
-  margin: 5px 0 0;
-  font-size: 12px;
-  color: var(--bc-text-dim);
-}
-.tt-btns {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-}
-.tt-btn {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px 12px;
-  border: 1px solid var(--bc-line);
-  border-radius: 8px;
-  background: var(--bc-panel-2);
-  color: var(--bc-text);
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.tt-btn__tone {
-  font-size: 14px;
-  font-weight: 800;
-}
-.tt-btn__line {
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1.4;
-  color: var(--bc-text-dim);
-}
-.tt-btn__badge {
-  position: absolute;
-  top: -8px;
-  right: 8px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--bc-accent);
-  color: #06131f;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-}
-.tt-btn--rec {
-  border-color: var(--bc-accent);
-}
-.tt-btn:hover:not(:disabled) {
-  border-color: var(--bc-accent);
-}
-.tt-btn:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-/* 선택 즉시 효과 배너 */
-.tt-banner {
-  margin: 12px 0 0;
-  padding: 14px 16px;
-  border-radius: 10px;
-  border: 1px solid var(--bc-line);
-  animation: tt-banner-pop 0.35s ease;
-}
-@keyframes tt-banner-pop {
-  from { transform: scale(0.92); opacity: 0; }
-  to   { transform: scale(1); opacity: 1; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .tt-banner { animation: none; }
-  .tt-morale__fill { transition: none; }
-}
-.tt-banner--up   { background: rgba(92, 184, 92, 0.14); border-color: #5cb85c; }
-.tt-banner--down { background: rgba(217, 83, 79, 0.16); border-color: #d9534f; }
-.tt-banner--flat { background: var(--bc-panel-2); }
-.tt-banner__head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0;
-}
-.tt-banner__icon { font-size: 24px; }
-.tt-banner__text { font-size: 18px; font-weight: 800; }
-.tt-banner--up .tt-banner__text   { color: #7ddc7d; }
-.tt-banner--down .tt-banner__text { color: #ff8a86; }
-.tt-banner__note {
-  margin: 6px 0 0;
-  font-size: 12px;
-  font-style: italic;
-  color: var(--bc-text-dim);
-}
-.tt-reactions {
-  display: flex;
-  gap: 14px;
-  margin: 10px 0 0;
-  padding: 0;
-  list-style: none;
-}
-.tt-reactions__item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-}
-.tt-reactions__icon { font-size: 20px; }
-.tt-reactions__name { font-size: 11px; color: var(--bc-text-dim); }
-.tt-done {
-  margin: 8px 0 0;
-  font-size: 12px;
-  color: var(--bc-accent);
-  font-weight: 700;
-}
-
-/* ── 승부차기 패널 (풀타임 하단 바 내부) ───────────────────── */
-.so-panel {
-  text-align: center;
-  width: 100%;
-}
-.so-title {
-  margin: 0 0 12px;
-  font-size: 20px;
-  font-weight: 800;
-  letter-spacing: 0.01em;
-}
-.so-note {
-  margin: 0 0 18px;
-  color: var(--bc-text-dim);
-  font-size: 14px;
-}
-.so-setup {
-  list-style: none;
-  margin: 0 0 16px;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.so-slot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.so-slot__no {
-  width: 22px;
-  height: 22px;
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  background: var(--bc-panel-2);
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--bc-text-dim);
-}
-.so-slot__pick {
-  flex: 1;
-  min-width: 0;
-  padding: 8px;
-  border: 1px solid var(--bc-line);
-  border-radius: 8px;
-  background: var(--bc-panel-2);
-  color: var(--bc-text);
-  font-family: inherit;
-  font-size: 13px;
-}
-.so-slot__dir {
-  width: 40px;
-  flex: 0 0 auto;
-  padding: 8px 0;
-  border: 1px solid var(--bc-line);
-  border-radius: 8px;
-  background: var(--bc-panel-2);
-  color: var(--bc-accent);
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 800;
-  cursor: pointer;
-}
-.so-kicks {
-  list-style: none;
-  margin: 0 0 4px;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.so-kick {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--bc-line);
-  font-size: 13px;
-}
-.so-kick--home {
-  border-left: 3px solid var(--bc-home);
-}
-.so-kick--away {
-  border-left: 3px solid var(--bc-away);
-}
-.so-kick--goal .so-kick__mark {
-  color: var(--bc-accent);
-  font-weight: 800;
-}
-.so-kick--miss .so-kick__mark {
-  color: var(--bc-danger);
-  font-weight: 800;
-}
-
-@media (max-width: 720px) {
-  .ms-root {
-    flex-direction: column;
-    height: auto;
-  }
-  .ms-stage {
-    height: 60vh;
-  }
-}
-
-/* ── 터치라인 외침 바(broadcast 하단) — 재생 중 즉시 사기 보정 ────────
-   4버튼 [독려][더 뛰어][침착][칭찬] + 10분 쿨다운 진행 바. 정지 없음. */
-.sb-root {
-  flex: 0 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 8px 14px;
-  border-top: 1px solid rgba(200, 245, 66, 0.25);
-  background: rgba(6, 14, 10, 0.55);
-}
-.sb-btns {
-  display: flex;
-  gap: 8px;
-}
-.sb-btn {
-  padding: 6px 16px;
-  border: 1px solid var(--bc-accent);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--bc-accent);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 800;
-  cursor: pointer;
-}
-.sb-btn:hover:not(:disabled) {
-  background: var(--bc-accent);
-  color: #0a1408;
-}
-.sb-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.sb-cool {
-  position: relative;
-  flex: 1 1 0;
-  min-width: 120px;
-  max-width: 260px;
-  height: 16px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  overflow: hidden;
-}
-.sb-cool__bar {
-  position: absolute;
-  inset: 0 auto 0 0;
-  background: var(--bc-accent);
-  opacity: 0.55;
-  transition: width 0.3s ease;
-}
-.sb-cool__text {
-  position: relative;
-  display: block;
-  text-align: center;
-  line-height: 16px;
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--bc-text);
-}
-
-/* ── 3D 하이라이트 ↔ 2D 작전판 전환 ─────────────────────────────
+/* ============================================================================
+   3D 하이라이트 ↔ 2D 작전판 전환 (AnalysisBoard의 스킨)
+   ----------------------------------------------------------------------------
    작전판은 라이브 위에 **겹쳐** 두고 opacity로 오간다(3D 언마운트 금지 —
    WebGL 컨텍스트 재생성이 매 하이라이트마다 히치를 만든다).
 
    전환 방향이 비대칭인 것이 핵심이다:
     · 라이브 → 분석(--on 부여): 0.26s 디졸브. 분석 보드는 "다른 카메라"가 아니라
-      다른 매체라, 컷으로 바꾸면 화면이 고장 난 것처럼 읽힌다. 실제 중계도
-      전술 분석 화면으로는 디졸브/와이프로 넘어간다.
-    · 분석 → 라이브(--on 제거): 하드 컷(transition 0s). 사건은 이미 시작됐고
-      디졸브 0.26s는 슛 모션의 앞부분을 먹는다. 컷 자체가 "지금 무슨 일이 난다"는
-      방송 신호다 — 리플레이에서 라이브로 돌아올 때 아무도 디졸브를 쓰지 않는다. */
-.ms-pitch-wrap { position: relative; }
+      다른 매체라, 컷으로 바꾸면 화면이 고장 난 것처럼 읽힌다.
+    · 분석 → 라이브(--on 제거): 하드 컷. 사건은 이미 시작됐고 디졸브는 슛 모션의
+      앞부분을 먹는다. 컷 자체가 "지금 무슨 일이 난다"는 방송 신호다.
+   ========================================================================== */
 .ab-root {
   position: absolute;
   inset: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 6px 8px 4px;
-  border-radius: 8px;
-  background: var(--bc-board, #0e1622);
+  gap: var(--sp-1);
+  padding: var(--sp-2);
+  background: var(--pitch-bg);
   opacity: 0;
   pointer-events: none;
-  /* 분석 → 라이브: 컷. */
-  transition: opacity 0s;
+  transition: opacity 0s; /* 분석 → 라이브: 컷 */
 }
 .ab-root--on {
   opacity: 1;
-  /* 라이브 → 분석: 디졸브. */
-  transition: opacity 0.26s ease-out;
+  transition: opacity 0.26s var(--ease-out); /* 라이브 → 분석: 디졸브 */
 }
-/* 보드는 남는 높이를 다 쓰고 105:68을 지킨다. width:100%로 두면 가로가 남을 때
-   viewBox가 좌우로 레터박스되어 도트가 화면 가운데로 몰린다. */
+/* 보드는 남는 공간에 **완전히 fit**한다(레터박스 허용, 크롭 금지).
+   aspect-ratio로 크기를 강제하면 좁은 화면에서 상하가 잘리거나(예전 결함) 반대로
+   폭의 1/3만 쓰는 미니 피치가 됐다(390px 실측 123×79). SVG의 viewBox와
+   preserveAspectRatio가 이미 비율을 지키므로 박스만 채워 주면 된다. */
 .ab-root > .pv-root {
-  flex: 1 1 0;
-  min-height: 0;
-  width: auto;
+  flex: 1 1 auto;
+  /* 피치가 먼저다 — 정보 바(캡션·범례)가 줄바꿈으로 부풀어도 보드의 절반 아래로는
+     내려가지 않는다(390px에서 피치가 79px까지 눌렸던 실측 회귀 방지). */
+  min-height: 45%;
+  width: 100%;
   height: 100%;
   max-width: 100%;
-  aspect-ratio: 105 / 68;
   margin: 0 auto;
 }
-
-/* 정보 바는 **아래**에 둔다 — 위는 스코어버그·플랜 배지가 이미 쓰고 있어 겹친다. */
+/* 정보 바는 **아래**에 둔다 — 위는 스코어버그 쪽 furniture가 쓰던 자리다. */
 .ab-head {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sp-2);
   flex-wrap: wrap;
-  font-size: 11px;
-  color: var(--bc-text-dim, #93a4bd);
+  font-size: var(--fs-xs);
+  color: var(--t-mid);
 }
 .ab-tag {
   font-weight: 800;
-  letter-spacing: 0.08em;
-  color: var(--bc-accent);
+  letter-spacing: var(--ls-caps);
+  color: var(--t-low);
 }
-.ab-pattern { font-weight: 700; color: var(--bc-text, #e7eefc); }
-.ab-chips { display: flex; gap: 4px; }
+.ab-pattern {
+  font-weight: 700;
+  color: var(--t-hi);
+}
+.ab-chips {
+  display: flex;
+  gap: var(--sp-1);
+}
 .ab-chip {
-  padding: 1px 6px;
-  border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--bc-accent) 35%, transparent);
-  background: color-mix(in srgb, var(--bc-accent) 10%, transparent);
-  font-variant-numeric: tabular-nums;
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--s-line);
+  background: var(--s-2);
+  font-variant-numeric: tabular-nums lining-nums;
 }
-.ab-stats { margin-left: auto; font-variant-numeric: tabular-nums; }
+.ab-stats {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums lining-nums;
+}
 .ab-caption {
-  font-size: 11px;
-  color: var(--bc-text-dim, #93a4bd);
+  /* text-align:center만 주면 글자는 가운데 오지만 박스는 전폭을 차지한다.
+     그 박스가 좌하단 라이브 스탯 HUD를 통째로 덮어 겹침으로 잡혔다(실측 60%).
+     박스를 글자 폭에 맞춰 줄이면 가운데 정렬은 유지되고 겹침만 사라진다. */
+  width: fit-content;
+  max-width: 100%;
+  margin-inline: auto;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
+  color: var(--t-mid);
   text-align: center;
 }
 

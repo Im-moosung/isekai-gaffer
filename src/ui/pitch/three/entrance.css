@@ -1,208 +1,237 @@
-/* 입장 연출 오버레이 — 방송 그래픽 톤(tokens.css --bc-* 사용, 인라인 스타일 금지). */
+/* ============================================================================
+   입장 연출 오버레이 — 방송 그래픽 톤. 토큰만 쓴다(하드코딩 hex·인라인 스타일 금지).
+
+   구조 원칙: **겹치지 않는 세로 흐름.**
+   예전에는 카드도 칩 스트립도 각자 bottom 좌표로 절대배치돼 있었다. 카드가 길어지는
+   순간(한글 이름 + 포지션) 칩 스트립을 덮었고(실측 67~77% 겹침), 2D 모드에서는
+   칩이 선수 도트 위에 직접 얹혔다. 지금은 하단 절반을 세로 flex 한 줄기로 잡고
+   그 안에서 카드 → 칩 순서로 쌓는다. 좌표가 아니라 흐름이 간격을 보장한다.
+
+   TSX(EntranceOverlay.tsx)는 다른 작업자 담당이라 마크업은 그대로 두고
+   레이아웃만 CSS로 다시 짰다.
+   ========================================================================== */
 
 .ent {
   position: absolute;
   inset: 0;
-  z-index: 40; /* 스코어버그(20)·티커보다 위 — 킥오프 전까지는 이 화면이 주인공이다. */
-  font-family: var(--bc-font);
-  color: var(--bc-text);
+  z-index: var(--z-overlay);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--sp-3);
+  padding: var(--sp-4);
+  font-family: var(--f-ui);
+  color: var(--t-hi);
   /* 오버레이는 경기 화면 클릭을 막지 않는다. 건너뛰기 버튼만 예외로 되살린다. */
   pointer-events: none;
   user-select: none;
   overflow: hidden;
 }
 
-/* ── 상단 자막 바 ─────────────────────────────────────────── */
+/* ── 로어서드(자막 바) — 좌하단. 방송 로어서드의 정위치다. ─────────────
+   좌측 컬러 띠 + 다크 카드는 금지 패턴이라 걷어냈다.
+   대신 --brand 3px **상단 라인** + 다크 플레이트로 같은 위계를 만든다. */
 .ent__bar {
-  position: absolute;
-  top: 22px;
-  left: 50%;
-  transform: translateX(-50%);
+  order: 1;
+  align-self: flex-start;
   display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  padding: 9px 18px 9px 12px;
-  border: 1px solid var(--bc-line);
-  border-radius: 10px;
-  background: linear-gradient(180deg, rgba(26, 39, 66, 0.94), rgba(11, 18, 32, 0.94));
-  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.5);
-  white-space: nowrap;
-  animation: ent-bar-in 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  align-items: baseline;
+  gap: var(--sp-3);
+  max-width: 100%;
+  padding: var(--sp-3) var(--sp-4);
+  border-top: 3px solid var(--brand);
+  border-radius: 0 0 var(--r-md) var(--r-md);
+  background: var(--s-scrim);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--shadow-2);
+  animation: ent-bar-in var(--dur-3) var(--ease-out) both;
 }
-
+/* 좌측 띠 잔재 — 마크업(TSX)이 다른 담당이라 요소는 남아 있다. 그리지 않는다. */
 .ent__accent {
-  width: 4px;
-  align-self: stretch;
-  border-radius: 2px;
-  background: var(--bc-home);
+  display: none;
 }
-
 .ent__subtitle {
-  font-size: 17px;
+  font-size: var(--fs-h2);
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: var(--ls-caps);
+  line-height: var(--lh-ui);
 }
-
 .ent__formation {
-  font-size: 13px;
+  font-size: var(--fs-sm);
   font-weight: 700;
-  letter-spacing: 0.14em;
-  color: var(--bc-accent);
-  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--ls-caps);
+  color: var(--t-mid);
+  font-variant-numeric: tabular-nums lining-nums;
 }
 
-/* ── 선수 소개 카드 ───────────────────────────────────────── */
+/* ── 선수 소개 카드 — 하단 흐름의 위쪽. 칩 스트립과 겹치지 않는다. ───── */
 .ent__card {
-  position: absolute;
-  left: 50%;
-  bottom: 108px;
-  transform: translateX(-50%);
+  order: 2;
+  align-self: center;
   display: flex;
   align-items: stretch;
-  gap: 0;
-  min-width: 320px;
-  border: 1px solid var(--bc-line);
-  border-radius: 12px;
+  min-width: min(320px, 100%);
+  max-width: 100%;
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-lg);
   overflow: hidden;
-  background: linear-gradient(180deg, var(--bc-panel-2), var(--bc-panel));
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+  background: var(--s-1);
+  box-shadow: var(--shadow-2);
   /* 등장 → 유지 → 퇴장을 한 사이클(0.5s 슬롯)에 담는다. 카드는 순번마다 다시 마운트된다. */
-  animation: ent-card-cycle 500ms ease-out both;
+  animation: ent-card-cycle 500ms var(--ease-out) both;
 }
-
 .ent__card-num {
   display: flex;
   align-items: center;
   justify-content: center;
   min-width: 68px;
-  padding: 0 10px;
-  background: var(--bc-home);
-  color: #fff;
-  font-size: 34px;
+  padding: 0 var(--sp-3);
+  background: var(--team-us);
+  color: var(--team-us-ink);
+  font-size: var(--fs-h1);
   font-weight: 900;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums lining-nums;
 }
-
 .ent__card-body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
-  padding: 12px 20px;
+  gap: var(--sp-1);
+  padding: var(--sp-3) var(--sp-5);
   flex: 1 1 auto;
+  min-width: 0;
 }
-
+/* 한글 24px에 line-height 1.09배는 받침이 잘린다. 최소 1.4배. */
 .ent__card-name {
-  font-size: 24px;
+  font-size: var(--fs-h1);
   font-weight: 800;
-  letter-spacing: 0.01em;
+  line-height: 1.4;
 }
-
 .ent__card-pos {
-  font-size: 12px;
+  font-size: var(--fs-xs);
   font-weight: 700;
-  letter-spacing: 0.16em;
-  color: var(--bc-text-dim);
+  letter-spacing: var(--ls-caps);
+  line-height: var(--lh-md);
+  color: var(--t-mid);
 }
-
 .ent__card-count {
   display: flex;
   align-items: flex-end;
-  padding: 12px 14px;
-  font-size: 11px;
+  padding: var(--sp-3);
+  font-size: var(--fs-xs);
   font-weight: 700;
-  color: var(--bc-text-dim);
-  font-variant-numeric: tabular-nums;
+  color: var(--t-low);
+  font-variant-numeric: tabular-nums lining-nums;
+  white-space: nowrap;
 }
 
-/* ── 라인업 시트(홈 XI 요약) ──────────────────────────────── */
+/* ── 라인업 시트(홈 XI 요약) — 카드 아래 별도 행. ───────────────────── */
 .ent__sheet {
-  position: absolute;
-  left: 50%;
-  bottom: 54px;
-  transform: translateX(-50%);
+  order: 3;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 6px;
-  max-width: min(92%, 900px);
+  gap: var(--sp-1);
+  width: 100%;
   margin: 0;
   padding: 0;
   list-style: none;
-  animation: ent-sheet-in 420ms ease-out both;
+  animation: ent-sheet-in var(--dur-2) var(--ease-out) both;
 }
-
 .ent__chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border: 1px solid var(--bc-line);
-  border-radius: 999px;
-  background: rgba(18, 28, 48, 0.82);
-  font-size: 12px;
+  gap: var(--sp-1);
+  padding: var(--sp-1) var(--sp-2);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-pill);
+  background: var(--s-scrim);
+  font-size: var(--fs-xs);
   font-weight: 700;
-  color: var(--bc-text-dim);
-  transition: color 160ms ease, background-color 160ms ease, border-color 160ms ease;
+  color: var(--t-mid);
+  transition: color var(--dur-1) var(--ease-out), background-color var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out);
 }
-
 .ent__chip-num {
-  font-variant-numeric: tabular-nums;
-  opacity: 0.75;
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--t-low);
 }
-
+/* 지금 소개 중인 선수 — 감독의 행동이 아니라 "지금 진행 중"이므로 --live다. */
 .ent__chip--on {
-  border-color: var(--bc-accent);
-  background: rgba(200, 245, 66, 0.14);
-  color: var(--bc-text);
+  border-color: color-mix(in srgb, var(--live) 45%, var(--s-line));
+  background: color-mix(in srgb, var(--live) 14%, var(--s-1));
+  color: var(--t-hi);
 }
 
-/* ── 건너뛰기 ─────────────────────────────────────────────── */
+/* ── 건너뛰기 — 우상단 secondary. ───────────────────────────────────
+   우측 하단 고스트는 눈에 띄지 않았고, 390px에서는 팀 칩과 78~83% 겹쳤다.
+   연출은 절대 사용자를 붙잡아두지 않는다 — 나가는 문은 잘 보여야 한다. */
 .ent__skip {
   position: absolute;
-  right: 18px;
-  bottom: 18px;
+  top: var(--sp-4);
+  right: var(--sp-4);
   pointer-events: auto;
-  padding: 8px 16px;
-  border: 1px solid var(--bc-line);
-  border-radius: 999px;
-  background: rgba(11, 18, 32, 0.88);
-  color: var(--bc-text);
-  font-family: var(--bc-font);
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  min-width: var(--tap-min);
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--s-line-strong);
+  border-radius: var(--r-md);
+  background: var(--s-scrim);
+  backdrop-filter: blur(8px);
+  color: var(--t-hi);
+  font-family: var(--f-ui);
+  font-size: var(--fs-md);
   font-weight: 700;
-  letter-spacing: 0.06em;
+  /* 한글은 line-height 1이면 받침이 잘린다. flex 정렬이 세로 중앙을 잡고
+     min-height가 크기를 보장하므로 행간을 넉넉히 줘도 버튼 높이는 안 변한다. */
+  line-height: var(--lh-tight);
   cursor: pointer;
 }
-
 .ent__skip:hover {
-  border-color: var(--bc-accent);
-  color: var(--bc-accent);
+  border-color: var(--brand);
+  background: var(--brand-weak);
 }
-
 .ent__skip:focus-visible {
-  outline: 2px solid var(--bc-accent);
+  outline: 2px solid var(--brand);
   outline-offset: 2px;
 }
 
-/* ── 애니메이션 ───────────────────────────────────────────── */
+/* ── 애니메이션 ───────────────────────────────────────────────────── */
 @keyframes ent-bar-in {
-  from { opacity: 0; transform: translateX(-50%) translateY(-14px); }
-  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-
 @keyframes ent-sheet-in {
-  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
-  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-
 /* 아래에서 올라왔다(0~24%) 머물고(~78%) 사라진다(~100%). */
 @keyframes ent-card-cycle {
-  0%   { opacity: 0; transform: translateX(-50%) translateY(26px); }
-  24%  { opacity: 1; transform: translateX(-50%) translateY(0); }
-  78%  { opacity: 1; transform: translateX(-50%) translateY(0); }
-  100% { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+  0%   { opacity: 0; transform: translateY(20px); }
+  24%  { opacity: 1; transform: translateY(0); }
+  78%  { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-6px); }
+}
+
+/* sm — 카드가 화면 폭을 다 쓰고, 칩 스트립은 두 줄까지만 보이게 조인다. */
+@media (max-width: 719px) {
+  .ent {
+    padding: var(--sp-3);
+    gap: var(--sp-2);
+  }
+  .ent__card {
+    align-self: stretch;
+    min-width: 0;
+  }
+  .ent__card-body {
+    padding: var(--sp-2) var(--sp-3);
+  }
+  .ent__subtitle {
+    font-size: var(--fs-md);
+  }
 }
 
 /* 모션 최소화 — 슬라이드는 전부 끄고 카드만 즉시 교체된다(정보는 그대로 전달). */
