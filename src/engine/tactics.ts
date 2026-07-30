@@ -177,7 +177,59 @@ const ATTACK_PATTERN_FX: Record<AttackPattern, { chanceRate: number; chanceQuali
   'through':  { chanceRate: 0.90, chanceQuality: 1.16, cornerBias: 1.0, onTargetBias: 1.0 },
   'longshot': { chanceRate: 1.14, chanceQuality: 0.80, cornerBias: 1.15, onTargetBias: 1.0 },
 }
-export function attackPatternEffects(p: AttackPattern = 'balanced') { return ATTACK_PATTERN_FX[p] }
+
+// ── P3 공격 패턴 상대 의존성 (2026-07-30) ─────────────────────────
+// 문제(실측 n=2400 페어드 · SE 0.012, balanced 대비 승점 차): **cross가 상대와 무관하게 최적**
+// 이었다 — rsa +0.111 · mex +0.103 · nor +0.130 · esp +0.093 · fra +0.093. through는 +0.03~0.00,
+// longshot은 다섯 상대 전부 음수(−0.02)라 사실상 정답이 하나인 축이었다.
+// 원인: cornerBias 1.6이 코너를 왕창 만들고 코너가 세트피스 슛으로 이어지는데,
+// 유일한 대가인 onTargetBias 0.94가 그보다 작다. 어느 상대에게도 조건이 붙지 않았다.
+//
+// 처방 — 위 표의 배수를 **상대에 대한 조건부**로 바꾼다. 판별자는 축구가 이미 쓰는 것 둘이다.
+//  (1) 상대 라인 높이 — 교과서 그대로다. 높게 서면 뒷공간이 있으니 침투(through)가 값을 하고,
+//      낮게 서서 박스를 채우면 측면에서 열어야 한다(cross) — 그때 블록·굴절로 코너도 많이 나온다.
+//      중거리(longshot)도 낮은 블록 쪽이다: 박스 밖은 비어 있고 박스 안엔 자리가 없다.
+//      경기 중 코치 조언(game/coach.ts 공격 코치)이 이미 이 규칙을 말하고 있었는데
+//      **엔진이 그 말을 지키지 않고 있었다** — 이제 배선이 조언과 일치한다.
+//  (2) 매치업 우위(risk) — cross의 대가. 크로스를 올리려면 풀백·윙어가 라인을 넘어가야 하고,
+//      걷어낸 크로스는 실제 축구에서 가장 흔한 역습 개시점이다. E1·F1과 같은 판별자로만
+//      스케일한다: 뒷공간을 내주는 대가는 그 공간을 쓸 상대가 있을 때만 발생한다.
+//
+// 계수 근거(실측 기반 선형 예측, 승점): 상대 찬스 빈도 1%p ≈ 승점 0.007(rsa)~0.014(fra)이고
+// cross 이득의 대부분이 cornerBias에서 나온다. K_CROSS_RISK 0.08이면 rsa(risk 0.39)에서
+// 대가가 3.1%로 이득을 남기고, fra(2.5)에서 20%로 이득을 확실히 뒤집는다.
+/** 상대 라인 높이 → '뒷공간이 열려 있는가' 0.5~1.5. 기준 50에서 정확히 1.0이라
+ *  중립 라인 상대에는 위 표의 값이 그대로 나온다. 실팀 분포는 40(rsa)~62(esp). */
+const spaceBehind = (line: number) => clamp(1 + (line - 50) / 20, 0.5, 1.5)
+const K_CROSS_RISK = 0.08
+
+/** 공격 패턴 판정 컨텍스트. 미지정이면 위 표 그대로다(회귀 불변). */
+export interface PatternContext {
+  /** 상대 프로필 라인 높이 0~100 */
+  oppLineHeight: number
+  /** 매치업 우위 기반 역습 위험 스케일(simulate.counterRiskScale) */
+  risk: number
+}
+
+/** 공격 패턴 배수. `ctx`를 주면 상대 라인 높이·역습 위험에 따라 이득과 대가가 갈린다.
+ *  `counterVulnerability`는 **이 팀이 내주는 찬스 빈도** 배수다(cross만 1.0이 아니다). */
+export function attackPatternEffects(
+  p: AttackPattern = 'balanced', ctx?: PatternContext,
+): { chanceRate: number; chanceQuality: number; cornerBias: number; onTargetBias: number; counterVulnerability: number } {
+  const base = ATTACK_PATTERN_FX[p]
+  if (!ctx || p === 'balanced') return { ...base, counterVulnerability: 1.0 }
+  const hi = spaceBehind(ctx.oppLineHeight)  // 뒷공간(하이라인 상대일수록 크다)
+  const lo = 2 - hi                          // 낮은 블록(물러선 상대일수록 크다)
+  if (p === 'through') return { ...base, chanceQuality: 1 + (base.chanceQuality - 1) * hi, counterVulnerability: 1.0 }
+  if (p === 'longshot') return { ...base, chanceRate: 1 + (base.chanceRate - 1) * lo, counterVulnerability: 1.0 }
+  return {
+    chanceRate: base.chanceRate,
+    chanceQuality: 1 + (base.chanceQuality - 1) * lo,
+    cornerBias: 1 + (base.cornerBias - 1) * lo,
+    onTargetBias: base.onTargetBias,
+    counterVulnerability: 1 + K_CROSS_RISK * ctx.risk,
+  }
+}
 
 // ── 주발(foot) — 인버티드 윙어 ───────────────────────────────────
 // `Player.foot`은 선언·픽스처·PlayerCard 표시에만 있고 엔진 로직이 0건이었다(감사 §12).
@@ -223,11 +275,62 @@ const ROUTE_FX: Record<SetPieceRoute, { conversion: number; counterRisk: number 
   far:   { conversion: 1.00, counterRisk: 1.00 },
   short: { conversion: 0.75, counterRisk: 0.80 },
 }
+
+// ── P4 세트피스 지시의 대가·상대 의존성 (2026-07-30) ────────────────
+// 문제(실측 n=2400 페어드 · SE 0.012, far/normal 대비 승점 차): near/heavy가 다섯 상대 전부
+// 최적이었다(rsa +0.062 · mex +0.065 · nor +0.065 · esp +0.062 · fra +0.047).
+// 분해하면 루트 near가 +0.025, 인원 heavy가 +0.031, light가 −0.025다 — 즉 "니어에 사람을
+// 많이 넣는다"는 조건 없는 정답이었다.
+//
+// 원인은 두 가지다.
+//  (a) 루트 near의 전환 +15%가 **상대 골키퍼를 보지 않는다**. 실제 축구에서 니어포스트
+//      혼전은 골키퍼의 영역이다 — 나와서 쳐내는 키퍼(제공권 82)에게 니어는 자살이고,
+//      파포스트는 그의 손이 닿지 않는 곳이다. 지금은 두 상황이 같은 배수를 받았다.
+//  (b) 인원 heavy의 대가(counterRisk 1.25)가 SP_COUNTER_BASE(0.05)에 **선형으로** 곱해져
+//      경기당 추가 역습이 0.05회 수준이었다. 전환 이득(+0.20 × 세트피스 슛 1.75회)을
+//      막을 크기가 아니다. 그리고 상대와 무관했다.
+
+/** 루트 near의 전환 보정 — 상대 GK 제공권이 판별자다. 기준 77.5에서 정확히 0(=far와 동률),
+ *  ±4.5에서 포화. ⚠ 기준은 **실제 출전하는 GK**(pickBestXI)의 제공권이지 스쿼드 최댓값이
+ *  아니다 — 프랑스는 스쿼드 최대가 82인데 선발 GK는 76이다. 11개 상대의 선발 GK 분포는
+ *  74(ecu) · 76(cze·rsa·can·fra) · 78(mex·nor·arg) · 80(eng·esp·mar)이라 다섯 팀은 니어가
+ *  옳고 세 팀(80)은 니어가 손해이며 78인 세 팀이 경계다 — 루트가 상대를 읽는 축이 된다.
+ *  폭 0.30은 실측 스케일에서 정한 값이다: 세트피스 슛 약 1.75회/경기 × 기준 xG 0.115라
+ *  전환 ±30%가 경기당 득점 ±0.06 = 승점 ±0.04(페어드 SE 0.012의 3배)다. */
+const K_NEAR_AERIAL = 0.30
+const nearAerialRoom = (gkAerial: number) => clamp((77.5 - gkAerial) / 4.5, -1, 1)
+
+/** 역습 노출 배수의 상대 의존 지수. 편차를 risk에 대해 **지수로** 키운다 —
+ *  선형으로 곱하면 heavy의 대가가 경기당 역습 0.05회라 이득을 못 막고(위 (b)),
+ *  뺄셈 형태는 risk가 크면 배수가 음수가 된다. 지수 형태는 항상 양수이고 로그 스케일에서
+ *  대칭이라 light(0.80)의 이득과 heavy(1.35)의 대가가 같은 규칙으로 커진다.
+ *  3.4의 근거(두 번의 실측 상향). 2.0에서는 fra(risk 2.5) far/heavy가 +0.012로 여전히 양수였고,
+ *  2.8에서도 heavy−light 기울기가 fra −0.019(n=8000, SE 0.0066)에 그쳐 손익분기가 risk 2.1
+ *  부근이었다 — 11개 상대 중 9개에서 heavy가 옳다는 뜻이라 "상대를 읽는 축"이라 부르기 어렵다.
+ *  3.4면 heavy(1.35)의 지수가 fra에서 8.5(역습 확률 0.05 → 상한 0.55)·esp(1.563)에서 5.3,
+ *  rsa(0.402)에서 1.37(0.057)이라 **저위험 상대에는 거의 걸리지 않는다**. 이 비대칭이
+ *  인원 선택의 부호를 가른다.
+ *
+ *  ⚠ 태세에서 파생된 박스 인원(boxLoad 미지정 경로)에는 이 지수를 걸지 않는다.
+ *  공격적 태세의 위험은 멘탈리티 축(E1)이 이미 risk로 스케일해 과금하고 있어, 여기서 또
+ *  지수로 물리면 같은 선택에 이중 과금이 된다(B4에서 압박이 4중 과금이던 것과 같은 실수). */
+const K_SP_RISK = 3.4
+
+/** 세트피스 판정 컨텍스트. 미지정이면 전 축이 기존 값 그대로다(회귀 불변). */
+export interface SetPieceContext {
+  /** 상대 GK 제공권 0~100 */
+  oppGkAerial: number
+  /** 매치업 우위 기반 역습 위험 스케일(simulate.counterRiskScale) */
+  risk: number
+}
 // 박스 인원: heavy는 GK 파워플레이의 축소판(이미 검증된 트레이드오프 패턴 재사용).
 const BOX_FX: Record<BoxLoad, { conversion: number; counterRisk: number }> = {
   light:  { conversion: 0.85, counterRisk: 0.80 },
   normal: { conversion: 1.00, counterRisk: 1.00 },
-  heavy:  { conversion: 1.20, counterRisk: 1.25 },
+  // P4: heavy의 역습 노출을 1.25 → 1.35로 올렸다. 1.25에서는 매치업 지수를 지수로 걸어도
+  // 경기당 추가 역습이 0.10회에 그쳐(세트피스 슛이 경기당 1.75회뿐이다) 전환 +20%를 막지
+  // 못했다 — 실측에서 far/heavy가 다섯 상대 전부 +0.024~+0.036이었다.
+  heavy:  { conversion: 1.20, counterRisk: 1.35 },
 }
 
 // 태세 → 박스 투입 성향(-1 최소 … +1 최대). boxLoad 지시가 없을 때 여기서 파생한다.
@@ -244,9 +347,16 @@ const K_BOX_CONV = 0.22, K_BOX_RISK = 0.25
 
 /** 공격 측 세트피스의 전환·역습노출 배수.
  *  boxLoad를 명시하면 그 값이 태세 파생을 덮어쓴다(감독의 직접 지시가 우선).
- *  둘 다 기본(balanced 태세·지시 없음)이면 전 축 정확히 1.0. */
-export function setPieceEffects(t: Pick<TacticState, 'setPiece' | 'mentality' | 'groupIntensity'>): { conversion: number; counterRisk: number } {
-  const r = ROUTE_FX[t.setPiece?.route ?? 'far']
+ *  둘 다 기본(balanced 태세·지시 없음)이고 ctx가 없으면 전 축 정확히 1.0.
+ *  `ctx`를 주면 (a) 니어 전환이 상대 GK 제공권을 읽고 (b) 역습 노출이 매치업 우위로
+ *  지수 스케일된다 — 근거는 위 P4 주석. */
+export function setPieceEffects(
+  t: Pick<TacticState, 'setPiece' | 'mentality' | 'groupIntensity'>, ctx?: SetPieceContext,
+): { conversion: number; counterRisk: number } {
+  const route = t.setPiece?.route ?? 'far'
+  const r = ROUTE_FX[route]
+  // 니어만 GK 제공권에 좌우된다. 파는 키퍼의 손이 닿지 않는 곳이고, 숏은 애초에 공중볼이 아니다.
+  const rConv = ctx && route === 'near' ? 1 + K_NEAR_AERIAL * nearAerialRoom(ctx.oppGkAerial) : r.conversion
   const load = t.setPiece?.boxLoad
   let b: { conversion: number; counterRisk: number }
   if (load) b = BOX_FX[load]
@@ -255,7 +365,14 @@ export function setPieceEffects(t: Pick<TacticState, 'setPiece' | 'mentality' | 
     const s = clamp(MENTALITY_BOX[t.mentality ?? 'balanced'] + (t.groupIntensity?.attack ?? 0) * 0.5, -1, 1)
     b = { conversion: 1 + K_BOX_CONV * s, counterRisk: 1 + K_BOX_RISK * s }
   }
-  return { conversion: r.conversion * b.conversion, counterRisk: r.counterRisk * b.counterRisk }
+  // 명시 지시(루트·박스 인원)만 매치업 지수로 스케일한다. 태세 파생분은 선형 그대로다
+  // (E1이 이미 같은 선택을 risk로 과금한다 — 위 K_SP_RISK 주석의 이중 과금 경고).
+  const declared = r.counterRisk * (load ? b.counterRisk : 1)
+  const scaled = ctx ? Math.pow(declared, ctx.risk * K_SP_RISK) : declared
+  return {
+    conversion: rConv * b.conversion,
+    counterRisk: scaled * (load ? 1 : b.counterRisk),
+  }
 }
 
 /** 수비 측 마킹의 전환 억제 배수. 상대 박스 공중 위협이 높을수록 맨마킹이 유리하고,
@@ -297,6 +414,47 @@ export function groupIntensityZoneFactor(gi: GroupIntensity | undefined, zone: '
   }
   return f
 }
+// ── P2 그룹 적극성의 대가 (2026-07-30) ─────────────────────────────
+// 문제(실측 n=2400 페어드 · SE 0.012, 전부 0 대비 승점 차): 공격+1/중원−1이 다섯 상대 전부
+// 양수였다(rsa +0.083 · mex +0.091 · nor +0.042 · esp +0.018 · fra +0.033). E3가 존 무게중심
+// 이동을 넣어 크기는 줄었지만 **부호가 갈리지 않아** 여전히 "올리는 쪽이 정답"인 축이었다.
+// 반대쪽 끝(공격−1/수비+1)도 rsa −0.094 … fra −0.003으로 부호가 하나다.
+//
+// 원인: E3의 무게중심 이동은 존 전력을 **재분배**할 뿐 어느 것도 위험으로 바꾸지 않는다.
+// 그래서 "앞으로 미는 재분배가 우리 전력 구성에서 이득인가"만 남고, 상대는 등장하지 않는다.
+// 실제 축구의 대가는 두 가지이고 서로 다른 것에 의존한다.
+//  (1) 무게중심을 앞으로 옮기면 잃었을 때 처벌이 커진다 — 그 처벌은 **처벌할 상대가 있을 때만**
+//      발생한다. E1(멘탈리티)·F1(형태)과 같은 판별자(risk)로만 스케일한다.
+//  (2) 라인끼리 반대로 움직이면 **블록이 늘어난다**. 공격을 올리고 중원을 내리면 그 사이가
+//      비고, 우리 공격은 지원 없이 고립된다. 이 대가는 상대가 아니라 우리 기하학의 문제라
+//      risk로 스케일하지 않는다 — 이 비대칭이 "올려도 붙여서 올려라"를 강제한다.
+//
+// 계수 근거(실측 기울기 → 선형 예측). 무게중심 1단위당 승점 실측은 rsa +0.113 · mex +0.092 ·
+// esp +0.026 · fra +0.022이고, 우리 찬스 질 1% ≈ 승점 0.0129 · 내주는 질은 0.75배 무게다(F1).
+//  · K_GI_POSTURE 0.062 = 승점 0.06/단위/risk. rsa(0.39)에서 0.113−0.023 = +0.090으로 남고
+//    esp(1.55) −0.067 · fra(2.5) −0.128로 뒤집힌다. 더 낮추면 esp가 페어드 SE와 구분되지 않는다.
+//  · K_GI_ISO 0.02 = 늘어남 1단위당 우리 찬스 질 −2%(승점 −0.026). 공격+1/중원−1(늘어남 2)이
+//    공격+1/중원+1(0)보다 0.05 불리해져, "붙여서 올리는" 편성이 argmax가 된다.
+/** 무게중심(앞으로 −1…+1). 공격 라인과 수비 라인의 적극성 차. */
+const giPosture = (gi: GroupIntensity) => (gi.attack - gi.defense) / 2
+/** 블록 늘어남(0~2). 앞 라인이 뒷 라인보다 적극적인 만큼만 센다 — 뒤가 더 적극적인 편성
+ *  (예: 수비+1/중원0)은 오히려 압축이라 벌하지 않는다. */
+const giStretch = (gi: GroupIntensity) =>
+  Math.max(0, gi.attack - gi.midfield) + Math.max(0, gi.midfield - gi.defense)
+const K_GI_POSTURE = 0.062
+const K_GI_ISO = 0.02
+const GI_NEUTRAL = { chanceQuality: 1.0, concedeQuality: 1.0 }
+
+/** 그룹 적극성의 찬스 질 대가. 전부 0이면 정확히 전 축 1.0(회귀 불변).
+ *  `risk`는 simulate.counterRiskScale(대등하면 1.0). */
+export function groupIntensityEffects(gi: GroupIntensity | undefined, risk: number): { chanceQuality: number; concedeQuality: number } {
+  if (!gi || (gi.attack === 0 && gi.midfield === 0 && gi.defense === 0)) return GI_NEUTRAL
+  return {
+    chanceQuality: 1 - giStretch(gi) * K_GI_ISO,
+    concedeQuality: 1 + giPosture(gi) * K_GI_POSTURE * risk,
+  }
+}
+
 // 체력 소모 배수: 적극(+1) 라인 하나당 +4% 가중, 자제(-1)는 -2%. 전부 0 → 1.0(불변).
 export function groupIntensityStaminaFactor(gi: GroupIntensity | undefined): number {
   if (!gi) return 1.0
@@ -332,6 +490,74 @@ export function phaseTilt(pf: PhaseFormations | undefined, phase: 'attack' | 'de
   if (zone === 'defense') return 1 - posture * K
   if (zone === 'attack') return 1 + posture * K
   return 1.0
+}
+
+// ── P1 페이즈 포메이션의 대가 (2026-07-30) ──────────────────────────
+// 이 저장소에 남아 있던 **가장 큰 공짜 점심**이었다. 실측(n=2400 페어드 · SE 0.012, 중립 지시,
+// 미선언 대비 승점 차): 공격 3-5-2 / 수비 5-4-1이 rsa +0.198 · mex +0.259 · nor +0.220 ·
+// esp +0.275 · fra +0.308. 다른 축의 지배 방지 임계(0.30)에 육박하고, 상대가 강할수록 더 컸다.
+//
+// 원인은 phaseTilt가 **읽히지 않는 존만 깎는다**는 것이다.
+//   공격 페이즈의 존 전력은 effectiveAttack(attack·midfield)만 소비되는데 틸트는 defense를 깎고,
+//   수비 페이즈는 effectiveDefense(defense·midfield)만 소비되는데 틸트는 attack을 깎는다.
+// 즉 보상은 언제나 읽히는 쪽에, 대가는 언제나 버려지는 쪽에 붙어 있었다. 두 페이즈를 각각
+// 극단으로 선언하면 두 보상을 동시에 받고 대가는 하나도 치르지 않는다.
+//
+// 위 실측을 네 조합(3-5-2·5-4-1의 2×2)에서 선형 분리하면 두 항이 깨끗하게 나온다
+// (무게중심 1단위당 승점, 양수는 그 방향이 이득):
+//   공격 페이즈 전진  rsa +0.192 · mex +0.204 · esp +0.172 · fra +0.178  → **상대 무관**
+//   수비 페이즈 후진  rsa +0.102 · mex +0.158 · esp +0.190 · fra +0.200  → 이미 상대 의존
+// 4-4-2/4-4-2(무게중심 0.15)가 실측 −0.001~+0.017로 0에 붙는 것이 이 선형 모형의 검증이다.
+//
+// 처방 — 두 항에 각각 다른 것에 의존하는 대가를 붙인다.
+//  (1) 공격 페이즈에 앞에 사람을 두면 **레스트 디펜스가 얇아진다**. 그 대가는 그 공간을 쓸
+//      상대가 있을 때만 발생한다 — E1(멘탈리티)·F1(형태)이 검증한 원리라 같은 판별자
+//      (simulate.counterRiskScale)로만 스케일한다. 이 항이 공격 페이즈에 부호 반전을 만든다.
+//  (2) 수비 페이즈에 뒤에 사람을 두면 **회수 지점이 자기 골문 앞**이다. 골문까지 70m를 가야
+//      하는 전환은 질이 낮다. 이 대가는 상대의 강함이 아니라 기하학이라 **risk로 스케일하지
+//      않는다**. 실측 이득이 0.102(rsa)~0.200(fra)로 이미 갈려 있으므로, 그 사이에 고정
+//      대가를 두면 수비 페이즈도 부호가 갈린다.
+//  (3) 두 페이즈 형태가 다를수록 전환마다 이동 거리가 길다. 3-5-2↔5-4-1이면 윙백이 매 전환
+//      풀 플랭크를 왕복한다 — 체력으로 문다. 어떤 clamp도 우회할 수 없는 누적 비용이다.
+//
+// 계수 근거(F1 주석 (a)의 실측 환산: 우리 찬스 질 1% ≈ 승점 0.0129, 내주는 질은 그 0.75배):
+//  · K_PF_REST 0.20 → 승점 0.194/단위/risk. rsa(0.39) 0.192−0.076 = +0.116이 남고
+//    esp(1.55) −0.129 · fra(2.5) −0.293으로 뒤집힌다. 0.15로 낮추면 esp가 −0.05로 얕아져
+//    페어드 SE(0.012)의 4배 마진을 확보하지 못한다.
+//  · K_PF_DEEP 0.10 → 승점 0.129/단위. 실측 이득 0.102(rsa)와 0.200(fra) **사이**에 놓이는
+//    유일한 구간이 0.11~0.19이고, 그 가운데를 잡았다.
+//  · K_PF_SHUTTLE 0.05 → 무게중심 차 1.55(3-5-2↔5-4-1)에서 체력 소모 +7.8%. 그룹 적극성의
+//    라인당 ±4%와 같은 스케일이다.
+//
+// ★ 세 항 모두 xG·체력 경로다 — 슛 '수'를 건드리지 않으므로 캘리브레이션 계약(팀별 슛/90분
+//   ±15%, 실팀 ±25%)은 **정의상 불변**이다. 게다가 캘리브레이션 배치는 phaseFormations를
+//   선언하지 않아 전 항이 1.0이다.
+/** 페이즈 미지정은 무게중심 0으로 읽는다 — phaseTilt가 미지정 페이즈에 1.0(=posture 0)을
+ *  돌려주므로 보상과 대가가 정확히 같은 기준을 쓴다. */
+const phasePosture = (f: FormationId | undefined) => (f ? FORMATION_POSTURE[f] : 0)
+const K_PF_REST = 0.20
+/** 뒤에 남겨두는 쪽(pa<0)의 **되돌아오는 이득은 절반**이다. 앞에 사람을 두면 역습에 걸리지만,
+ *  뒤에 남긴다고 상대의 정돈된 공격까지 사라지지는 않는다 — 얻는 것은 '전환에 당하지 않는 것'
+ *  하나뿐이다. E3(그룹 적극성)가 자제를 적극의 5/6로 둔 것과 같은 이유이며, 이 비대칭이 없으면
+ *  risk 상한(2.5)에서 대가가 통째로 이득으로 뒤집혀 **후진 선언이 새로운 지배 전략**이 된다
+ *  (실측: 대칭 판에서 vs fra 5-4-1/5-4-1이 미선언 대비 +0.391로 다른 축을 전부 압도했다). */
+const K_PF_REST_BACK = 0.5
+const K_PF_DEEP = 0.10
+const K_PF_SHUTTLE = 0.05
+const PF_NEUTRAL = { chanceQuality: 1.0, concedeQuality: 1.0, staminaDrain: 1.0 }
+
+/** 페이즈 포메이션 선언의 대가. 미선언(또는 양 페이즈 모두 미지정)이면 전 축 정확히 1.0
+ *  → 시드 회귀 불변. `risk`는 simulate.counterRiskScale(대등하면 1.0). */
+export function phaseFormationEffects(
+  pf: PhaseFormations | undefined, risk: number,
+): { chanceQuality: number; concedeQuality: number; staminaDrain: number } {
+  if (!pf || (!pf.attack && !pf.defense)) return PF_NEUTRAL
+  const pa = phasePosture(pf.attack), pd = phasePosture(pf.defense)
+  return {
+    chanceQuality: 1 + pd * K_PF_DEEP,
+    concedeQuality: 1 + pa * K_PF_REST * risk * (pa < 0 ? K_PF_REST_BACK : 1),
+    staminaDrain: 1 + Math.abs(pa - pd) * K_PF_SHUTTLE,
+  }
 }
 
 // ── F1 포메이션 축 비단조성 ──────────────────────────────────────

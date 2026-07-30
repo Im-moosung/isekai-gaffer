@@ -15,11 +15,11 @@
 //     지시"라는 기준점일 뿐 "아무것도 안 했을 때"가 아니다. Δpp를 그렇게 읽으면 안 된다.
 //  4. XI는 patch.formation을 반영해 다시 세운다(batch 주석 참고). 여기가 실제로 게이트를
 //     오염시키던 구멍이었다.
-import type { FormationId, Mentality, TacticState, Team } from './types'
+import type { AttackPattern, BoxLoad, FormationId, GroupIntensity, Mentality, PhaseFormations, SetPieceRoute, TacticState, Team } from './types'
 import { loadTeam, type TeamId } from '../data/loader'
 import { createMatch, simulateSegment, flankStrength } from './simulate'
 import { pickBestXI } from './lineup'
-import { FORMATION_POSTURE, MENTALITIES } from './tactics'
+import { ATTACK_PATTERNS, BOX_LOADS, FORMATION_POSTURE, MENTALITIES, SET_PIECE_ROUTES } from './tactics'
 
 export type AxisKey = 'lineHeight' | 'pressing' | 'tempo'
 
@@ -66,6 +66,29 @@ function batch(homeId: TeamId, awayId: TeamId, patch: Partial<TacticState>, n: n
     else if (st.score[0] === st.score[1]) d++
   }
   return { winRate: w / n, points: (w * 3 + d) / n, gf: gf / n, ga: ga / n }
+}
+
+/** 중립 지시 — 축을 분리해 재는 모든 계측의 공통 기준점. */
+const NEUTRAL_INS = { lineHeight: 50, pressing: 50, tempo: 50, attackFocus: 'balanced' as const }
+
+/** 임의 플랜의 경기당 승점. 지시는 중립(50/50/50)으로 고정하고 patch가 그 위를 덮는다.
+ *
+ *  ★ 두 arm에 **같은 seedBase**를 주면 공통 난수(paired)가 되어 차이의 표준오차가 셀 단위
+ *  SE보다 5~6배 작아진다(실측: 비페어드 0.085 → 페어드 0.014, n=2400). 이 저장소는
+ *  "n=800에서 fra +0.3을 참값으로 착각했는데 n=3200의 참값이 −1.0이었다"로 한 번 데였다.
+ *  새 축의 게이트는 전부 이 함수를 통한 페어드 차이로 판정한다. */
+export function planPoints(
+  homeId: TeamId, awayId: TeamId, patch: Partial<TacticState>, n: number, seedBase = 1000,
+): number {
+  return batch(homeId, awayId, { instructions: NEUTRAL_INS, ...patch }, n, seedBase).points
+}
+
+/** 두 플랜의 페어드 승점 차(a − b). 양수면 a가 유리. */
+export function planSlope(
+  homeId: TeamId, awayId: TeamId,
+  a: Partial<TacticState>, b: Partial<TacticState>, n: number, seedBase = 1000,
+): number {
+  return planPoints(homeId, awayId, a, n, seedBase) - planPoints(homeId, awayId, b, n, seedBase)
 }
 
 /** 한 축만 values로 변화시키고 나머지는 중립(50)으로 고정한 스윕. */
@@ -129,6 +152,107 @@ export function formationSlope(homeId: TeamId, awayId: TeamId, n: number, seedBa
   return fwd.points - back.points
 }
 
+// ── 게이트 없던 네 축 (P1~P4, 2026-07-30) ────────────────────────────
+// 지시 3축·멘탈리티·포메이션에는 비단조성 게이트가 있었는데 **아래 넷에는 아무것도 없었고,
+// 넷 다 상대 무관 정답을 갖고 있었다**(실측 n=2400 페어드 · SE 0.012, 중립 지시 · 미선언 대비):
+//   phaseFormations 공격 3-5-2/수비 5-4-1  rsa +0.198 · mex +0.259 · esp +0.275 · fra +0.308
+//   groupIntensity  공격+1/중원−1          rsa +0.083 · mex +0.091 · esp +0.018 · fra +0.033
+//   attackPattern   cross                  rsa +0.111 · mex +0.103 · esp +0.093 · fra +0.093
+//   setPiece        near/heavy             rsa +0.062 · mex +0.065 · esp +0.062 · fra +0.047
+// 수리 내용과 계수 근거는 engine/tactics.ts의 P1~P4 주석에 있다.
+//
+// ★ 네 축의 대가는 전부 **선언했을 때만** 켜진다(미선언·표준값이면 배수가 정확히 1.0).
+//   캘리브레이션 배치(runBatch)는 네 축을 하나도 선언하지 않으므로 계약이 비트 단위로
+//   불변이다 — 실측으로 확인했다(runBatch n=300 홈 슛 편차 kor-cze +15.3% · esp-arg +20.4%로
+//   a9f946a 기록과 소수점까지 동일).
+//
+// 아래 계측은 전부 **페어드**(두 arm이 같은 시드 대역)다. 이 저장소는 비페어드 소표본으로
+// 두 번 데였다(n=800에서 fra 참값 −1.0을 +0.3으로 읽음 · n=400 스윕이 자기 노이즈를 잼).
+// 페어드 차이의 표준오차는 n=2400에서 약 0.012이고 n에 √로 줄어든다.
+
+/** 페이즈 포메이션 축의 기울기 — 두 페이즈 모두 전진(3-5-2) 빼기 두 페이즈 모두 후진(5-4-1).
+ *  36개 조합의 argmax가 아니라 **정렬된 두 극단**을 쓰는 이유는 formationSlope와 같다:
+ *  argmax는 노이즈로 흔들리고, 이 게이트가 묻는 질문은 "부호가 상대에 따라 뒤집히는가"다. */
+export function phaseFormationSlope(homeId: TeamId, awayId: TeamId, n: number, seedBase = 1000): number {
+  return planSlope(homeId, awayId,
+    { phaseFormations: { attack: '3-5-2', defense: '3-5-2' } },
+    { phaseFormations: { attack: '5-4-1', defense: '5-4-1' } }, n, seedBase)
+}
+
+/** 페이즈 선언 후보들 중 **미선언 대비 최대 이득**. 0 이하면 선언 자체가 손해라는 뜻이다.
+ *  폭(max−min)이 아니라 상단만 재는 이유: 이 축의 문제는 "아무 상대에게나 선언하면 공짜로
+ *  이득"이었다는 것이고, 하단(공격 5-4-1/수비 3-5-2 같은 자기모순 조합)이 깊게 벌받는 것은
+ *  고쳐야 할 문제가 아니라 설계 그대로다. 6종 전수 대신 무게중심 양 끝과 그 조합만 본다 —
+ *  중간 형태는 정의상 두 끝 사이에 놓인다(대가·보상이 모두 posture에 선형이다). */
+export function phaseDeclarationGain(homeId: TeamId, awayId: TeamId, n: number, seedBase = 1000): number {
+  const base = planPoints(homeId, awayId, {}, n, seedBase)
+  const cands: PhaseFormations[] = [
+    { attack: '3-5-2', defense: '3-5-2' }, { attack: '3-5-2', defense: '5-4-1' },
+    { attack: '5-4-1', defense: '5-4-1' }, { attack: '5-4-1', defense: '3-5-2' },
+    { attack: '4-3-3', defense: '4-1-4-1' },
+  ]
+  return Math.max(...cands.map(pf => planPoints(homeId, awayId, { phaseFormations: pf }, n, seedBase) - base))
+}
+
+const GI_FWD: GroupIntensity = { attack: 1, midfield: 0, defense: -1 }
+const GI_BACK: GroupIntensity = { attack: -1, midfield: 0, defense: 1 }
+
+/** 그룹 적극성 축의 기울기 — 무게중심 앞(공격+1/수비−1) 빼기 뒤(공격−1/수비+1).
+ *  ⚠ 앞쪽 arm은 '늘어남'(giStretch) 2를 함께 무는 반면 뒤쪽 arm은 0이다. 즉 이 기울기에는
+ *  −0.05 정도의 고정 오프셋이 실려 있다(설계 그대로: 앞 라인만 밀어 올리면 블록이 늘어난다).
+ *  부호 판정에는 영향이 없다 — 양쪽 상대에서 부호가 갈리는지만 본다. */
+export function groupIntensitySlope(homeId: TeamId, awayId: TeamId, n: number, seedBase = 1000): number {
+  return planSlope(homeId, awayId, { groupIntensity: GI_FWD }, { groupIntensity: GI_BACK }, n, seedBase)
+}
+
+/** 그룹 적극성 8편성의 승점 폭(지배 방지용). */
+export function groupIntensitySpan(homeId: TeamId, awayId: TeamId, n: number, seedBase = 1000): number {
+  const cands: GroupIntensity[] = [
+    { attack: 0, midfield: 0, defense: 0 }, GI_FWD, GI_BACK,
+    { attack: 1, midfield: 1, defense: 0 }, { attack: 1, midfield: -1, defense: 0 },
+    { attack: 1, midfield: 0, defense: 0 }, { attack: 0, midfield: 0, defense: 1 },
+    { attack: 1, midfield: 1, defense: 1 },
+  ]
+  const pts = cands.map(gi => planPoints(homeId, awayId, { groupIntensity: gi }, n, seedBase))
+  return Math.max(...pts) - Math.min(...pts)
+}
+
+/** 공격 패턴 축의 기울기 — cross 빼기 through. 두 패턴은 상대 라인 높이에 대해 정확히
+ *  반대 방향으로 반응하도록 배선돼 있으므로(tactics P3), 이 차이가 축의 부호다. */
+export function attackPatternSlope(homeId: TeamId, awayId: TeamId, n: number, seedBase = 1000): number {
+  return planSlope(homeId, awayId, { attackPattern: 'cross' }, { attackPattern: 'through' }, n, seedBase)
+}
+
+/** 공격 패턴 4종의 승점 폭. */
+export function attackPatternSpan(homeId: TeamId, awayId: TeamId, n: number, seedBase = 1000): number {
+  const pts = ATTACK_PATTERNS.map(p => planPoints(homeId, awayId, { attackPattern: p }, n, seedBase))
+  return Math.max(...pts) - Math.min(...pts)
+}
+
+/** 세트피스 루트 축의 기울기 — near 빼기 far(박스 인원은 normal로 고정).
+ *  판별자는 상대 GK 제공권이다(tactics P4). */
+export function setPieceRouteSlope(homeId: TeamId, awayId: TeamId, n: number, seedBase = 1000): number {
+  return planSlope(homeId, awayId,
+    { setPiece: { route: 'near', boxLoad: 'normal' } },
+    { setPiece: { route: 'far', boxLoad: 'normal' } }, n, seedBase)
+}
+
+/** 세트피스 인원 축의 기울기 — heavy 빼기 light(루트는 far로 고정).
+ *  판별자는 매치업 우위다(역습이 열렸을 때 처벌받는가). */
+export function setPieceLoadSlope(homeId: TeamId, awayId: TeamId, n: number, seedBase = 1000): number {
+  return planSlope(homeId, awayId,
+    { setPiece: { route: 'far', boxLoad: 'heavy' } },
+    { setPiece: { route: 'far', boxLoad: 'light' } }, n, seedBase)
+}
+
+/** 세트피스 9종(루트 3 × 인원 3)의 승점 폭. */
+export function setPieceSpan(homeId: TeamId, awayId: TeamId, n: number, seedBase = 1000): number {
+  const pts: number[] = []
+  for (const route of SET_PIECE_ROUTES) for (const boxLoad of BOX_LOADS)
+    pts.push(planPoints(homeId, awayId, { setPiece: { route, boxLoad } }, n, seedBase))
+  return Math.max(...pts) - Math.min(...pts)
+}
+
 /** 승점 최대 형태. 동점이면 목록 앞쪽(결정론). */
 export function bestFormation(cells: { formation: FormationId; points: number }[]): FormationId {
   return cells.reduce((a, b) => (a.points >= b.points ? a : b)).formation
@@ -155,8 +279,11 @@ export function bestFormation(cells: { formation: FormationId; points: number }[
  *           점수는 4-4-2(1.278)를 골랐고, 그 0.076 승점이 게이트를 +0.9pp로 밀었다.
  *     무게중심 반대 극단은 11개 상대 중 **10개에서 실측 최하위와 일치**한다(예외는 전력이
  *     대등해 축이 평평한 노르웨이: 최하위 4-4-2 1.587 vs 5-4-1 1.619).
- *  공격 패턴은 그대로 둔다 — 4종에 뚜렷한 반대 극이 없어(cross↔through가 대칭이 아니다)
- *  "뒤집었다"고 부를 만한 사상이 정의되지 않는다. */
+ *   - 페이즈 포메이션: 각 페이즈를 **무게중심 반대 극단**으로 (형태와 같은 조작)
+ *   - 공격 패턴: cross ↔ through. P3 이전엔 "4종에 뚜렷한 반대 극이 없다"며 그대로 뒀지만,
+ *     이제 두 패턴은 **같은 판별자(상대 라인 높이)의 정반대 부호**다 — 뒷공간이 있으면 침투,
+ *     박스가 잠겨 있으면 크로스. 중거리는 크로스와 같은 쪽(낮은 블록)이라 through로 뒤집는다.
+ *   - 세트피스: 루트 near ↔ far(GK 제공권을 거꾸로 읽는다), 인원 heavy ↔ light. */
 export function invertPlan(plan: Partial<TacticState>, opp: Team): Partial<TacticState> {
   const out: Partial<TacticState> = { ...plan }
   if (plan.instructions) {
@@ -178,16 +305,38 @@ export function invertPlan(plan: Partial<TacticState>, opp: Team): Partial<Tacti
   if (plan.groupIntensity) {
     out.groupIntensity = { ...plan.groupIntensity, attack: plan.groupIntensity.defense, defense: plan.groupIntensity.attack }
   }
-  if (plan.formation) {
-    // 추천 형태의 무게중심 부호를 뒤집어 반대 극단으로 보낸다.
-    const rec = FORMATION_POSTURE[plan.formation]
-    out.formation = FORMATION_IDS.reduce((a, b) => {
-      const pick = rec > 0 ? FORMATION_POSTURE[a] <= FORMATION_POSTURE[b] : FORMATION_POSTURE[a] >= FORMATION_POSTURE[b]
-      return pick ? a : b
-    })
+  if (plan.formation) out.formation = oppositePosture(plan.formation)
+  if (plan.phaseFormations) {
+    const pf = plan.phaseFormations
+    out.phaseFormations = {
+      ...(pf.attack ? { attack: oppositePosture(pf.attack) } : {}),
+      ...(pf.defense ? { defense: oppositePosture(pf.defense) } : {}),
+    }
+  }
+  if (plan.attackPattern) out.attackPattern = INVERT_PATTERN[plan.attackPattern]
+  if (plan.setPiece) {
+    out.setPiece = {
+      ...plan.setPiece,
+      ...(plan.setPiece.route ? { route: INVERT_ROUTE[plan.setPiece.route] } : {}),
+      ...(plan.setPiece.boxLoad ? { boxLoad: INVERT_LOAD[plan.setPiece.boxLoad] } : {}),
+    }
   }
   return out
 }
+
+/** 무게중심(posture)이 정반대 극단인 형태. */
+function oppositePosture(f: FormationId): FormationId {
+  const rec = FORMATION_POSTURE[f]
+  return FORMATION_IDS.reduce((a, b) => {
+    const pick = rec > 0 ? FORMATION_POSTURE[a] <= FORMATION_POSTURE[b] : FORMATION_POSTURE[a] >= FORMATION_POSTURE[b]
+    return pick ? a : b
+  })
+}
+const INVERT_PATTERN: Record<AttackPattern, AttackPattern> = {
+  balanced: 'balanced', cross: 'through', longshot: 'through', through: 'cross',
+}
+const INVERT_ROUTE: Record<SetPieceRoute, SetPieceRoute> = { near: 'far', far: 'near', short: 'near' }
+const INVERT_LOAD: Record<BoxLoad, BoxLoad> = { heavy: 'light', light: 'heavy', normal: 'normal' }
 
 const FORMATION_IDS: FormationId[] = ['4-3-3', '4-2-3-1', '4-4-2', '3-5-2', '4-1-4-1', '5-4-1']
 

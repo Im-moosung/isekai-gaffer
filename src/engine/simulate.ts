@@ -1,7 +1,7 @@
 // src/engine/simulate.ts
 import { createRng, type Rng } from './rng'
 import { zoneStrength } from './strength'
-import { instructionEffects, formationEdge, formationEffects, mentalityEffects, attackPatternEffects, groupIntensityStaminaFactor, attackFocusEffects, footEffects, groupIntensityZoneFactor, setPieceEffects, markingFactor, type MatchupContext } from './tactics'
+import { instructionEffects, formationEdge, formationEffects, phaseFormationEffects, groupIntensityEffects, mentalityEffects, attackPatternEffects, groupIntensityStaminaFactor, attackFocusEffects, footEffects, groupIntensityZoneFactor, setPieceEffects, markingFactor, type MatchupContext } from './tactics'
 import { effectiveStats } from './fitness'
 import { pickBestXI } from './lineup'
 import type { Instructions, MatchEvent, MatchState, Player, Position, SideState, SideStats, TacticState, Team } from './types'
@@ -251,6 +251,19 @@ function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
     const ff = formationEffects(sides[i].tactics.formation, sides[(1 - i) as 0 | 1].tactics.formation, risk)
     fx[i].chanceQuality *= ff.chanceQuality
     fx[i].concedeQuality *= ff.concedeQuality
+    // P1 페이즈 포메이션 · P2 그룹 적극성: 존 가중 이동(strength.ts)이 주는 **보상의 대가**다.
+    // 둘 다 미선언이면 전 축 1.0이라 회귀 불변. 근거는 tactics.phaseFormationEffects·
+    // groupIntensityEffects 주석 참고.
+    const pf = phaseFormationEffects(sides[i].tactics.phaseFormations, risk)
+    const gi = groupIntensityEffects(sides[i].tactics.groupIntensity, risk)
+    fx[i].chanceQuality *= pf.chanceQuality * gi.chanceQuality
+    fx[i].concedeQuality *= pf.concedeQuality * gi.concedeQuality
+    fx[i].staminaDrain *= pf.staminaDrain
+    // P3 공격 패턴: 크로스는 풀백을 라인 위로 올린다 — 걷어낸 크로스가 역습 개시점이 된다.
+    // cross 이외 패턴과 ctx 없는 경로에서는 정확히 1.0.
+    fx[i].counterVulnerability *= attackPatternEffects(sides[i].tactics.attackPattern, {
+      oppLineHeight: sides[(1 - i) as 0 | 1].team.profile.style.lineHeight, risk,
+    }).counterVulnerability
     fx[i].chanceRate *= m.chanceRate
     fx[i].chanceQuality *= m.chanceQuality
     fx[i].possessionBias *= m.possessionBias
@@ -376,7 +389,11 @@ function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
   const zDef = zoneStrength(def, 'defense')
   const atkZone = effectiveAttack(zAtk)
   const defZone = effectiveDefense(zDef)
-  const ap = attackPatternEffects(atk.tactics.attackPattern)
+  // P3: 패턴 효과는 상대 라인 높이(뒷공간)와 역습 위험을 읽는다. 여기 risk는 공격 측 기준이다.
+  const ap = attackPatternEffects(atk.tactics.attackPattern, {
+    oppLineHeight: def.team.profile.style.lineHeight,
+    risk: counterRiskScale(zs[atkIdx], zs[defIdx]),
+  })
   const momentumBoost = atkIdx === 0 ? 1 + st.momentum * 0.15 : 1 - st.momentum * 0.15
   // 수비 측의 suppression(하이라인·하이프레스로 상대 전개를 끊는 항)이 공격 측 찬스를 억제한다.
   const chanceP = clamp(
@@ -554,7 +571,11 @@ const displayXg = (goalProbability: number) => clamp(goalProbability, DISPLAY_XG
 function resolveChance(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: ReturnType<typeof instructionEffects>[], rng: Rng, strengthRatio = 1, spDepth = 0) {
   const atk = atkIdx === 0 ? st.home : st.away
   const def = defIdx === 0 ? st.home : st.away
-  const ap = attackPatternEffects(atk.tactics.attackPattern)
+  // P3: simulateMinute과 **같은 컨텍스트**를 써야 빈도·질·코너가 한 벌의 규칙이 된다.
+  const ap = attackPatternEffects(atk.tactics.attackPattern, {
+    oppLineHeight: def.team.profile.style.lineHeight,
+    risk: counterRiskScale(zoneStrength(atk), zoneStrength(def)),
+  })
   // GK 파워플레이 양면: 공격 측 활성 → 세트피스에 GK 가담, 찬스 퀄 +40%.
   //                    수비 측 활성 → 골문 비움, 공격 측 실점(득점) 확률 3배(역습 빈 골문).
   const qualityBoost = gkPowerplayActive(st, atkIdx) ? 1.4 : 1.0
@@ -710,7 +731,6 @@ function resolveSetPiece(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: Retur
   const def = defIdx === 0 ? st.home : st.away
   const taker = setPieceTaker(atk)
   if (!taker) return
-  const sp = setPieceEffects(atk.tactics)
 
   // 1) 시도 성립: 키커 능력이 기준(70)에서 ±30% 변동시킨다. 배송이 나쁘면 첫 수비수에 걸린다.
   const attemptP = clamp(SP_ATTEMPT_BASE * (0.7 + 0.3 * (taker.setPiece / 70)), 0.12, 0.65)
@@ -723,6 +743,12 @@ function resolveSetPiece(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: Retur
   const gkSlot = def.tactics.lineup.find(l => l.slot === 'GK')!
   const gk = def.team.squad.find(p => p.id === gkSlot.playerId)!
   const gkAerial = gk.gkStats?.aerial ?? 25
+  // P4: 니어 전환은 상대 GK 제공권을, 역습 노출은 매치업 우위를 읽는다(tactics P4 주석).
+  // 표준 지시(far/normal)면 두 축 모두 정확히 1.0이라 기존 결과가 그대로 유지된다.
+  const sp = setPieceEffects(atk.tactics, {
+    oppGkAerial: gkAerial,
+    risk: counterRiskScale(zoneStrength(atk), zoneStrength(def)),
+  })
   const gkSave = (gk.gkStats?.saving ?? 20) * (0.75 + 0.25 * def.staminaByPlayer[gk.id] / 100)
   // GK 제공권: 62 기준 1.0, 92면 0.90, 32면 1.10. 나오는 골키퍼가 코너를 지운다.
   const gkFactor = clamp(1 - (gkAerial - 62) / 300, 0.85, 1.15)
@@ -765,10 +791,21 @@ function resolveSetPiece(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: Retur
   }
   // 2) 역습 노출: 박스에 사람을 밀어넣은 대가. 표준 지시에서도 소폭 걸리고,
   //    heavy·near를 고르면 커진다. 이 역습이 얻는 코너는 다시 세트피스를 부르지 않는다(재귀 가드).
-  if (rng.chance(clamp(SP_COUNTER_BASE * sp.counterRisk, 0, 0.2))) {
+  //
+  // P4: 상한을 0.2 → 0.55로 올린다. sp.counterRisk가 매치업 우위로 지수 스케일되면서
+  // far/heavy · risk 2.5에서 8.5배(=0.42)에 닿는데, 0.2 상한이 그 위를 통째로 잘라
+  // **대가가 상대에 따라 커지지 못하게** 막고 있었다. 표준 지시(far/normal)는 배수가 정확히
+  // 1.0이라 여전히 0.05이고, 저위험 상대(rsa risk 0.40)에서도 heavy가 0.057에 그친다.
+  //
+  // 그리고 역습의 **질**도 함께 오른다. 박스에 여섯을 올려보낸 뒤의 역습은 3대2로 열린다 —
+  // 실제 축구에서 코너 역습이 위험한 이유가 빈도가 아니라 그 수적 상황이다. 지수 0.7은
+  // 확률(선형)과 이중 과금이 되지 않도록 일부만 싣되, 0.5에서는 fra far/heavy의 승점 차가
+  // −0.028(페어드 SE 0.012의 2.3배)에 그쳐 게이트를 걸 수 없었기에 올린 값이다.
+  if (rng.chance(clamp(SP_COUNTER_BASE * sp.counterRisk, 0, 0.55))) {
     const zsAtk = zoneStrength(def, 'attack').attack
     const zsDef = zoneStrength(atk, 'defense').defense
-    resolveChance(st, defIdx, atkIdx, fx, rng, zsAtk / Math.max(30, zsDef), MAX_SP_CHAIN)
+    const outnumbered = Math.pow(sp.counterRisk, 0.7)
+    resolveChance(st, defIdx, atkIdx, fx, rng, (zsAtk / Math.max(30, zsDef)) * outnumbered, MAX_SP_CHAIN)
     return
   }
   // 3) 클리어가 다시 라인 밖으로 — 연속 코너(근거는 SP_REPEAT_CORNER_P 주석).

@@ -2,8 +2,12 @@
 // 상대 프로필 기반 플랜 추천 — 순수·결정론. 엔진이 아니라 게임 로직 계층에 둔다
 // (엔진은 시뮬레이션만 담당하고, "감독에게 무엇을 권할까"는 게임 규칙이기 때문).
 // 추천은 정답이 아니라 출발점이다. UI는 반드시 "감독 판단으로 수정하십시오"를 함께 보여준다.
-import type { FormationId, Instructions, Mentality, TacticState, Team } from '../engine/types'
-import { FORMATION_POSTURE, MENTALITIES, formationEdge, formationEffects, trapFactor } from '../engine/tactics'
+import type { AttackPattern, BoxLoad, FormationId, Instructions, Mentality, PhaseFormations, SetPieceRoute, TacticState, Team } from '../engine/types'
+import {
+  ATTACK_PATTERNS, BOX_LOADS, FORMATION_POSTURE, MENTALITIES, SET_PIECE_ROUTES,
+  attackPatternEffects, formationEdge, formationEffects, phaseFormationEffects, phaseTilt,
+  setPieceEffects, trapFactor, type PatternContext,
+} from '../engine/tactics'
 import { mapFormation } from '../engine/formations'
 import { positionFitness } from '../engine/fitness'
 import { pickBestXI } from '../engine/lineup'
@@ -31,10 +35,10 @@ const clampTo = (v: number, lo: number, hi: number) => clampAxis(Math.min(hi, Ma
 /** 상대 GK의 빌드업 능력. 엔진(simulate의 matchupContext)이 실제로 보는 값과 어긋나면
  *  추천 근거가 거짓이 되므로, 상대 XI도 엔진과 같은 pickBestXI로 세워 그 GK를 읽는다.
  *  GK가 없으면 엔진과 같은 기본값 50. */
-function oppGkBuildup(opp: Team): number {
+function oppGk(opp: Team): { buildup: number; aerial: number } {
   const gkSlot = pickBestXI(opp).lineup.find(l => l.slot === 'GK')
   const gk = gkSlot ? opp.squad.find(p => p.id === gkSlot.playerId) : undefined
-  return gk?.gkStats?.buildup ?? 50
+  return { buildup: gk?.gkStats?.buildup ?? 50, aerial: gk?.gkStats?.aerial ?? 25 }
 }
 
 // ── 추천은 엔진 판별자에서 파생한다 (별도 규칙표 금지) ──────────────────────
@@ -151,9 +155,109 @@ export function formationPlanScore(me: Team, oppForm: FormationId, risk: number,
   return gain - W_CONCEDE * cost
 }
 
+// ── 페이즈 포메이션 추천 (P1 후속) ──────────────────────────────────
+// 형태 추천(formationPlanScore)과 **같은 구조·같은 무게**로 짠다. 다른 것은 하나뿐이다:
+// 페이즈 형태는 XI를 바꾸지 않고 존 가중만 옮기므로(engine phaseTilt), 기저 존 전력은
+// 이미 고른 포메이션의 것을 쓰고 거기에 틸트 배수만 곱한다.
+//  · 공격 페이즈: 틸트가 올려주는 실효 공격 전력이 이득, 레스트 디펜스(concedeQuality)가 대가.
+//  · 수비 페이즈: 틸트가 올려주는 실효 수비 전력이 이득, 전환 질(chanceQuality)이 대가.
+// 두 페이즈가 서로 다를수록 붙는 체력 대가(staminaDrain)는 K_SHUTTLE_SCORE로 뺀다.
+/** 공격 페이즈 형태 f의 가치. */
+export function phaseAttackScore(me: Team, myFormation: FormationId, risk: number, f: FormationId): number {
+  const z = kickoffZones(me, myFormation)
+  const tilted = effectiveAttack({ attack: z.attack * phaseTilt({ attack: f }, 'attack', 'attack'), midfield: z.midfield })
+  const fx = phaseFormationEffects({ attack: f }, risk)
+  return STRENGTH_SENSITIVITY * Math.log(tilted) - W_CONCEDE * Math.log(fx.concedeQuality)
+}
+/** 막아서 얻는 승점은 **상대가 얼마나 위험한가에 비례**한다. 공격 페이즈 점수와 달리 수비
+ *  페이즈 점수에는 이 무게가 반드시 필요하다: 상수 무게(=1.8 자리에 1.0)로 두면 추천이
+ *  11개 상대 전부 수비 페이즈 3-5-2로 붙어 버린다(실측 대조 loss 0.31 → 0.18).
+ *  위험의 척도는 새로 만들지 않고 엔진이 쓰는 risk를 그대로 쓴다. 1.8은 아래 격자 대조로
+ *  정한 값이다 — 손익분기가 risk ≈ 0.73에 놓여, mar(0.81) 위쪽부터 수비 페이즈가 뒤로 간다. */
+const K_PHASE_DEF_RISK = 1.8
+/** 수비 페이즈 형태 f의 가치. */
+export function phaseDefenseScore(me: Team, myFormation: FormationId, risk: number, f: FormationId): number {
+  const z = kickoffZones(me, myFormation)
+  const tilted = effectiveDefense({ defense: z.defense * phaseTilt({ defense: f }, 'defense', 'defense'), midfield: z.midfield })
+  const fx = phaseFormationEffects({ defense: f }, risk)
+  return K_PHASE_DEF_RISK * risk * W_CONCEDE * STRENGTH_SENSITIVITY * Math.log(tilted) + Math.log(fx.chanceQuality)
+}
+/** 전환 이동 거리(체력)의 점수 무게. */
+const K_SHUTTLE_SCORE = 0.03
+
+/** 두 페이즈 형태를 함께 고른다(36조합 전수). 무게중심이 벌어질수록 붙는 체력 대가 때문에
+ *  두 선택이 독립이 아니다 — 그래서 각각 argmax를 취하지 않고 합으로 고른다.
+ *
+ *  ★ 두 계수(K_PHASE_DEF_RISK 1.8 · K_SHUTTLE_SCORE 0.03)는 **11개 상대 × 16조합 실측 격자**
+ *  (n=1600 페어드 · SE 0.015, measure 기록은 아래 표)에 맞춰 정했다. 이 조합에서 추천이 고른
+ *  칸과 실측 최적 칸의 승점 차 합이 0.175(상대당 평균 0.016 = SE 정도)로 최소다.
+ *  추천 칸의 실측값 / 그 상대의 실측 최대(괄호):
+ *    cze 3-5-2|3-5-2 .077(.088) · rsa 3-5-2|3-5-2 .073(.073) · ecu 3-5-2|3-5-2 −.012(.027)
+ *    can 3-5-2|3-5-2 .047(.047) · mex 3-5-2|3-5-2 .015(.054) · mar 3-5-2|3-5-2 .036(.044)
+ *    nor 3-5-2|4-1-4-1 .009(.009) · arg 4-3-3|5-4-1 .021(.035) · esp 4-3-3|5-4-1 .034(.055)
+ *    eng 4-1-4-1|5-4-1 .059(.102) · fra 5-4-1|5-4-1 .134(.134)
+ *  약체 쪽에서 어긋나는 칸(ecu·mex)의 격차 0.039는 그 상대의 16칸이 전부 ±1~2 SE 안에
+ *  뭉쳐 있어 실측 argmax 자체가 판정 불가라는 뜻이다. 강팀 쪽(arg~fra)에서는 무게중심
+ *  방향이 전부 일치한다. */
+export function phaseFormationPlan(me: Team, myFormation: FormationId, risk: number): PhaseFormations {
+  let best: PhaseFormations = { attack: FORMATIONS[0], defense: FORMATIONS[0] }, bestScore = -Infinity
+  for (const a of FORMATIONS) for (const d of FORMATIONS) {
+    const sc = phaseAttackScore(me, myFormation, risk, a) + phaseDefenseScore(me, myFormation, risk, d)
+      - K_SHUTTLE_SCORE * Math.abs(FORMATION_POSTURE[a] - FORMATION_POSTURE[d])
+    if (sc > bestScore) { bestScore = sc; best = { attack: a, defense: d } }
+  }
+  return best
+}
+
+// ── 공격 패턴 추천 (P3 후속) ────────────────────────────────────────
+// 이전 판은 "상대 점유 ≥70이면 through / 라인 ≥62면 through" 같은 손으로 쓴 규칙이었고,
+// 엔진이 실제로 무엇을 하는지와 무관했다(실측에서 cross가 11개 상대 전부 최적이었는데도
+// 추천은 스페인에만 through를 걸었다). 이제 **엔진 배수를 그대로 승점 기여로 환산해** 고른다.
+//  · chanceRate·counterVulnerability는 찬스 '수'의 배수라 로그가 곧 상대 변화율이다.
+//  · 내주는 쪽 무게는 formationPlanScore와 같은 W_CONCEDE(0.50).
+//  · W_CORNER 0.25 = 코너 획득 배수의 무게. 코너 하나가 세트피스 슛 0.38개(xG 0.115)를 만들고
+//    오픈플레이 찬스보다 질이 낮으므로 빈도 배수보다 가볍다. 이 값에서 11개 상대 중 **10개가
+//    실측 argmax와 일치**한다(어긋나는 캐나다는 실측 cross 0.070 vs through 0.061로 페어드
+//    SE(0.017) 안의 동률이다).
+const W_CORNER = 0.25
+/** 패턴 p의 상대적 가치(단위 없음, 4종 간 서열만 쓴다). balanced는 정확히 0이다. */
+export function attackPatternScore(p: AttackPattern, ctx: PatternContext): number {
+  const fx = attackPatternEffects(p, ctx)
+  return Math.log(fx.chanceRate) + Math.log(fx.chanceQuality) + W_CORNER * Math.log(fx.cornerBias)
+    + Math.log(fx.onTargetBias) - W_CONCEDE * Math.log(fx.counterVulnerability)
+}
+
+// ── 세트피스 추천 (P4 후속) ─────────────────────────────────────────
+// 루트는 상대 GK 제공권이, 박스 인원은 매치업 우위가 정한다 — 둘 다 엔진 setPieceEffects가
+// 이미 읽는 값이라 그 함수를 그대로 호출해 서열만 매긴다.
+// W_SP_RISK 0.11 = 역습 노출의 무게. 이 값에서 루트는 11개 상대 전부, 인원은 10개가 실측
+// argmax와 일치한다(경계는 arg risk 1.578과 eng 2.137 사이 = 손익분기 risk 1.97).
+const W_SP_RISK = 0.11
+/** 세트피스 지시의 상대적 가치. far/normal이 정확히 0이다. */
+export function setPieceScore(route: SetPieceRoute, boxLoad: BoxLoad, gkAerial: number, risk: number): number {
+  const fx = setPieceEffects({ setPiece: { route, boxLoad } }, { oppGkAerial: gkAerial, risk })
+  return Math.log(fx.conversion) - W_SP_RISK * Math.log(fx.counterRisk)
+}
+
 const MENTALITY_KO: Record<Mentality, string> = {
   'very-defensive': '매우 수비적', 'defensive': '수비적', 'balanced': '균형',
   'attacking': '공격적', 'very-attacking': '매우 공격적',
+}
+const PATTERN_WHY: Record<AttackPattern, string> = {
+  balanced: '어느 쪽도 뚜렷하지 않아 공격 방식을 고정하지 않습니다',
+  cross: '낮게 서서 박스를 채우니 측면에서 열고 코너를 쌓습니다',
+  through: '높게 서 있어 뒷공간이 열립니다 — 중앙 침투로 갑니다',
+  longshot: '박스 안은 자리가 없고 박스 밖은 비어 있습니다 — 중거리를 늘립니다',
+}
+const ROUTE_WHY: Record<SetPieceRoute, string> = {
+  near: '키퍼가 니어를 지배하지 못하니 앞쪽으로 감아 넣습니다',
+  far: '니어는 키퍼의 영역이라 파포스트로 넘깁니다',
+  short: '공중볼로는 승산이 없어 짧게 빼 점유를 지킵니다',
+}
+const LOAD_WHY: Record<BoxLoad, string> = {
+  heavy: '역습을 맞아도 감당할 만해 박스에 사람을 더 넣습니다',
+  normal: '박스 인원은 표준으로 둡니다',
+  light: '역습이 치명적이라 박스 인원을 줄여 뒤를 남깁니다',
 }
 // attackFocus 근거 문구용. 좌우가 뒤집힌다 — 우리가 왼쪽으로 몰면 상대의 **오른쪽** 수비를 만난다
 // (엔진 flankStrength의 정의와 동일). 문구에서 이걸 틀리면 근거가 거짓이 된다.
@@ -182,7 +286,8 @@ export function recommendPlan(me: Team, opp: Team): PlanRecommendation {
   //  (2) edge — 매치업 우위. "볼을 잃었을 때 처벌받는가"를 재고 **태세**를 정한다.
   // 둘을 하나로 묶었던 이전 판이 틀렸다는 것은 실측이 보였다(edgeMentalityIndex 주석 참고):
   // 잉글랜드·아르헨티나·프랑스는 trap이 높은데(가둘 수 있다) 최적 태세는 최하단이다.
-  const gkBuildup = oppGkBuildup(opp)
+  const gk = oppGk(opp)
+  const gkBuildup = gk.buildup
   const buildupIndex = Math.round((gkBuildup + s.possession) / 2)
   const trap = trapFactor({ oppGkBuildup: gkBuildup, oppPossession: s.possession })
   const myZones = kickoffZones(me), oppZones = kickoffZones(opp)
@@ -200,10 +305,15 @@ export function recommendPlan(me: Team, opp: Team): PlanRecommendation {
   // (engine tactics.GI_ZONE_FX). 그래서 태세와 같은 방향일 때만 값이 있다.
   // 이전 판의 "상대 압박 ≥65면 midfield+1"은 실측에서 오히려 손해라 제거했다
   // (지정 없음 대비 arg −3.6 / mar −3.8pp).
+  // P2 이후 이 축에도 대가가 붙었다: 무게중심을 앞으로 옮기면 내주는 찬스의 질이 오르고
+  // (risk에 비례) 라인끼리 반대로 움직이면 블록이 늘어난다(engine groupIntensityEffects).
+  // 실측 argmax(n=2400 페어드)가 태세 사다리와 그대로 겹친다 — idx≥3인 여섯 팀은 공격+1,
+  // idx≤1인 네 팀은 수비+1이고 그 중 가장 센 상대(esp·eng·fra)는 공격−1까지 함께다.
+  // 중원은 0으로 둔다: 1/−1/0과 1/0/0의 실측 차가 상대마다 부호가 갈려(SE 0.017 안) 신호가 없다.
   patch.groupIntensity = mentalityIndex >= 3
     ? { attack: 1, midfield: 0, defense: 0 }
     : mentalityIndex <= 1
-      ? { attack: 0, midfield: 0, defense: 1 }
+      ? { attack: -1, midfield: 0, defense: 1 }
       : { attack: 0, midfield: 0, defense: 0 }
 
   // 축과 태세를 한 문장 안에서 말하되, **각자의 근거 수치를 붙여** 말한다.
@@ -224,16 +334,7 @@ export function recommendPlan(me: Team, opp: Team): PlanRecommendation {
       : `${edgeText} — 전력이 대등해 ${MENTALITY_KO[mentality]} 태세로 균형을 잡습니다`
   reasons.push({ field: 'lineHeight', text: `${indexText} — ${axisClause}. ${postureClause}` })
 
-  if (s.possession >= 70) {
-    // 태세는 이미 위에서 정해졌다(점유 78인 스페인은 trap −0.46 → 수비적 · 라인 20).
-    // 여기서 멘탈리티나 라인을 다시 건드리면 레버가 둘로 갈라져 문면 모순이 되살아나므로
-    // 이 분기는 **공격 방식**만 정한다. 물러선 블록의 보상은 엔진의 counterGain
-    // (라인<40 && 템포>60, 상대 점유에 비례)이고, 중앙 침투가 그 전환을 받는다.
-    patch.attackPattern = 'through'
-    reasons.push({ field: 'attackPattern', text: `상대 점유 성향 ${s.possession} — 회수 후 중앙 침투로 전환을 노립니다` })
-  }
   if (s.lineHeight >= 62) {
-    patch.attackPattern = 'through'
     ins.tempo = clampAxis(ins.tempo + 15)
     reasons.push({ field: 'tempo', text: `상대 라인 높이 ${s.lineHeight} — 뒷공간 침투가 유효합니다` })
   }
@@ -318,6 +419,51 @@ export function recommendPlan(me: Team, opp: Team): PlanRecommendation {
   reasons.push({
     field: 'formation',
     text: `${best} — ${shapeClause} — ${shapeRiskClause}`,
+  })
+
+  // ── 페이즈 포메이션 (P1) ────────────────────────────────────────
+  // 이 축이 지금 게임에서 가장 큰 레버다(실측 폭 0.29~0.61 승점). 그래서 추천이 반드시
+  // 말해야 한다 — 유저가 워룸에서 이걸 비워 두면 가장 큰 판단을 하지 않은 것이다.
+  const phases = phaseFormationPlan(me, best, formationRisk)
+  patch.phaseFormations = phases
+  const pa = FORMATION_POSTURE[phases.attack!], pd = FORMATION_POSTURE[phases.defense!]
+  reasons.push({
+    field: 'phaseFormations',
+    text: `공격 시 ${phases.attack} · 수비 시 ${phases.defense} — `
+      + (pa > 0
+        ? `볼을 잡으면 앞에 사람을 더 보냅니다(역습 위험 지수 ${formationRisk.toFixed(2)})`
+        : `볼을 잡아도 뒤를 비우지 않습니다(역습 위험 지수 ${formationRisk.toFixed(2)})`)
+      + '. '
+      + (pd < 0
+        ? '수비 시엔 내려앉아 블록을 두껍게 합니다 — 대신 회수 지점이 낮아 전환의 질을 잃습니다'
+        : '수비 시에도 높은 곳에서 회수해 짧은 전환을 노립니다 — 대신 뒤가 얇습니다'),
+  })
+
+  // ── 공격 패턴 (P3) ──────────────────────────────────────────────
+  // 판별자는 상대 라인 높이(뒷공간이 있는가)와 매치업 우위(크로스의 대가를 감당하는가)다.
+  const patternCtx: PatternContext = { oppLineHeight: s.lineHeight, risk: formationRisk }
+  let bestPattern: AttackPattern = 'balanced', bestPatternScore = 0
+  for (const p of ATTACK_PATTERNS) {
+    const sc = attackPatternScore(p, patternCtx)
+    if (sc > bestPatternScore) { bestPatternScore = sc; bestPattern = p }
+  }
+  if (bestPattern !== 'balanced') {
+    patch.attackPattern = bestPattern
+    reasons.push({ field: 'attackPattern', text: `상대 라인 높이 ${s.lineHeight} — ${PATTERN_WHY[bestPattern]}` })
+  }
+
+  // ── 세트피스 (P4) ───────────────────────────────────────────────
+  // 루트는 상대 GK 제공권, 박스 인원은 역습 위험 지수가 정한다.
+  let bestRoute: SetPieceRoute = 'far', bestLoad: BoxLoad = 'normal', bestSp = 0
+  for (const route of SET_PIECE_ROUTES) for (const boxLoad of BOX_LOADS) {
+    const sc = setPieceScore(route, boxLoad, gk.aerial, formationRisk)
+    if (sc > bestSp) { bestSp = sc; bestRoute = route; bestLoad = boxLoad }
+  }
+  patch.setPiece = { route: bestRoute, boxLoad: bestLoad }
+  reasons.push({
+    field: 'setPiece',
+    text: `상대 GK 제공권 ${gk.aerial} — ${ROUTE_WHY[bestRoute]}. ${LOAD_WHY[bestLoad]}`
+      + `(역습 위험 지수 ${formationRisk.toFixed(2)})`,
   })
 
   if (opp.profile.benchPattern === 'protect-lead') {

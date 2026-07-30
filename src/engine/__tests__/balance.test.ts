@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { runAxisSweep, runAbBatch, runMentalitySweep, runFormationSweep, formationSlope, bestFormation, invertPlan, type AxisKey } from '../balance'
+import {
+  runAxisSweep, runAbBatch, runMentalitySweep, runFormationSweep, formationSlope, bestFormation, invertPlan,
+  phaseFormationSlope, phaseDeclarationGain, groupIntensitySlope, groupIntensitySpan,
+  attackPatternSlope, attackPatternSpan, setPieceRouteSlope, setPieceLoadSlope, setPieceSpan,
+  type AxisKey,
+} from '../balance'
 import { FORMATION_POSTURE } from '../tactics'
 import { runBatch } from '../calibrate'
 import { recommendPlan } from '../../game/scouting'
@@ -221,6 +226,150 @@ describe('포메이션 축 지배 방지 — 어느 형태도 압도하면 안 �
   it('중간 전력(멕시코)에서 6종 승점 폭이 0.30 미만', () => {
     const pts = runFormationSweep('kor', 'mex', 4000).map(c => c.points)
     expect(Math.max(...pts) - Math.min(...pts)).toBeLessThan(0.30)
+  }, 600_000)
+})
+
+// ── 게이트 없던 네 축 (P1~P4, 2026-07-30) ─────────────────────────
+// 지시 3축·멘탈리티·포메이션에는 비단조성 게이트가 있었는데 아래 네 축에는 **아무 게이트도
+// 없었고, 넷 다 상대 무관 정답을 갖고 있었다**(수리 전 실측, n=2400 페어드 · SE 0.012,
+// 중립 지시 · 미선언 대비 경기당 승점):
+//   phaseFormations 공격 3-5-2/수비 5-4-1  rsa +0.198 · mex +0.259 · esp +0.275 · fra +0.308
+//   groupIntensity  공격+1/중원−1          rsa +0.083 · mex +0.091 · esp +0.018 · fra +0.033
+//   attackPattern   cross                  rsa +0.111 · mex +0.103 · esp +0.093 · fra +0.093
+//   setPiece        near/heavy             rsa +0.062 · mex +0.065 · esp +0.062 · fra +0.047
+// 수리 내용과 계수 근거는 engine/tactics.ts P1~P4 주석에 있다.
+//
+// ── 표본 수의 근거 ────────────────────────────────────────────────
+// 전부 **페어드**(두 arm이 같은 시드 대역 = 공통 난수)로 잰다. 실측 페어드 표준오차는
+// n=2400에서 0.012이고 √n로 줄어든다 → n=4000에서 0.0093 · n=8000에서 0.0066.
+// 비페어드였다면 같은 정밀도에 30배 넘는 표본이 필요하다(지시 축 게이트는 n=400 비페어드라
+// SE가 0.085다 — 그래서 그쪽 MARGIN이 0.08로 크다).
+// 마진은 각 축의 실측 효과 크기에서 정한다: **가장 얇은 쪽 게이트 값이 마진 위로 최소 5σ**가
+// 되도록 잡되, 마진 자체가 "노이즈가 아니라 감독이 체감할 크기"여야 하므로 0.06 아래로는
+// 내리지 않는다(경기당 승점 0.06 = 승률 약 2pp).
+describe('페이즈 포메이션 축 (P1) — 최적 선언이 상대에 따라 뒤집혀야 한다', () => {
+  // n=4000 · 페어드 → SE 0.0093. 실측(시드 대역 2개):
+  //   rsa +0.224/+0.244 · mex +0.130/+0.111 · nor +0.062/+0.065 · esp −0.181/−0.174 · fra −0.378/−0.385
+  // 가장 얇은 게이트(rsa)도 마진 위로 (0.224−0.06)/0.0093 = 17.6σ다.
+  const N_PF = 4000
+  const PF_MARGIN = 0.06
+
+  it('약체(남아공) 상대로는 두 페이즈 모두 전진 배치가 유리해야 한다', () => {
+    expect(phaseFormationSlope('kor', 'rsa', N_PF)).toBeGreaterThan(PF_MARGIN)
+  }, 300_000)
+
+  it('강팀(스페인) 상대로는 두 페이즈 모두 후진 배치가 유리해야 한다', () => {
+    expect(phaseFormationSlope('kor', 'esp', N_PF)).toBeLessThan(-PF_MARGIN)
+  }, 300_000)
+
+  it('강팀(프랑스) 상대로도 후진 배치가 유리해야 한다', () => {
+    expect(phaseFormationSlope('kor', 'fra', N_PF)).toBeLessThan(-PF_MARGIN)
+  }, 300_000)
+
+  it('시드 대역을 바꿔도 부호가 유지된다 (남아공 양수 / 프랑스 음수)', () => {
+    expect(phaseFormationSlope('kor', 'rsa', N_PF, 777_000)).toBeGreaterThan(PF_MARGIN)
+    expect(phaseFormationSlope('kor', 'fra', N_PF, 777_000)).toBeLessThan(-PF_MARGIN)
+  }, 600_000)
+
+  // 이 축의 원래 고장은 "폭이 크다"가 아니라 **"선언 자체가 공짜 이득"**이었다(중간 전력
+  // 상대에게도 +0.259). 그래서 폭(max−min)이 아니라 **미선언 대비 상단**을 잰다 —
+  // 하단(공격 5-4-1/수비 3-5-2 같은 자기모순 선언)이 깊게 벌받는 것은 설계 그대로다.
+  // 임계 0.12: 수리 후 실측이 mex 0.052/0.057이라 7σ 여유가 있고, 수리 전 값(0.259)은
+  // 확실히 잡는다. 다른 축의 폭 임계(0.30)보다 낮은 것은 이것이 폭이 아니라 상단이기 때문이다.
+  it('지배 방지: 중간 전력(멕시코)에서 어떤 선언도 미선언 대비 +0.12를 넘지 않는다', () => {
+    expect(phaseDeclarationGain('kor', 'mex', N_PF)).toBeLessThan(0.12)
+    expect(phaseDeclarationGain('kor', 'mex', N_PF, 777_000)).toBeLessThan(0.12)
+  }, 600_000)
+})
+
+describe('그룹 적극성 축 (P2) — 최적 무게중심이 상대에 따라 뒤집혀야 한다', () => {
+  // n=4000 실측: rsa +0.123/+0.137 · mex +0.026/+0.021 · esp −0.184/−0.153 · fra −0.291/−0.295
+  // 가장 얇은 게이트(rsa)가 마진 위로 (0.123−0.06)/0.0093 = 6.8σ.
+  const N_GI = 4000
+  const GI_MARGIN = 0.06
+
+  it('약체(남아공) 상대로는 앞으로 옮기는 쪽이 유리해야 한다', () => {
+    expect(groupIntensitySlope('kor', 'rsa', N_GI)).toBeGreaterThan(GI_MARGIN)
+  }, 300_000)
+
+  it('강팀(스페인) 상대로는 뒤로 옮기는 쪽이 유리해야 한다', () => {
+    expect(groupIntensitySlope('kor', 'esp', N_GI)).toBeLessThan(-GI_MARGIN)
+  }, 300_000)
+
+  it('시드 대역을 바꿔도 부호가 유지된다 (남아공 양수 / 프랑스 음수)', () => {
+    expect(groupIntensitySlope('kor', 'rsa', N_GI, 777_000)).toBeGreaterThan(GI_MARGIN)
+    expect(groupIntensitySlope('kor', 'fra', N_GI, 777_000)).toBeLessThan(-GI_MARGIN)
+  }, 600_000)
+
+  it('지배 방지: 중간 전력(멕시코)에서 8편성 승점 폭이 0.30 미만', () => {
+    expect(groupIntensitySpan('kor', 'mex', N_GI)).toBeLessThan(0.30)
+  }, 600_000)
+})
+
+describe('공격 패턴 축 (P3) — 크로스와 중앙 침투의 서열이 상대에 따라 뒤집혀야 한다', () => {
+  // 판별자는 상대 라인 높이다(뒷공간이 있으면 침투, 박스가 잠겨 있으면 크로스).
+  // n=4000 실측: rsa +0.169/+0.194 · cze +0.120/+0.151 · mex −0.048/−0.033 ·
+  //              esp −0.137/−0.119 · fra −0.135/−0.133
+  const N_AP = 4000
+  const AP_MARGIN = 0.06
+
+  it('물러선 블록(남아공 라인 40) 상대로는 크로스가 중앙 침투보다 낫다', () => {
+    expect(attackPatternSlope('kor', 'rsa', N_AP)).toBeGreaterThan(AP_MARGIN)
+  }, 300_000)
+
+  it('하이라인(스페인 라인 62) 상대로는 중앙 침투가 낫다', () => {
+    expect(attackPatternSlope('kor', 'esp', N_AP)).toBeLessThan(-AP_MARGIN)
+  }, 300_000)
+
+  it('시드 대역을 바꿔도 부호가 유지된다 (남아공 양수 / 프랑스 음수)', () => {
+    expect(attackPatternSlope('kor', 'rsa', N_AP, 777_000)).toBeGreaterThan(AP_MARGIN)
+    expect(attackPatternSlope('kor', 'fra', N_AP, 777_000)).toBeLessThan(-AP_MARGIN)
+  }, 600_000)
+
+  it('지배 방지: 중간 전력(멕시코)에서 4종 승점 폭이 0.30 미만', () => {
+    expect(attackPatternSpan('kor', 'mex', N_AP)).toBeLessThan(0.30)
+  }, 300_000)
+})
+
+describe('세트피스 축 (P4) — 루트는 상대 GK가, 박스 인원은 매치업이 정한다', () => {
+  // 이 축은 효과 크기가 네 축 중 가장 작다(세트피스 슛이 경기당 1.75회뿐이다). 그래서
+  // **표본을 세 배로** 쓴다: n=12000 → 페어드 SE 0.0054(n=2400의 0.012에서 √5배 축소).
+  // 마진도 그에 맞춰 0.02~0.03으로 내린다 — 다른 축의 0.06을 그대로 쓰면 게이트가 영원히
+  // 통과할 수 없고, 반대로 마진 0으로 두면 부호가 시드 운에 걸린다.
+  const N_SP = 12_000
+
+  // 루트 실측(n=12000, near − far, 박스 normal 고정)은 상대 **선발 GK 제공권에 단조**다.
+  // 참고로 n=4800 전수(11개 상대, near − far):
+  //   74 ecu +0.043 | 76 can +0.017 rsa +0.015 cze +0.015 fra +0.009
+  //   78 mex −0.007 nor −0.010 arg −0.011 | 80 esp −0.022 mar −0.023 eng −0.029
+  // 게이트에 쓰는 두 상대의 n=12000 값(시드 대역 2개): ecu +0.040/+0.038 · eng −0.033/−0.030.
+  // 마진 위로 ecu 3.3σ · eng 2.8σ다.
+  it('제공권이 약한 GK(에콰도르 74) 상대로는 니어가 파포스트보다 낫다 (두 시드 대역)', () => {
+    expect(setPieceRouteSlope('kor', 'ecu', N_SP)).toBeGreaterThan(0.02)
+    expect(setPieceRouteSlope('kor', 'ecu', N_SP, 777_000)).toBeGreaterThan(0.02)
+  }, 600_000)
+
+  it('제공권이 강한 GK(잉글랜드 80) 상대로는 파포스트가 낫다 (두 시드 대역)', () => {
+    expect(setPieceRouteSlope('kor', 'eng', N_SP)).toBeLessThan(-0.015)
+    expect(setPieceRouteSlope('kor', 'eng', N_SP, 777_000)).toBeLessThan(-0.015)
+  }, 600_000)
+
+  // 인원 실측(n=12000, heavy − light, 루트 far 고정) — 역습 위험 지수에 단조이고
+  // arg(risk 1.578) 부근에서 부호가 갈린다:
+  //   rsa(0.40) +0.050/+0.053 · mex(0.64) +0.048/+0.047 · arg(1.58) +0.008/+0.007 ·
+  //   eng(2.14) −0.030/−0.031 · fra(2.50) −0.049/−0.045
+  it('역습이 무섭지 않은 상대(남아공)에겐 박스에 사람을 더 넣는 쪽이 낫다 (두 시드 대역)', () => {
+    expect(setPieceLoadSlope('kor', 'rsa', N_SP)).toBeGreaterThan(0.03)
+    expect(setPieceLoadSlope('kor', 'rsa', N_SP, 777_000)).toBeGreaterThan(0.03)
+  }, 600_000)
+
+  it('역습이 치명적인 상대(프랑스)에겐 박스 인원을 줄이는 쪽이 낫다 (두 시드 대역)', () => {
+    expect(setPieceLoadSlope('kor', 'fra', N_SP)).toBeLessThan(-0.02)
+    expect(setPieceLoadSlope('kor', 'fra', N_SP, 777_000)).toBeLessThan(-0.02)
+  }, 600_000)
+
+  it('지배 방지: 중간 전력(멕시코)에서 9종 승점 폭이 0.30 미만', () => {
+    expect(setPieceSpan('kor', 'mex', 4000)).toBeLessThan(0.30)
   }, 600_000)
 })
 
