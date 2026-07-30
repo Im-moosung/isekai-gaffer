@@ -1,0 +1,478 @@
+/* ============================================================================
+   앱 셸 + 공통 컴포넌트 프리미티브
+   ----------------------------------------------------------------------------
+   구조적 진단: 겹침과 잘림은 "높이를 예산으로 배분"하는 설계에서 나왔다.
+   .ms-root{height:100vh} → .ms-stage{overflow:hidden} → .ms-precenter{overflow-y:auto}
+   → .tc-war{max-height:38vh} → .tc-war__body{overflow-y:auto} → .lu-bench{overflow:auto}
+   중첩 스크롤 컨테이너가 5단이었다. 각 단계가 남는 높이를 나눠 가지므로
+   뷰포트가 1px 줄면 가장 안쪽이 먼저 죽는다(벤치 73% 은닉, 모바일 피치 높이 0px).
+
+   해법은 하나다 — **스크롤은 문서가 한다.** 페이지는 세로로 자란다.
+   내부 스크롤 컨테이너는 화면당 최대 1개, 그것도 보이는 어포던스를 반드시 갖는다.
+   ========================================================================== */
+
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  width: 100%;
+  background: var(--s-0);
+  color: var(--t-hi);
+  font-family: var(--f-ui);
+}
+
+/* 상단 방송 furniture — sticky. 고정 높이를 갖되 내용이 넘치면 자란다. */
+.shell__top {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-furniture);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  min-height: var(--h-topbar);
+  padding: var(--sp-2) var(--sp-4);
+  background: color-mix(in srgb, var(--s-0) 88%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--s-line);
+}
+
+/* 본문 — 문서 스크롤이 담당한다. overflow를 걸지 않는다. */
+.shell__body {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: var(--w-content);
+  margin: 0 auto;
+  padding: var(--sp-5) var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-width: 0;
+}
+.shell__body--wide {
+  max-width: var(--w-wide);
+}
+.shell__body--read {
+  max-width: var(--w-read);
+}
+.shell__body--flush {
+  padding: 0;
+  gap: 0;
+}
+
+/* 하단 액션 바 — 주 CTA 1개 + 상태 1줄. 티커도 여기 안으로 들어온다
+   (별도 레이어로 띄우면 오버레이와 겹쳐 텍스트가 쌓인다). */
+.shell__bottom {
+  position: sticky;
+  bottom: 0;
+  z-index: var(--z-furniture);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  min-height: var(--h-bottombar);
+  padding: var(--sp-2) var(--sp-4);
+  background: color-mix(in srgb, var(--s-0) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--s-line);
+}
+.shell__bottom-status {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--t-mid);
+  font-size: var(--fs-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell__brand {
+  font-size: var(--fs-sm);
+  font-weight: 800;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--t-hi);
+}
+.shell__context {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fs-sm);
+  color: var(--t-mid);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 719px) {
+  .shell__body {
+    padding: var(--sp-4) var(--sp-3);
+    gap: var(--sp-4);
+  }
+  .shell__top,
+  .shell__bottom {
+    padding: var(--sp-2) var(--sp-3);
+  }
+}
+
+/* ============================================================================
+   버튼 — 4종만. 화면당 primary는 하나.
+   커밋 어포던스 4종이 한 화면에 있으면(채택/감독 판단대로/지시 적용/전술 확정)
+   무엇을 눌러야 반영되는지 알 수 없다. 규칙 하나로 그 문제가 사라진다.
+   ========================================================================== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: 40px;
+  min-width: var(--tap-min);
+  padding: 0 var(--sp-4);
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--t-hi);
+  font-family: inherit;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.btn--sm {
+  min-height: 32px;
+  padding: 0 var(--sp-3);
+  font-size: var(--fs-sm);
+}
+.btn--lg {
+  min-height: 48px;
+  padding: 0 var(--sp-5);
+  font-size: var(--fs-lg);
+}
+
+.btn--primary {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--t-on-brand);
+}
+.btn--primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--brand) 86%, white);
+}
+
+.btn--secondary {
+  border-color: var(--s-line-strong);
+  color: var(--t-hi);
+}
+.btn--secondary:hover:not(:disabled) {
+  border-color: var(--brand);
+  background: var(--brand-weak);
+}
+
+.btn--ghost {
+  color: var(--t-mid);
+}
+.btn--ghost:hover:not(:disabled) {
+  color: var(--t-hi);
+  background: var(--s-2);
+}
+
+.btn--danger {
+  border-color: var(--danger-line);
+  color: var(--danger);
+}
+.btn--danger:hover:not(:disabled) {
+  background: var(--danger-weak);
+}
+
+/* 아이콘 전용 버튼도 손가락에는 44px가 필요하다. */
+.btn--icon {
+  width: var(--tap-min);
+  min-width: var(--tap-min);
+  height: var(--tap-min);
+  min-height: var(--tap-min);
+  padding: 0;
+  border-radius: var(--r-sm);
+  border-color: var(--s-line);
+  color: var(--t-mid);
+}
+.btn--icon:hover:not(:disabled) {
+  color: var(--t-hi);
+  border-color: var(--s-line-strong);
+}
+.btn--icon[aria-pressed='true'] {
+  color: var(--brand);
+  border-color: var(--brand-line);
+  background: var(--brand-weak);
+}
+
+/* ============================================================================
+   카드 — 좌측 컬러 띠 금지.
+   "컬러 좌측 띠 + 회색 카드"는 상태를 색으로만 말하면서 정작 그 색이
+   카드 내용과 아무 관계가 없다. 대신 4변 테두리 색조 + 배경 틴트를 쓴다.
+   ========================================================================== */
+.card {
+  background: var(--s-1);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  padding: var(--sp-4);
+  min-width: 0;
+}
+.card--flat {
+  background: transparent;
+  border-color: var(--s-line);
+}
+.card--warn {
+  border-color: var(--warn-line);
+  background: color-mix(in srgb, var(--warn) 6%, var(--s-1));
+}
+.card--danger {
+  border-color: var(--danger-line);
+  background: color-mix(in srgb, var(--danger) 6%, var(--s-1));
+}
+.card--good {
+  border-color: var(--good-line);
+  background: color-mix(in srgb, var(--good) 6%, var(--s-1));
+}
+.card--brand {
+  border-color: var(--brand-line);
+  background: color-mix(in srgb, var(--brand) 6%, var(--s-1));
+}
+
+/* 아이브로우 라벨 — 좌측 띠를 대체하는 첫 번째 수단. 색은 텍스트에만 얹는다. */
+.eyebrow {
+  display: block;
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-eyebrow);
+  font-weight: 800;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--t-low);
+}
+.eyebrow--warn {
+  color: var(--warn);
+}
+.eyebrow--danger {
+  color: var(--danger);
+}
+.eyebrow--good {
+  color: var(--good);
+}
+.eyebrow--brand {
+  color: var(--brand);
+}
+
+/* 섹션 — 카드를 겹치지 않고 헤어라인과 타이포 위계만으로 구획한다. */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+.section__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--s-line);
+}
+.section__title {
+  font-size: var(--fs-h2);
+  font-weight: 800;
+  color: var(--t-hi);
+}
+.section__meta {
+  font-size: var(--fs-sm);
+  color: var(--t-low);
+}
+
+.page-title {
+  font-size: var(--fs-h1);
+  font-weight: 800;
+  line-height: var(--lh-tight);
+  color: var(--t-hi); /* 상속에 맡기지 않는다 — 전역 규칙에 지는 사고가 있었다 */
+}
+
+/* ============================================================================
+   배지 / 칩 / 세그먼트
+   ========================================================================== */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  height: 22px;
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--s-2);
+  color: var(--t-mid);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.badge--live {
+  background: color-mix(in srgb, var(--live) 16%, var(--s-1));
+  color: var(--live);
+}
+.badge--warn {
+  background: var(--warn-weak);
+  color: var(--warn);
+}
+.badge--danger {
+  background: var(--danger-weak);
+  color: var(--danger);
+}
+.badge--good {
+  background: var(--good-weak);
+  color: var(--good);
+}
+.badge--gold {
+  background: color-mix(in srgb, var(--gold) 14%, var(--s-1));
+  color: var(--gold);
+}
+
+/* 진행 중 표시 — 라임이 허용되는 유일한 자리. */
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--live);
+  flex: none;
+}
+
+/* 세그먼트 컨트롤 — 배타 선택. 네이티브 select와 점선 테두리 버튼을 대체한다. */
+.seg {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-pill);
+  background: var(--s-1);
+}
+.seg__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 var(--sp-3);
+  border: none;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--t-mid);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-out), color var(--dur-1) var(--ease-out);
+}
+.seg__item:hover:not(:disabled) {
+  color: var(--t-hi);
+}
+.seg__item[aria-pressed='true'],
+.seg__item[aria-selected='true'],
+.seg__item.is-active {
+  background: var(--brand);
+  color: var(--t-on-brand);
+}
+.seg__item:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 탭 — 비파괴 뷰 전환. 하단 2px 인디케이터. 번호 접두(①②) 금지. */
+.tabs {
+  display: flex;
+  gap: var(--sp-4);
+  border-bottom: 1px solid var(--s-line);
+}
+.tabs__item {
+  position: relative;
+  min-height: var(--tap-min);
+  padding: 0 var(--sp-1);
+  border: none;
+  background: transparent;
+  color: var(--t-mid);
+  font-family: inherit;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  cursor: pointer;
+}
+.tabs__item[aria-selected='true'] {
+  color: var(--t-hi);
+}
+.tabs__item[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--brand);
+}
+
+/* ============================================================================
+   스크롤 어포던스 — 내부 스크롤을 허용하는 유일한 자리에 반드시 붙인다.
+   ========================================================================== */
+.scroll-pane {
+  position: relative;
+  min-height: 0;
+}
+.scroll-pane__fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 40px;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent, var(--s-1));
+}
+
+/* ============================================================================
+   스탯 바 — 합이 100인 단일 자유도 데이터에 숫자 두 개는 잉여다.
+   바 하나 + 양 끝 바깥의 tabular 숫자로 표현한다. 숫자에 팀 색을 칠하지 않는다.
+   ========================================================================== */
+.statbar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--sp-3);
+}
+.statbar__track {
+  display: flex;
+  height: 8px;
+  border-radius: var(--r-pill);
+  overflow: hidden;
+  background: var(--s-2);
+}
+.statbar__us {
+  background: var(--team-us);
+}
+.statbar__them {
+  background: var(--team-them);
+}
+.statbar__val {
+  font-family: var(--f-num);
+  font-variant-numeric: tabular-nums lining-nums;
+  font-size: var(--fs-sm);
+  color: var(--t-hi);
+}
+
+/* 킷 스트립 — 스코어버그의 팀 색 3px. 피치 위 도트 색과 반드시 일치시킨다.
+   흰 킷은 어두운 아웃라인을 넣어야 흰 배경 요소와 붙었을 때 구분된다. */
+.kit-strip {
+  display: inline-block;
+  width: 3px;
+  align-self: stretch;
+  min-height: 14px;
+  border-radius: 2px;
+  outline: 1px solid rgba(4, 8, 16, 0.6);
+}
+.kit-strip--us {
+  background: var(--team-us);
+}
+.kit-strip--them {
+  background: var(--team-them);
+}
