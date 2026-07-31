@@ -19,6 +19,7 @@ const { makeTestTeam } = await load('/src/engine/fixtures/testTeams.ts')
 
 const state = createMatch(makeTestTeam('kor', 78), makeTestTeam('esp', 86), { seed: 11 })
 const cast = E.buildEntranceCast(state)
+const script = E.entranceScript(cast, process.argv.includes('--short') ? 'short' : 'full')
 
 // ── 최소 선형대수(three 없이) ────────────────────────────────────
 const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z })
@@ -48,10 +49,7 @@ const SAFE = 0.9
 const inSafe = (n) => n !== null && Math.abs(n.x) <= SAFE && Math.abs(n.y) <= SAFE
 
 // ── Match3D.tsx의 모드 매핑을 그대로 ───────────────────────────────
-const MODE_MAP = process.argv.includes('--old')
-  ? { lineup: 'reaction', intro: 'reaction', _: 'broadcast' }
-  : { lineup: 'entrance-close', intro: 'entrance-close', disperse: 'broadcast', _: 'entrance' }
-const modeFor = (ph) => MODE_MAP[ph] ?? MODE_MAP._
+const modeFor = (ph) => E.entranceCameraMode(script, script.phases.find(p => p.phase === ph).start + 1)
 
 const HEAD_Y = 1.75   // player3d 리그의 머리 높이 근사
 const FOOT_Y = 0.05
@@ -62,9 +60,10 @@ const SEED = state.seed
 /** 단계 대표 시각들. 소개는 11명 전원을 훑어야 하므로 촘촘히 뽑는다. */
 function samples() {
   const out = []
-  for (const span of E.ENTRANCE_PHASES) {
+  for (const span of script.phases) {
     const len = span.end - span.start
-    const n = span.phase === 'intro' ? 22 : 5
+    if (len <= 0) continue
+    const n = span.phase.endsWith('intro') ? 24 : 5
     for (let i = 1; i <= n; i++) out.push({ phase: span.phase, ms: span.start + (len * i) / (n + 1) })
   }
   return out
@@ -73,8 +72,8 @@ function samples() {
 function measure(aspect) {
   const rows = new Map()
   for (const s of samples()) {
-    const f = E.entranceFrame(cast, s.ms)
-    const actors = [...f.players, f.referee]
+    const f = E.entranceFrame(script, s.ms)
+    const actors = [...f.players, ...f.referees]
     // t(초)는 three Clock 경과. 연출 시작을 0으로 두고 호흡 위상만 쓰므로 ms/1000이면 충분.
     const shot = C.cameraFor(modeFor(s.phase), f.focus, s.ms / 1000, SEED)
     let full = 0
@@ -90,10 +89,10 @@ function measure(aspect) {
     }
     // 소개 단계: 호명 중인 선수가 실제로 프레임 안에 있는가(카드와 화면의 일치).
     let named = null
-    const card = E.introCardAt(cast, s.ms)
-    if (card) {
-      const p = f.players.find(x => x.id === card.player.id)
-      named = p ? inNdc(project(shot, aspect, { x: p.x, y: TORSO_Y, z: p.z })) : false
+    const hi = E.entranceHighlightAt(script, s.ms)
+    if (hi) {
+      const p = f.players.find(x => x.id === hi.player.id)
+      named = p ? inSafe(project(shot, aspect, { x: p.x, y: TORSO_Y, z: p.z })) : false
     }
     const cur = rows.get(s.phase) ?? { full: [], partial: [], total: actors.length, shot, focus: f.focus, named: [], safe: [] }
     cur.full.push(full)
@@ -107,6 +106,32 @@ function measure(aspect) {
 
 const mn = (a) => Math.min(...a)
 const mx = (a) => Math.max(...a)
+
+if (process.argv.includes('--beats')) {
+  // 소개 문장 전문 덤프 — 22명이 전부 불리는지, 그룹 묶음이 맞는지 눈으로 확인한다.
+  console.log(`\n## 소개 문장 전문 (${script.beats.length}비트 · ${(script.totalMs / 1000).toFixed(2)}s)`)
+  console.log('\n| # | 시작(s) | 길이(s) | 팀 | 화자 | 자막 | 발화 |')
+  console.log('|---:|---:|---:|---|---|---|---|')
+  script.beats.forEach((b, i) => {
+    const team = b.side === 'home' ? '우리' : '상대'
+    const who = b.speaker === 'analyst' ? '해설' : '캐스터'
+    console.log(
+      `| ${i + 1} | ${(b.start / 1000).toFixed(2)} | ${((b.end - b.start) / 1000).toFixed(2)} | ` +
+        `${team} | ${who} | ${b.text} | ${b.speech} |`,
+    )
+  })
+  const named = script.beats.filter(b => b.playerId).length
+  console.log(`\n호명된 선수 ${named}명 (홈 ${cast.home.length} + 어웨이 ${cast.away.length})`)
+  await server.close()
+  process.exit(0)
+}
+
+console.log(`\n## 총 길이 ${(script.totalMs / 1000).toFixed(2)}s · 모드 ${script.mode} · 비트 ${script.beats.length}개`)
+console.log('\n| 단계 | 시작(s) | 길이(s) |')
+console.log('|---|---:|---:|')
+for (const p of script.phases) {
+  console.log(`| ${p.phase} | ${(p.start / 1000).toFixed(2)} | ${((p.end - p.start) / 1000).toFixed(2)} |`)
+}
 
 for (const aspect of ASPECTS) {
   console.log(`\n### aspect ${aspect.toFixed(3)}`)

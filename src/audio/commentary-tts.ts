@@ -193,6 +193,34 @@ export function speakAside(
   }
 }
 
+/**
+ * **대본 발화** — 입장 라인업 소개처럼 *미리 짜인 타임라인*이 발화 시각을 정하는 채널.
+ *
+ * 큐 정책이 둘 다와 다르다:
+ *  - `speak()`처럼 드롭하지 않는다. 명단 중간의 이름 하나가 사라지면 화면 하이라이트와
+ *    소리가 어긋난 채로 남은 스무 명이 계속 흘러간다 — 회복 불가능한 어긋남이다.
+ *  - `speak()`처럼 선점(cancel)하지도 않는다. 앞 이름을 자르면서 다음 이름을 부르면
+ *    명단이 아니라 소음이 된다.
+ *  - `speakAside()`와 달리 `pending`이어도 붙인다. 대본이 이미 발화 길이(estimateSpeechMs)로
+ *    비트 간격을 잡아 두었으므로 큐가 밀리는 것은 추정 오차뿐이고, 큐에 이어 붙이면
+ *    **순서는 언제나 보존**된다(순서 보존 > 지연 없음).
+ *
+ * 취소는 호출부가 {@link stopAll}로 한다(건너뛰기·언마운트).
+ */
+export function speakScripted(
+  line: string, opts: { speed?: number; role?: SpeechRole } = {},
+): void {
+  if (!available || !ttsOn || !line) return
+  const synth = getSynth()
+  if (!synth) return
+  try {
+    const u = makeUtterance(line, opts.role ?? 'normal', opts.speed ?? 1)
+    if (u) synth.speak(u)
+  } catch {
+    /* no-op — TTS 실패가 연출을 멈추지 않는다 */
+  }
+}
+
 /** 지금 speak()가 실제로 소리를 낼 수 있는 상태인가(보이스 확보 + 토글 ON).
  *  재생 체류 시간을 발화 길이만큼 늘릴지 판정하는 데 쓴다 — 해설이 꺼져 있으면
  *  늘릴 이유가 없다(무음인데 화면만 느려지면 안 된다). */

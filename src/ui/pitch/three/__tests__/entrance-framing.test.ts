@@ -13,17 +13,19 @@
 import { describe, expect, it } from 'vitest'
 import { cameraFor, type CameraShot } from '../camera'
 import {
-  ENTRANCE_PHASES,
   buildEntranceCast,
   entranceCameraMode,
   entranceFrame,
-  introCardAt,
+  entranceHighlightAt,
+  entranceScript,
+  type EntrancePhase,
 } from '../entrance'
 import { createMatch } from '../../../../engine/simulate'
 import { makeTestTeam } from '../../../../engine/fixtures/testTeams'
 
 const state = createMatch(makeTestTeam('kor', 78), makeTestTeam('esp', 86), { seed: 11 })
 const cast = buildEntranceCast(state)
+const script = entranceScript(cast, 'full')
 
 /**
  * 검사할 뷰포트 종횡비.
@@ -83,9 +85,9 @@ const inSafe = (n: { x: number; y: number } | null): boolean =>
 
 /** 그 시각에 세이프 에어리어 안에 **온몸이** 들어온 배역 수(심판 포함). */
 function safeCount(ms: number, aspect: number): number {
-  const f = entranceFrame(cast, ms)
-  const shot = cameraFor(entranceCameraMode(ms), f.focus, ms / 1000, state.seed)
-  const actors = [...f.players, f.referee]
+  const f = entranceFrame(script, ms)
+  const shot = cameraFor(entranceCameraMode(script, ms), f.focus, ms / 1000, state.seed)
+  const actors = [...f.players, ...f.referees]
   return actors.filter(
     a =>
       inSafe(project(shot, aspect, { x: a.x, y: HEAD_Y, z: a.z })) &&
@@ -93,53 +95,71 @@ function safeCount(ms: number, aspect: number): number {
   ).length
 }
 
-const span = (phase: string) => ENTRANCE_PHASES.find(s => s.phase === phase)!
+const span = (phase: EntrancePhase) => script.phases.find(s => s.phase === phase)!
 /** 단계 안을 n등분해 훑는다(경계 ms는 인접 단계로 새므로 제외). */
-function within(phase: string, n = 9): number[] {
+function within(phase: EntrancePhase, n = 9): number[] {
   const s = span(phase)
   const out: number[] = []
   for (let i = 1; i <= n; i++) out.push(s.start + ((s.end - s.start) * i) / (n + 1))
   return out
 }
 
-describe('입장 연출 프레이밍 — 와이드 단계는 23명 전원이 화면 안에 있다', () => {
+describe('입장 연출 프레이밍 — 와이드 단계는 25명 전원이 화면 안에 있다', () => {
   // 터널·워크아웃은 "무언가 시작된다"를 보여 주는 단계다. 여기가 비면 심사자가 보는
   // 첫 경기 장면이 빈 잔디가 된다 — 예외 없이 전원이 세이프 에어리어 안이어야 한다.
-  for (const phase of ['tunnel', 'walkout'] as const) {
+  for (const phase of ['tunnel', 'walkout', 'split'] as const) {
     for (const aspect of ASPECTS) {
       it(`${phase} @ aspect ${aspect}`, () => {
         for (const ms of within(phase)) {
-          expect(`${phase} ${Math.round(ms)}ms: ${safeCount(ms, aspect)}`).toBe(`${phase} ${Math.round(ms)}ms: 23`)
+          // 22명 + 심판 3인.
+          expect(`${phase} ${Math.round(ms)}ms: ${safeCount(ms, aspect)}`).toBe(`${phase} ${Math.round(ms)}ms: 25`)
         }
       })
     }
   }
 })
 
-describe('입장 연출 프레이밍 — 클로즈 단계', () => {
-  it('정렬·소개는 클로즈업이라 전원은 못 담지만 절반 이상은 항상 화면에 있다', () => {
-    for (const phase of ['lineup', 'intro'] as const) {
+describe('입장 연출 프레이밍 — 소개 클로즈 컷', () => {
+  it('클로즈업이라 23명 전원은 못 담지만 소개 중인 팀 줄은 대부분 화면에 있다', () => {
+    // 두 줄이 26 m 떨어져 있으므로 반대편 팀은 프레임 밖이 정상이다. 검사 대상은
+    // **소개 중인 그 팀 11명**이고, 사선 클로즈라 양 끝 한둘은 잘려도 된다.
+    for (const phase of ['home-intro', 'away-intro'] as const) {
+      const side = phase === 'home-intro' ? 'home' : 'away'
       for (const aspect of ASPECTS) {
         for (const ms of within(phase, 21)) {
-          expect(safeCount(ms, aspect)).toBeGreaterThanOrEqual(11)
+          const f = entranceFrame(script, ms)
+          const shot = cameraFor(entranceCameraMode(script, ms), f.focus, ms / 1000, state.seed)
+          const inFrame = f.players.filter(
+            p =>
+              p.side === side &&
+              inSafe(project(shot, aspect, { x: p.x, y: HEAD_Y, z: p.z })) &&
+              inSafe(project(shot, aspect, { x: p.x, y: FOOT_Y, z: p.z })),
+          ).length
+          expect(`${phase} ${Math.round(ms)}ms @${aspect}: ${inFrame}`).toBe(
+            `${phase} ${Math.round(ms)}ms @${aspect}: ${Math.max(inFrame, 7)}`,
+          )
         }
       }
     }
   })
 
-  it('호명 중인 선수는 **언제나** 프레임 안에 있다(카드와 화면이 어긋나지 않는다)', () => {
+  it('호명 중인 선수는 **언제나** 프레임 안에 있다(명단과 화면이 어긋나지 않는다)', () => {
     for (const aspect of ASPECTS) {
-      for (const ms of within('intro', 33)) {
-        const card = introCardAt(cast, ms)
-        expect(card).not.toBeNull()
-        const f = entranceFrame(cast, ms)
-        const shot = cameraFor(entranceCameraMode(ms), f.focus, ms / 1000, state.seed)
-        const p = f.players.find(x => x.id === card!.player.id)
-        expect(p).toBeDefined()
-        const n = project(shot, aspect, { x: p!.x, y: 0.95, z: p!.z })
-        expect(n).not.toBeNull()
-        expect(Math.abs(n!.x)).toBeLessThanOrEqual(SAFE)
-        expect(Math.abs(n!.y)).toBeLessThanOrEqual(SAFE)
+      for (const phase of ['home-intro', 'away-intro'] as const) {
+        for (const ms of within(phase, 41)) {
+          const hi = entranceHighlightAt(script, ms)
+          if (!hi) continue // 그룹 도입·해설 비트에는 하이라이트가 없다
+          const f = entranceFrame(script, ms)
+          const shot = cameraFor(entranceCameraMode(script, ms), f.focus, ms / 1000, state.seed)
+          const p = f.players.find(x => x.id === hi.player.id)
+          expect(p).toBeDefined()
+          const n = project(shot, aspect, { x: p!.x, y: 0.95, z: p!.z })
+          expect(n).not.toBeNull()
+          expect(`${phase} ${Math.round(ms)} x`).toBe(
+            Math.abs(n!.x) <= SAFE ? `${phase} ${Math.round(ms)} x` : `밖(${n!.x.toFixed(2)})`,
+          )
+          expect(Math.abs(n!.y)).toBeLessThanOrEqual(SAFE)
+        }
       }
     }
   })
@@ -147,25 +167,26 @@ describe('입장 연출 프레이밍 — 클로즈 단계', () => {
 
 describe('입장 연출 카메라 스크립트', () => {
   it('단계별 모드 — 와이드 → 사선 클로즈 → 경기 카메라', () => {
-    const at = (phase: string) => entranceCameraMode(within(phase, 1)[0])
+    const at = (phase: EntrancePhase) => entranceCameraMode(script, within(phase, 1)[0])
     expect(at('tunnel')).toBe('entrance')
     expect(at('walkout')).toBe('entrance')
-    expect(at('lineup')).toBe('entrance-close')
-    expect(at('intro')).toBe('entrance-close')
+    expect(at('split')).toBe('entrance')
+    expect(at('home-intro')).toBe('entrance-close')
+    expect(at('away-intro')).toBe('entrance-close')
     // 흩어짐부터는 경기 카메라 — 킥오프 휘슬에서 카메라가 또 움직이지 않는다.
     expect(at('disperse')).toBe('broadcast')
-    expect(entranceCameraMode(1e9)).toBe('broadcast')
+    expect(entranceCameraMode(script, 1e9)).toBe('broadcast')
   })
 
   it('카메라 위치가 단계 안에서 튀지 않는다(연속성)', () => {
     // reaction을 재사용하던 시절, 소개 6번째에서 focus.x가 0을 통과하면 방위각 부호가
     // 뒤집혀 카메라가 19 m 순간이동했다. 같은 모드라 리그의 0.6 s 전환도 타지 않는다.
-    for (const phase of ['tunnel', 'walkout', 'lineup', 'intro', 'disperse'] as const) {
+    for (const phase of ['tunnel', 'walkout', 'split', 'home-intro', 'away-intro', 'disperse'] as const) {
       const s = span(phase)
       let prev: CameraShot | null = null
       for (let ms = s.start + 1; ms < s.end; ms += 20) {
-        const f = entranceFrame(cast, ms)
-        const shot = cameraFor(entranceCameraMode(ms), f.focus, ms / 1000, state.seed)
+        const f = entranceFrame(script, ms)
+        const shot = cameraFor(entranceCameraMode(script, ms), f.focus, ms / 1000, state.seed)
         if (prev) {
           const jump = Math.hypot(shot.pos.x - prev.pos.x, shot.pos.y - prev.pos.y, shot.pos.z - prev.pos.z)
           // 20 ms에 0.3 m = 15 m/s. 연출 카메라가 이보다 빨리 움직일 이유가 없다.

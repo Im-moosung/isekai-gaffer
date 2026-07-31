@@ -23,7 +23,10 @@ import { LiveStats } from './LiveStats'
 // 입장 연출 — three 무의존이라 정적 import여도 3D 청크 분리가 깨지지 않는다.
 // (entrance.ts/EntranceOverlay.tsx 모두 three를 타입으로도 import하지 않는다.)
 import { EntranceOverlay } from '../pitch/three/EntranceOverlay'
-import { buildEntranceCast, type EntranceCast } from '../pitch/three/entrance'
+import {
+  ENTRANCE_SPEECH_SPEED, buildEntranceCast, defaultEntranceMode, entranceScript, markEntranceSeen,
+  type EntranceMode, type EntranceScript,
+} from '../pitch/three/entrance'
 import {
   minuteDwellWithSpeech, minuteRevealMs, sceneDwellMs, REVEAL_LAG_MS,
   pickDramaEvent, isImportantEvent, isHighlightEvent, eventIndex, type PlaybackSpeed,
@@ -242,7 +245,7 @@ export function MatchScreen({
   // 입장 연출 — cast가 있는 동안만 재생된다(phase는 아직 'pre').
   // 클럭의 정본은 오버레이다(자체 rAF). 3D 씬은 이 ref를 읽어 같은 시각을 그리므로
   // 폴백(Pixi/SVG)에서 3D가 없어도 자막·소개 카드는 그대로 돌아간다.
-  const [entranceCast, setEntranceCast] = useState<EntranceCast | null>(null)
+  const [entranceScr, setEntranceScr] = useState<EntranceScript | null>(null)
   const entranceClock = useRef(0)
 
   // 경기 초기화(마운트/픽스처 변경 시). 엔진은 pre 상태로 준비.
@@ -520,12 +523,38 @@ export function MatchScreen({
     // 엔진이 아직 준비 전이면(이론상 도달 불가) 연출을 건너뛰고 바로 시작한다.
     if (!engine) { sfx.whistle('kickoff'); kickoff(); return }
     entranceClock.current = 0
-    setEntranceCast(buildEntranceCast(engine))
+    // 첫 경기는 전체 연출(스토리보드 4컷), 그 뒤로는 짧은 판이 기본이다 — 근거는
+    // entrance.defaultEntranceMode 주석. 언제든 "선수 소개 보기"로 되돌릴 수 있다.
+    setEntranceScr(entranceScript(buildEntranceCast(engine), defaultEntranceMode()))
+  }
+
+  /** short 모드에서 "선수 소개 보기" — 전체 연출로 갈아 끼우고 처음부터 다시 재생한다. */
+  function expandEntrance(mode: EntranceMode = 'full') {
+    const eng = useMatchStore.getState().engine
+    if (!eng) return
+    ctts.stopAll()
+    entranceClock.current = 0
+    setEntranceScr(entranceScript(buildEntranceCast(eng), mode))
+  }
+
+  /**
+   * 입장 소개 비트 하나를 발화한다. 큐 정책이 경기 중과 다르다 —
+   * {@link ctts.speakScripted}는 드롭도 선점도 하지 않는다(대본이 이미 페이싱을 잡았다).
+   * ENTRANCE_SPEECH_SPEED는 비트 길이를 역산할 때 쓴 값과 **같아야** 한다.
+   */
+  function speakEntranceBeat(beat: { speech: string; speaker: 'caster' | 'analyst' }) {
+    ctts.speakScripted(beat.speech, {
+      speed: ENTRANCE_SPEECH_SPEED,
+      role: beat.speaker === 'analyst' ? 'analyst' : 'normal',
+    })
   }
 
   /** 입장 연출 종료(자연 종료·건너뛰기 공통) — 여기서 비로소 경기가 시작된다. */
   function handleEntranceDone() {
-    setEntranceCast(null)
+    // 전체 연출을 한 번 봤으면 다음 경기부터는 짧은 판이 기본이다.
+    if (entranceScr?.mode === 'full') markEntranceSeen()
+    ctts.stopAll()
+    setEntranceScr(null)
     sfx.whistle('kickoff')
     kickoff()
   }
@@ -542,7 +571,7 @@ export function MatchScreen({
 
   // ── 일시정지 토글 + 스페이스 단축키 ──────────────────────────────
   // 재생 중이거나 이미 정지 상태일 때만 의미가 있다. 작전판·입장 연출·종료에서는 무의미.
-  const canFreeze = phase === 'playing' && !tacticsMode && !entranceCast
+  const canFreeze = phase === 'playing' && !tacticsMode && !entranceScr
   function toggleFreeze() {
     if (!canFreeze) return
     setFrozen(f => !f)
@@ -711,12 +740,12 @@ export function MatchScreen({
   //  · 입장 연출 — 0:0 0' 스코어버그와 중계 티커가 돌면 "아직 시작 전"이 무너진다.
   //    대신 프리매치 스트립 한 줄만 남긴다.
   const finished = phase === 'fulltime'
-  const overlayOpen = tacticsMounted || !!entranceCast
+  const overlayOpen = tacticsMounted || !!entranceScr
   const chromeOn = !overlayOpen
   // 킥오프 전 전술 설계 화면(워룸)에서는 재생 관련 furniture가 전부 의미가 없다.
   // 되감을 경기도, 바꿀 배속도, 전환할 렌더러도 아직 없다. 남아 있으면
   // "이미 경기가 돌아가고 있다"는 잘못된 신호를 준다(감사 W-12).
-  const preDesign = phase === 'pre' && !entranceCast
+  const preDesign = phase === 'pre' && !entranceScr
   /**
    * **풀블리드 방송 스테이지**(입장 연출 · 재생 · 정지). 킥오프 전 워룸과 종료
    * 리포트는 읽는 화면이라 예전처럼 문서 흐름을 쓴다.
@@ -750,7 +779,7 @@ export function MatchScreen({
       )}
 
       {/* 입장 연출 중 유일한 furniture — 대진 한 줄. 시계도 스코어도 없다. */}
-      {entranceCast && (
+      {entranceScr && (
         <header className="ms-topbar ms-topbar--prematch">
           <p className="ms-prematch">
             <span className="ms-prematch__teams">{home.name.ko} vs {away.name.ko}</span>
@@ -761,7 +790,7 @@ export function MatchScreen({
 
       <main
         className={
-          `ms-stage${phase === 'pre' && !entranceCast ? ' ms-stage--pre' : ''}` +
+          `ms-stage${phase === 'pre' && !entranceScr ? ' ms-stage--pre' : ''}` +
           // 배너가 떠 있는 동안만 2D 작전판이 그만큼 아래로 물러난다(match.css).
           `${bannerText && !finished ? ' ms-stage--banner' : ''}`
         }
@@ -788,7 +817,7 @@ export function MatchScreen({
                     {...pitchProps}
                     event={live3d ? highlight!.event : null}
                     fallback={pitch2d}
-                    entrance={entranceCast}
+                    entrance={entranceScr}
                     entranceClock={entranceClock}
                   />
                 </Suspense>
@@ -810,11 +839,15 @@ export function MatchScreen({
               />
             )}
             {/* 입장 연출 오버레이 — 자막·선수 소개 카드·건너뛰기. */}
-            {entranceCast && (
+            {entranceScr && (
               <EntranceOverlay
-                cast={entranceCast}
+                // key = 모드. "선수 소개 보기"로 갈아 끼우면 클럭이 0부터 다시 산다.
+                key={entranceScr.mode}
+                script={entranceScr}
                 onDone={handleEntranceDone}
                 onProgress={ms => { entranceClock.current = ms }}
+                onBeat={speakEntranceBeat}
+                {...(entranceScr.mode === 'short' ? { onExpand: () => expandEntrance('full') } : {})}
               />
             )}
             {/* ── 골 드라마: 대형 타이포 + 득점자 배너(스코어버그 펄스는 별도) ──
@@ -964,7 +997,7 @@ export function MatchScreen({
 
         {/* ── 킥오프 전 전술 센터 — 방송 스테이지 아래에 붙는 워룸.
             입장 연출 중에는 내린다 — 킥오프를 이미 눌렀으므로 설계는 끝났다. ── */}
-        {phase === 'pre' && !entranceCast && (
+        {phase === 'pre' && !entranceScr && (
           <div className="ms-precenter">
             <TacticsCenter onKickoff={handleKickoff} referenceScore={referenceScore} />
           </div>

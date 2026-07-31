@@ -815,6 +815,64 @@ export function makeFlagCanvas(w = 128, h = 96): HTMLCanvasElement | null {
   return canvas
 }
 
+// ── 입장 배너(피치에 펼치는 팀 색 천) ───────────────────────────
+/**
+ * 입장 연출에서 피치에 펼치는 **팀 배너** 텍스처.
+ *
+ * ★ 실제 국기를 그리지 않는다. 프로젝트 규칙이 공식 엠블럼·로고 사용을 금지하고
+ *   (docs/proposal/proposal-draft.md 고지 절), 국기는 그중에서도 가장 다투기 쉬운
+ *   자산이다. 대신 원정 응원석이 펼치는 **대형 천(tifo)** 의 문법을 쓴다 —
+ *   팀 색 바탕 + 사선 색면 + 팀명. "그 팀의 자리"라는 의미는 그대로 전달되면서
+ *   어떤 실존 국기·엠블럼과도 닮지 않는다.
+ *
+ * @param base  팀 색(0xRRGGBB)
+ * @param ink   글자색(팀 색 대비로 호출부가 고른다 — {@link kitInk})
+ * @param label 팀 한국어 이름
+ */
+export function makeBannerCanvas(
+  base: number, ink: number, label: string, w = 512, h = 320,
+): HTMLCanvasElement | null {
+  const c = makeCanvas(w, h)
+  if (!c) return null
+  const { ctx, canvas } = c
+  const css = (v: number) => `#${(v >>> 0).toString(16).padStart(6, '0')}`
+  ctx.fillStyle = css(base)
+  ctx.fillRect(0, 0, w, h)
+  // 사선 색면 두 줄 — 천의 방향감을 만든다(단색이면 3D에서 색종이로 보인다).
+  ctx.save()
+  ctx.globalAlpha = 0.16
+  ctx.fillStyle = css(ink)
+  for (const off of [-0.35, 0.25]) {
+    ctx.beginPath()
+    ctx.moveTo(w * off, h)
+    ctx.lineTo(w * (off + 0.34), h)
+    ctx.lineTo(w * (off + 0.78), 0)
+    ctx.lineTo(w * (off + 0.44), 0)
+    ctx.closePath()
+    ctx.fill()
+  }
+  ctx.restore()
+  // 테두리 — 실제 배너는 가장자리를 박음질한다. 3D 원경에서 형태를 잡아 준다.
+  ctx.strokeStyle = css(ink)
+  ctx.globalAlpha = 0.55
+  ctx.lineWidth = Math.max(4, h * 0.028)
+  ctx.strokeRect(ctx.lineWidth, ctx.lineWidth, w - ctx.lineWidth * 2, h - ctx.lineWidth * 2)
+  ctx.globalAlpha = 1
+  // 팀명 — 한 줄. 폭에 맞춰 자동으로 줄인다(긴 팀명도 잘리지 않게).
+  ctx.fillStyle = css(ink)
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  let size = Math.round(h * 0.3)
+  ctx.font = `800 ${size}px system-ui, sans-serif`
+  const max = w * 0.78
+  while (size > 12 && ctx.measureText(label).width > max) {
+    size -= 4
+    ctx.font = `800 ${size}px system-ui, sans-serif`
+  }
+  ctx.fillText(label, w / 2, h / 2)
+  return canvas
+}
+
 // ── 광고보드(LED 페리미터) ──────────────────────────────────────
 /**
  * 광고보드 기본 문구(가상 브랜드만 — 실존 상표 사용 금지).

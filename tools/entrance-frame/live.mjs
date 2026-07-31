@@ -28,13 +28,18 @@ const W = Number(arg('w', 1600))
 const H = Number(arg('h', 900))
 const PLAYS = Number(arg('play', 8))
 
-/** entrance.ts의 단계 길이(ms). 단계 안 어디를 찍을지 정하는 데만 쓴다. */
+/**
+ * 스토리보드 4컷 + 흩어짐. 단계 안 **어디를** 찍을지만 정하는 값이다(진짜 동기는
+ * 오버레이의 `data-phase`가 잡는다). 소개 컷은 캐스트에 따라 길이가 변하므로
+ * 고정 대기 대신 "단계 진입 후 n ms"로 잡는다.
+ */
 const PHASES = [
-  ['tunnel', 1800],
-  ['walkout', 3600],
-  ['lineup', 900],
-  ['intro', 5500],
-  ['disperse', 2000],
+  ['tunnel', 900],
+  ['walkout', 3000],
+  ['split', 3600],
+  ['home-intro', 9000],
+  ['away-intro', 9000],
+  ['disperse', 1100],
 ]
 
 function freePort() {
@@ -99,7 +104,7 @@ try {
       name,
       { timeout: 30000 },
     )
-    await page.waitForTimeout(Math.round(ms * 0.5))
+    await page.waitForTimeout(ms)
     console.log(`  ${name} → ${await shot(name)}`)
   }
 

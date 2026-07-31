@@ -21,10 +21,13 @@ import { shadowDiscGeometry } from './player3d'
 import { ROW_STEP, SEAT_PITCH, buildCrowd, crowdCapacity, type CrowdBundle, type CrowdStand } from './crowd'
 import { buildExterior, type ExteriorBundle } from './exterior'
 import { buildCornerFlags, buildGoal } from './props'
+import { kitInk } from './pose'
+import { ENTRANCE_BANNER_AWAY, ENTRANCE_BANNER_HOME } from './entrance'
 import {
   AD_PANEL_ASPECT,
   AD_TEXTS,
   makeAdBoardCanvas,
+  makeBannerCanvas,
   makeConcreteCanvas,
   makeCrowdCanvas,
   makePitchCanvas,
@@ -65,6 +68,10 @@ export interface BuildSceneOptions {
    * 외부 요소 중 유일하게 오버드로우 비용이 있는 항목이라 따로 열어 둔다.
    */
   lightShafts?: boolean
+  /** 입장 배너에 새길 팀 이름(한국어). 없으면 배너를 만들지 않는다. */
+  homeLabel?: string
+  /** 어웨이 팀 이름(한국어). */
+  awayLabel?: string
   /** 피치 텍스처 해상도(px/m). 기본 20 → 2100×1360. 저사양은 12 권장. */
   pxPerMeter?: number
   /** renderer.capabilities.getMaxAnisotropy() 값. 기본 16. */
@@ -124,6 +131,12 @@ export interface SceneBundle {
    * @param intensity 0=평상시 미세 흔들림, 1=골 세리머니 점프(파도타기)
    */
   crowdWave(t: number, intensity: number): void
+  /**
+   * 입장 배너(피치에 펼치는 팀 색 천)를 켜고 끈다. 기본 꺼짐 — **입장 연출 중에만** 켠다.
+   * 경기가 시작되면 배너는 걷힌다(실제 의식도 그렇다).
+   * `homeLabel`/`awayLabel`을 주지 않았으면 조용한 no-op이다.
+   */
+  setEntranceBanners(visible: boolean): void
   /**
    * 발광체(조명탑·LED 보드) HDR 배율을 런타임에 교체한다. {@link BuildSceneOptions.emissiveBoost}와
    * 같은 의미이며, 포스트FX가 **비동기로** 붙는 호출부가 사후에 켤 수 있게 열어 둔다.
@@ -362,6 +375,53 @@ export function buildScene(THREE: ThreeAPI, opts: BuildSceneOptions = {}): Scene
     adTexEnd.needsUpdate = true
   }
 
+  /**
+   * ── 입장 배너(스토리보드 컷1의 "국기") ─────────────────────────
+   * 피치에 눕힌 팀 색 천 두 장. **실제 국기가 아니다** — 프로젝트 규칙이 공식
+   * 엠블럼·로고를 금지하므로 팀 색 + 팀명의 절차 배너(tifo)로 대체했다
+   * (근거는 textures.makeBannerCanvas · entrance.ENTRANCE_BANNER_HOME 주석).
+   * 기본은 숨김이고 입장 연출이 켠다.
+   */
+  const bannerGroup = new THREE.Group()
+  bannerGroup.visible = false
+  bannerGroup.name = 'entrance-banners'
+  pitchGroup.add(bannerGroup)
+  const addBanner = (
+    spec: { x: number; z: number; w: number; h: number }, color: number, label: string,
+  ): void => {
+    const tex = toTexture(THREE, makeBannerCanvas(color, kitInk(color), label), { aniso })
+    if (tex) {
+      // ★ 180° 회전 보정(u·v 둘 다 뒤집는다). 평면을 -90°로 눕히면
+      //   · u(+X)는 **화면 왼쪽**을 향하고(방송 카메라가 -Z라 화면 오른쪽이 -X — ends.ts),
+      //   · v(+Y)는 -Z로 가서 **화면 아래**를 향한다.
+      //   둘을 그대로 두면 팀명이 뒤집힌 채 거울상으로 읽힌다(실제 캡처로 확인).
+      tex.wrapS = THREE.RepeatWrapping
+      tex.wrapT = THREE.RepeatWrapping
+      tex.repeat.set(-1, -1)
+      tex.offset.set(1, 1)
+      tex.needsUpdate = true
+    }
+    const geo = new THREE.PlaneGeometry(spec.w, spec.h)
+    geo.rotateX(-Math.PI / 2)
+    const mat = new THREE.MeshLambertMaterial({
+      color: tex ? 0xffffff : color,
+      ...(tex ? { map: tex } : {}),
+      transparent: true,
+      opacity: 0.94,
+      depthWrite: false,
+    })
+    const mesh = new THREE.Mesh(geo, mat)
+    // 잔디 바로 위. 0.02는 z-fighting을 피하는 최소 높이다(라인 텍스처와 같은 평면이다).
+    mesh.position.set(spec.x, 0.02, spec.z)
+    mesh.renderOrder = 1
+    bannerGroup.add(mesh)
+  }
+  if (opts.homeLabel) addBanner(ENTRANCE_BANNER_HOME, homeColor, opts.homeLabel)
+  if (opts.awayLabel) addBanner(ENTRANCE_BANNER_AWAY, awayColor, opts.awayLabel)
+  const setEntranceBanners = (visible: boolean): void => {
+    bannerGroup.visible = visible && bannerGroup.children.length > 0
+  }
+
   const rise = STAND_DEPTH * Math.tan(RAKE)
   const slope = STAND_DEPTH / Math.cos(RAKE)
   const sideRakeGeo = new THREE.BoxGeometry(SIDE_LEN, SLAB_T, slope)
@@ -548,6 +608,7 @@ export function buildScene(THREE: ThreeAPI, opts: BuildSceneOptions = {}): Scene
     scene,
     camera,
     pitchGroup,
+    setEntranceBanners,
     stadiumGroup,
     pitchMesh,
     // 값 복사로 노출하면 dispose 후에도 해제된 메시를 붙들게 된다(dangling). getter로 클로저를 본다.

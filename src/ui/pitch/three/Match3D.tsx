@@ -15,7 +15,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { MatchEvent, MatchState } from '../../../engine/types'
 import type { ChoreoStep } from '../choreography'
 import { createCameraRig } from './camera'
-import { entranceCameraMode, entranceFrame, type EntranceCast } from './entrance'
+import { entranceCameraMode, entranceFrame, type EntranceScript } from './entrance'
+import { endsSwapped } from '../ends'
 import { FLASH_CONCEDED, FLASH_SCORED, createBall, flashQuad, goalBurst, type GoalBurst } from './fx3d'
 import { bindResize, createRendererHost, webgl2Available } from './host'
 import { DIVE_LAY_U, KICK_IMPACT_T, computeFrame } from './movement'
@@ -25,7 +26,7 @@ import { createRenderScaler, readStoredScale, writeStoredScale } from './perf'
 import { createPlayer, disposePlayerCaches, type PlayerRig } from './player3d'
 import { createPostFX } from './postfx'
 import { EMISSIVE_BOOST, buildScene, type ThreeAPI } from './scene'
-import type { FrameState } from './types'
+import { FIRST_HALF_ENDS, rotateFrame, type FrameState } from './types'
 
 interface Match3DProps {
   state: MatchState
@@ -50,7 +51,7 @@ interface Match3DProps {
    * 입장 연출 캐스트. null이 아니면 **경기 프레임 대신 입장 연출을 렌더한다**
    * (킥오프 전 한정). 연출의 시계는 DOM 오버레이가 소유한다 — 3D는 읽기만 한다.
    */
-  entrance?: EntranceCast | null
+  entrance?: EntranceScript | null
   /**
    * 입장 연출 경과 ms를 담은 가변 ref. **prop이 아니라 ref인 이유**: 오버레이는 60fps로
    * 진행하는데 이걸 state로 올리면 초당 60회 React 리렌더가 발생한다(3D 루프는 이미
@@ -208,6 +209,9 @@ export function Match3D(props: Match3DProps) {
       const bundle = buildScene(THREE, {
         homeColor,
         awayColor,
+        // 입장 배너(스토리보드 컷1) — 팀명을 새긴 팀 색 천. 실제 국기는 쓰지 않는다.
+        homeLabel: propsRef.current.state.home.team.name.ko,
+        awayLabel: propsRef.current.state.away.team.name.ko,
         crowdCount: CROWD_FULL,
         pxPerMeter: PX_PER_M,
         maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
@@ -246,13 +250,14 @@ export function Match3D(props: Match3DProps) {
        * 심판 리그 — 입장 연출에서만 쓰므로 **연출이 실제로 재생될 때** 만든다.
        * (건너뛴 유저에게 리그 하나를 만들어 줄 이유가 없다.)
        */
-      let refRig: PlayerRig | null = null
-      const ensureRefRig = (): PlayerRig => {
-        if (!refRig) {
-          refRig = createPlayer(THREE, { kit: REF_KIT, accent: REF_ACCENT, number: 0, isGk: false })
-          scene.add(refRig.root)
+      const refRigs: PlayerRig[] = []
+      const ensureRefRig = (i: number): PlayerRig => {
+        while (refRigs.length <= i) {
+          const rig = createPlayer(THREE, { kit: REF_KIT, accent: REF_ACCENT, number: 0, isGk: false })
+          scene.add(rig.root)
+          refRigs.push(rig)
         }
-        return refRig
+        return refRigs[i]
       }
 
       // 선발 22명은 첫 프레임 전에 만들어 둔다(루프 안에서 22개 생성 = 렌더 히치).
@@ -438,10 +443,10 @@ export function Match3D(props: Match3DProps) {
         // ── 입장 연출: 킥오프 전에는 경기 프레임 대신 이 타임라인을 그린다 ──
         // 연출의 시계는 DOM 오버레이가 소유한다(3D가 없어도 연출이 진행돼야 하므로).
         // 여기서는 그 시각을 읽어 같은 순간의 포즈를 그릴 뿐이다.
-        const cast = p.entrance ?? null
-        if (cast) {
+        const script = p.entrance ?? null
+        if (script) {
           const ems = p.entranceClock?.current ?? 0
-          const ef = entranceFrame(cast, ems)
+          const ef = entranceFrame(script, ems)
           const gkH = p.state.home.tactics.lineup[0]?.playerId
           const gkA = p.state.away.tactics.lineup[0]?.playerId
           seen.clear()
@@ -453,13 +458,18 @@ export function Match3D(props: Match3DProps) {
             seen.add(pose.id)
           }
           for (const [id, rig] of rigs) if (!seen.has(id)) rig.root.visible = false
-          const ref = ensureRefRig()
-          ref.root.visible = true
-          ref.apply(ef.referee, elapsed)
+          // 심판 3인(주심 + 부심 2인) — 스토리보드 컷1의 "심판 심판 심판".
+          ef.referees.forEach((pose, i) => {
+            const rig = ensureRefRig(i)
+            rig.root.visible = true
+            rig.apply(pose, elapsed)
+          })
           ball.update(ef.ball, dt)
           // 카메라 스크립트는 연출 모듈이 소유한다(entranceCameraMode) — 프레이밍 검증
           // 테스트가 렌더와 같은 모드를 쓰게 하기 위해서다.
-          camRig.setMode(entranceCameraMode(ems))
+          // 배너는 연출 중에만 펼쳐 둔다.
+          bundle.setEntranceBanners(true)
+          camRig.setMode(entranceCameraMode(script, ems))
           camRig.update({ focus: ef.focus, t: elapsed, dt, camera })
           post.render(dt)
           // 입장 연출에는 이름표를 달지 않는다 — 도열·국가 제창은 화면 전체가 그림이고,
@@ -471,8 +481,9 @@ export function Match3D(props: Match3DProps) {
           lastMinute = -1
           return
         }
-        // 연출이 끝났거나 건너뛴 뒤: 심판은 화면에서 사라진다(경기 중 심판은 안 그린다).
-        if (refRig) refRig.root.visible = false
+        // 연출이 끝났거나 건너뛴 뒤: 심판과 배너는 화면에서 사라진다.
+        for (const rig of refRigs) rig.root.visible = false
+        bundle.setEntranceBanners(false)
 
         // ── 분 내 진행도 t: 분(또는 시퀀스)이 바뀌면 클럭을 리셋한다 ──
         const minute = p.state.minute
@@ -505,11 +516,24 @@ export function Match3D(props: Match3DProps) {
         })
         prevFrame = frame
 
+        /**
+         * ── 표시 진영 ──────────────────────────────────────────
+         * 무브먼트는 언제나 엔진 프레임(홈이 +x로 공격)에서 계산하고, **화면에 올리기
+         * 직전** 여기서 한 번만 180° 돌린다. 두 가지를 동시에 해결한다:
+         *  ④ 전반에는 항상 돌린다(FIRST_HALF_ENDS = −1) — 안 돌리면 방송 카메라(−Z)에서
+         *     홈이 화면 **왼쪽**으로 공격해 2D 작전판과 반대로 보인다.
+         *  ⑤ 후반에는 진영을 바꾼다 → 부호가 한 번 더 뒤집혀 +1(회전 없음)이 된다.
+         * 180° 회전은 등거리라 발 앵커링·GK 접촉·킥 방향이 그대로 보존된다.
+         * `prevFrame`은 **돌리기 전** 프레임을 물려준다 — 관성이 한 좌표계 안에서 닫혀야
+         * 하프타임에 22명의 속도 벡터가 통째로 뒤집히지 않는다.
+         */
+        const view = rotateFrame(frame, endsSwapped(minute) ? 1 : FIRST_HALF_ENDS)
+
         // ── 선수 22명 ────────────────────────────────────────────
         const gkHome = p.state.home.tactics.lineup[0]?.playerId
         const gkAway = p.state.away.tactics.lineup[0]?.playerId
         seen.clear()
-        for (const pose of frame.players) {
+        for (const pose of view.players) {
           const rig = ensureRig(pose.id, pose.side, pose.number, pose.id === gkHome || pose.id === gkAway)
           if (!rig) continue
           rig.root.visible = true
@@ -519,19 +543,21 @@ export function Match3D(props: Match3DProps) {
         // 퇴장 등으로 이번 프레임에 없는 선수는 숨긴다(리그는 유지 — 재등장 대비).
         for (const [id, rig] of rigs) if (!seen.has(id)) rig.root.visible = false
 
-        ball.update(frame.ball, dt)
+        ball.update(view.ball, dt)
 
-        const ev = frame.event
+        const ev = view.event
         // ── 임팩트: 발이 공에 닿는 프레임 · GK 손이 공에 닿는 프레임 ──
         // 포즈 진행도가 접촉 지점을 **넘어서는 프레임**을 경계로 잡는다. computeFrame이
         // 이미 두 진행도를 볼 이벤트 시각에 역산해 맞춰 두었으므로(kickAt·diveScheduleAt),
         // 여기서 별도의 시간 계산 없이 "지금이 접촉"을 알 수 있다.
-        const kicker = frame.players.find(pl => pl.action === 'kick')
+        // ★ 헤딩도 임팩트다 — 포즈 시간 규약(KICK_IMPACT_T)이 킥과 같으므로 같이 잡는다.
+        //   빼면 헤더 골에서 카메라 임펄스와 임팩트 파티클이 통째로 사라진다.
+        const kicker = view.players.find(pl => pl.action === 'kick' || pl.action === 'header')
         const kickT = kicker ? kicker.actionT : -1
         if (kicker && prevKickT >= 0 && prevKickT < KICK_IMPACT_T && kickT >= KICK_IMPACT_T) {
           camRig.impulse(KICK_IMPULSE)
           if (!reduced) {
-            const puff = goalBurst(THREE, IMPACT_COLOR, { x: frame.ball.x, y: 0.12, z: frame.ball.z }, {
+            const puff = goalBurst(THREE, IMPACT_COLOR, { x: view.ball.x, y: 0.12, z: view.ball.z }, {
               seed: p.state.seed + minute * 31, count: IMPACT_COUNT, life: IMPACT_LIFE, speed: 0.3, size: 0.34,
             })
             scene.add(puff.mesh)
@@ -539,12 +565,12 @@ export function Match3D(props: Match3DProps) {
           }
         }
         prevKickT = kickT
-        const diver = frame.players.find(pl => pl.action === 'dive')
+        const diver = view.players.find(pl => pl.action === 'dive')
         const diveT = diver ? diver.actionT : -1
         if (diver && ev === 'save' && prevDiveT >= 0 && prevDiveT < DIVE_LAY_U && diveT >= DIVE_LAY_U) {
           camRig.impulse(SAVE_IMPULSE)
           if (!reduced) {
-            const puff = goalBurst(THREE, IMPACT_COLOR, { x: frame.ball.x, y: 0.12, z: frame.ball.z }, {
+            const puff = goalBurst(THREE, IMPACT_COLOR, { x: view.ball.x, y: 0.12, z: view.ball.z }, {
               seed: p.state.seed + minute * 57, count: IMPACT_COUNT, life: IMPACT_LIFE, speed: 0.34, size: 0.36,
             })
             scene.add(puff.mesh)
@@ -570,7 +596,7 @@ export function Match3D(props: Match3DProps) {
             const burst = goalBurst(
               THREE,
               scoredByHome ? homeColor : awayColor,
-              { x: frame.ball.x, y: Math.max(frame.ball.y, 0.6), z: frame.ball.z },
+              { x: view.ball.x, y: Math.max(view.ball.y, 0.6), z: view.ball.z },
               { seed: p.state.seed + minute },
             )
             scene.add(burst.mesh)
@@ -611,13 +637,13 @@ export function Match3D(props: Match3DProps) {
         }
 
         // ── 카메라 적용 + 렌더 ───────────────────────────────────
-        camRig.update({ focus: { ...frame.focus, r: frame.focusRadius ?? 0 }, t: elapsed, dt, camera })
+        camRig.update({ focus: { ...view.focus, r: view.focusRadius ?? 0 }, t: elapsed, dt, camera })
         post.render(dt)
 
         // ── 선수 이름표 ──────────────────────────────────────────
         // 렌더 **뒤**에 갱신한다 — camRig가 방금 옮긴 카메라의 행렬로 투영해야
         // 이름이 이번 프레임의 몸 위에 정확히 얹힌다(한 프레임 늦으면 빠른 팬에서 끌린다).
-        updatePlates(frame, elapsed)
+        updatePlates(view, elapsed)
       }
 
       // ── 컨텍스트 로스 → 즉시 정리 후 폴백 ────────────────────────
@@ -646,8 +672,8 @@ export function Match3D(props: Match3DProps) {
         // 리그를 먼저 떼어내야 bundle.dispose()의 트리 순회가 공유 캐시를 건드리지 않는다.
         for (const rig of rigs.values()) rig.dispose()
         rigs.clear()
-        refRig?.dispose()
-        refRig = null
+        for (const rig of refRigs) rig.dispose()
+        refRigs.length = 0
         bundle.dispose()
         disposePlayerCaches()
         renderer.dispose()

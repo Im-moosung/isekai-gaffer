@@ -28,7 +28,7 @@
 //  8) 전술 반영 해설 — 감독의 지시(decisionLog)를 해설이 알아본다(§3.5). ★ 인과를
 //     단정하지 않는다. 엔진은 "그 지시 때문에" 그렇게 됐는지 모른다. 전부 시간 서술
 //     ("압박을 올린 뒤로 ~")로만 쓴다 — 사실 서술은 틀릴 수 없다.
-import type { DecisionEntry, MatchEvent, MatchEventType, Team } from '../engine/types'
+import type { DecisionEntry, MatchEvent, MatchEventType, Position, Team } from '../engine/types'
 import { dramaRank } from './drama'
 
 // ── 조사 자동 선택 (§5.5) ────────────────────────────────────
@@ -81,6 +81,26 @@ const ORD_KO = ['', '첫', '두', '세', '네', '다섯', '여섯', '일곱', '�
 /** 고유어 서수 관형사 — `${ordKo(3)} 번째` → "세 번째". 범위 밖이면 '여러'. */
 export function ordKo(n: number): string {
   return ORD_KO[n] ?? '여러'
+}
+
+/** 고유어 기수 관형사 — 사람을 셀 때는 `4명`이 "사명"이 아니라 "네 명"이다. */
+const CARD_KO = ['', '한', '두', '세', '네', '다섯', '여섯', '일곱', '여덟', '아홉', '열', '열한'] as const
+
+/** `${countKo(4)} 명` → "네 명". 범위 밖이면 한자어 수사로 폴백한다. */
+export function countKo(n: number): string {
+  return CARD_KO[n] ?? String(n)
+}
+
+/**
+ * 포메이션 id를 발음 가능한 문자열로 — `4-2-3-1` → `사 이 삼 일`.
+ * 하이픈을 그대로 두면 ko-KR 보이스가 "사 마이너스 이"로 읽거나 통째로 삼킨다.
+ * 실제 캐스터도 "사-이-삼-일"로 자릿수를 하나씩 끊어 읽는다.
+ */
+export function formationSpeechKo(formation: string): string {
+  return formation
+    .split('-')
+    .map(d => SINO_KO[Number(d)] ?? d)
+    .join(' ')
 }
 
 // ── 해시 (§4.1 #4) ──────────────────────────────────────────
@@ -1258,4 +1278,160 @@ export function commentateTimeline(
  */
 export function commentate(e: MatchEvent, home: Team, away: Team, seed = 0): Line {
   return commentateAt([e], 0, home, away, seed)
+}
+
+// ── 입장 라인업 소개 (경기 이벤트가 아니다) ──────────────────
+//
+// ★ 왜 `commentateAll` 밖인가: 저 함수는 **이벤트와 1:1**이라는 계약을 갖는다
+//   (접두 안정성 · `commentateAt` 일치 · playback의 eventIndex). 입장 소개는 이벤트가
+//   하나도 없는 구간의 발화라 그 배열에 끼워 넣을 자리가 없다. 그래서 완전히 별도
+//   경로로 두고, 공용 자산(조사·수사·sanitizeSpeech·Speaker)만 함께 쓴다.
+//
+// 화자 분담(§1.1)은 그대로다 — **캐스터가 명단을 읽고**, 해설위원은 다 읽은 뒤
+// 한 줄 받는다. 해설이 먼저 말하는 일은 없다.
+//
+// 문장 구조는 사용자 지시를 그대로 따른다:
+//   "골키퍼 김승규" / "네 명의 수비가 출전합니다. 김민재, 이한범, …, … 입니다."
+// 즉 **포지션 그룹 단위로 묶어 말하되 개별 이름을 부른다.** 이름 하나가 곧 비트
+// 하나이므로, 표시 계층은 비트 경계에서 도트·명단 행 하이라이트를 옮기면 된다.
+
+/** 소개 묶음 — 포지션을 네 그룹으로 접는다. */
+export type LineupGroupKey = 'GK' | 'DF' | 'MF' | 'FW'
+
+const GROUP_OF: Record<Position, LineupGroupKey> = {
+  GK: 'GK',
+  CB: 'DF', LB: 'DF', RB: 'DF',
+  DM: 'MF', CM: 'MF', AM: 'MF',
+  LW: 'FW', RW: 'FW', ST: 'FW',
+}
+
+/** 포지션 → 소개 묶음. */
+export function lineupGroupOf(position: Position): LineupGroupKey {
+  return GROUP_OF[position] ?? 'MF'
+}
+
+/** 소개에 필요한 최소 선수 정보(엔진 타입에 묶이지 않는다 — 표시 계층이 만들어 넘긴다). */
+export interface LineupMember {
+  id: string
+  number: number
+  nameKo: string
+  position: Position
+}
+
+/** 소개 비트 한 개 = 한 문장 = 한 번의 발화. */
+export interface LineupBeat {
+  /** 'open' 팀 도입 · 'group' 그룹 도입 · 'name' 개별 호명 · 'analyst' 해설 받는 말 */
+  kind: 'open' | 'group' | 'name' | 'analyst'
+  speaker: Speaker
+  /** 화면 자막 문자열. */
+  text: string
+  /** TTS 문자열({@link sanitizeSpeech} 통과). */
+  speech: string
+  /** 이 비트에서 하이라이트할 선수 id. 없으면 null. */
+  playerId: string | null
+  group: LineupGroupKey | null
+}
+
+/** 그룹 도입 문장 — 사용자 예문("네 명의 수비가 출전합니다")을 기본형으로 삼는다. */
+const GROUP_LEAD: Record<Exclude<LineupGroupKey, 'GK'>, (n: number) => string> = {
+  DF: n => `${countKo(n)} 명의 수비가 출전합니다.`,
+  MF: n => `중원에는 ${countKo(n)} 명이 섭니다.`,
+  FW: n => `최전방은 ${countKo(n)} 명입니다.`,
+}
+
+/** 그룹 라벨(자막용 — 발화에는 위 문장이 쓰인다). */
+const GROUP_LABEL: Record<LineupGroupKey, string> = {
+  GK: '골키퍼', DF: '수비', MF: '미드필더', FW: '공격수',
+}
+
+/**
+ * 해설위원이 명단을 다 들은 뒤 받는 말. 백라인 인원으로 갈리고, 같은 인원 안에서는
+ * 팀·포메이션 해시로 변형을 고른다(결정론 — 매 경기 같은 문장이 반복되지 않게).
+ * ★ 인과를 단정하지 않는다. 전부 형태 서술이다.
+ */
+const ANALYST_SHAPE: Record<number, readonly string[]> = {
+  3: [
+    '스리백으로 뒤를 두껍게 세웠습니다.',
+    '백 스리, 좌우 윙백의 활동량이 관건입니다.',
+    '스리백입니다. 중앙을 좁게 쓰겠다는 뜻이죠.',
+  ],
+  4: [
+    '포백 라인이 균형을 잡습니다.',
+    '기본에 충실한 포백, 간격 유지가 열쇠입니다.',
+    '포백입니다. 좌우 풀백이 얼마나 올라오느냐를 보시죠.',
+  ],
+  5: [
+    '파이브백, 일단 뒤를 잠그고 시작합니다.',
+    '백 파이브로 폭을 넓게 지킵니다.',
+    '다섯을 뒤에 세웠습니다. 역습을 노리는 배치죠.',
+  ],
+}
+const ANALYST_FALLBACK = '익숙하지 않은 배치입니다. 첫 십 분을 보면 답이 나옵니다.'
+
+/**
+ * 한 팀의 입장 소개 비트 배열(결정론·순수).
+ *
+ * @param teamKo    팀 한국어 이름
+ * @param formation 포메이션 id(`4-2-3-1` 등) — 도입 문장에서 자릿수로 읽는다
+ * @param members   선발 XI. **정렬 순서가 곧 명단 순서**다(GK → 수비 → 중원 → 공격).
+ */
+export function lineupIntroBeats(
+  teamKo: string, formation: string, members: readonly LineupMember[],
+): LineupBeat[] {
+  const out: LineupBeat[] = []
+  if (members.length === 0) return out
+
+  const push = (b: Omit<LineupBeat, 'speech'> & { speech?: string }): void => {
+    out.push({ ...b, speech: sanitizeSpeech(b.speech ?? b.text) })
+  }
+
+  push({
+    kind: 'open', speaker: 'caster', playerId: null, group: null,
+    text: `${teamKo} 선발 라인업 · ${formation}`,
+    speech: `${teamKo} 선발 라인업입니다. ${formationSpeechKo(formation)} 대형.`,
+  })
+
+  // 그룹은 members 순서를 지키며 접는다 — 명단 순서와 호명 순서가 어긋나면
+  // 하이라이트가 명단 위를 되돌아가며 튄다.
+  const order: LineupGroupKey[] = ['GK', 'DF', 'MF', 'FW']
+  for (const key of order) {
+    const group = members.filter(m => lineupGroupOf(m.position) === key)
+    if (group.length === 0) continue
+    if (key === 'GK') {
+      // 사용자 예문 그대로 — 골키퍼는 그룹 도입 없이 이름과 한 문장이다.
+      for (const m of group) {
+        push({
+          kind: 'name', speaker: 'caster', playerId: m.id, group: key,
+          text: `골키퍼 ${m.nameKo}`, speech: `골키퍼, ${m.nameKo}.`,
+        })
+      }
+      continue
+    }
+    push({
+      kind: 'group', speaker: 'caster', playerId: null, group: key,
+      text: `${GROUP_LABEL[key]} ${group.length}명`,
+      speech: GROUP_LEAD[key](group.length),
+    })
+    group.forEach((m, i) => {
+      const last = i === group.length - 1
+      push({
+        kind: 'name', speaker: 'caster', playerId: m.id, group: key,
+        text: m.nameKo,
+        // 마지막 이름에서 문장을 닫는다 — 쉼표로 끝나면 보이스가 다음 그룹 도입까지
+        // 한 호흡으로 이어 읽어 그룹 경계가 사라진다.
+        speech: last ? `${m.nameKo}입니다.` : `${m.nameKo},`,
+      })
+    })
+  }
+
+  const backline = members.filter(m => lineupGroupOf(m.position) === 'DF').length
+  const pool = ANALYST_SHAPE[backline]
+  // 변형 키에 인원 수까지 넣는다 — 두 팀이 같은 포메이션일 때 같은 문장이 연달아
+  // 나오면(양 팀 소개는 바로 이어진다) 템플릿이라는 게 그대로 드러난다.
+  const shape = pool
+    ? pool[fnv1a(`entrance:${teamKo}:${formation}:${members.length}`) % pool.length]
+    : ANALYST_FALLBACK
+  push({ kind: 'analyst', speaker: 'analyst', playerId: null, group: null, text: shape })
+
+  return out
 }
