@@ -265,6 +265,37 @@ function homeStaminaFloor(engine: MatchState): number {
   return vals.length ? Math.min(...vals) : 100
 }
 
+/**
+ * 순간 제안 배너의 유효 기간(경기 분). 이 분이 지나면 자동 소거된다.
+ *
+ * 왜 만료가 필요한가: 제안 문장은 **그 순간의 상황 서술**이다("실점 직후입니다").
+ * 무기한 남으면 2'에 뜬 실점 배너가 7' 동점 이후에도 같은 문장으로 떠 있어
+ * 화면이 실제 스코어와 정반대의 말을 한다(실측: 10'→22' 12분 지속).
+ *
+ * 왜 5분인가: 유저가 반응할 시간이 먼저다. 재생 dwell(playback.ts)은 1x에서
+ * 무사건 분 1.1 s · 사건 분 최대 9.6 s이고, 제안이 뜨는 분은 거의 항상 사건 분이다
+ * (실점·득점은 골 dwell 8.6 s). 5분이면 1x에서 최소 13 s, 2x에서도 6~7 s가 남아
+ * [사용]/[흘려보낸다]를 누를 여유가 있다. 반대로 10분을 주면 다음 제안이 뜰 때까지
+ * 낡은 문장이 살아 있고(momentPrompt는 하나뿐이라 새 제안을 막는다), 하이드레이션
+ * 브레이크 간격(약 22분)의 절반을 한 배너가 차지한다.
+ *
+ * 스코어 변화에 의한 소거는 이 기간과 별개로 즉시 적용된다 — 만료보다 강한 신호다.
+ */
+export const MOMENT_PROMPT_TTL = 5
+
+/** 이 분에 순간 제안을 그대로 유지해도 되는가. 스코어가 스냅샷과 다르거나
+ *  유효 기간이 지났으면 false(= 소거). 순수 함수라 테스트가 직접 부른다. */
+export function momentPromptAlive(
+  prompt: DecisionMoment | null, promptScore: readonly [number, number] | null,
+  minute: number, score: readonly [number, number],
+): boolean {
+  if (!prompt) return false
+  if (minute - prompt.minute > MOMENT_PROMPT_TTL) return false
+  // 스냅샷이 없는 경우(구 상태 호환)는 스코어 판정을 건너뛴다.
+  if (promptScore && (promptScore[0] !== score[0] || promptScore[1] !== score[1])) return false
+  return true
+}
+
 /** 상대 감독의 변경 1건 통보(발동 분 + 배너 문구). */
 export interface OppNotice { minute: number; text: string }
 
@@ -309,6 +340,9 @@ export interface MatchUIState {
   momentPrompt: DecisionMoment | null
   /** 이미 발동한 동적 순간 유형(유형당 1회 제한). */
   firedMoments: DecisionMoment['kind'][]
+    /** momentPrompt를 세팅한 분의 스코어 스냅샷. 스코어가 바뀌면 제안 문장이 거짓이 되므로
+   *  이 값과 현재 스코어를 비교해 즉시 소거한다. null이면 제안 없음. */
+  momentPromptScore: [number, number] | null
   /** 개입 부스트 만료 분(그 분까지 홈 지시 효과 ×1.3). advanceMinute이 엔진에 전달. */
   boostUntil: number
   /** 하프타임 팀토크 1회 제한 플래그. */
@@ -361,6 +395,7 @@ const initial = {
   schedule: null as HydrationSchedule | null,
   pauseReason: null as PauseReason | null,
   momentPrompt: null as DecisionMoment | null,
+  momentPromptScore: null as [number, number] | null,
   firedMoments: [] as DecisionMoment['kind'][],
   boostUntil: 0,
   talked: false,
@@ -405,7 +440,7 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     set({ phase: 'playing', matchPlan: structuredClone(engine.home.tactics), planDeviation: 0, adaptUntil: 0 })
   },
   advanceMinute: () => {
-    const { engine, phase, schedule, firedMoments, momentPrompt, boostUntil, oppFired, oppNotices, matchPlan, adaptUntil } = get()
+    const { engine, phase, schedule, firedMoments, momentPrompt: prevPrompt, momentPromptScore: prevPromptScore, boostUntil, oppFired, oppNotices, matchPlan, adaptUntil } = get()
     if (!engine) throw new Error('경기 미시작')
     if (phase !== 'playing') return // 정지 중엔 재개(confirmTactics)로만 진행
     const prevScore: [number, number] = [engine.score[0], engine.score[1]]
@@ -442,20 +477,27 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     // 액션을 무한 반복하거나(oppFired 소실) 통보가 사라진다.
     const opp = { oppFired: firedNext, oppNotices: noticesNext }
 
+    // 순간 제안 만료 — 상황 서술은 상황이 유지될 때만 참이다. 스코어가 바뀌었거나
+    // 유효 기간이 지난 제안은 여기서 버린다(MOMENT_PROMPT_TTL 주석 참조).
+    // 감지보다 **먼저** 판정해야 낡은 제안이 새 제안을 계속 막지 않는다.
+    const alive = momentPromptAlive(prevPrompt, prevPromptScore, minute, next.score)
+    const momentPrompt = alive ? prevPrompt : null
+    const expiry = alive ? {} : { momentPrompt: null, momentPromptScore: null }
+
     if (minute >= 90) {
-      set({ engine: next, phase: 'fulltime', pauseReason: null, momentPrompt: null, ...opp })
+      set({ engine: next, phase: 'fulltime', pauseReason: null, momentPrompt: null, momentPromptScore: null, ...opp })
       return
     }
     if (minute === 45) {
-      set({ engine: next, phase: 'halftime', pauseReason: { kind: 'halftime' }, ...opp })
+      set({ engine: next, phase: 'halftime', pauseReason: { kind: 'halftime' }, ...expiry, ...opp })
       return
     }
     if (schedule && minute === schedule.firstHydration) {
-      set({ engine: next, phase: 'paused-break', pauseReason: { kind: 'hydration1' }, ...opp })
+      set({ engine: next, phase: 'paused-break', pauseReason: { kind: 'hydration1' }, ...expiry, ...opp })
       return
     }
     if (schedule && minute === schedule.secondHydration) {
-      set({ engine: next, phase: 'paused-break', pauseReason: { kind: 'hydration2' }, ...opp })
+      set({ engine: next, phase: 'paused-break', pauseReason: { kind: 'hydration2' }, ...expiry, ...opp })
       return
     }
 
@@ -467,11 +509,14 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
         { homeId: next.home.team.id, awayId: next.away.team.id },
       )
       if (moment && !firedMoments.includes(moment.kind)) {
-        set({ engine: next, momentPrompt: moment, firedMoments: [...firedMoments, moment.kind], ...opp })
+        set({
+          engine: next, momentPrompt: moment, momentPromptScore: [next.score[0], next.score[1]],
+          firedMoments: [...firedMoments, moment.kind], ...opp,
+        })
         return
       }
     }
-    set({ engine: next, ...opp })
+    set({ engine: next, ...expiry, ...opp })
   },
   pauseByUser: () => {
     const { engine, phase } = get()
@@ -493,7 +538,7 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     // 순간"으로 보고 효과를 싣는다. 감독 타임은 상황을 들여다보는 자유 정지다.
     const scheduled = pauseReason?.kind !== 'user'
     set({
-      phase: 'playing', pauseReason: null, momentPrompt: null,
+      phase: 'playing', pauseReason: null, momentPrompt: null, momentPromptScore: null,
       ...(scheduled ? { boostUntil: engine.minute + BOOST_MINUTES } : {}),
     })
   },
@@ -503,7 +548,7 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     if (!momentPrompt) throw new Error('제안된 순간이 없음')
     set({ phase: 'paused-moment', pauseReason: { kind: 'moment', moment: momentPrompt } })
   },
-  dismissMoment: () => set({ momentPrompt: null }),
+  dismissMoment: () => set({ momentPrompt: null, momentPromptScore: null }),
   submitCommand: (side, cmd) => {
     const { engine, phase, pauseReason, schedule, decisionLog, matchPlan, planDeviation } = get()
     if (!engine) throw new Error('경기 미시작')
