@@ -5,6 +5,7 @@ import { type ChoreoStep } from '../choreography'
 import { sequenceOwner } from '../cast'
 import { PitchView } from '../PitchView'
 import { separateDots, tacticalCoords } from '../shape'
+import { endsSwapped } from '../ends'
 import { layoutLabels, textWidth, type Box, type LabelReq } from '../labels'
 import {
   PITCH_W, PITCH_H, ZOOM, toWorld, clamp, lerp, clampFocus,
@@ -202,10 +203,20 @@ export function PixiPitch(props: PixiPitchProps) {
 
       // ── 레이아웃 상태(리사이즈 감지) ───────────────────────────
       let scale = 1, offX = 0, offY = 0, lastW = -1, lastH = -1
+      /**
+       * ── 표시 진영(../ends.ts) ────────────────────────────────
+       * 후반이면 피치를 180° 돌려 그린다(3D·SVG와 같은 규칙). 계산은 전부 엔진 좌표에서
+       * 하고 **px로 옮기는 마지막 한 걸음에서만** 돌린다 — 도트 분리 솔버·전술 좌표가
+       * 모두 엔진 프레임을 전제하기 때문이다.
+       */
+      const swappedNow = () => endsSwapped(propsRef.current.state.minute)
       const normToPx = (x: number, y: number) => {
-        const w = toWorld({ x, y })
+        const w = toWorld(swappedNow() ? { x: 100 - x, y: 100 - y } : { x, y })
         return { x: offX + w.x * scale, y: offY + w.y * scale }
       }
+      /** 월드(m) 좌표를 표시 진영으로 돌린다 — 공·파티클·카메라 초점이 쓴다. */
+      const rotWorld = (w: { x: number; y: number }) =>
+        swappedNow() ? { x: PITCH_W - w.x, y: PITCH_H - w.y } : w
       // 잔디+줄무늬+라인(px). 크기 변할 때만 호출.
       const drawPitch = (sw: number, sh: number) => {
         pitchG.clear()
@@ -476,8 +487,8 @@ export function PixiPitch(props: PixiPitchProps) {
         fxG.clear()
         let ballWorld: { x: number; y: number } | null = null
         if (s && seq) {
-          ballWorld = s.ball
-          const ballPx = { x: offX + s.ball.x * scale, y: offY + s.ball.y * scale }
+          ballWorld = rotWorld(s.ball)
+          const ballPx = { x: offX + ballWorld.x * scale, y: offY + ballWorld.y * scale }
           // 볼 캐리어 링 — 공이 지금 누구 발밑에 있나. 무버 고스트 원의 자리를 대신한다:
           // 선수는 진짜 도트가 이미 그리고 있으므로, 여기서 말할 것은 "소유"뿐이다.
           const cdv = carrierId ? dvById.get(carrierId) : undefined
@@ -487,7 +498,7 @@ export function PixiPitch(props: PixiPitchProps) {
           }
           // 골 FX 발동(공이 목적지 도달 시).
           if (goalArmed && prog >= seq[seq.length - 1].t) {
-            particles = spawnBurst(s.ball.x, s.ball.y, goalArmed.color)
+            particles = spawnBurst(ballWorld.x, ballWorld.y, goalArmed.color)
             flashStart = now; flashConceded = goalArmed.conceded
             shakeStart = now
             goalArmed = null

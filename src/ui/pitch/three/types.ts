@@ -16,13 +16,61 @@ export function toWorld(x: number, y: number): { x: number; z: number } {
   return { x: (x / 100 - 0.5) * PITCH_W, z: (y / 100 - 0.5) * PITCH_H }
 }
 
+/**
+ * **표시 진영 부호** — 월드 프레임을 Y축 기준 180° 돌릴지(−1) 그대로 둘지(+1).
+ *
+ * 왜 필요한가는 `../ends.ts` 헤더 참조(④ 2D·3D 좌우 불일치 / ⑤ 후반 진영 교대).
+ * 무브먼트는 이 값을 모른다 — 계산은 언제나 엔진 프레임에서 하고, **화면에 올리기 직전**
+ * 한 번만 돌린다. 180° 회전은 등거리 변환이라 속도·yaw·상대 위치가 전부 보존되므로
+ * 물리·인과(발 앵커링, GK 접촉, 킥 방향)에 손댈 것이 없다.
+ */
+export type EndsSign = 1 | -1
+
+/**
+ * 전반의 기본 부호. −1인 이유: 방송 카메라가 −Z 사이드라인에 있어 화면 오른쪽이 월드
+ * −X이므로, 홈(월드 −X 진영)이 화면에서 **왼쪽으로** 공격해 2D 작전판과 반대였다.
+ * 180° 돌리면 홈이 +X 진영에 서서 −X(=화면 오른쪽)로 공격한다 — 2D와 같다.
+ */
+export const FIRST_HALF_ENDS: EndsSign = -1
+
+/** 이 팀이 공격하는 방향의 월드 X 부호. 엔진 프레임에서 홈은 +x로 공격한다. */
+export function attackDirX(side: 'home' | 'away', s: EndsSign = FIRST_HALF_ENDS): number {
+  return (side === 'home' ? 1 : -1) * s
+}
+
+/**
+ * 프레임 한 장을 표시 진영으로 돌린다(순수 함수, 입력 불변).
+ * `s === 1`이면 입력을 그대로 돌려준다 — 회전 비용도, 부동소수 오차도 없다.
+ */
+export function rotateFrame(f: FrameState, s: EndsSign): FrameState {
+  if (s === 1) return f
+  return {
+    ...f,
+    players: f.players.map(p => ({
+      ...p,
+      x: -p.x,
+      z: -p.z,
+      // yaw는 +X를 0으로 재는 각이므로 180° 회전은 π를 더하는 것과 같다.
+      yaw: p.yaw + Math.PI,
+      ...(p.vx != null ? { vx: -p.vx } : {}),
+      ...(p.vz != null ? { vz: -p.vz } : {}),
+    })),
+    ball: { ...f.ball, x: -f.ball.x, z: -f.ball.z },
+    focus: { x: -f.focus.x, z: -f.focus.z },
+  }
+}
+
 export interface Vec3 {
   x: number
   y: number
   z: number
 }
 
-export type PlayerAction = 'idle' | 'run' | 'kick' | 'celebrate' | 'dive' | 'down'
+/**
+ * 선수 액션. `header`는 2026-08-01 추가(득점 루트 5종 중 "크로스 → 헤더") — 무브먼트가
+ * **임팩트 순간 공의 높이**를 보고 kick과 갈라 준다(movement.HEADER_MIN_Y).
+ */
+export type PlayerAction = 'idle' | 'run' | 'kick' | 'header' | 'celebrate' | 'dive' | 'down'
 
 export interface PlayerPose {
   id: string
