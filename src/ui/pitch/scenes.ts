@@ -131,6 +131,11 @@ export interface ScenePoint {
    */
   carrier?: number
   /**
+   * 이 스텝의 **도착 높이**(m). 미지정이면 궤적 종류의 기본값(movement.BALL_END).
+   * 크로스바를 넘겨 버리는 미스처럼 "골라인 통과 높이"가 장면의 핵심일 때만 쓴다.
+   */
+  endY?: number
+  /**
    * 이 스텝이 **GK의 손이 공에 닿는 순간**인가(세이브 전용).
    *
    * 왜 별도 플래그인가: 무브먼트는 다이브 최대 신전을 "마지막 키프레임"에 맞추고 있었는데,
@@ -148,6 +153,8 @@ interface Station {
   carrier: number
   /** carrier < 0일 때의 명시 볼 좌표. */
   ball?: [number, number]
+  /** 도착 높이(m) — {@link ScenePoint.endY}로 그대로 나간다. */
+  endY?: number
   /** 이 스테이션에서 **출발**하는 구간의 궤적. 마지막 스테이션은 무시된다. */
   arc?: BallArc
   /** true면 컨트롤 정지를 넣지 않는다(원터치). 첫 스테이션은 항상 정지가 없다. */
@@ -364,6 +371,48 @@ const FINISH_VARIANTS: FinishVariant[] = [
 ]
 export const FINISH_VARIANT_COUNT = FINISH_VARIANTS.length
 
+// ── 미스 종점 분포 (StatsBomb open-data 실측) ─────────────────────────────
+// 출처: statsbomb/open-data 이벤트 1,014경기에서 뽑은 **오프타깃 슛 7,772건**의
+// `shot_end_location`(골라인 평면 3D 좌표). 스펙상 `Off T`는 "초기 궤적이 포스트 밖에서
+// 끝난 슛"이라 GK와 무관한 순수 조준 결과이며, 우리가 필요한 값이 정확히 이것이다.
+//   · 포스트 바깥 수평 간극:  p25 1.10 · **p50 2.10** · p75 4.30 · p90 6.49 m
+//   · 크로스바 위 높이:       p25 1.31 · **p50 2.04** · p75 2.86 · p90 3.69 m
+//   · 범주 비율: 옆으로만 45.4% / 위로만 27.9% / 옆+위 26.6%
+//   · 프레임에서 2 m 안 40.5% · 3 m 안 60.9% — 미스는 **골대 근처에 몰려 있다**
+//
+// ★ 개편 전 우리 값은 포스트 밖 **5.18 / 11.30 / 19.46 m**로, 모든 미스가 실측 분포의
+//   p90~p99 꼬리에 있었다(전수 144조합). 사용자 지적 "너무 멀찍하게 빗나가서 긴장감이
+//   떨어져"가 정확히 이 숫자다.
+/**
+ * 포스트 바깥 수평 간극(m) — 레인 6종이 실측 분포의 **1/12·3/12·…·11/12 분위수**를 훑는다.
+ * 레인은 균등하게 뽑히므로 이렇게 놓아야 6개의 표본 중앙값이 실측 중앙값과 맞는다
+ * (LogNormal μ=0.750 σ=0.918을 역함수로 평가). 균등 간격으로 놓으면 중앙값이 3.0으로
+ * 부풀어 "실측보다 항상 더 멀리 빗나간다"가 된다.
+ */
+const MISS_WIDE_M = [0.6, 1.1, 1.75, 2.6, 3.9, 7.5]
+/** 크로스바 위 높이(m) — 같은 규칙(Gamma k=4.09 θ=0.52, 표본 중앙값 2.05). */
+const MISS_OVER_M = [0.8, 1.3, 1.8, 2.3, 2.9, 3.8]
+/**
+ * 미스 범주 배정표 — 행 = 마무리 변형(3), 열 = 레인(6).
+ * 18칸의 비율이 실측 범주 비율(옆 45.4 / 위 27.9 / 옆+위 26.6)과 맞도록 짰다:
+ * W 8칸(44.4%) · O 5칸(27.8%) · B 5칸(27.8%). 한 변형 안에서도 섞여 있어야
+ * 같은 변형이 반복돼도 같은 그림이 되지 않는다.
+ */
+const MISS_CATEGORY: readonly (readonly ('W' | 'O' | 'B')[])[] = [
+  ['W', 'W', 'W', 'O', 'B', 'W'],
+  ['W', 'O', 'B', 'O', 'W', 'O'],
+  ['B', 'W', 'O', 'B', 'W', 'B'],
+]
+/** 옆으로만 빗나간 슛의 골라인 통과 높이(m). 실측 중앙값 0.64 — 낮게 스친다. */
+const MISS_LOW_Y = 0.64
+/** 골문 반폭(m) — 규정 7.32 m. */
+const GOAL_HALF_M = 3.66
+/** 크로스바 높이(m). */
+const CROSSBAR_M = 2.44
+
+/** 미터 단위 좌우 오프셋 → 0~100 y 좌표. */
+const offsetY = (m: number) => 50 + (m / PITCH_H) * 100
+
 /**
  * 슈터가 배달 한 구간 동안 달릴 수 있는 최대 전진(0~100 x 단위).
  * 15 units ≈ 15.8 m — 1.6 s 배달에서 9.9 m/s가 되므로 실질 상한이다(그 이상은
@@ -384,6 +433,8 @@ function finishStations(
   prev: Station,
   launch: [number, number],
   variant: number,
+  /** 레인 인덱스 — 미스 종점의 **크기**(분위수)를 고르는 데 쓴다. */
+  lane: number,
 ): { stations: Station[]; deliverArc: BallArc } {
   const V = FINISH_VARIANTS[variant]
   const [lx, ly] = launch
@@ -443,7 +494,8 @@ function finishStations(
 
   /** 슈팅 스테이션 — 캐리어는 반드시 슬롯 0(엔진이 정한 주인공)이다. */
   const shot: Station = { movers: boxMovers, carrier: 0, arc: 'shot', oneTouch: V.oneTouch }
-  const end = (ball: [number, number]): Station => ({ movers: netMovers, carrier: -1, ball })
+  const end = (ball: [number, number], endY?: number): Station =>
+    ({ movers: netMovers, carrier: -1, ball, ...(endY != null ? { endY } : {}) })
   /** 골라인에서 m 미터 앞의 x(0~100). 세이브 접촉점을 미터로 저술하기 위한 환산. */
   const beforeLine = (m: number) => clamp(100 - (m / PITCH_W) * 100)
 
@@ -469,9 +521,24 @@ function finishStations(
       }
     }
     case 'miss': {
-      // 골문 밖 — 어느 쪽으로 얼마나 벗어나는지가 변형이다(골문 안으로는 절대 안 간다).
-      const wideY = V.post === 0 ? (ly > 50 ? 84 : 16) : clamp(50 + V.post * sideSign * (V.post === 1 ? 13 : 22), 8, 92)
-      return { stations: [shot, end([99, wideY])], deliverArc }
+      /**
+       * 골문 밖 — **실측 분포**(위 MISS_* 주석)를 세 범주로 나눠 마무리 변형에 싣는다.
+       *  W 옆으로만(45%) : 포스트 밖 g m, 낮게 스친다
+       *  O 위로만(28%)   : 좌우는 골문 폭 안, 크로스바 위 h m
+       *  B 옆+위(27%)    : 둘 다
+       * 범주는 (마무리 변형 × 레인) 표가, 크기(g·h)는 레인이 정한다 — 같은 변형이라도
+       * 장면마다 다른 분위수를 뽑아 "항상 같은 거리로 빗나간다"가 되지 않게 한다.
+       */
+      const g = MISS_WIDE_M[mod(lane, MISS_WIDE_M.length)]
+      const h = MISS_OVER_M[mod(lane + 3, MISS_OVER_M.length)]
+      const cat = MISS_CATEGORY[mod(variant, MISS_CATEGORY.length)][mod(lane, LANE_COUNT)]
+      const wide = cat !== 'O'
+      const over = cat !== 'W'
+      // 벗어나는 쪽은 전개한 쪽(sideSign) — 슈터가 몸을 연 방향으로 밀린다.
+      const y = wide
+        ? offsetY(sideSign * (GOAL_HALF_M + g))
+        : offsetY(sideSign * GOAL_HALF_M * 0.45)
+      return { stations: [shot, end([99, clamp(y)], over ? CROSSBAR_M + h : MISS_LOW_Y)], deliverArc }
     }
     case 'shot':
       // 블록·굴절 — 골문 바로 앞에서 멈춘다(세이브보다 얕고 미스처럼 벗어나지 않는다).
@@ -582,6 +649,7 @@ function timeline(stations: Station[], dwellMs: number): ScenePoint[] {
       // 같은 선수가 계속 소유하면 드리블이다 — 드리블하는 공은 뜨지 않는다.
       ...(dribble ? { arc: 'ground' as BallArc } : s.arc ? { arc: s.arc } : {}),
       ...(s.carrier >= 0 ? { carrier: s.carrier } : {}),
+      ...(s.endY != null ? { endY: s.endY } : {}),
       ...(s.contact ? { contact: true as const } : {}),
     })
     if (isLast) break
@@ -664,7 +732,7 @@ export function buildScene(
   const build = mapLane(finish === 'chance' ? bv.stations.slice(1) : bv.stations, lane)
   const last = build[build.length - 1]
   const launch = last.movers[last.carrier] as [number, number]
-  const { stations: fin, deliverArc } = finishStations(finish, last, launch, fv)
+  const { stations: fin, deliverArc } = finishStations(finish, last, launch, fv, lane)
   // ★ 배달 궤적은 **빌드업 마지막 스테이션에서 출발하는 구간**의 것이다(오프바이원 수정).
   const stations: Station[] = [...build.slice(0, -1), { ...last, arc: deliverArc }, ...fin]
   const dwell = SCENE_DWELL_MS[finish]

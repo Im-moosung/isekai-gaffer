@@ -45,6 +45,11 @@ export interface ChoreoStep {
    */
   carrier?: string
   /**
+   * 이 스텝의 **도착 높이**(m). 미지정이면 궤적 종류의 기본값. 크로스바를 넘겨 버리는
+   * 미스처럼 "골라인 통과 높이"가 장면의 핵심일 때만 저술이 채운다(scenes.ScenePoint.endY).
+   */
+  endY?: number
+  /**
    * 이 스텝이 **GK의 손이 공에 닿는 순간**인가(세이브 전용). movement가 다이브 최대
    * 신전 시각과 GK 몸통 목표를 이 스텝에서 역산한다 — "마지막 키프레임 = 접촉"이라는
    * 암묵 규약을 명시 계약으로 바꾼 것이다.
@@ -176,6 +181,7 @@ export function buildSequence(event: MatchEvent, homeState: SideState, awayState
     ...(p.arc ? { arc: p.arc } : {}),
     // 캐리어 슬롯 → 실제 선수 id. 슬롯보다 배정된 선수가 적으면(퇴장 등) 소유자 없음.
     ...(p.carrier != null && ids[p.carrier] ? { carrier: ids[p.carrier] } : {}),
+    ...(p.endY != null ? { endY: p.endY } : {}),
     ...(p.contact ? { contact: true as const } : {}),
   }))
 }

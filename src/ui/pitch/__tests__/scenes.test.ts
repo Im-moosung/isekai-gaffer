@@ -10,6 +10,11 @@ import {
   type ScenePoint, type SceneFinish,
 } from '../scenes'
 import { PITCH_H, PITCH_W } from '../geometry'
+
+/** 골문 반폭(m) — 규정 7.32 m. */
+const GOAL_HALF_M = 3.66
+/** 크로스바 높이(m). */
+const CROSSBAR_M = 2.44
 import { buildSequence, sceneKeyFor } from '../choreography'
 
 /** 0~100 좌표 두 점의 실제 거리(m). */
@@ -121,9 +126,20 @@ describe('변형 축 — 같은 결과를 다른 그림으로', () => {
             expect(saveGap, tag).toBeLessThan(4)
             expect(endOf(save).contact, tag).toBe(true)
             expect(Math.abs(endOf(save).ball[1] - 50), tag).toBeLessThanOrEqual(7)
-            // 미스: 골라인까지 가지만 골문 폭 밖으로 벗어난다.
+            // 미스: 골라인까지 가지만 **골문 안으로는 들어가지 않는다** — 포스트 밖으로
+            // 벗어나거나 크로스바를 넘거나, 둘 다.
+            // ★ 예전 계약은 "골문 중앙에서 4 units(2.7 m) 넘게 벗어난다"였고, 실제 저술은
+            //   포스트 밖 5.18 / 11.30 / 19.46 m였다 — StatsBomb 실측(오프타깃 7,772건)의
+            //   p90~p99 꼬리다. 사용자 지적 "너무 멀찍하게 빗나가서 긴장감이 떨어져"가 그 값이다.
+            //   지금은 실측 분포를 따르므로 "골대 근처"가 정상이고, 계약은 방향이 아니라
+            //   **골이 아님**을 고정해야 한다.
             expect(endOf(miss).ball[0], tag).toBeGreaterThan(98)
-            expect(Math.abs(endOf(miss).ball[1] - 50), tag).toBeGreaterThan(4)
+            const missOutZ = Math.abs(endOf(miss).ball[1] - 50) - (GOAL_HALF_M / PITCH_H) * 100
+            const missOver = (endOf(miss).endY ?? 0) - CROSSBAR_M
+            expect(missOutZ > 0 || missOver > 0, `${tag}: 미스가 골문 안이다`).toBe(true)
+            // 그리고 골대에서 8 m 넘게 벗어나지 않는다(실측 p99는 프레임에서 12.6 m,
+            // 우리 라이브러리는 그보다 안쪽만 쓴다 — 긴장감이 목적이다).
+            expect(Math.hypot(Math.max(0, missOutZ) * PITCH_H / 100, Math.max(0, missOver)), tag).toBeLessThan(8)
             // 블록: 골문 앞에서 멈춘다(골보다 앞).
             expect(endOf(shot).ball[0], tag).toBeGreaterThan(90)
             expect(endOf(shot).ball[0], tag).toBeLessThan(endOf(goal).ball[0])
@@ -215,7 +231,10 @@ describe('★ attackPattern이 화면을 바꾼다', () => {
     expect(goal[goal.length - 1].ball[0]).toBeGreaterThan(98)
     expect(save[save.length - 1].ball[0]).toBeLessThan(goal[goal.length - 1].ball[0])
     expect(save[save.length - 1].contact).toBe(true)
-    expect(Math.abs(miss[miss.length - 1].ball[1] - 50)).toBeGreaterThan(25)
+    // 미스는 골문 안으로 들어가지 않는다(옆으로 벗어나거나 크로스바를 넘는다).
+    const end = miss[miss.length - 1]
+    const outZ = Math.abs(end.ball[1] - 50) - (GOAL_HALF_M / PITCH_H) * 100
+    expect(outZ > 0 || (end.endY ?? 0) > CROSSBAR_M).toBe(true)
   })
 })
 
