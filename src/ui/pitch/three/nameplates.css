@@ -1,0 +1,55 @@
+/* src/ui/pitch/three/nameplates.css
+   3D 방송 화면의 선수 이름표(DOM 오버레이).
+
+   톤: 방송 자막의 관례를 따른다 — 잔디 위 흰 글씨는 잔디 밝기에 따라 사라지므로
+   **어두운 반투명 플레이트 + 팀색 좌측 바**를 깐다. 글자에는 얇은 그림자를 하나만
+   둔다(텍스트 스트로크는 9~13 px에서 글자를 뭉갠다).
+
+   성능 계약: 매 프레임 바뀌는 것은 transform·opacity·font-size뿐이다. 전자 둘은
+   합성 전용이고 font-size만 재레이아웃을 유발하는데, 값이 정수 px이라 한 라벨이
+   같은 카메라 프리셋 안에서는 사실상 고정된다. */
+
+.m3d-plates {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  /* 캔버스 위, 스코어보드·오버레이 아래. */
+  z-index: 1;
+  line-height: 1;
+  /* 이 레이어를 합성 레이어로 승격시켜 22개 transform이 페이지 페인트를 건드리지 않게. */
+  contain: strict;
+}
+
+.m3d-plate {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* transform은 JS가 매 프레임 쓴다(translate3d + translate(-50%,-50%)). */
+  white-space: nowrap;
+  padding: 0.18em 0.42em 0.18em 0.34em;
+  border-radius: 0.25em;
+  border-left: 0.22em solid var(--plate-accent, #fff);
+  background: color-mix(in srgb, var(--bc-ink, #0b1220) 72%, transparent);
+  color: #f2f6fb;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 65%);
+  opacity: 0;
+  /* 사라질 때만 부드럽게 — 나타날 때 늦으면 "누구였지"가 된다. */
+  transition: opacity 140ms linear;
+  will-change: transform, opacity;
+}
+
+.m3d-plate--home {
+  --plate-accent: var(--bc-home, #e2453d);
+}
+.m3d-plate--away {
+  --plate-accent: var(--bc-away, #3d7be2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .m3d-plate {
+    transition: none;
+  }
+}

@@ -19,6 +19,8 @@ import { entranceCameraMode, entranceFrame, type EntranceCast } from './entrance
 import { FLASH_CONCEDED, FLASH_SCORED, createBall, flashQuad, goalBurst, type GoalBurst } from './fx3d'
 import { bindResize, createRendererHost, webgl2Available } from './host'
 import { DIVE_LAY_U, KICK_IMPACT_T, computeFrame } from './movement'
+import { createNameplateLayer, type PlateItem } from './nameplates'
+import './nameplates.css'
 import { createRenderScaler, readStoredScale, writeStoredScale } from './perf'
 import { createPlayer, disposePlayerCaches, type PlayerRig } from './player3d'
 import { createPostFX } from './postfx'
@@ -212,6 +214,11 @@ export function Match3D(props: Match3DProps) {
       })
       const scene = bundle.scene
       const camera = bundle.camera
+      /**
+       * 선수 이름표(DOM 오버레이). 캔버스 위에 얹으므로 렌더러가 붙은 **뒤**에 만든다.
+       * 실제 배치·표시 판단은 nameplates.ts가 하고, 여기서는 투영만 넘긴다.
+       */
+      const plates = createNameplateLayer(host)
 
       const ball = createBall(THREE)
       scene.add(ball.group)
@@ -283,6 +290,74 @@ export function Match3D(props: Match3DProps) {
         post.setReducedMotion(reduced)
       }
       reducedMql.addEventListener?.('change', onReducedChange)
+
+      // ── 이름표 투영 ──────────────────────────────────────────────
+      /**
+       * 이름표 텍스트 — **성(姓)만** 쓴다. 화면상 9~15 px에서 전체 이름은 폭이 두 배가
+       * 되고, 방송 자막도 라이브 중에는 성만 띄운다. 한국어 이름은 성이 앞이라 첫 글자,
+       * 라틴 표기는 마지막 낱말이 성이다. 로케일 판정 없이 한글 유무로 가른다.
+       */
+      const plateText = (ko: string): string => {
+        const t = ko.trim()
+        if (t.length === 0) return ''
+        // 한글 이름(김민재)은 3~4자라 통째로 쓴다 — 성만 쓰면 김/이/박이 화면에 즐비하다.
+        if (/[가-힣]/.test(t)) return t.length <= 4 ? t : t.slice(0, 4)
+        const parts = t.split(/\s+/)
+        return parts[parts.length - 1]
+      }
+      /** id → 이름표 문자열. 스쿼드는 경기 중 바뀌지 않으므로 팀별로 한 번만 만든다. */
+      const nameCache = new Map<string, Map<string, string>>()
+      const namesOf = (side: 'home' | 'away'): Map<string, string> => {
+        const st = propsRef.current.state[side]
+        let m = nameCache.get(st.team.id)
+        if (!m) {
+          m = new Map(st.team.squad.map(pl => [pl.id, plateText(pl.name.ko)]))
+          nameCache.set(st.team.id, m)
+        }
+        return m
+      }
+      /** 투영 임시 벡터 — 매 프레임 44회 쓰므로 한 개를 돌려 쓴다(GC 금지). */
+      const projV = new THREE.Vector3()
+      /** 머리 꼭대기 높이(m) — pose.HIP_Y(0.94) + SHOULDER_Y(0.5) + 머리 반지름 여유. */
+      const HEAD_Y = 1.72
+      const plateItems: PlateItem[] = []
+
+      const updatePlates = (frame: FrameState, _t: number): void => {
+        const w = host.clientWidth
+        const h = host.clientHeight
+        if (w < 2 || h < 2) {
+          plates.clear()
+          return
+        }
+        camera.updateMatrixWorld()
+        plateItems.length = 0
+        const homeNames = namesOf('home')
+        const awayNames = namesOf('away')
+        for (const pose of frame.players) {
+          const text = (pose.side === 'home' ? homeNames : awayNames).get(pose.id) ?? ''
+          if (!text) continue
+          // 머리 · 발 두 점을 투영한다. 둘의 픽셀 간격이 곧 "화면상 선수 키"이고,
+          // 그 값이 카메라 거리·화각·창 크기를 한 수로 요약한다.
+          projV.set(pose.x, HEAD_Y, pose.z).project(camera)
+          const inFront = projV.z < 1
+          const hx = (projV.x * 0.5 + 0.5) * w
+          const hy = (-projV.y * 0.5 + 0.5) * h
+          projV.set(pose.x, 0, pose.z).project(camera)
+          const fy = (-projV.y * 0.5 + 0.5) * h
+          plateItems.push({
+            id: pose.id,
+            side: pose.side,
+            text,
+            sx: hx,
+            sy: hy,
+            playerPx: Math.abs(fy - hy),
+            inFront,
+            // 중요도 = 볼까지의 거리. 화면이 좁으면 공 주변부터 이름이 남는다.
+            rank: Math.hypot(pose.x - frame.ball.x, pose.z - frame.ball.z),
+          })
+        }
+        plates.update(plateItems, w, h)
+      }
 
       // ── 루프 상태 ────────────────────────────────────────────────
       // three Clock은 r185에서 deprecated(콘솔 경고) → Timer. document에 connect하면
@@ -381,6 +456,9 @@ export function Match3D(props: Match3DProps) {
           camRig.setMode(entranceCameraMode(ems))
           camRig.update({ focus: ef.focus, t: elapsed, dt, camera })
           post.render(dt)
+          // 입장 연출에는 이름표를 달지 않는다 — 도열·국가 제창은 화면 전체가 그림이고,
+          // 이름은 방송에서도 라인업 자막(별도 레이어)이 맡는다.
+          plates.clear()
           // 연출이 끝나면 킥오프 배치부터 새로 시작한다 — 입장 마지막 자세를 prev로
           // 물려주면 1분 첫 프레임에서 22명이 이상한 보간을 탄다.
           prevFrame = null
@@ -529,6 +607,11 @@ export function Match3D(props: Match3DProps) {
         // ── 카메라 적용 + 렌더 ───────────────────────────────────
         camRig.update({ focus: { ...frame.focus, r: frame.focusRadius ?? 0 }, t: elapsed, dt, camera })
         post.render(dt)
+
+        // ── 선수 이름표 ──────────────────────────────────────────
+        // 렌더 **뒤**에 갱신한다 — camRig가 방금 옮긴 카메라의 행렬로 투영해야
+        // 이름이 이번 프레임의 몸 위에 정확히 얹힌다(한 프레임 늦으면 빠른 팬에서 끌린다).
+        updatePlates(frame, elapsed)
       }
 
       // ── 컨텍스트 로스 → 즉시 정리 후 폴백 ────────────────────────
@@ -550,6 +633,7 @@ export function Match3D(props: Match3DProps) {
         renderer.domElement.removeEventListener('webglcontextlost', onContextLost)
         for (const b of bursts) b.dispose()
         bursts.length = 0
+        plates.dispose()
         post.dispose()
         flash.dispose()
         ball.dispose()
