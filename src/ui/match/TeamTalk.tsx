@@ -4,6 +4,7 @@ import {
   type TeamTalkTone, type TeamTalkResult,
 } from '../../game/matchStore'
 import { useCampaignStore } from '../../game/campaignStore'
+import { scoreMoraleShift } from '../../engine/simulate'
 import { getLine } from '../../game/teamTalkLines'
 import './match.css'
 
@@ -23,11 +24,17 @@ const REACTION_KO: Record<string, string> = {
   '😰': '위축됨',
 }
 
-/** 팀 사기 평균 → 구간별 상태 문구(사전 정보). */
+/** 팀 사기 평균 → 구간별 상태 문구(사전 정보).
+ *
+ *  ★ 구간은 **기준선 70을 중심으로** 잡는다. 예전 경계(75/55/40)는 중립 구간이 55~74로
+ *    넓어서, 스코어 변위(simulate.scoreMoraleShift, 골차당 ±6)를 반영해도 1-2로 뒤진
+ *    라커룸이 여전히 "차분하게 준비돼 있습니다"로 읽혔다. 한 골 차 열세(−6)가 문구를
+ *    실제로 바꾸도록 폭을 좁혔다: 70(동점) 차분 · 64(한 골 차 열세) 가라앉음 ·
+ *    82(두 골 차 리드) 자신감 · 58(두 골 차 열세) 위축. */
 function moraleStatus(avg: number): string {
-  if (avg >= 75) return '선수들이 자신감에 차 있습니다'
-  if (avg >= 55) return '선수들이 차분하게 준비돼 있습니다'
-  if (avg >= 40) return '선수들이 다소 가라앉아 있습니다'
+  if (avg >= 80) return '선수들이 자신감에 차 있습니다'
+  if (avg >= 66) return '선수들이 차분하게 준비돼 있습니다'
+  if (avg >= 60) return '선수들이 다소 가라앉아 있습니다'
   return '선수들이 위축되어 있습니다'
 }
 
@@ -51,12 +58,24 @@ export function TeamTalk({ side }: { side: 'home' }) {
   const expectation = teamExpectation(sideState.team.fifaRanking, engine[other].team.fifaRanking)
   const recommended = recommendedTone(situation, expectation)
 
-  // 사전 정보: 선발 라인업(퇴장 제외) 사기 평균.
+  // 사전 정보: 선발 라인업(퇴장 제외) 사기 평균 + **스코어가 주는 변위**.
+  //
+  // ★ 예전에는 moraleByPlayer만 읽었고, 그 값은 팀토크·외침으로만 움직였다. 그래서 1-2로
+  //   뒤진 하프타임에도 헤더가 "선수들이 차분하게 준비돼 있습니다 · 사기 70"이었다
+  //   (감사 결함 ⑤). 라커룸의 공기가 스코어보드를 모르는 화면이었다.
+  //   스코어 변위를 엔진 상태(zoneStrength 경로)에 태우지 않는 이유는
+  //   engine/simulate.scoreMoraleShift 주석 참조 — momentum이 이미 같은 일을 하고 있어
+  //   이중 계상이 되고, 실측에서 실팀 캘리브레이션(±25%)이 깨졌다.
   const lineupMorale = sideState.tactics.lineup
     .filter(l => !sideState.sentOff.includes(l.playerId))
     .map(l => sideState.moraleByPlayer[l.playerId] ?? 0)
+  const [ownGoals, oppGoals] = side === 'home'
+    ? [engine.score[0], engine.score[1]]
+    : [engine.score[1], engine.score[0]]
   const avgMorale = lineupMorale.length
-    ? Math.round(lineupMorale.reduce((a, b) => a + b, 0) / lineupMorale.length)
+    ? Math.max(0, Math.min(100, Math.round(
+        lineupMorale.reduce((a, b) => a + b, 0) / lineupMorale.length + scoreMoraleShift(ownGoals, oppGoals),
+      )))
     : 0
 
   const nameOf = (id: string) => sideState.team.squad.find(p => p.id === id)?.name.ko ?? id

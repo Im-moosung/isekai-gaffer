@@ -39,6 +39,28 @@ export const CAUTION_WIPE_AFTER: readonly CampaignStage[] = ['group3', 'qf']
 /** 사기 기준선. 엔진(simulate/strength)이 초기값으로 쓰는 70과 같아야 한다. */
 export const MORALE_BASELINE = 70
 
+/**
+ * 경기 사이에 **남는** 피로의 비율. 다음 경기 시작 체력 = 100 − (100 − 종료체력) × RESIDUAL_LOAD.
+ *
+ * ★ 이전 값은 "부족분의 70% 회복"(= 잔여 0.30)이었고, 그것이 8경기에 걸쳐 복리로 누적돼
+ *   3경기째부터 팀이 **상시 탈진 상태**로 뛰었다(감사 결함 ①). 실측(seed 7·42, 캠페인 8경기,
+ *   교체 없음):
+ *     HT 최저/중앙  1경기 62/67 → 2경기 39/47 → 3경기 33/41 → 4~8경기 32/38~39
+ *     FT 중앙       34 → 14 → 8 → 6 → 5 (즉 후반 내내 걸어 다닌다)
+ *   회복 곡선의 고정점이 "거의 0"이라 로테이션으로도 되돌릴 수 없는 상태였다.
+ *
+ * ★ 실제 월드컵은 경기 간격이 3~5일이다. 그 정도면 글리코겐·급성 근피로는 대부분 회복되고,
+ *   남는 것은 누적 부하다. 그렇다고 0으로 두면 **로테이션의 이유가 사라진다** —
+ *   체력은 감독의 결정 축으로 남아야 한다. 0은 "이월 없음"이고 0.30은 "붕괴"였다.
+ *
+ * ★ 0.15의 의미: 90분을 끝까지 소진(종료 0)한 선수는 다음 경기를 **85**로 시작하고,
+ *   벤치에서 쉰 선수는 100으로 시작한다. 15점 차는 effectiveStats에서 체감되는 폭이고,
+ *   고정점도 붕괴하지 않는다(실측: 2경기 이후 HT 중앙 55~58에서 평평해진다).
+ */
+export const RESIDUAL_LOAD = 0.15
+
+const clamp01to100 = (v: number) => Math.max(0, Math.min(100, v))
+
 /** 한 경기에서 한 선수가 받은 카드 집계(MatchState.events에서 파생). */
 export interface MatchCardTally {
   yellows: number
@@ -80,6 +102,7 @@ export interface CampaignState {
     decisions?: DecisionEntry[],
     extra?: RecordExtra,
   ): void
+  /** 다음 경기 시작 체력. 남는 피로는 RESIDUAL_LOAD 비율만큼 — 상세는 그 상수 주석. */
   startingStamina(playerId: number | string): number
   /** 다음 경기 시작 사기. 기준선 70으로 70% 회귀 — 고양도 침체도 한 경기 뒤엔 옅어진다. */
   startingMorale(playerId: number | string): number
@@ -252,7 +275,7 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
     const opponentId = state.currentOpponent()
     const record: MatchRecord = { stage, opponentId, score, ...(shootout ? { shootout } : {}), decisions }
     const records = [...state.records, record]
-    // 체력 이월: 이번 경기 종료 스태미나를 저장(다음 경기 시작 시 70% 회복)
+    // 체력 이월: 이번 경기 종료 스태미나를 저장(다음 경기 시작값은 startingStamina가 계산)
     const fatigueCarry = { ...state.fatigueCarry, ...staminaByPlayer }
     // 사기 이월: 종료 사기를 저장(다음 경기 시작 시 기준선 70으로 70% 회귀)
     const moraleCarry = { ...state.moraleCarry, ...(extra?.moraleByPlayer ?? {}) }
@@ -304,11 +327,11 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
     set({ records, fatigueCarry, moraleCarry, cautions, bans, lastTeamTalkTone, stage: NEXT_TOURNAMENT[stage as 'r32' | 'r16' | 'qf' | 'sf'] })
   },
 
-  // 다음 경기 시작 스태미나: 이월값 + (100-이월값)*0.7 (70% 회복). 미기록/첫 경기는 100.
+  // 다음 경기 시작 스태미나 — RESIDUAL_LOAD 주석 참고. 미기록/첫 경기는 100.
   startingStamina: (playerId) => {
     const carry = get().fatigueCarry[String(playerId)]
     if (carry === undefined) return 100
-    return Math.min(100, carry + (100 - carry) * 0.7)
+    return clamp01to100(100 - (100 - carry) * RESIDUAL_LOAD)
   },
 
   // 다음 경기 시작 사기: 기준선 70으로 70% 회귀. 체력은 100(만점)으로 회복하지만 사기는

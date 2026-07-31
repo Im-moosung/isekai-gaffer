@@ -114,15 +114,27 @@ describe('토너먼트 정규시간 패배 → 즉시 엔딩', () => {
   })
 })
 
-describe('체력 이월 70% 회복', () => {
+describe('체력 이월 — 잔여 피로 RESIDUAL_LOAD', () => {
   it('첫 경기는 100', () => {
     store().startCampaign(1)
     expect(store().startingStamina('p1')).toBe(100)
   })
-  it('이월값 40 → 다음 시작 82 (40 + 60*0.7)', () => {
+  it('이월값 40 → 다음 시작 91 (100 − 60×0.15)', () => {
     store().startCampaign(1)
     store().recordResult([1, 0], { p1: 40 })
-    expect(store().startingStamina('p1')).toBeCloseTo(82)
+    expect(store().startingStamina('p1')).toBeCloseTo(91)
+  })
+  // 감사 결함 ①의 회귀 방지선: 8경기를 끝까지 소진해도 시작 체력이 붕괴하지 않아야 한다.
+  // 이전 모델(부족분 70% 회복)은 여기서 100 → 30 → 9 → 3 …으로 무너졌다.
+  it('탈진(종료 0)을 반복해도 시작 체력이 하한(85)에서 평평하다', () => {
+    store().startCampaign(1)
+    for (let i = 0; i < 8; i++) store().recordResult([1, 0], { p1: 0 })
+    expect(store().startingStamina('p1')).toBeCloseTo(85)
+  })
+  it('쉬어서 체력이 남은 선수는 거의 100으로 돌아온다', () => {
+    store().startCampaign(1)
+    store().recordResult([1, 0], { p1: 90 })
+    expect(store().startingStamina('p1')).toBeCloseTo(98.5)
   })
   it('기록되지 않은 선수는 100', () => {
     store().startCampaign(1)
