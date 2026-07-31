@@ -13,6 +13,10 @@ import {
   CLUTCH_MULTIPLIER,
   BLOWOUT_DIFF,
   BLOWOUT_MULTIPLIER,
+  sceneDwellMs,
+  minuteRevealMs,
+  minuteSpeechParts,
+  REVEAL_LAG_MS,
 } from '../playback'
 import { createMatch, simulateSegment } from '../../../engine/simulate'
 import { makeTestTeam } from '../../../engine/fixtures/testTeams'
@@ -442,5 +446,86 @@ describe('속도 토글 × 발화 하한 — 빨리감기가 실제로 빨라진
 
   it('2x는 1x의 60% 이하 — 토글이 의미를 잃지 않는다', () => {
     expect(total(2) / total(1)).toBeLessThanOrEqual(0.6)
+  })
+})
+
+
+// ── 결과 노출 시각(2026-08-01 5라운드 피드백 ①) ─────────────────────────
+// "화면을 보고 해설한다" — 발화는 결과가 화면에 보인 뒤에 시작하고, dwell은 그만큼 늘어난다.
+describe('결과 노출(reveal) — 발화가 화면을 앞지르지 않는다', () => {
+  const h = makeTestTeam('kor', 76)
+  const a = makeTestTeam('esp', 88)
+
+  it('sceneDwellMs는 발화와 무관하다(안무는 늘어나지 않는다)', () => {
+    // 안무 재생 시간은 리듬만으로 정해진다 — 발화가 길어도 장면이 느려지지 않는다.
+    expect(sceneDwellMs([ev('goal')], 1, false)).toBe(EVENT_DWELL_MS.goal)
+    expect(sceneDwellMs([ev('goal')], 2, false)).toBe(Math.round(EVENT_DWELL_MS.goal! / 2))
+    expect(sceneDwellMs([], 1, false)).toBe(NO_EVENT_DWELL_MS)
+    expect(sceneDwellMs([], 1, true)).toBe(NO_EVENT_DWELL_MS * CLUTCH_MULTIPLIER)
+  })
+
+  it('revealMs가 있으면 dwell 하한이 "노출 + 반응 지연 + 발화"가 된다', () => {
+    const speech = 4000
+    const reveal = 6500
+    const plain = minuteDwellMs(10, [ev('goal')], 1, false, 0, speech)
+    const delayed = minuteDwellMs(10, [ev('goal')], 1, false, 0, speech, reveal)
+    expect(plain).toBe(EVENT_DWELL_MS.goal) // 8600 > 4000이라 리듬이 이긴다
+    expect(delayed).toBe(reveal + REVEAL_LAG_MS + speech)
+    expect(delayed).toBeGreaterThan(plain)
+  })
+
+  it('상한은 여전히 MAX_DWELL_MS다', () => {
+    expect(minuteDwellMs(10, [ev('goal')], 1, false, 0, 60_000, 8000)).toBe(MAX_DWELL_MS)
+  })
+
+  it('실엔진: 하이라이트 분의 노출 시각은 안무 안(0 < reveal < sceneMs)이다', () => {
+    const final = simulateSegment(createMatch(h, a, { seed: 1003 }), 90)
+    let highlights = 0
+    for (let m = 1; m <= 90; m++) {
+      const at = final.events.filter(e => e.minute === m)
+      const sceneMs = sceneDwellMs(at, 1, false)
+      const reveal = minuteRevealMs(at, final.home, final.away, sceneMs)
+      if (reveal === 0) continue
+      highlights++
+      expect(reveal).toBeGreaterThan(1000) // 결과가 시작하자마자 나오지는 않는다
+      expect(reveal).toBeLessThan(sceneMs) // 안무가 끝나기 전에 결과가 보인다
+    }
+    expect(highlights).toBeGreaterThan(10)
+  })
+
+  it('캐스터 문장은 그 분 안에서 끝난다(해설위원은 넘쳐도 된다)', () => {
+    const final = simulateSegment(createMatch(h, a, { seed: 1003 }), 90)
+    for (let m = 1; m <= 90; m++) {
+      const at = final.events.filter(e => e.minute === m)
+      const sceneMs = sceneDwellMs(at, 1, false)
+      const reveal = minuteRevealMs(at, final.home, final.away, sceneMs)
+      if (reveal === 0) continue
+      const all = final.events.filter(e => e.minute <= m)
+      const parts = minuteSpeechParts(at, h, a, 1, all, 1003, {}, m)
+      const dwell = minuteDwellWithSpeech(m, at, h, a, 1, false, 0, true, all, 1003, {}, reveal)
+      // 상한에 걸린 분만 예외다(아주 긴 문장) — 그 외에는 반드시 담긴다.
+      if (dwell < MAX_DWELL_MS) {
+        expect(reveal + REVEAL_LAG_MS + parts.casterMs, `m=${m}`).toBeLessThanOrEqual(dwell)
+      }
+    }
+  })
+
+  it('90분 총합이 예전(발화 즉시) 대비 크게 부풀지 않는다(1x, 6시드 평균 +25% 이내)', () => {
+    let before = 0
+    let after = 0
+    for (let seed = 1000; seed <= 1005; seed++) {
+      const final = simulateSegment(createMatch(h, a, { seed }), 90)
+      for (let m = 1; m <= 90; m++) {
+        const at = final.events.filter(e => e.minute === m)
+        const all = final.events.filter(e => e.minute <= m)
+        const clutch = m >= 80 && Math.abs(final.score[0] - final.score[1]) <= 1
+        const sceneMs = sceneDwellMs(at, 1, clutch)
+        const reveal = minuteRevealMs(at, final.home, final.away, sceneMs)
+        before += minuteDwellWithSpeech(m, at, h, a, 1, clutch, 0, true, all, seed)
+        after += minuteDwellWithSpeech(m, at, h, a, 1, clutch, 0, true, all, seed, {}, reveal)
+      }
+    }
+    expect(after).toBeGreaterThan(before) // 실제로 늘어난다(발화가 뒤로 갔으니까)
+    expect(after / before).toBeLessThan(1.25)
   })
 })

@@ -4,9 +4,10 @@
 // 재생 루프(MatchScreen)는 매 분마다 이 함수로 "이 분에 머무를 시간(dwell)"을
 // 계산해 다음 스텝을 예약한다. 사건이 큰 분(골·슛)은 오래 머물러 연출하고,
 // 무사건 분은 빠르게 넘겨(빨리감기) 지루함을 줄인다. 랜덤·시간 의존 없음(결정론).
-import type { MatchEvent, MatchEventType, Team } from '../../engine/types'
+import type { MatchEvent, MatchEventType, SideState, Team } from '../../engine/types'
 import { FLOW_DWELL_MS } from '../pitch/flow'
 import { SCENE_DWELL_MS } from '../pitch/scenes'
+import { buildSequence } from '../pitch/choreography'
 import { commentateAt, flowLineAt, type CommentaryCtx } from '../../game/commentary'
 import { casterRole, estimatePairMs, estimateSpeechMs } from '../../audio/commentary-tts'
 
@@ -50,7 +51,14 @@ export const BLOWOUT_MULTIPLIER = 0.6
 
 /** dwell 상한(ms, 속도 적용 후). 발화 길이 보정이 무한정 늘어나지 않게 막는다.
  *
- *  ★ 2026-07-30: 9000 → 9600. 골 dwell이 8600이 되면서(장면 소요 6.5 s + 세리머니 2 s)
+ *  ★ 2026-08-01: 9600 → 13500. **발화가 장면 뒤로 옮겨졌다**(아래 "발화 시점" 절).
+ *  결과가 화면에 보이는 시각(골 ≈ 6.5 s)이 지난 **뒤**에 캐스터 문장이 시작하므로,
+ *  한 분에 필요한 시간이 `장면 소요 + 캐스터 발화`가 됐다. 골 기준 6.5 + 0.26 + 5 ≈ 12 s다.
+ *  상한을 올리지 않으면 그 문장이 다음 분에 잘려 예전 증상(말과 화면의 어긋남)이
+ *  방향만 바뀐 채 되돌아온다. 90분 총 재생은 약 40 s 늘어난다 — 사용자가 완성도를
+ *  우선한다고 명시했다(2026-08-01 5라운드 피드백 ①).
+ *
+ *  ★ 2026-07-30 기록: 9000 → 9600. 골 dwell이 8600이 되면서(장면 소요 6.5 s + 세리머니 2 s)
  *  상한 9000이 골 해설의 하한 보정을 잘라 낼 수 있게 됐다.
  *
  *  ★ Phase C 4단계 기록(9000 시절). 화자가 둘이 되어 골 순간의 요구 발화가
@@ -58,7 +66,67 @@ export const BLOWOUT_MULTIPLIER = 0.6
  *  (브라우저 실측: 상한 7000에서 골 해설 2건이 전부 interrupted). 대신 길이를 콘텐츠
  *  쪽에서 줄였다 — 해설이 붙는 골에는 연호(`{선수}! {선수}!`)를 생략한다(commentary.ts).
  *  그 결과 골 한 분의 총 발화가 약 9초로 상한 안에 들어온다. */
-export const MAX_DWELL_MS = 9600
+export const MAX_DWELL_MS = 13500
+
+// ── 발화 시점 — "화면을 보고 해설한다" (2026-08-01 5라운드 피드백 ①) ─────
+//
+// 사용자 지적 원문: *"해설이 먼저 나오고 화면이 다음에 나와. '김승규가 슛을 막았습니다'가
+// 나오고 그에 맞는 화면이 다음에 나와. 무슨 예지력이야?"*
+//
+// 구조상 원인: 재생이 분 단위라 한 분에 들어서는 **즉시** 그 분의 결과 문장을 발화했다.
+// 그런데 안무는 dwell 전체(골 8.6 s)에 걸쳐 재생되고 결과(골 · 세이브 접촉)는 그 끝에
+// 온다. 즉 캐스터가 6~7초 앞서 결과를 말하고 있었다 — 예지력.
+//
+// 처방: **결과가 화면에 보이는 시각(reveal)을 안무에서 역산**하고, 캐스터는 그 뒤에
+// 말한다. 해설위원은 캐스터 뒤(유터런스 체이닝)이므로 순서는 저절로 유지된다.
+// "해설은 절대 먼저 말하지 않는다"(§1.1)를 **화면 대비**로 확장한 것이다.
+
+/**
+ * 캐스터가 결과를 보고 입을 떼기까지의 지연(ms).
+ *
+ * 0이면 공이 그물에 닿는 **프레임과 동시에** 말이 시작돼 여전히 예지력처럼 들린다
+ * (사람은 보고 말하기까지 최소 0.2 s가 걸린다). 0.5 s를 넘기면 이번엔 반응이 굼떠
+ * 중계가 아니라 나레이션이 된다. 실제 중계의 골 콜 시작 지연이 대략 이 범위다.
+ */
+export const REVEAL_LAG_MS = 260
+
+/**
+ * 안무에서 **결과가 화면에 보이는 순간**의 dwell 상대 시각(0~1).
+ *
+ *  - 세이브: `contact` 스텝(= GK 손이 공에 닿는 순간). 그 뒤 리바운드 스텝이 붙어도
+ *    "막았습니다"의 근거는 접촉이다.
+ *  - 그 외(골 · 미스 · 슛): 마지막 스텝. 골은 공이 그물에 닿는 지점, 미스는 골라인을
+ *    벗어나는 지점이라 둘 다 마지막 키프레임이 곧 결과다.
+ *
+ * 구조적 타입만 받는다 — choreography를 import하지 않아도 테스트가 리터럴로 부를 수 있다.
+ */
+export function sceneRevealT(seq: readonly { t: number; contact?: boolean }[]): number {
+  if (seq.length === 0) return 0
+  const contact = seq.find(s => s.contact)
+  const t = contact ? contact.t : seq[seq.length - 1].t
+  return t > 0 && t < 1 ? t : t >= 1 ? 1 : 0
+}
+
+/**
+ * 이 분의 **결과 노출 시각**(ms, 분 시작 기준). 하이라이트 안무가 없는 분은 0이다
+ * (코너 · 파울 · 무사건 분의 문장은 결과가 아니라 국면 서술이라 미룰 이유가 없다).
+ *
+ * @param sceneMs 안무가 실제로 재생되는 시간 = {@link sceneDwellMs}. **dwell이 아니다** —
+ *   dwell은 발화 때문에 늘어나지만 안무는 늘어나지 않는다(늘리면 reveal도 함께 밀려
+ *   방정식이 스스로를 쫓는다).
+ */
+export function minuteRevealMs(
+  eventsAtMinute: MatchEvent[],
+  homeState: SideState,
+  awayState: SideState,
+  sceneMs: number,
+): number {
+  const drama = pickDramaEvent(eventsAtMinute)
+  if (!drama || !isHighlightEvent(drama)) return 0
+  const seq = buildSequence(drama, homeState, awayState)
+  if (seq.length === 0) return 0
+  return Math.round(sceneRevealT(seq) * sceneMs)
+}
 
 // ── 주인공 이벤트 선택자(단일 진실원) ─────────────────────────
 // ★ 왜 하나여야 하나: 예전엔 한 분의 대표 이벤트를 두 곳이 따로 골랐다.
@@ -114,18 +182,45 @@ export function minuteSpeechMs(
   ctx: CommentaryCtx = {},
   minute?: number,
 ): number {
+  return minuteSpeechParts(eventsAtMinute, home, away, speed, allEvents, seed, ctx, minute).pairMs
+}
+
+/**
+ * 그 분 발화의 **두 조각** — 캐스터만 / 캐스터 + 해설.
+ *
+ * 왜 나눠야 하나: 발화가 장면 뒤로 밀리면서 "한 분에 다 담을 수 있는 발화"가 줄었다.
+ * 캐스터 문장은 반드시 그 분 안에서 끝나야 한다(그 분의 결과를 말하는 사람이다).
+ * 해설위원 문장은 넘쳐도 된다 — 실제 중계도 다음 국면이 시작된 뒤까지 골 이야기를
+ * 이어 간다. 그래서 **하한은 캐스터, 참고치는 쌍**이다.
+ */
+export function minuteSpeechParts(
+  eventsAtMinute: MatchEvent[],
+  home: Team,
+  away: Team,
+  speed: PlaybackSpeed = 1,
+  allEvents: readonly MatchEvent[] = eventsAtMinute,
+  seed = 0,
+  ctx: CommentaryCtx = {},
+  minute?: number,
+): { casterMs: number; pairMs: number } {
   const drama = pickDramaEvent(eventsAtMinute)
   if (!drama) {
     // 무사건 분 — 소강 구간 라인이 나올 수 있다. 짧지만 이것도 잘리면 안 된다.
-    if (minute === undefined) return 0
+    if (minute === undefined) return { casterMs: 0, pairMs: 0 }
     const flow = flowLineAt(allEvents, minute, home, away, seed)
-    return flow ? estimateSpeechMs(flow.speech, flow.speaker === 'analyst' ? 'analyst' : 'normal', speed) : 0
+    const ms = flow
+      ? estimateSpeechMs(flow.speech, flow.speaker === 'analyst' ? 'analyst' : 'normal', speed)
+      : 0
+    return { casterMs: ms, pairMs: ms }
   }
   const line = commentateAt(allEvents, eventIndex(allEvents, drama), home, away, seed, ctx)
   // ★ 화자가 둘이면 총 발화가 길어진다 — 캐스터 + 해설을 합쳐서 하한을 잡아야
   //   해설이 다음 분에 잘리지 않는다(B-1 체류 보정의 화자 2인 확장).
   const role = casterRole(isImportantEvent(drama), line.intensity)
-  return estimatePairMs(line.speech, role, line.follow?.speech, speed)
+  return {
+    casterMs: estimateSpeechMs(line.speech, role, speed),
+    pairMs: estimatePairMs(line.speech, role, line.follow?.speech, speed),
+  }
 }
 
 /** allEvents 안에서 이벤트의 위치. 참조가 다를 수 있으므로(스토어가 상태를 복제한다)
@@ -162,6 +257,32 @@ export function minuteDwellMs(
   clutch: boolean,
   scoreDiff = 0,
   speechMs = 0,
+  revealMs = 0,
+): number {
+  const rhythm = sceneDwellMs(eventsAtMinute, speed, clutch, scoreDiff)
+  // 발화 길이 하한 → 상한 클램프. 말이 끝나기 전에 다음 분으로 넘어가지 않게 하되,
+  // 긴 문장 하나가 화면을 무한정 붙잡지 못하도록 MAX_DWELL_MS로 막는다.
+  //
+  // ★ revealMs가 있으면 발화는 **그 뒤에** 시작한다(예지력 금지). 그래서 하한이
+  //   `발화 길이`가 아니라 `결과 노출 + 반응 지연 + 발화 길이`가 된다.
+  const floor = revealMs > 0 ? revealMs + REVEAL_LAG_MS + speechMs : speechMs
+  return Math.min(MAX_DWELL_MS, Math.max(rhythm, Math.round(floor)))
+}
+
+/**
+ * **안무가 실제로 재생되는 시간**(ms, 속도 적용 후) — 리듬 dwell 그 자체다.
+ *
+ * ★ dwell과 분리된 이유(2026-08-01): 예전에는 렌더러에도 최종 dwell(발화 하한이 반영된
+ *   값)을 넘겼다. 안무 키프레임 t는 dwell 상대값이라 **발화가 길어질수록 장면이 느려졌고**,
+ *   결과 노출 시각도 함께 밀려서 "발화를 결과 뒤로" 방정식이 스스로를 쫓았다
+ *   (골 기준 필요 dwell이 22초로 발산한다). 지금은 안무가 자기 속도로 끝나고,
+ *   남는 시간은 세리머니·중계의 여운이 된다 — 실제 중계의 리듬이기도 하다.
+ */
+export function sceneDwellMs(
+  eventsAtMinute: MatchEvent[],
+  speed: PlaybackSpeed,
+  clutch: boolean,
+  scoreDiff = 0,
 ): number {
   let base = 0
   for (const e of eventsAtMinute) {
@@ -174,9 +295,7 @@ export function minuteDwellMs(
   }
   // 블로우아웃 가속: 승부가 갈린(3골차+) 경기는 연출을 압축해 빠르게 넘긴다.
   if (scoreDiff >= BLOWOUT_DIFF) base *= BLOWOUT_MULTIPLIER
-  // 발화 길이 하한 → 상한 클램프. 말이 끝나기 전에 다음 분으로 넘어가지 않게 하되,
-  // 긴 문장 하나가 화면을 무한정 붙잡지 못하도록 MAX_DWELL_MS로 막는다.
-  return Math.min(MAX_DWELL_MS, Math.max(Math.round(base / speed), Math.round(speechMs)))
+  return Math.round(base / speed)
 }
 
 /**
@@ -198,9 +317,12 @@ export function minuteDwellWithSpeech(
   allEvents: readonly MatchEvent[] = eventsAtMinute,
   seed = 0,
   ctx: CommentaryCtx = {},
+  revealMs = 0,
 ): number {
-  const speechMs = speechEnabled
-    ? minuteSpeechMs(eventsAtMinute, home, away, speed, allEvents, seed, ctx, minute)
-    : 0
-  return minuteDwellMs(minute, eventsAtMinute, speed, clutch, scoreDiff, speechMs)
+  if (!speechEnabled) return minuteDwellMs(minute, eventsAtMinute, speed, clutch, scoreDiff, 0, revealMs)
+  const parts = minuteSpeechParts(eventsAtMinute, home, away, speed, allEvents, seed, ctx, minute)
+  // 발화가 결과 뒤로 밀린 분은 **캐스터만** 그 분 안에서 끝나면 된다(해설은 넘쳐도 된다).
+  // 밀리지 않는 분(코너·파울·무사건)은 예전처럼 쌍 전체를 하한으로 쓴다.
+  const speechMs = revealMs > 0 ? parts.casterMs : parts.pairMs
+  return minuteDwellMs(minute, eventsAtMinute, speed, clutch, scoreDiff, speechMs, revealMs)
 }

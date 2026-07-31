@@ -28,8 +28,11 @@ function kickoffNow(getByRole: (role: string, opts: { name: string }) => HTMLEle
 }
 
 // 목표 phase까지 재생 — 도중 자동 정지(브레이크·하프타임)는 confirmTactics로 재개.
+// ★ 2026-08-01: 상한을 400 → 3000으로 올렸다. 한 분에 걸리는 타이머가 늘었다 —
+//   결과 노출 게이트(minuteRevealMs)와 발화 지연(REVEAL_LAG_MS)이 각각 타이머를 하나씩
+//   더 쓴다. 400번으로는 90분을 못 넘겨 fulltime에 도달하지 못한다.
 function replayTo(target: string) {
-  for (let i = 0; i < 400 && store().phase !== target; i++) {
+  for (let i = 0; i < 3000 && store().phase !== target; i++) {
     if (store().phase === 'playing') act(() => { vi.advanceTimersToNextTimer() })
     else act(() => { store().confirmTactics() })
   }

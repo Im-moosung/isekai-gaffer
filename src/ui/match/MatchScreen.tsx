@@ -25,7 +25,8 @@ import { LiveStats } from './LiveStats'
 import { EntranceOverlay } from '../pitch/three/EntranceOverlay'
 import { buildEntranceCast, type EntranceCast } from '../pitch/three/entrance'
 import {
-  minuteDwellWithSpeech, pickDramaEvent, isImportantEvent, isHighlightEvent, eventIndex, type PlaybackSpeed,
+  minuteDwellWithSpeech, minuteRevealMs, sceneDwellMs, REVEAL_LAG_MS,
+  pickDramaEvent, isImportantEvent, isHighlightEvent, eventIndex, type PlaybackSpeed,
 } from './playback'
 import * as sfx from '../../audio/sfx'
 import './match.css'
@@ -219,6 +220,20 @@ export function MatchScreen({
   const frozenRef = useRef(false)
   frozenRef.current = frozen
   const [crowdSwell, setCrowdSwell] = useState(false)
+  /**
+   * **결과 노출 게이트** — 이 분의 결과(골·세이브·미스)가 화면에 보였는가.
+   *
+   * 사용자 지적(2026-08-01 ①): *"해설이 먼저 나오고 화면이 다음에 나와. 무슨 예지력이야?"*
+   * 재생이 분 단위라 분에 들어서는 즉시 결과 문장을 말하고 스코어를 올리고 GOAL 배너를
+   * 띄웠는데, 정작 안무는 6~7초 뒤에야 공을 그물에 넣었다.
+   *
+   * 이 플래그가 **결과를 아는 모든 UI**의 스위치다 — 발화·스코어버그·티커·골 드라마·
+   * 관중 함성이 전부 여기 걸린다. 반대로 **안무·카메라·2D 보드는 걸리지 않는다**
+   * (그것들이 결과를 보여주는 주체다). 하이라이트 안무가 없는 분은 처음부터 true다.
+   */
+  const [revealed, setRevealed] = useState(true)
+  /** 이번 분의 남은 노출 대기(ms). 일시정지에서 이어 붙이기 위한 미러. */
+  const revealRef = useRef({ minute: -1, left: 0 })
   const swellTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const firedGoalMinuteRef = useRef(-1)
   const spokenMinuteRef = useRef(-1)
@@ -285,10 +300,13 @@ export function MatchScreen({
       // 해설이 들리는 상태면 주인공 이벤트 발화 길이를 dwell 하한으로 쓴다(말 잘림 방지).
       // 화자가 둘이 되면 한 분의 총 발화가 길어진다 — allEvents·seed·ctx를 넘겨야
       // 실제로 발화될 문장(캐스터 + 해설)과 같은 기준으로 체류 하한이 잡힌다.
+      // 결과가 화면에 보이는 시각 — 발화·스코어·티커가 전부 이 시각을 기준으로 밀린다.
+      const sceneMs = sceneDwellMs(eventsAtMinute, speed, clutch, diff)
+      const revealMs = minuteRevealMs(eventsAtMinute, eng.home, eng.away, sceneMs)
       const dwell = overrideMs ?? minuteDwellWithSpeech(
         m, eventsAtMinute, home, away, speed, clutch, diff, ctts.willSpeak(),
         eng.events.filter(e => e.minute <= m), seed,
-        { decisions: st.decisionLog, managedTeamId: home.id },
+        { decisions: st.decisionLog, managedTeamId: home.id }, revealMs,
       )
       pendingMs = dwell
       startedAt = performance.now()
@@ -366,9 +384,45 @@ export function MatchScreen({
     else if (phase === 'paused-break') sfx.whistle('break')
   }, [phase])
 
+  // ── 결과 노출 타이머 ────────────────────────────────────────────────
+  // 이 분의 안무에서 결과가 보이는 시각(minuteRevealMs)만큼 기다렸다가 게이트를 연다.
+  // 일시정지 중에는 시계도 멈춘다 — 정지 화면에서 스코어가 혼자 올라가면 안 된다.
+  useEffect(() => {
+    if (!engine || phase !== 'playing') {
+      revealRef.current = { minute: -1, left: 0 }
+      setRevealed(true)
+      return
+    }
+    const m = engine.minute
+    if (revealRef.current.minute !== m) {
+      const eventsAtMinute = engine.events.filter(e => e.minute === m)
+      const diff = Math.abs(engine.score[0] - engine.score[1])
+      const clutch = m >= 80 && diff <= 1
+      const sceneMs = sceneDwellMs(eventsAtMinute, speed, clutch, diff)
+      const revealMs = minuteRevealMs(eventsAtMinute, engine.home, engine.away, sceneMs)
+      revealRef.current = { minute: m, left: revealMs }
+      setRevealed(revealMs <= 0)
+    }
+    const left = revealRef.current.left
+    if (frozen || left <= 0) return
+    const started = performance.now()
+    const timer = setTimeout(() => {
+      revealRef.current.left = 0
+      setRevealed(true)
+    }, left)
+    return () => {
+      clearTimeout(timer)
+      // 아직 안 열렸으면 남은 시간을 보존한다(정지 → 재개에서 이어 간다).
+      if (revealRef.current.left > 0) {
+        revealRef.current.left = Math.max(0, left - (performance.now() - started))
+      }
+    }
+  }, [engine, phase, frozen, speed])
+
   // 골 사운드: 재생 중 현재 분의 골에 1회 발동(우리=goalBurst / 실점=concedeMurmur) + 관중 스웰 4초.
   useEffect(() => {
-    if (phase !== 'playing' || !engine) return
+    // ★ revealed 게이트: 공이 그물에 들어가기 전에 함성부터 터지면 결과를 미리 알려 준다.
+    if (phase !== 'playing' || !engine || !revealed) return
     const m = engine.minute
     const goal = engine.events.find(e => e.type === 'goal' && e.minute === m)
     if (!goal || firedGoalMinuteRef.current === m) return
@@ -378,7 +432,7 @@ export function MatchScreen({
     setCrowdSwell(true)
     if (swellTimerRef.current) clearTimeout(swellTimerRef.current)
     swellTimerRef.current = setTimeout(() => setCrowdSwell(false), 4000)
-  }, [phase, engine])
+  }, [phase, engine, revealed])
 
   // TTS 해설: 재생 중 현재 분의 **주인공 이벤트** 1개만 발화(과밀 방지).
   // ★ 위 highlight 안무와 동일한 pickDramaEvent를 쓴다 — 말하는 이벤트와 그리는
@@ -387,27 +441,38 @@ export function MatchScreen({
   // ★ 화면에 뿌리는 Line.text와 다른 문자열이다 — `고오오올`·`…`·`!!!`은 ko-KR 보이스에서
   //   말더듬·오독이 되므로 발화에는 정규화된 speech를 쓴다(리서치 §5.2).
   // 분당 1회(spokenMinuteRef)만 발동 — 미지원·보이스 없음·토글 OFF면 조용한 no-op.
+  //
+  // ★ 2026-08-01: **화면을 보고 해설한다.** 이 효과는 결과가 화면에 보인 뒤(revealed)에야
+  //   깨어나고, 거기서 다시 REVEAL_LAG_MS(사람이 보고 입을 떼는 시간)만큼 늦춰 말한다.
+  //   예전에는 분에 들어서는 즉시 발화해 "막았습니다"가 세이브보다 6초 앞섰다.
   useEffect(() => {
-    if (phase !== 'playing' || !engine) return
+    if (phase !== 'playing' || !engine || !revealed) return
     const m = engine.minute
     if (spokenMinuteRef.current === m) return
-    spokenMinuteRef.current = m
-    const all = engine.events.filter(e => e.minute <= m)
-    const spoken = pickDramaEvent(all.filter(e => e.minute === m))
-    if (!spoken) {
-      // 무사건 분 — 소강 구간이면 흐름 라인 하나로 침묵을 메운다(§3.4).
-      // speakAside는 선점하지 않으므로 앞 분의 발화가 남아 있으면 조용히 넘어간다.
-      const flow = flowLineAt(all, m, home, away, seed)
-      if (flow) ctts.speakAside(flow.speech, { speed, role: flow.speaker === 'analyst' ? 'analyst' : 'normal' })
-      return
-    }
-    // 히스토리를 넘겨야 streak·골 종류·변형 억제가 산다(맥락 없는 단발 호출은 로봇 신호).
-    const line = commentateAt(all, eventIndex(all, spoken), home, away, seed, commentaryCtx)
-    // speed를 함께 넘긴다 — 빨리감기 중계는 발화도 빨라져야 체류 시간과 맞는다.
-    ctts.speak(line.speech, { important: isImportantEvent(spoken), intensity: line.intensity, speed })
-    // 해설위원은 **받아서** 말한다 — speakAside가 큐에 이어 붙여 캐스터 뒤에 나온다(§5.6).
-    if (line.follow) ctts.speakAside(line.follow.speech, { speed })
-  }, [phase, engine, home, away, speed, seed, commentaryCtx])
+    // ★ 여기서 spokenMinuteRef를 세우지 않는다 — 타이머가 실제로 발화한 뒤에 센다.
+    //   먼저 세우면 이 효과가 발화 전에 한 번 더 돌 때(예: 지시 기록 변경) 타이머만
+    //   지워지고 그 분의 해설이 통째로 사라진다.
+    const timer = setTimeout(() => {
+      spokenMinuteRef.current = m
+      const all = engine.events.filter(e => e.minute <= m)
+      const spoken = pickDramaEvent(all.filter(e => e.minute === m))
+      if (!spoken) {
+        // 무사건 분 — 소강 구간이면 흐름 라인 하나로 침묵을 메운다(§3.4).
+        // speakAside는 선점하지 않으므로 앞 분의 발화가 남아 있으면 조용히 넘어간다.
+        const flow = flowLineAt(all, m, home, away, seed)
+        if (flow) ctts.speakAside(flow.speech, { speed, role: flow.speaker === 'analyst' ? 'analyst' : 'normal' })
+        return
+      }
+      // 히스토리를 넘겨야 streak·골 종류·변형 억제가 산다(맥락 없는 단발 호출은 로봇 신호).
+      const line = commentateAt(all, eventIndex(all, spoken), home, away, seed, commentaryCtx)
+      // speed를 함께 넘긴다 — 빨리감기 중계는 발화도 빨라져야 체류 시간과 맞는다.
+      ctts.speak(line.speech, { important: isImportantEvent(spoken), intensity: line.intensity, speed })
+      // 해설위원은 **받아서** 말한다 — speakAside가 큐에 이어 붙여 캐스터 뒤에 나온다(§5.6).
+      // 캐스터보다 뒤라는 순서는 유터런스 체이닝이 보장한다(화면 대비로도 자동으로 더 뒤다).
+      if (line.follow) ctts.speakAside(line.follow.speech, { speed })
+    }, REVEAL_LAG_MS)
+    return () => clearTimeout(timer)
+  }, [phase, engine, revealed, home, away, speed, seed, commentaryCtx])
 
   // 작전판 진입·pause 시 진행 중 발화를 취소한다(작전 지시 중 해설이 새지 않게).
   useEffect(() => {
@@ -544,11 +609,19 @@ export function MatchScreen({
   const displayMinute = engine.minute
   // 현재 분까지 도달한 이벤트만 노출. 엔진이 분 단위로 전진하므로 engine.score와
   // 일치하지만, Ticker/PitchView와 동일 필터로 골 이벤트에서 표시 스코어를 파생한다.
-  const shown = engine.events.filter(e => e.minute <= displayMinute)
+  //
+  // ★ 이번 분은 **결과가 화면에 보인 뒤에야**(revealed) 노출한다. 그 전에 넣으면
+  //   스코어버그가 골보다 먼저 1을 올리고 티커에 "골!"이 먼저 뜬다 — 발화만 미루고
+  //   글자를 그대로 두면 사용자가 지적한 예지력이 눈으로 남는다.
+  const shown = engine.events.filter(e => e.minute < displayMinute || (e.minute === displayMinute && revealed))
   // 라인은 배열 단위로 만든다 — 접두 안정성이 있어 매 분 다시 계산해도 앞 줄이 바뀌지 않는다.
   // 타임라인은 캐스터 + 해설 + 소강 라인을 시간순으로 펼친 것이다(티커가 화자를 표시한다).
   // displayMinute를 넘겨야 마지막 이벤트 이후의 정적에도 소강 라인이 들어간다.
-  const commentaryLines = commentateTimeline(shown, home, away, seed, commentaryCtx, displayMinute)
+  // ★ untilMinute도 노출 게이트를 따른다. 아직 안 보여 준 분까지 훑게 하면 그 분의
+  //   이벤트를 못 본 채로 "소강 구간"이라 판정해 흐름 라인을 하나 넣었다가, 노출 직후
+  //   그 줄이 사라지고 결과 줄로 바뀐다(티커 한 줄이 깜빡인다).
+  const tickerUntil = revealed ? displayMinute : displayMinute - 1
+  const commentaryLines = commentateTimeline(shown, home, away, seed, commentaryCtx, tickerUntil)
   const tickerLines = commentaryLines.map(l => ({ minute: l.minute, text: l.text, speaker: l.speaker }))
   const lastEvent = shown[shown.length - 1]
   const shownScore: [number, number] = [0, 0]
@@ -562,12 +635,13 @@ export function MatchScreen({
   const minuteEvents = engine.events.filter(e => e.minute === displayMinute)
   const diffNow = Math.abs(shownScore[0] - shownScore[1])
   const clutchNow = displayMinute >= 80 && diffNow <= 1
-  // 시퀀스 재생 총 시간 = 그 분의 실제 dwell(재생 루프와 동일 함수 — 어긋나면 안무가
-  // 분 전환보다 늦게 끝나거나 일찍 끝나 정적이 생긴다).
-  const seqDwell = minuteDwellWithSpeech(
-    displayMinute, minuteEvents, home, away, speed, clutchNow, diffNow, ctts.willSpeak(), shown, seed,
-    commentaryCtx,
-  )
+  // 안무 재생 시간 = 리듬 dwell(sceneDwellMs). **분 dwell이 아니다.**
+  //
+  // ★ 2026-08-01: 예전에는 최종 dwell(발화 하한 반영)을 넘겼다. 안무 키프레임 t가 dwell
+  //   상대값이라 발화가 길어질수록 장면이 통째로 느려졌고, 그러면 결과 노출 시각도 함께
+  //   밀려서 "발화를 결과 뒤로" 보정이 스스로를 쫓는다(골 필요 dwell이 22초로 발산).
+  //   지금은 안무가 자기 속도로 끝나고, 남는 시간이 세리머니·중계의 여운이 된다.
+  const seqDwell = sceneDwellMs(minuteEvents, speed, clutchNow, diffNow)
   // ── 3D 하이라이트 ↔ 2D 작전판 전환 ────────────────────────────────
   // 3D는 **중요한 이벤트에서만** 돈다(HIGHLIGHT_TYPES = 골·세이브·미스·슛·퇴장).
   // 코너·파울·경고·찬스와 무사건 분은 2D 작전판이 받는다 — 그게 "하이라이트"의 뜻이고,
@@ -584,7 +658,8 @@ export function MatchScreen({
     ? `${displayMinute}' ${EVENT_KO[highlight.event.type] ?? '전개'} — 세트피스·국면 정리`
     : `${possTeam.name.ko} 점유 — ${flow?.label ?? '전개'}`
   // 골 드라마: 이번 분 득점. 상대 골이면 실점 연출로 차별화.
-  const goalEvent = minuteEvents.find(e => e.type === 'goal')
+  // ★ revealed 게이트 — 공이 그물에 닿기 전에 "GOAL"이 뜨면 연출이 결과를 미리 말한다.
+  const goalEvent = revealed ? minuteEvents.find(e => e.type === 'goal') : undefined
   const goalDrama = replaying && !!goalEvent
   const conceded = !!goalEvent && goalEvent.teamId !== home.id
   const scorerTeam = goalEvent ? (goalEvent.teamId === home.id ? home : away) : undefined
@@ -592,7 +667,9 @@ export function MatchScreen({
     ? scorerTeam.squad.find(p => p.id === goalEvent.playerId)?.name.ko
     : undefined
   // 위험 순간: xG 0.25+ 세이브·미스.
-  const dangerEvent = minuteEvents.find(e => (e.type === 'save' || e.type === 'miss') && (e.xg ?? 0) >= DANGER_XG)
+  const dangerEvent = revealed
+    ? minuteEvents.find(e => (e.type === 'save' || e.type === 'miss') && (e.xg ?? 0) >= DANGER_XG)
+    : undefined
   const dangerMoment = replaying && !!dangerEvent
 
   // 상단 방송 배너 — broadcast 모드(재생 중) 순간 제안이 우선. 정지·하프타임 안내는 작전판이 담당.
