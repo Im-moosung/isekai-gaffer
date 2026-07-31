@@ -219,6 +219,104 @@ export function liveBacklineX(
   return idx.reduce((s, i) => s + cs[i].x, 0) / idx.length
 }
 
+// ── 도트 가독성 분리 ──────────────────────────────────────────────
+// 실제 축구에서 선수는 겹친다 — 대인 마크·경합은 정상이고, 억지로 떼면 거짓이 된다.
+// 그래서 **겹침을 없애는 게 아니라 읽히게** 만든다: 두 도트가 완전히 포개져 한 명이
+// 사라지는 것만 막고, 겹친 상태 자체는 남긴다(테두리·z순서가 두 원을 갈라 보여준다).
+//
+// 계약: 이동은 **쌍 대칭**이고 상한이 있다. 마커는 이 함수를 거친 좌표의 평균에서
+// 뽑으므로(PitchView.meanBackline) 마커-도트 일치는 정의상 유지된다.
+
+/** 도트 반지름(viewBox = m). PitchView의 `r={2.4}`와 같은 값이어야 한다. */
+export const DOT_R_VB = 2.4
+/**
+ * "둘로 읽히는" 최소 중심 거리(viewBox ≈ m). 3.6이면 겹침 면적이 원 하나의 약 24%로
+ * 남아 경합처럼 보이되, 뒤 도트의 등번호 중심(반지름 2.4 바깥)이 드러난다.
+ * 실제 축구의 마크 간격(2~4m)과도 같은 범위다.
+ */
+export const MIN_DOT_SEP = 3.6
+/** 한 선수를 전술 위치에서 밀 수 있는 최대치(viewBox = m). 미세 진동 진폭과 같은 급이다. */
+const MAX_SEP_PUSH = 1.8
+/** 완화 반복. 3회면 세 명이 뭉친 경우도 풀린다(수렴 실측). */
+const SEP_ITER = 2
+/** 0~100 프레임 → viewBox 환산(x 105m, y 68m). 겹침은 **화면 좌표**에서 판정해야 한다. */
+const VB_X = 1.05
+const VB_Y = 0.68
+
+/**
+ * 도트가 서로를 완전히 가리지 않도록 최소 간격까지만 벌린다(결정론).
+ *
+ * @param coords 절대 프레임 좌표 배열(홈 11 + 어웨이 11을 이어붙여 넘긴다)
+ * @returns 새 배열. 입력은 건드리지 않는다.
+ */
+export function separateDots(coords: Coord[]): Coord[] {
+  const n = coords.length
+  const out = coords.map(c => ({ x: c.x, y: c.y }))
+  // ★ 야코비(동시 갱신)다. 가우스-자이델(제자리 갱신)로 짰더니 **인덱스 순서**가 결과를
+  //   갈라, 도트가 서로를 스쳐 지나갈 때 한 프레임에 2유닛(≈2m) 튀었다(실측). 같은 입력에서
+  //   모든 쌍의 밀어냄을 모아 한 번에 적용하면 결과가 입력의 연속 함수가 되어 튐이 없다.
+  const px = new Array<number>(n)
+  const py = new Array<number>(n)
+  for (let it = 0; it < SEP_ITER; it++) {
+    px.fill(0)
+    py.fill(0)
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const dx = (out[j].x - out[i].x) * VB_X
+        const dy = (out[j].y - out[i].y) * VB_Y
+        const d = Math.hypot(dx, dy)
+        if (d >= MIN_DOT_SEP) continue
+        let ux: number
+        let uy: number
+        if (d < 1e-6) {
+          // 완전히 같은 점 — 인덱스에서 방향을 뽑는다(Math.random 금지).
+          const a = ((i * 7 + j * 13) % 360) * (Math.PI / 180)
+          ux = Math.cos(a)
+          uy = Math.sin(a)
+        } else {
+          ux = dx / d
+          uy = dy / d
+        }
+        // 쌍 대칭 — 두 도트를 같은 양만큼 반대로 민다(집단 평균 보존).
+        const push = (MIN_DOT_SEP - d) / 2
+        px[i] -= (ux * push) / VB_X
+        py[i] -= (uy * push) / VB_Y
+        px[j] += (ux * push) / VB_X
+        py[j] += (uy * push) / VB_Y
+      }
+    }
+    for (let i = 0; i < n; i++) {
+      out[i].x += px[i]
+      out[i].y += py[i]
+    }
+  }
+  // 상한 적용 + 피치 안으로. 상한을 매 반복이 아니라 마지막에 한 번 거는 이유:
+  // 중간 단계를 자르면 반복이 수렴하지 않고 진동한다.
+  for (let i = 0; i < n; i++) {
+    const dx = (out[i].x - coords[i].x) * VB_X
+    const dy = (out[i].y - coords[i].y) * VB_Y
+    const d = Math.hypot(dx, dy)
+    if (d > MAX_SEP_PUSH) {
+      const k = MAX_SEP_PUSH / d
+      out[i].x = coords[i].x + ((out[i].x - coords[i].x) * k)
+      out[i].y = coords[i].y + ((out[i].y - coords[i].y) * k)
+    }
+    out[i].x = clampX(out[i].x)
+    out[i].y = clampY(out[i].y)
+  }
+  return out
+}
+
+/** 두 도트의 겹침 면적 비율(0~1) — 원-원 교차 넓이 / 원 하나의 넓이. */
+export function dotOverlapRatio(a: Coord, b: Coord, r = DOT_R_VB): number {
+  const d = Math.hypot((a.x - b.x) * VB_X, (a.y - b.y) * VB_Y)
+  if (d >= 2 * r) return 0
+  if (d <= 0) return 1
+  const t = d / (2 * r)
+  const area = 2 * r * r * Math.acos(t) - (d / 2) * Math.sqrt(4 * r * r - d * d)
+  return area / (Math.PI * r * r)
+}
+
 /** 블록 길이·폭(m). GK를 뺀 10명의 x·y 스팬 — "우리가 얼마나 컴팩트한가"의 실측 지표. */
 export function blockMetrics(coords: Coord[]): { lengthM: number; widthM: number } {
   const f = coords.slice(1)

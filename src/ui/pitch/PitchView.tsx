@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import type { MatchState, MatchEvent, SideState } from '../../engine/types'
-import { backlineIndices, blockMetrics, liveTeamCoords, tacticalCoords, type LiveInput } from './shape'
+import { backlineIndices, blockMetrics, liveTeamCoords, separateDots, tacticalCoords, type LiveInput } from './shape'
 import type { Coord } from './formations'
 import type { ChoreoStep } from './choreography'
 import { AnalysisLayer, analysisLabels, TAG_FS, type AnalysisGeom } from './AnalysisLayer'
@@ -61,6 +61,49 @@ interface PitchViewProps {
   analysis?: boolean
   /** 블록 지표(길이·폭 m) 콜백 — 작전판 칩이 실시간 수치를 띄운다. */
   onMetrics?: (m: { lengthM: number; widthM: number }) => void
+}
+
+/** 가독성 분리 오프셋이 한 틱에 변할 수 있는 최대치(0~100 프레임). 20Hz에서 7유닛/초(≈6m/s). */
+const SEP_RATE = 0.35
+/** raw 좌표가 이보다 크게 바뀌면(슬라이더·포메이션·교체) 보간하지 않고 즉시 맞춘다. */
+const SEP_SNAP = 2.0
+
+/**
+ * 도트 가독성 분리 + **시간 평활**.
+ *
+ * 왜 평활이 필요한가: `separateDots`는 매 프레임 독립적으로 푸는 순수 함수라, 두 선수가
+ * 서로를 스쳐 지나가면 밀어내는 방향이 뒤집히며 한 프레임에 1.8유닛(≈1.8m)까지 튄다
+ * (실측). 오프셋 자체는 최대 1.8유닛으로 작으니 **오프셋에만** 속도 제한을 걸면
+ * 전술 위치(raw)의 반응성은 그대로 두고 튐만 없앨 수 있다.
+ */
+function useSmoothSeparation(raw: Coord[], t: number, on: boolean): Coord[] {
+  const ref = useRef<{ t: number; off: Coord[]; raw: Coord[] } | null>(null)
+  if (!on) {
+    ref.current = null
+    return raw
+  }
+  const target = separateDots(raw)
+  const aim = target.map((c, i) => ({ x: c.x - raw[i].x, y: c.y - raw[i].y }))
+  const prev = ref.current
+  let off = aim
+  if (prev && prev.off.length === raw.length) {
+    let jump = 0
+    for (let i = 0; i < raw.length; i++) {
+      jump = Math.max(jump, Math.hypot(raw[i].x - prev.raw[i].x, raw[i].y - prev.raw[i].y))
+    }
+    if (jump <= SEP_SNAP) {
+      // 같은 틱의 재렌더에서는 값을 고정한다(렌더 횟수에 결과가 의존하면 안 된다).
+      off = prev.t === t ? prev.off : aim.map((c, i) => {
+        const dx = c.x - prev.off[i].x
+        const dy = c.y - prev.off[i].y
+        const d = Math.hypot(dx, dy)
+        const k = d > SEP_RATE ? SEP_RATE / d : 1
+        return { x: prev.off[i].x + dx * k, y: prev.off[i].y + dy * k }
+      })
+    }
+  }
+  ref.current = { t, off, raw: raw.map(c => ({ x: c.x, y: c.y })) }
+  return raw.map((c, i) => ({ x: c.x + off[i].x, y: c.y + off[i].y }))
 }
 
 /** 안무 스텝 인덱스 — 이전에 ChoreoLayer 안에 있었지만, 공 위치가 **도트 배치(블록 이동)**
@@ -139,8 +182,13 @@ export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels 
   const live: LiveInput | undefined = analysis
     ? { t: clock.t, ball: clock.ball ?? undefined, possess: clock.possess }
     : undefined
-  const homeC = teamCoords(state.home, 'home', live)
-  const awayC = teamCoords(state.away, 'away', live)
+  const rawHome = teamCoords(state.home, 'home', live)
+  const rawAway = teamCoords(state.away, 'away', live)
+  // ★ 작전판에서만 가독성 분리를 건다 — 도트가 완전히 포개져 한 명이 사라지는 것만 막는다.
+  //   방송 2D·전술판은 3D와 좌표가 같아야 하므로 손대지 않는다.
+  const sep = useSmoothSeparation(useMemo(() => [...rawHome, ...rawAway], [rawHome, rawAway]), clock.t, analysis)
+  const homeC = analysis ? sep.slice(0, rawHome.length) : rawHome
+  const awayC = analysis ? sep.slice(rawHome.length) : rawAway
 
   // 수비 라인 마커는 **도트 배열의 백라인 평균**에서 뽑는다 — 마커-도트 일치 계약(shape.ts).
   const geom: AnalysisGeom = {
@@ -212,8 +260,10 @@ export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels 
       <PitchMarkings />
       {/* 전술 레이어는 마킹 위·도트 아래 — 선수를 가리지 않는다. */}
       {analysis && <AnalysisLayer state={state} geom={geom} />}
+      {/* z순서 — 작전판에서는 상대를 먼저 깔고 우리 팀을 위에 올린다(보드의 주어는 우리다). */}
+      {analysis && <SideDots side={state.away} which="away" coords={awayC} />}
       <SideDots side={state.home} which="home" coords={homeC} highlightId={highlightId} onDotClick={onDotClick} />
-      <SideDots side={state.away} which="away" coords={awayC} />
+      {!analysis && <SideDots side={state.away} which="away" coords={awayC} />}
       {ghost && <GhostDot side={state.home} slotIndex={ghost.slotIndex} number={ghost.number} />}
       {/* 시퀀스 재생 중엔 안무(공·무버) 우선, 아니면 정적 lastEvent 마커. */}
       {playing

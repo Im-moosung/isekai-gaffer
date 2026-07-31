@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest'
 import type { FormationId, Instructions } from '../../../engine/types'
 import { XI_SLOTS } from '../formations'
-import { backlineIndices, blockMetrics, liveBacklineX, liveTeamCoords, tacticalCoords } from '../shape'
+import { backlineIndices, blockMetrics, dotOverlapRatio, liveBacklineX, liveTeamCoords, separateDots, tacticalCoords } from '../shape'
 
 const FORMATIONS = Object.keys(XI_SLOTS) as FormationId[]
 const ins = (o: Partial<Instructions> = {}): Instructions =>
@@ -175,6 +175,88 @@ describe('blockMetrics', () => {
           expect(b.lengthM, `${f} L${L}`).toBeLessThan(78)
           expect(b.widthM, `${f} P${P}`).toBeGreaterThan(25)
           expect(b.widthM, `${f} P${P}`).toBeLessThan(66)
+        }
+      }
+    }
+  })
+})
+
+describe('★ 도트 가독성 분리 — 겹침을 지우는 게 아니라 읽히게 만든다', () => {
+  /** 홈+어웨이 22개를 이어붙인 배열. */
+  const both = (f: FormationId, L: number, P: number, t = 0) => [
+    ...liveTeamCoords(f, 'home', ins({ lineHeight: L, pressing: P }), { t }),
+    ...liveTeamCoords(f, 'away', ins({ lineHeight: 100 - L, pressing: P }), { t }),
+  ]
+
+  it('한 도트가 다른 도트를 완전히 가리는 일이 없다(겹침 면적 ≤ 30%)', () => {
+    let worstRaw = 0
+    let worstSep = 0
+    for (const f of FORMATIONS) {
+      for (let L = 10; L <= 90; L += 10) {
+        for (const P of [0, 50, 100]) {
+          for (const t of [0, 3.7, 9.1]) {
+            const raw = both(f, L, P, t)
+            const sep = separateDots(raw)
+            for (let i = 0; i < raw.length; i++) {
+              for (let j = i + 1; j < raw.length; j++) {
+                worstRaw = Math.max(worstRaw, dotOverlapRatio(raw[i], raw[j]))
+                worstSep = Math.max(worstSep, dotOverlapRatio(sep[i], sep[j]))
+              }
+            }
+          }
+        }
+      }
+    }
+    // 분리 전에는 거의 완전 은폐가 난다(회귀 기준선).
+    expect(worstRaw).toBeGreaterThan(0.6)
+    expect(worstSep).toBeLessThanOrEqual(0.3)
+  })
+
+  it('전술 위치를 왜곡하지 않는다 — 이동 상한 1.8m', () => {
+    for (const f of FORMATIONS) {
+      for (let L = 10; L <= 90; L += 20) {
+        const raw = both(f, L, 50, 5.5)
+        const sep = separateDots(raw)
+        for (let i = 0; i < raw.length; i++) {
+          const d = Math.hypot((sep[i].x - raw[i].x) * 1.05, (sep[i].y - raw[i].y) * 0.68)
+          expect(d, `${f} L${L}[${i}]`).toBeLessThanOrEqual(1.8 + 1e-9)
+        }
+      }
+    }
+  })
+
+  it('쌍 대칭이라 팀 평균이 거의 보존된다(수비 라인 마커 드리프트 < 0.6m)', () => {
+    for (const f of FORMATIONS) {
+      for (let L = 10; L <= 90; L += 10) {
+        const raw = both(f, L, 50, 2.1)
+        const sep = separateDots(raw)
+        const idx = backlineIndices(f)
+        const mean = (cs: typeof raw) => idx.reduce((s, i) => s + cs[i].x, 0) / idx.length
+        expect(Math.abs(mean(sep) - mean(raw)) * 1.05, `${f} L${L}`).toBeLessThan(0.6)
+      }
+    }
+  })
+
+  it('결정론 — 같은 입력이면 같은 결과, 완전히 겹친 점도 갈라진다', () => {
+    const same = [{ x: 50, y: 50 }, { x: 50, y: 50 }, { x: 50, y: 50 }]
+    const a = separateDots(same)
+    const b = separateDots(same)
+    expect(b).toEqual(a)
+    for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) {
+      expect(Math.hypot((a[i].x - a[j].x) * 1.05, (a[i].y - a[j].y) * 0.68)).toBeGreaterThan(1.5)
+    }
+    // 입력 배열은 건드리지 않는다.
+    expect(same[0]).toEqual({ x: 50, y: 50 })
+  })
+
+  it('피치 밖으로 밀려나지 않는다', () => {
+    for (const f of FORMATIONS) {
+      for (const L of [0, 100]) {
+        for (const c of separateDots(both(f, L, 100, 7.3))) {
+          expect(c.x).toBeGreaterThanOrEqual(0)
+          expect(c.x).toBeLessThanOrEqual(100)
+          expect(c.y).toBeGreaterThanOrEqual(0)
+          expect(c.y).toBeLessThanOrEqual(100)
         }
       }
     }
