@@ -548,3 +548,86 @@ export function diveAngles(t: number, dir: number): DiveAngles {
     tuck: -0.55 * smoothstep(u / 0.6),
   }
 }
+
+// ── 다이브 팔 자세 상수 — player3d의 'dive' 분기와 **여기가 정본** ────────────
+// 왜 pose.ts로 올렸나: 무브먼트 레이어가 "손이 지금 어디 있는가"를 알아야 공을 손에
+// 붙일 수 있다(잡는 세이브). 리터럴이 렌더러 안에만 있으면 두 계층이 서로 다른 팔을
+// 상상하게 되고, 그것이 곧 "공 따로 골키퍼 따로"다.
+/** 눕는 쪽(아래로 깔리는) 팔의 어깨 굽힘 배율 — 위쪽 팔이 100%로 뻗는다. */
+export const DIVE_ARM_DOWN_SCALE = 0.75
+/** 어깨 벌림(rad) — [아래쪽 팔, 위쪽 팔]. */
+export const DIVE_ARM_OUT: [number, number] = [0.03, 0.05]
+/** 팔꿈치 굴곡(rad) — [아래쪽 팔, 위쪽 팔]. 뻗는 팔은 거의 편다. */
+export const DIVE_ELBOW: [number, number] = [0.25, 0.1]
+/** 다이브 중 상체 앞숙임(rad). */
+export const DIVE_TORSO_PITCH = 0.12
+/** 다이브 중 상체 비틀기 계수(rad) — dir 부호를 곱한다. */
+export const DIVE_TORSO_TWIST = 0.18
+/** 손 메시 중심의 팔꿈치 로컬 오프셋(m). */
+export const HAND_DROP = FOREARM + 0.01
+
+/** 3차원 벡터(로컬 리그 좌표: x=정면, y=위, z=오른쪽). */
+export interface Vec3L {
+  x: number
+  y: number
+  z: number
+}
+
+const rotX = (v: Vec3L, a: number): Vec3L => {
+  const c = Math.cos(a)
+  const s = Math.sin(a)
+  return { x: v.x, y: v.y * c - v.z * s, z: v.y * s + v.z * c }
+}
+const rotY = (v: Vec3L, a: number): Vec3L => {
+  const c = Math.cos(a)
+  const s = Math.sin(a)
+  return { x: v.x * c + v.z * s, y: v.y, z: -v.x * s + v.z * c }
+}
+const rotZ = (v: Vec3L, a: number): Vec3L => {
+  const c = Math.cos(a)
+  const s = Math.sin(a)
+  return { x: v.x * c - v.y * s, y: v.x * s + v.y * c, z: v.z }
+}
+
+/**
+ * 다이브 중 **뻗는 손**의 위치를 선수 로컬 좌표로 구한다(순기구학).
+ *
+ * 리그 계층(player3d와 동일): root → body(y=lift, rot.x=roll) → torso(y=HIP_Y,
+ * rot = Rx·Ry·Rz) → shoulder(y=SHOULDER_Y, z=±ARM_Z, rot = Rx(armOut)·Rz(shoulder))
+ * → elbow(y=−UPPER_ARM, rot.z) → hand(y=−HAND_DROP). three의 기본 회전 순서가
+ * XYZ(R = Rx·Ry·Rz)이므로 여기서도 같은 순서로 합성한다.
+ *
+ * 뻗는 팔은 **위로 뜨는 쪽**이다. roll > 0(dir > 0)이면 로컬 +Z(오른쪽)가 아래로
+ * 깔리므로 왼팔(z = −ARM_Z)이 위, 반대면 오른팔이 위다.
+ *
+ * @param t   다이브 진행도 0~1.
+ * @param dir 다이브 방향 ±1.
+ * @returns 로컬 좌표(x = 선수 정면, y = 지면 위 높이, z = 선수 오른쪽).
+ */
+export function diveHandLocal(t: number, dir: number): Vec3L {
+  const d = diveAngles(t, dir)
+  const s = Math.sign(dir) || 1
+  // 위로 뜨는 팔의 부호: dir>0이면 왼팔(-1), dir<0이면 오른팔(+1).
+  const armSign = s > 0 ? -1 : 1
+  const shoulderAngle = d.armReach
+  const armOut = DIVE_ARM_OUT[1]
+  // player3d: 왼팔은 rotation.x = +armOut, 오른팔은 −armOut.
+  const armOutSigned = armSign < 0 ? armOut : -armOut
+  const elbowAngle = DIVE_ELBOW[1]
+
+  // 손 → 팔꿈치 공간 → 어깨 공간
+  let p: Vec3L = { x: 0, y: -HAND_DROP, z: 0 }
+  p = rotZ(p, elbowAngle)
+  p = { x: p.x, y: p.y - UPPER_ARM, z: p.z }
+  // 어깨 회전(Rx·Rz) 후 어깨 위치를 더해 몸통 공간으로
+  p = rotZ(p, shoulderAngle)
+  p = rotX(p, armOutSigned)
+  p = { x: p.x, y: p.y + SHOULDER_Y, z: p.z + armSign * ARM_Z }
+  // 몸통 회전(Rx(0)·Ry(twist)·Rz(−pitch)) 후 힙 높이를 더해 body 공간으로
+  p = rotZ(p, -DIVE_TORSO_PITCH)
+  p = rotY(p, DIVE_TORSO_TWIST * s)
+  p = { x: p.x, y: p.y + HIP_Y, z: p.z }
+  // body 회전(Rx(roll)) 후 lift를 더해 root 공간으로
+  p = rotX(p, d.roll)
+  return { x: p.x, y: p.y + d.lift, z: p.z }
+}

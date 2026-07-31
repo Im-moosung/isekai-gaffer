@@ -7,6 +7,8 @@
 import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
 import { createPlayer, disposePlayerCaches } from '../player3d'
+import { diveHandLocal } from '../pose'
+import { DIVE_LAY_U } from '../movement'
 import type { PlayerPose } from '../types'
 import {
   TAU,
@@ -1126,5 +1128,50 @@ describe('접지 그림자 — 실제 발을 따라간다', () => {
     for (const m of mats) m.addEventListener('dispose', () => disposed++)
     rig.dispose()
     expect(disposed).toBe(3)
+  })
+})
+
+describe('★ diveHandLocal — 무브먼트와 렌더러가 같은 손을 본다', () => {
+  /**
+   * 무브먼트 레이어는 이 순기구학으로 "손이 어디 있는가"를 역산해 GK 몸통 자리를 정하고
+   * (movement.gkDiveAnchor) 잡는 세이브에서 공을 손에 붙인다. 렌더러(player3d)의 리그가
+   * 다른 팔을 그리면 그 순간 "공 따로 골키퍼 따로"가 된다.
+   *
+   * 아래 값은 실제 three 리그에 다이브 포즈를 적용해 손 메시의 월드 좌표를 읽어 얻은
+   * 실측치다(tools/sim-audit/verify-fk.mjs, 오차 0.0000 m). 리그 치수·다이브 각을 바꾸면
+   * 여기서 깨진다 — 그때 무브먼트 쪽 계약도 함께 봐야 한다는 뜻이다.
+   */
+  const CASES: [number, number, [number, number, number]][] = [
+    [0.25, 1, [-0.495, 1.554, 0.668]],
+    [0.4, 1, [-0.473, 1.388, 1.597]],
+    [0.55, 1, [-0.401, 1.013, 1.804]],
+    [1, 1, [-0.401, 0.519, 1.804]],
+    [0.55, -1, [-0.401, 1.013, -1.804]],
+  ]
+
+  it('실제 three 리그가 만드는 손 위치와 일치한다', () => {
+    for (const [t, dir, [x, y, z]] of CASES) {
+      const l = diveHandLocal(t, dir)
+      expect(l.x, `t=${t} dir=${dir} x`).toBeCloseTo(x, 3)
+      expect(l.y, `t=${t} dir=${dir} y`).toBeCloseTo(y, 3)
+      expect(l.z, `t=${t} dir=${dir} z`).toBeCloseTo(z, 3)
+    }
+  })
+
+  it('다이브 방향이 손의 좌우만 뒤집는다(대칭)', () => {
+    for (const t of [0.3, 0.55, 0.8, 1]) {
+      const a = diveHandLocal(t, 1)
+      const b = diveHandLocal(t, -1)
+      expect(b.x).toBeCloseTo(a.x, 9)
+      expect(b.y).toBeCloseTo(a.y, 9)
+      expect(b.z).toBeCloseTo(-a.z, 9)
+    }
+  })
+
+  it('완전 신전(DIVE_LAY_U)에서 손이 잔디 위에 있고 도달이 측방이다', () => {
+    const l = diveHandLocal(DIVE_LAY_U, 1)
+    expect(l.y).toBeGreaterThan(0.6) // 공을 쳐낼 수 있는 높이
+    // 도달의 대부분이 측방(로컬 Z)이다 — 스칼라 반경 근사가 틀렸던 이유.
+    expect(Math.abs(l.z)).toBeGreaterThan(Math.abs(l.x) * 3)
   })
 })

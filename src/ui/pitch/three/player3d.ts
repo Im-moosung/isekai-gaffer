@@ -30,7 +30,8 @@ import {
 // 이유는 pose.ts 헤더 참조. 기존 import 경로(`from './player3d'`)를 쓰는 곳이 있어
 // 공개 이름은 그대로 재수출한다.
 import {
-  ANKLE_H, ARM_Z, CELEBRATE_JUMP, FOREARM, HIP_Y, LEG_Z, SHIN_LEN, SHOULDER_Y,
+  ANKLE_H, ARM_Z, CELEBRATE_JUMP, DIVE_ARM_DOWN_SCALE, DIVE_ARM_OUT, DIVE_ELBOW,
+  DIVE_TORSO_PITCH, DIVE_TORSO_TWIST, FOREARM, HIP_Y, LEG_Z, SHIN_LEN, SHOULDER_Y,
   SPRINT_SPEED, STAND_DROP, TAU, THIGH_LEN, UPPER_ARM,
   advancePhase, celebrateOffset, clamp, clamp01, deepKit, diveAngles, gaitAngles,
   hash01, kickAngles, kitInk, luminance, mixColor, solveLeg,
@@ -963,16 +964,17 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
           rightDown ? [up, down] : [down, up]
         const [hipL, hipR] = pick(-0.15, 0.25 - 0.3 * d.tuck)
         const [kneeL, kneeR] = pick(-0.2 + 0.5 * d.tuck, d.tuck)
-        const [shL, shR] = pick(d.armReach * 0.75, d.armReach)
+        const [shL, shR] = pick(d.armReach * DIVE_ARM_DOWN_SCALE, d.armReach)
         // 옆으로 누우면 시상면이 지면과 평행해진다 → 팔은 벌리지 않아야(=몸 옆으로
         // 처지지 않아야) 공을 향해 뻗은 모양이 되고 잔디를 파고들지 않는다
-        const [outL, outR] = pick(0.03, 0.05)
-        const [elL, elR] = pick(0.25, 0.1)
+        // ★ 상수 정본은 pose.ts다 — 무브먼트가 같은 값으로 손 위치를 역산해 공을 붙인다.
+        const [outL, outR] = pick(DIVE_ARM_OUT[0], DIVE_ARM_OUT[1])
+        const [elL, elR] = pick(DIVE_ELBOW[0], DIVE_ELBOW[1])
         pose.bodyY = d.lift
         pose.bodyRoll = d.roll // 다이브는 다리까지 함께 눕는다
         pose.torsoRoll = 0
-        pose.torsoPitch = 0.12
-        pose.torsoTwist = 0.18 * diveDir
+        pose.torsoPitch = DIVE_TORSO_PITCH
+        pose.torsoTwist = DIVE_TORSO_TWIST * diveDir
         pose.hipL = hipL
         pose.hipR = hipR
         pose.kneeL = kneeL
