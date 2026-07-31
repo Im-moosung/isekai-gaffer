@@ -41,6 +41,8 @@ const LEAD = Number(arg('lead', 4400))
 const WANT = arg('want', 'save,save,miss,goal').split(',')
 /** 장면 키 정규식 필터 — 예 `^H/outside`(유저 전술이 실제로 적용된 홈 공격만). */
 const SCENE_RE = new RegExp(arg('scene', '.'))
+/** 재생 배속 버튼 라벨(`1x`·`1.5x`·`2x`). 배속을 올리면 dwell이 줄어 더 많은 분을 훑는다. */
+const RATE = arg('rate', '')
 
 function freePort() {
   return new Promise((res, rej) => {
@@ -96,6 +98,14 @@ try {
     console.log(`  전술 '${PATTERN}' 선택`)
   }
   await page.getByRole('button', { name: '킥오프' }).click()
+
+  if (RATE) {
+    await page.evaluate(label => {
+      const b = [...document.querySelectorAll('button')].find(x => x.textContent?.trim() === label)
+      b?.click()
+    }, RATE)
+    console.log(`  배속 ${RATE}`)
+  }
 
   const canvas = page.locator('canvas.m3d-canvas')
   await canvas.waitFor({ state: 'visible', timeout: 30000 })
