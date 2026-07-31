@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Application, Container, Graphics, Text } from 'pixi.js'
 import type { MatchState, MatchEvent } from '../../../engine/types'
-import { slotCoords } from '../formations'
-import { attackingSideOf, type ChoreoStep } from '../choreography'
+import { type ChoreoStep } from '../choreography'
+import { sequenceOwner } from '../cast'
 import { PitchView } from '../PitchView'
+import { separateDots, tacticalCoords } from '../shape'
+import { layoutLabels, textWidth, type Box, type LabelReq } from '../labels'
 import {
   PITCH_W, PITCH_H, ZOOM, toWorld, clamp, lerp, clampFocus,
   bezierAt, controlFor, easeFor, shakeOffset,
@@ -61,16 +63,56 @@ function webglAvailable(): boolean {
   }
 }
 
-// 도트 하나의 지속 라벨(등번호)·배지(사기)·보간 위치 상태.
+// 도트 하나의 지속 라벨(등번호)·이름표·배지(사기)·보간 위치 상태.
 interface DotVisual {
   label: Text
+  /** 선수 이름표 — 장면에 관여한 선수에게만 켠다(④). 자리는 labels.layoutLabels가 정한다. */
+  name: Text
   mood: Text
   // 현재 px 위치(포메이션 변경 시 목표로 부드럽게 lerp).
   cx: number
   cy: number
   placed: boolean
   lastNum: string
+  lastName: string
   lastMood: string
+}
+
+/** 이름표 기준 폰트(px) — Text 객체를 이 크기로 만들고 scale로 화면 크기를 맞춘다. */
+const NAME_BASE_FS = 26
+/** 이름표 화면 폰트 크기(px). 40~52px 도트 옆에서 읽히는 최소값이 12px대다. */
+const NAME_SCREEN_FS = 15
+/** 도트 화면 반지름(px)의 하한·상한. 풀블리드 캔버스에서 지름 90px까지 부풀던 것을 묶는다(⑩). */
+const DOT_SCREEN_R_MIN = 7
+const DOT_SCREEN_R_MAX = 22
+/** 화면 짧은 변 대비 도트 반지름 비율. 1080px 높이에서 반지름 17px(지름 35px), 상한 지름 44px. */
+const DOT_SCREEN_R_RATIO = 0.016
+
+/**
+ * 진행도 p에서 공을 소유한 선수 id. 저술(scenes/flow)이 스텝마다 명시한다.
+ * 비행 중(carrier 없음)이면 undefined — 그때는 소유 링을 그리지 않는다.
+ */
+function stepCarrier(seq: ChoreoStep[], p: number): string | undefined {
+  let i = 0
+  while (i < seq.length - 1 && p > seq[i + 1].t) i++
+  return seq[i].carrier
+}
+
+/**
+ * 이름표 후보 자리(px). SVG PitchView.nameSlots와 같은 순서 — 아래 → 위 → 대각 → 좌우.
+ * 가로 오프셋은 그 이름의 **실제 폭**에서 낸다(3글자와 7글자가 같은 자리를 쓸 수 없다).
+ */
+function nameSlotsPx(name: string, fs: number, dotR: number): { dx: number; dy: number }[] {
+  const half = (textWidth(name, fs) + fs * 0.4) / 2
+  const side = dotR * 1.25 + half + fs * 0.15
+  const down = dotR * 1.25 + fs * 0.95
+  return [
+    { dx: 0, dy: down }, { dx: 0, dy: -down },
+    { dx: side * 0.7, dy: down * 0.85 }, { dx: -side * 0.7, dy: down * 0.85 },
+    { dx: side * 0.7, dy: -down * 0.85 }, { dx: -side * 0.7, dy: -down * 0.85 },
+    { dx: side, dy: 0 }, { dx: -side, dy: 0 },
+    { dx: 0, dy: down * 1.6 }, { dx: 0, dy: -down * 1.6 },
+  ]
 }
 
 export function PixiPitch(props: PixiPitchProps) {
@@ -140,10 +182,21 @@ export function PixiPitch(props: PixiPitchProps) {
           },
         })
         label.anchor.set(0.5)
+        const name = new Text({
+          text: '',
+          style: {
+            fontFamily: 'Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif',
+            fontSize: NAME_BASE_FS, fontWeight: '700', fill: 0xffffff, align: 'center',
+            // 후광 — 잔디·도트 위 어디에 놓여도 읽힌다(SVG .pv-name의 paint-order와 같은 의도).
+            stroke: { color: 0x060c16, width: 7 },
+          },
+        })
+        name.anchor.set(0.5)
+        name.visible = false
         const mood = new Text({ text: '', style: { fontFamily: 'sans-serif', fontSize: 26 } })
         mood.anchor.set(0.5)
-        labelLayer.addChild(label, mood)
-        return { label, mood, cx: 0, cy: 0, placed: false, lastNum: '', lastMood: '' }
+        labelLayer.addChild(label, name, mood)
+        return { label, name, mood, cx: 0, cy: 0, placed: false, lastNum: '', lastName: '', lastMood: '' }
       }
       for (let i = 0; i < 11; i++) { dotVisuals.home.push(makeDot()); dotVisuals.away.push(makeDot()) }
 
@@ -212,7 +265,18 @@ export function PixiPitch(props: PixiPitchProps) {
       let flashStart = -1, flashConceded = false
       let shakeStart = -1
 
-      const dotR = () => Math.max(2, scale * 2.05)
+      /**
+       * 도트 반지름(월드 px = 카메라 적용 **전**).
+       *
+       * ★ 예전에는 `scale * 2.05`, 즉 월드 2.05 m 고정이었다. 풀블리드로 캔버스가 커지자
+       *   1920×1080에서 반지름 32 px, 카메라 줌 1.6을 곱해 **지름 104 px**가 됐다 —
+       *   감사 ⑩("도트가 지름 ~90px로 그려져 10~12명만 보인다")이 잡은 그림이다.
+       *   방송 그래픽의 선수 마커는 화면 크기가 고정이다(줌해도 커지지 않는다).
+       *   그래서 화면 반지름을 먼저 정하고 카메라 배율로 나눠 월드 반지름을 역산한다.
+       */
+      const dotScreenR = () =>
+        clamp(Math.min(lastW, lastH) * DOT_SCREEN_R_RATIO, DOT_SCREEN_R_MIN, DOT_SCREEN_R_MAX)
+      const dotR = () => Math.max(1, dotScreenR() / Math.max(0.5, camZoom))
 
       // 안무 표본: 진행도 p(0~1)에서 공(월드)·무버(월드)를 반환.
       const sampleSeq = (seq: ChoreoStep[], p: number) => {
@@ -284,30 +348,84 @@ export function PixiPitch(props: PixiPitchProps) {
           }
         }
 
+        // ── 안무 표본을 **먼저** 뽑는다 ─────────────────────────
+        // 무버 좌표가 도트 좌표를 덮어쓰기 때문이다(⑤). 예전에는 도트를 먼저 그리고
+        // 그 위에 번호 없는 반투명 원을 얹었다 — 사용자가 "3개의 동그란 그림자"라 부른 것.
+        const seq = curSeq && curSeq.length > 0 ? curSeq : null
+        const prog = seq ? clamp((now - seqStart) / (p.dwellMs ?? 3000), 0, 1) : 0
+        const s = seq ? sampleSeq(seq, prog) : null
+        // 공격 팀은 **시퀀스 자체**에서 판정한다 — `save`의 teamId는 막은 팀(수비)이라
+        // prop을 그대로 믿으면 무버가 반대 팀에 꽂힌다(cast.sequenceOwner).
+        const attSide = sequenceOwner(p.state, seq ?? undefined, p.sequenceSide ?? 'home')
+        const moverById = new Map((s?.movers ?? []).map(m => [m.id, m]))
+        const carrierId = seq ? stepCarrier(seq, prog) : undefined
+        // 이번 장면의 주역 — 이름표는 이들에게만 붙는다(④). 22명 전원에 붙이면 글자가 피치를 덮는다.
+        const cast = new Set<string>(moverById.keys())
+        if (carrierId) cast.add(carrierId)
+
+        // ── 도트 좌표 22개 ─────────────────────────────────────
+        // 전술 변환 좌표(SVG·3D와 같은 정본) + 무버 덮어쓰기 + 가독성 분리.
+        // ★ 예전에는 포메이션 원형(slotCoords)을 그대로 썼다 — 라인·압박 슬라이더를
+        //   만져도 도트가 안 움직였고, SVG 작전판과 좌표가 어긋났다.
+        const normOf = (which: 'home' | 'away') => {
+          const { formation, lineup, instructions } = p.state[which].tactics
+          return lineup.map((slot, i) => {
+            const m = which === attSide ? moverById.get(slot.playerId) : undefined
+            // 무버 좌표는 월드(m) — 정규 좌표로 되돌려 분리 솔버에 같은 단위로 넘긴다.
+            if (m) return { x: (m.x / PITCH_W) * 100, y: (m.y / PITCH_H) * 100 }
+            return tacticalCoords(formation, i, which, instructions)
+          })
+        }
+        const normHome = normOf('home')
+        const normAway = normOf('away')
+        // 팀 **간**에도 건다 — 우리 도트가 상대 도트에 통째로 가려지던 문제(감사 ⑨).
+        const sepNorm = separateDots([...normHome, ...normAway])
+        const sepOf = (which: 'home' | 'away', i: number) =>
+          which === 'home' ? sepNorm[i] : sepNorm[normHome.length + i]
+
         // ── 도트(22) 재그리기 + 라벨 갱신 ──
         dotsG.clear()
         const R = dotR()
-        for (const which of ['home', 'away'] as const) {
+        // 이름표 폰트도 화면 크기 고정 — 카메라 배율로 나눠 월드 크기를 역산한다(도트와 같은 규칙).
+        const nameFs = NAME_SCREEN_FS / Math.max(0.5, camZoom)
+        const nameReqs: LabelReq[] = []
+        const dotBoxes: Box[] = []
+        const dvById = new Map<string, DotVisual>()
+        // z순서 — 장면의 주어를 마지막에(=위에) 그린다. 예전엔 언제나 어웨이가 마지막이라
+        // 우리 도트가 상대 도트 밑에 깔렸다(감사 ⑨). 분리 솔버가 은폐를 막지만, 순서까지
+        // 맞춰야 "누구를 보는 화면인가"가 흔들리지 않는다.
+        const order: ('home' | 'away')[] = seq && attSide === 'away' ? ['home', 'away'] : ['away', 'home']
+        for (const which of order) {
           const sideState = p.state[which]
           const color = which === 'home' ? homeColor : awayColor
-          const { formation, lineup } = sideState.tactics
-          const numById = new Map(sideState.team.squad.map(s => [s.id, s.number]))
+          const { lineup } = sideState.tactics
+          const numById = new Map(sideState.team.squad.map(s2 => [s2.id, s2.number]))
+          const nameById = new Map(sideState.team.squad.map(s2 => [s2.id, s2.name.ko]))
           const pool = dotVisuals[which]
           for (let i = 0; i < pool.length; i++) {
             const dv = pool[i]
             const slot = lineup[i]
-            if (!slot || i >= lineup.length) { dv.label.visible = false; dv.mood.visible = false; continue }
-            const c = slotCoords(formation, i, which)
+            if (!slot || i >= lineup.length) {
+              dv.label.visible = false; dv.mood.visible = false; dv.name.visible = false
+              continue
+            }
+            dvById.set(slot.playerId, dv)
+            const c = sepOf(which, i)
             const t = normToPx(c.x, c.y)
-            if (!dv.placed) { dv.cx = t.x; dv.cy = t.y; dv.placed = true }
-            // 포메이션 변경 시 부드럽게 이동(프레임 독립 lerp).
-            const k = reduced ? 1 : 1 - Math.exp(-dt * 9)
-            dv.cx = lerp(dv.cx, t.x, k)
-            dv.cy = lerp(dv.cy, t.y, k)
+            // 안무가 옮기는 선수는 **즉시** 그 자리다(평활하면 공보다 늦게 도착한다).
+            // 그 외에는 포메이션 변경 시 부드럽게 이동(프레임 독립 lerp).
+            const instant = reduced || (which === attSide && moverById.has(slot.playerId))
+            if (!dv.placed || instant) { dv.cx = t.x; dv.cy = t.y; dv.placed = true }
+            else {
+              const k = 1 - Math.exp(-dt * 9)
+              dv.cx = lerp(dv.cx, t.x, k)
+              dv.cy = lerp(dv.cy, t.y, k)
+            }
             // 그림자 → 바디 → 링(고대비).
             dotsG.circle(dv.cx, dv.cy + R * 0.45, R * 0.98).fill({ color: 0x000000, alpha: 0.3 })
             dotsG.circle(dv.cx, dv.cy, R).fill(color)
-            dotsG.circle(dv.cx, dv.cy, R).stroke({ width: Math.max(1, scale * 0.42), color: 0xffffff, alpha: 0.9 })
+            dotsG.circle(dv.cx, dv.cy, R).stroke({ width: Math.max(1, R * 0.2), color: 0xffffff, alpha: 0.9 })
+            dotBoxes.push({ x: dv.cx - R * 1.25, y: dv.cy - R * 1.25, w: R * 2.5, h: R * 2.5 })
             // 등번호.
             const num = String(numById.get(slot.playerId) ?? '')
             if (num !== dv.lastNum) { dv.label.text = num; dv.lastNum = num }
@@ -323,33 +441,52 @@ export function PixiPitch(props: PixiPitchProps) {
               dv.mood.position.set(dv.cx + R * 1.1, dv.cy - R * 1.1)
               dv.mood.scale.set((R * 0.95) / 26)
             }
+            // 이름표 배치 요청 — 실제 자리는 SVG 작전판과 **같은 충돌 회피 패스**가 정한다.
+            dv.name.visible = false
+            if (cast.has(slot.playerId) && which === attSide) {
+              const nm = nameById.get(slot.playerId)
+              if (nm) {
+                if (nm !== dv.lastName) { dv.name.text = nm; dv.lastName = nm }
+                nameReqs.push({
+                  id: slot.playerId,
+                  text: nm,
+                  ax: dv.cx,
+                  ay: dv.cy,
+                  fontSize: nameFs,
+                  slots: nameSlotsPx(nm, nameFs, R),
+                  rank: 0,
+                })
+              }
+            }
+          }
+        }
+        // 이름표 자리 확정(겹침 0 보장 — 자리를 못 찾으면 그리지 않는다).
+        if (nameReqs.length > 0) {
+          const bounds = { x: 0, y: 0, w: PITCH_W * scale + offX * 2, h: PITCH_H * scale + offY * 2 }
+          for (const pl of layoutLabels(nameReqs, bounds, dotBoxes).placed) {
+            const dv = dvById.get(pl.id)
+            if (!dv) continue
+            dv.name.visible = true
+            dv.name.position.set(pl.x, pl.y)
+            dv.name.scale.set(nameFs / NAME_BASE_FS)
           }
         }
 
-        // ── 공·무버·트레일 + 파티클 ──
+        // ── 공·트레일 + 파티클 ──
         fxG.clear()
         let ballWorld: { x: number; y: number } | null = null
-        if (curSeq && curSeq.length > 0) {
-          const dwell = p.dwellMs ?? 3000
-          const prog = clamp((now - seqStart) / dwell, 0, 1)
-          const s = sampleSeq(curSeq, prog)
+        if (s && seq) {
           ballWorld = s.ball
           const ballPx = { x: offX + s.ball.x * scale, y: offY + s.ball.y * scale }
-          // ★ 공격 팀은 이벤트에서 다시 계산한다 — `save`의 teamId는 막은 팀(수비)이라
-          //   prop을 그대로 믿으면 무버 도트가 **반대 팀 색**으로 찍힌다
-          //   (choreography.attackingSideOf 참조).
-          const side = p.lastEvent
-            ? attackingSideOf(p.lastEvent, p.state.home.team.id)
-            : (p.sequenceSide ?? 'home')
-          const moverColor = side === 'home' ? homeColor : awayColor
-          // 무버(공격 팀 동반 러너 — 작은 팀컬러 도트 + 흰 링으로 선수임을 명확히).
-          for (const m of s.movers) {
-            const mp = { x: offX + m.x * scale, y: offY + m.y * scale }
-            fxG.circle(mp.x, mp.y, R * 0.66).fill({ color: moverColor, alpha: 0.9 })
-            fxG.circle(mp.x, mp.y, R * 0.66).stroke({ width: Math.max(0.8, scale * 0.28), color: 0xffffff, alpha: 0.7 })
+          // 볼 캐리어 링 — 공이 지금 누구 발밑에 있나. 무버 고스트 원의 자리를 대신한다:
+          // 선수는 진짜 도트가 이미 그리고 있으므로, 여기서 말할 것은 "소유"뿐이다.
+          const cdv = carrierId ? dvById.get(carrierId) : undefined
+          if (cdv) {
+            fxG.circle(cdv.cx, cdv.cy, R * 1.55)
+              .stroke({ width: Math.max(1, R * 0.18), color: 0xffffff, alpha: 0.75 })
           }
           // 골 FX 발동(공이 목적지 도달 시).
-          if (goalArmed && prog >= curSeq[curSeq.length - 1].t) {
+          if (goalArmed && prog >= seq[seq.length - 1].t) {
             particles = spawnBurst(s.ball.x, s.ball.y, goalArmed.color)
             flashStart = now; flashConceded = goalArmed.conceded
             shakeStart = now
@@ -402,9 +539,7 @@ export function PixiPitch(props: PixiPitchProps) {
         // ── 카메라 워크 ──
         let targetZoom = 1
         let focusX = PITCH_W / 2, focusY = PITCH_H / 2
-        if (curSeq && curSeq.length > 0 && ballWorld && !reduced) {
-          const dwell = p.dwellMs ?? 3000
-          const prog = clamp((now - seqStart) / dwell, 0, 1)
+        if (seq && ballWorld && !reduced) {
           const elapsed = now - seqStart
           const zin = easeFor('camera')(clamp(elapsed / 400, 0, 1)) // 0.4s 줌인
           const zout = clamp((prog - 0.82) / 0.18, 0, 1) // 종료부 복귀

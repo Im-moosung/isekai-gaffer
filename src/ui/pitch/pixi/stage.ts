@@ -12,8 +12,16 @@ import type { ChoreoStep } from '../choreography'
 export { PITCH_W, PITCH_H } from '../geometry'
 import { PITCH_W, PITCH_H } from '../geometry'
 
-/** 하이라이트 카메라 줌 배율(액션 존 확대). */
-export const ZOOM = 1.6
+/**
+ * 하이라이트 카메라 줌 배율(액션 존 확대).
+ *
+ * ★ 1.6 → 1.3(감사 ⑩). 경기 화면이 풀블리드가 되면서 캔버스가 뷰포트 전체를 쓰게 됐는데,
+ *   1920×1080에서 줌 1.6은 보이는 영역을 75.6 m × 42.5 m로 잘라 22명 중 10~12명만 남겼다.
+ *   1.3이면 93 m × 52 m — 피치 길이의 89%가 보이므로 잘리는 선수가 거의 없고, 그러면서도
+ *   "카메라가 사건 쪽으로 붙는다"는 신호는 남는다. (도트 크기는 별개 문제였다: 월드 고정
+ *   반지름이라 줌과 곱해져 지름 104 px가 됐다 — PixiPitch.dotR 주석 참조.)
+ */
+export const ZOOM = 1.3
 
 export interface Pt { x: number; y: number }
 
