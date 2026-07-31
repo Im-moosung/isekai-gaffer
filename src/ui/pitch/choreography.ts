@@ -197,9 +197,17 @@ function primaryOf(event: MatchEvent, attacking: SideState): string | undefined 
   return i > 0 ? id : undefined
 }
 
-/** 이벤트 → 레인 변형 인덱스(0~5). 분·타입·선수·팀을 섞어 같은 분에 몰리지 않게 한다. */
+/**
+ * 이벤트 → 레인 변형 인덱스(0~5). 분·타입·선수를 섞어 같은 분에 몰리지 않게 한다.
+ *
+ * ★ 2026-07-31: 키에서 **teamId를 뺐다.** 슛 지점을 "골문까지의 거리"로 저술하게 되면서
+ *   깊이(x)가 좌우 오프셋(y)의 함수가 됐고(scenes.finishStations), 레인이 곧 y다.
+ *   teamId가 레인을 가르면 같은 사건의 홈·원정 x가 서로 미러가 아니게 된다
+ *   (실측: 홈 x + 원정 x = 92.99, 규약은 100 — `choreography.test.ts`의 미러 계약).
+ *   실제 경기에서는 두 팀의 `playerId`가 다르므로 teamId 없이도 레인은 갈린다.
+ */
 function laneFor(event: MatchEvent): number {
-  return hash(`lane|${event.minute}:${event.type}:${event.playerId ?? ''}:${event.teamId}`) % LANE_COUNT
+  return hash(`lane|${event.minute}:${event.type}:${event.playerId ?? ''}`) % LANE_COUNT
 }
 
 /**

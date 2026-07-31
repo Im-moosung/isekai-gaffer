@@ -200,8 +200,11 @@ export const BUILDUP_BY_PATTERN: Record<AttackPattern, BuildupId> = {
  * 빌드업 4계열 × 실행 변형 2종. 전부 3스테이션(= 볼 터치 3번)이다.
  *
  * ★ 저술 규칙(개편 후):
- *  1. 슬롯 0은 슈터다. 빌드업 내내 x 60 → 68 → 76으로 **박스로 침투**한다(공은 안 준다).
- *     마무리에서 그가 슈팅 지점까지 달릴 거리를 6~16 m 안에 두기 위한 배치다.
+ *  1. 슬롯 0은 슈터다. 빌드업 내내 x 65 → 73 → 80으로 **박스로 침투**한다(공은 안 준다).
+ *     마무리에서 그가 슈팅 지점까지 달릴 거리를 {@link MAX_RUN_IN_M} 안에 두기 위한 배치다.
+ *     ★ 2026-07-31: 마지막 지점을 76 → 80으로 밀었다. 76(골라인 25 m)에서는 박스 안
+ *     마무리(골라인 8~13 m)가 한 구간에 17 m 주행을 요구해 물리적으로 불가능했고,
+ *     그래서 모든 슛이 박스 밖으로 밀려났다. 중거리 계열(outside)만 70에 남는다.
  *  2. 공은 슬롯 1·2 사이를 오간다. 같은 슬롯이 연속으로 캐리어면 드리블 구간이 되고,
  *     그때는 볼 속도가 곧 선수 속도이므로 시간 역산이 자동으로 6.6 m/s로 눌러 준다.
  *  3. 무버 한 명이 한 구간에 8~10 m를 넘게 달리지 않는다(구간 1~1.6 s × 6.6 m/s).
@@ -219,9 +222,9 @@ const BUILDUPS: Record<BuildupId, Buildup> = {
         label: '중앙 3자 연결',
         roles: [[60, 50], [80, 50], [72, 26]],
         stations: [
-          { movers: [[61, 46], [42, 60], [54, 34]], carrier: 1, arc: 'pass' },
-          { movers: [[69, 48], [50, 56], [59, 37]], carrier: 2, arc: 'ground' },
-          { movers: [[76, 50], [55, 55], [64, 41]], carrier: 1 },
+          { movers: [[65, 46], [42, 60], [54, 34]], carrier: 1, arc: 'pass' },
+          { movers: [[73, 48], [50, 56], [59, 37]], carrier: 2, arc: 'ground' },
+          { movers: [[80, 50], [55, 55], [64, 41]], carrier: 1 },
         ],
       },
       {
@@ -229,10 +232,10 @@ const BUILDUPS: Record<BuildupId, Buildup> = {
         label: '중앙 원투 벽패스',
         roles: [[62, 42], [80, 52], [70, 70]],
         stations: [
-          { movers: [[61, 54], [44, 44], [50, 60]], carrier: 1, arc: 'pass' },
+          { movers: [[65, 54], [44, 44], [50, 60]], carrier: 1, arc: 'pass' },
           // 벽패스 리턴은 지면·원터치 — 원터치로 되돌리는 공은 뜨지도, 멈추지도 않는다.
-          { movers: [[69, 52], [50, 46], [55, 58]], carrier: 2, arc: 'ground', oneTouch: true },
-          { movers: [[76, 51], [54, 48], [59, 56]], carrier: 1 },
+          { movers: [[73, 52], [50, 46], [55, 58]], carrier: 2, arc: 'ground', oneTouch: true },
+          { movers: [[80, 51], [54, 48], [59, 56]], carrier: 1 },
         ],
       },
     ],
@@ -246,10 +249,10 @@ const BUILDUPS: Record<BuildupId, Buildup> = {
         vid: 'a',
         label: '터치라인 돌파',
         stations: [
-          { movers: [[62, 52], [62, 76], [52, 58]], carrier: 2, arc: 'pass' },
+          { movers: [[66, 52], [62, 76], [52, 58]], carrier: 2, arc: 'pass' },
           // 터치라인 드리블 — 캐리어가 그대로 유지되므로 시간 역산이 선수 속도로 눌러 준다.
-          { movers: [[69, 54], [68, 80], [58, 62]], carrier: 1, arc: 'ground' },
-          { movers: [[76, 56], [76, 86], [64, 60]], carrier: 1 },
+          { movers: [[73, 54], [68, 80], [58, 62]], carrier: 1, arc: 'ground' },
+          { movers: [[80, 56], [76, 86], [64, 60]], carrier: 1 },
         ],
         roles: [[74, 84], [80, 50], [72, 18]],
       },
@@ -258,10 +261,10 @@ const BUILDUPS: Record<BuildupId, Buildup> = {
         label: '풀백 오버래핑',
         roles: [[76, 80], [80, 50], [70, 22]],
         stations: [
-          { movers: [[62, 54], [58, 72], [54, 62]], carrier: 2, arc: 'ground' },
+          { movers: [[66, 54], [58, 72], [54, 62]], carrier: 2, arc: 'ground' },
           // 안으로 접었다가 다시 측면으로 — 오버래핑의 그림.
-          { movers: [[69, 55], [66, 80], [60, 64]], carrier: 1, arc: 'pass' },
-          { movers: [[76, 56], [76, 88], [66, 62]], carrier: 1 },
+          { movers: [[73, 55], [66, 80], [60, 64]], carrier: 1, arc: 'pass' },
+          { movers: [[80, 56], [76, 88], [66, 62]], carrier: 1 },
         ],
       },
     ],
@@ -276,10 +279,10 @@ const BUILDUPS: Record<BuildupId, Buildup> = {
         label: '하프스페이스 스루',
         roles: [[64, 64], [80, 50], [72, 20]],
         stations: [
-          { movers: [[60, 56], [44, 52], [56, 66]], carrier: 1, arc: 'pass' },
+          { movers: [[64, 56], [44, 52], [56, 66]], carrier: 1, arc: 'pass' },
           // 스루패스는 뜨지 않는다 — 뜨면 수비가 따라붙는다.
-          { movers: [[68, 57], [50, 56], [62, 70]], carrier: 2, arc: 'ground' },
-          { movers: [[76, 58], [56, 58], [68, 72]], carrier: 2 },
+          { movers: [[72, 57], [50, 56], [62, 70]], carrier: 2, arc: 'ground' },
+          { movers: [[80, 58], [56, 58], [68, 72]], carrier: 2 },
         ],
       },
       {
@@ -287,9 +290,9 @@ const BUILDUPS: Record<BuildupId, Buildup> = {
         label: '내려받아 원터치 스루',
         roles: [[66, 40], [80, 50], [72, 74]],
         stations: [
-          { movers: [[60, 44], [46, 62], [56, 36]], carrier: 1, arc: 'pass' },
-          { movers: [[68, 45], [52, 58], [62, 38]], carrier: 2, arc: 'ground', oneTouch: true },
-          { movers: [[76, 47], [57, 56], [68, 40]], carrier: 2 },
+          { movers: [[64, 44], [46, 62], [56, 36]], carrier: 1, arc: 'pass' },
+          { movers: [[72, 45], [52, 58], [62, 38]], carrier: 2, arc: 'ground', oneTouch: true },
+          { movers: [[80, 47], [57, 56], [68, 40]], carrier: 2 },
         ],
       },
     ],
@@ -346,8 +349,6 @@ interface FinishVariant {
   /** 키 접미어. */
   vid: string
   label: string
-  /** launch → 슈팅 지점 전진율(0.55가 기존 그림). */
-  adv: number
   /** 슈팅 지점 y의 전개 폭 유지 계수. 음수면 **반대쪽**에서 잡는다(컷백). */
   w: number
   /** 결과 지점 좌우 — 0=기존(수렴), +1=니어포스트, -1=파포스트. */
@@ -360,14 +361,14 @@ interface FinishVariant {
 
 const FINISH_VARIANTS: FinishVariant[] = [
   // a — 정면. 받아서 한 번 잡고 때린다.
-  { vid: 'a', label: '정면 마무리', adv: 0.55, w: 0.35, post: 0, ground: false, oneTouch: false },
+  { vid: 'a', label: '정면 마무리', w: 0.35, post: 0, ground: false, oneTouch: false },
   // b — 문전 원터치. 한 발 더 들어가 니어포스트로 밀어 넣는다(트래핑 없음).
-  { vid: 'b', label: '문전 원터치', adv: 0.72, w: 0.15, post: 1, ground: false, oneTouch: true },
+  { vid: 'b', label: '문전 원터치', w: 0.15, post: 1, ground: false, oneTouch: true },
   // c — 컷백. 엔드라인 쪽에서 되돌린 공을 반대쪽에서 때린다(배달은 지면, 파포스트).
   // ★ w를 -0.45에서 -0.2로 줄였다: 측면 깊은 곳(y≈88)에서 -0.45를 곱하면 슈팅 지점이
   //   반대쪽 하프스페이스(y≈33)로 날아가 배달 거리가 38 m가 됐다. 컷백은 바이라인에서
   //   페널티 스폿 쪽으로 **되빼는** 공이지 피치를 가로지르는 전환 패스가 아니다.
-  { vid: 'c', label: '컷백 되돌림', adv: 0.3, w: -0.2, post: -1, ground: true, oneTouch: false },
+  { vid: 'c', label: '컷백 되돌림', w: -0.2, post: -1, ground: true, oneTouch: false },
 ]
 export const FINISH_VARIANT_COUNT = FINISH_VARIANTS.length
 
@@ -407,6 +408,14 @@ const MISS_CATEGORY: readonly (readonly ('W' | 'O' | 'B')[])[] = [
 const MISS_LOW_Y = 0.64
 /** 골문 반폭(m) — 규정 7.32 m. */
 const GOAL_HALF_M = 3.66
+/**
+ * 니어/파포스트 마무리를 골문 반폭의 몇 %까지 밀어 넣는가.
+ *
+ * 0.7 → 골 중앙에서 최대 2.86 m, 포스트(3.66)까지 **0.80 m** 여유다. 공 반지름 0.11 +
+ * 포스트 반지름 0.09 = 0.20 m를 빼도 0.6 m가 남아, 원근이 눌리는 골 뒤 카메라에서도
+ * "기둥 안쪽"으로 읽힌다.
+ */
+const POST_INSET = 0.7
 /** 크로스바 높이(m). */
 const CROSSBAR_M = 2.44
 
@@ -414,11 +423,115 @@ const CROSSBAR_M = 2.44
 const offsetY = (m: number) => 50 + (m / PITCH_H) * 100
 
 /**
- * 슈터가 배달 한 구간 동안 달릴 수 있는 최대 전진(0~100 x 단위).
- * 15 units ≈ 15.8 m — 1.6 s 배달에서 9.9 m/s가 되므로 실질 상한이다(그 이상은
- * 시간 역산이 구간을 늘려 배달이 슬로모션이 된다).
+ * 슈터가 배달 한 구간 동안 이동할 수 있는 최대 거리(m).
+ *
+ * 13.5 m ≈ 1.93 s × {@link CARRIER_RUN_SPEED}. 그 이상을 요구하면 시간 역산이 배달
+ * 구간을 늘려 크로스가 공중에 떠 있는 슬로모션이 되고, 장면 전체가 dwell 계약
+ * (마지막 t ≤ 0.8)을 넘긴다 — 실측 cross/b1/f2/miss가 15.8 m에서 0.828이었다.
+ *
+ * ★ 방향 제한은 없다. 뒤로 빼주는 공(`outside.b`)에 맞춰 **물러나며** 때리는 것도
+ *   축구이고, 실제로 컷백 마무리는 슈터가 골라인 쪽에서 되돌아 나온다.
  */
-const MAX_RUN_IN = 15
+const MAX_RUN_IN_M = 13.5
+
+/**
+ * 슛 발사점의 x 상한(0~100). 92 = 골라인 8.4 m 앞.
+ *
+ * 왜 상한이 있나: 결과 키프레임(블록 x 94~96 · 세이브 97.5 · 골 99)이 그 앞에 있어야
+ * "슛 → 결과"의 순서가 성립한다. 그래서 실측의 최근접 사분위(6야드 박스 안 8.6%)는
+ * 이 라이브러리가 표현하지 못한다 — 그 대신 가장 가까운 칸이 8.4 m에 몰린다.
+ */
+const MAX_SHOT_X = 92
+
+// ── 슛 발사점 분포 (StatsBomb open-data 실측) ─────────────────────────────
+// 출처: statsbomb/open-data 이벤트 전 4,235경기에서 무작위 350경기를 뽑아 얻은
+// **오픈플레이 슛 8,348건**의 `location` → 골문 중앙(120, 40) 거리(야드→m).
+//   · p10 7.4 · p25 10.7 · **p50 16.1** · p75 22.2 · p90 27.1 · p95 30.0 · p99 37.2 m
+//   · 페널티 박스 안 63.8% · 6야드 박스 안 8.6%
+//   · 구간: 0~6 4.6% / 6~11 21.6% / 11~16.5 25.4% / 16.5~20 14.3% /
+//           20~25 18.8% / 25~30 10.2% / 30~35 3.4% / 35+ 1.6%
+//   · 박스 밖(>16.5 m)만: n=4,038(48.4%) p50 22.4 · p75 26.2 · p90 30.1 m
+//   · 프리킥 슛(n=394)은 p50 26.1 m — 오픈플레이 중거리와 겹치는 띠다.
+//
+// ★ 개편 전 우리 값은 **전 패턴 p50 26.9 m · 박스 안 0%**였다(라이브러리 전수 576조합,
+//   90분 실주행 4시드 97슛에서도 p50 27.3 m). 즉 어떤 전술을 골라도 화면에 나오는 슛이
+//   전부 실측 p88 이상의 중거리였다. 사용자 지적 "너무 먼 곳에서 중거리 슛"이 이 숫자다.
+//   원인은 `finishStations`의 `launch`가 **슈터가 아니라 마지막 패서**의 위치였던 것이다:
+//   패서는 x 55~62(하프라인 부근)에 있으므로 `clamp(lx + …, 74, lx + MAX_RUN_IN)`의
+//   상한(lx+15 = 70~77)이 하한(74)보다 작아져 clamp가 **항상 하한 74**를 뱉었다.
+/**
+ * 빌드업 계열별 슛 거리 사다리(m, 골문 중앙까지) — 3칸을 **변형 축**으로 색인한다.
+ *
+ * 왜 레인으로 색인하지 않는가: 레인은 **좌우(y) 전용 축**이고, 거리를 거기 묶으면
+ * 두 개의 미러 계약이 동시에 깨진다 — (a) 레인 0/1처럼 서로 좌우 미러인 쌍이 다른 깊이를
+ * 갖고, (b) `laneFor`가 팀마다 다른 레인을 주면 같은 사건의 홈·원정 x가 미러가 아니게 된다
+ * (실측: 홈 x + 원정 x = 92.99, 규약은 100). 그래서 축을 분리해 **변형 축**으로 색인한다:
+ * (빌드업 실행 변형 0~1 + 마무리 변형 0~2)의 합이 3칸을 균등하게(6조합 × 2) 훑는다.
+ *
+ * 계열마다 다른 사다리를 쓰는 이유 = **유저 전술이 화면에 보여야 한다**(전수 576조합 실측):
+ *  · wing(크로스)   문전 마무리 — p50 13.3 m · 골문 16.5 m 안 81%
+ *  · through(스루)  뒷공간을 째면 GK와 마주 본다 — p50 14.4 m · 74%
+ *  · central(균형)  실측 오픈플레이 전체 분포에 맞춘다 — p50 15.6 m(실측 16.1) · 58%
+ *  · outside(중거리) 실측 **박스 밖 슛** 분포(p50 22.4 · p90 30.1)에 맞춘다 — p50 21.8 m · 0%
+ */
+const SHOT_DIST_M: Record<BuildupId, readonly [number, number, number]> = {
+  central: [10.5, 17, 25],
+  wing: [9, 13, 19],
+  through: [9.5, 14, 20],
+  outside: [21, 25, 30],
+}
+
+/**
+ * 마무리 변형별 거리 배율 — 같은 전술 안에서도 "어떻게 끝냈나"로 거리가 갈린다.
+ * a 정면(1.0) · b 문전 원터치(0.8 — 한 발 더 들어간다) · c 컷백(0.92 — 스폿 부근).
+ */
+const FINISH_DIST_SCALE = [1, 0.8, 0.92]
+
+/**
+ * **결과별** 거리 배율 — 같은 전술이라도 결과에 따라 거리가 다르다. 실측이 그렇다.
+ *
+ * 출처: 같은 StatsBomb 표본의 오픈플레이 슛을 `shot.outcome`으로 갈랐다(거리 p50, 박스 안).
+ *   · Goal    n=856   **11.0 m** · 88%   → 골은 문전에서 난다
+ *   · Saved   n=2,003 **16.9 m** · 62%
+ *   · Off T   n=2,699 **17.1 m** · 60%   (우리 'miss')
+ *   · Blocked n=2,028 **18.1 m** · 55%   (우리 'shot' = 블록·굴절)
+ * 기준(1.0)은 오픈플레이 전체 p50 16.1 m이고, 위 값을 그 비로 옮겼다.
+ * chance는 슛이 아니라 "박스까지"라 기준값을 그대로 쓴다.
+ */
+const FINISH_KIND_SCALE: Record<FinishId, number> = {
+  goal: 0.68,
+  save: 1.05,
+  miss: 1.06,
+  shot: 1.12,
+  chance: 1,
+}
+
+/**
+ * 세이브 슛의 **최소 거리**(m) — 칸(rung)별. 실측 분포보다 가까운 쪽을 잘라 낸다.
+ *
+ * 왜 실측을 그대로 못 쓰는가(실측 Saved p25는 12.0 m다): GK는 임팩트 **후에** 움직인다
+ * (movement.gkDiveAnchor는 `t >= tShot`부터, 다이브 포즈는 GK_REACTION_MS=200 ms 뒤부터).
+ * 접촉점까지 몸통이 2.5~2.8 m를 가야 하는데 GK 상한은 5.5 m/s이고 정지에서 출발한다.
+ * 실측(90분 3시드 28세이브, 프레임 단위): 하한 16.0 m면 손-공 최소 거리가 0.00~0.34 m로
+ * 전부 접촉 판정(0.33 m) 근처까지 들어오고, 15.4 m로 낮추면 0.45 m까지 벌어진다.
+ * 비행 시간으로 옮기면 (16.0 − 0.45 발 앞 − 2.6 접촉 깊이) / 25 m/s = 518 ms다.
+ * 근거리 세이브는 실제로도 다이브가 아니라 **반사 블록**인데 우리 포즈 라이브러리에 그
+ * 동작이 없다 — 그래서 저술 쪽에서 막는다. 그 대가로 세이브 표본 중앙값이 실측
+ * 16.9 m보다 조금 멀어진다(90분 실주행 17.1 m).
+ *
+ * 칸마다 다른 값을 두는 이유: 단일 하한이면 가까운 칸이 전부 한 점에 뭉쳐
+ * "세이브는 늘 같은 자리에서"가 된다.
+ */
+const SAVE_MIN_M: readonly [number, number, number] = [16.0, 17.0, 18.0]
+
+/**
+ * 어떤 전술이든 이 거리(m)를 넘는 슛은 저술하지 않는다.
+ *
+ * 근거: 실측 오픈플레이 슛의 p95가 30.0 m이고 30 m 초과는 5.0%뿐이다. 하프라인
+ * 부근(50 m+)은 시즌에 몇 번이라 **연출 라이브러리에 넣을 사건이 아니다** —
+ * 라이브러리는 반복 재생되므로 꼬리 사건을 넣으면 그것이 곧 일상이 된다.
+ */
+export const MAX_SHOT_DIST_M = 31
 
 /**
  * 마무리 스테이션 — 빌드업의 마지막 캐리어 위치(launch)에서 이어 붙인다.
@@ -433,17 +546,52 @@ function finishStations(
   prev: Station,
   launch: [number, number],
   variant: number,
-  /** 레인 인덱스 — 미스 종점의 **크기**(분위수)를 고르는 데 쓴다. */
+  /** 레인 인덱스 — 슛 거리와 미스 종점의 **분위수**를 고르는 데 쓴다. */
   lane: number,
+  /** 빌드업 계열 — 슛 거리 사다리를 고른다(유저 전술이 화면에 보이는 지점). */
+  buildup: BuildupId,
+  /** 빌드업 실행 변형 0~1 — 마무리 변형과 합쳐 거리 칸을 고른다(좌우 미러 보존). */
+  buildupVariant: number,
 ): { stations: Station[]; deliverArc: BallArc } {
   const V = FINISH_VARIANTS[variant]
   const [lx, ly] = launch
-  // 슈팅 지점 — launch에서 골문 쪽으로 전진. 하한 74는 중거리 계열이 "중거리"로 남게 하고,
-  // 상한 lx+MAX_RUN_IN은 슈터가 배달 한 구간에 달려갈 수 있는 거리로 물리에서 나온다.
-  const dx = clamp(lx + (95 - lx) * V.adv, 74, Math.min(92, lx + MAX_RUN_IN))
+  /** 슈터(슬롯 0)가 배달 직전에 서 있는 곳 — 주행 상한은 여기서 잰다. */
+  const runFrom = prev.movers[0]
   // 슈팅 지점 y. w>0이면 전개 쪽을 유지한 채 골문으로 수렴, w<0이면 반대쪽(컷백).
   // 슈팅 지점은 박스 폭 안에 머문다 — 밖으로 나가면 "마무리"가 아니라 전환 패스가 된다.
-  const my = clamp(50 + (ly - 50) * V.w, 38, 62)
+  let my = clamp(50 + (ly - 50) * V.w, 38, 62)
+  /**
+   * 슈팅 지점 x — **골문 중앙까지의 거리를 먼저 정하고** 깊이를 역산한다.
+   *
+   * 왜 거리가 먼저인가: 실측 대조군(StatsBomb)이 "골문까지 몇 m"의 분포이고, 사용자가
+   * 보는 것도 그 거리다. 예전처럼 전진율(V.adv)로 x를 정하면 y가 벌어질수록 실제 거리가
+   * 멋대로 늘어난다(전개 쪽 y=38이면 좌우로만 8 m가 붙는다).
+   */
+  const rung = mod(buildupVariant + variant, SHOT_DIST_M[buildup].length)
+  const want = Math.min(
+    MAX_SHOT_DIST_M,
+    Math.max(
+      SHOT_DIST_M[buildup][rung] * FINISH_DIST_SCALE[mod(variant, FINISH_DIST_SCALE.length)]
+        * FINISH_KIND_SCALE[finish],
+      finish === 'save' ? SAVE_MIN_M[rung] : 0,
+    ),
+  )
+  // 좌우 성분이 목표 거리를 삼키지 않게 한다 — 삼키면 깊이가 0이 되어 골라인에 붙는다.
+  let gz = ((my - 50) / 100) * PITCH_H
+  if (Math.abs(gz) > want * 0.8) {
+    gz = Math.sign(gz) * want * 0.8
+    my = 50 + (gz / PITCH_H) * 100
+  }
+  const gx = Math.sqrt(Math.max(1, want * want - gz * gz))
+  let dx = clamp(100 - (gx / PITCH_W) * 100, 0, MAX_SHOT_X)
+  // 슈터가 배달 한 구간에 갈 수 있는 곳인가 — 넘으면 슛 지점을 슈터 쪽으로 당긴다.
+  // (당기는 것이지 자르는 것이 아니다: 방향은 유지되고 거리만 줄어든다.)
+  const runM = metres(runFrom, [dx, my])
+  if (runM > MAX_RUN_IN_M) {
+    const f = MAX_RUN_IN_M / runM
+    dx = clamp(runFrom[0] + (dx - runFrom[0]) * f)
+    my = clamp(runFrom[1] + (my - runFrom[1]) * f, 38, 62)
+  }
   // 전개한 쪽 부호 — 니어/파포스트는 이걸 기준으로 정한다.
   const sideSign = ly > 50 ? 1 : -1
   const deliverDist = metres([lx, ly], [dx, my])
@@ -454,9 +602,13 @@ function finishStations(
    */
   // ★ 크로스 판정이 V.ground보다 우선한다: 측면 깊은 곳에서 문전까지는 30 m가 넘는데
   //   그걸 지면(13 m/s)으로 굴리면 배달 하나가 2.4 s를 먹는다.
+  // ★ 컷백 강제(V.ground)에도 거리 조건이 붙는다: 컷백은 바이라인에서 스폿으로 **되빼는**
+  //   짧은 공이다. 중앙 빌드업에서 슛 지점이 문전까지 들어가면 배달이 35 m를 넘는데,
+  //   그것을 13 m/s 지면으로 굴리면 한 구간이 3.0 s가 되어 dwell 계약(마지막 t ≤ 0.8)이
+  //   깨진다(실측 balanced/b0/f2/goal 0.810). 그 거리는 이미 컷백이 아니라 스루패스다.
   const deliverArc: BallArc = Math.abs(ly - 50) > 25 && lx >= 70
     ? 'cross'
-    : V.ground
+    : V.ground && deliverDist <= 22
       ? 'ground'
       : deliverDist > 18
         ? 'pass'
@@ -488,9 +640,17 @@ function finishStations(
    *   그리는 것이지 좌표로 옮길 것이 아니다.
    */
   const netMovers: [number, number][] = boxMovers.map(m2 => [...m2] as [number, number])
-  /** 골문 안 착지 y — post가 0이면 슈팅 지점에서 수렴, 아니면 니어/파포스트. */
+  /**
+   * 골문 안 착지 y — post가 0이면 슈팅 지점에서 수렴, 아니면 니어/파포스트.
+   *
+   * ★ 2026-07-31 포스트 계수 0.85 → {@link POST_INSET}. 0.85는 `hi`가 큰 마무리에서
+   *   골문 밖으로 나갔다: 골(hi 56)은 골 중앙에서 3.47 m — 포스트 3.66 m에서 **19 cm**,
+   *   공 반지름(0.11)과 포스트 반지름(0.09)을 빼면 **0 cm** 여유였다. 세이브(hi 57)는
+   *   4.05 m로 아예 포스트 **밖**이었다. 블라인드 감사가 잡은 "골인데 공이 골대 오른쪽
+   *   기둥 바깥 잔디에 있다"가 이 숫자다.
+   */
   const mouth = (spread: number, lo: number, hi: number) =>
-    V.post === 0 ? clamp(50 + (my - 50) * spread, lo, hi) : clamp(50 + V.post * sideSign * (hi - 50) * 0.85, lo, hi)
+    V.post === 0 ? clamp(50 + (my - 50) * spread, lo, hi) : clamp(50 + V.post * sideSign * (hi - 50) * POST_INSET, lo, hi)
 
   /** 슈팅 스테이션 — 캐리어는 반드시 슬롯 0(엔진이 정한 주인공)이다. */
   const shot: Station = { movers: boxMovers, carrier: 0, arc: 'shot', oneTouch: V.oneTouch }
@@ -501,7 +661,10 @@ function finishStations(
 
   switch (finish) {
     case 'goal':
-      return { stations: [shot, end([99, mouth(0.35, 44, 56)])], deliverArc }
+      // ★ 골 종점은 **골라인 위**(x=100)다. 예전 99는 골라인 1.05 m **앞**이라 공이
+      //   골망에 들어가지 않았다 — 무브먼트가 여기서부터 네트 안까지 밀어 넣는다
+      //   (movement.GOAL_NET_REST_M). 0~100 좌표계는 골라인까지만 표현할 수 있다.
+      return { stations: [shot, end([100, mouth(0.35, 44, 56)])], deliverArc }
     case 'save': {
       /**
        * GK가 **잡는다** — 접촉점은 골라인 앞 {@link SAVE_CONTACT_M} 띠 안이다.
@@ -516,7 +679,9 @@ function finishStations(
        */
       const depth = V.post === 1 ? SAVE_CONTACT_M - 0.4 : V.post === -1 ? SAVE_CONTACT_M + 0.6 : SAVE_CONTACT_M
       return {
-        stations: [shot, { ...end([beforeLine(depth), mouth(0.45, 43, 57)]), contact: true }],
+        // ★ 접촉점의 좌우 폭을 0.45/43~57 → 0.4/44~56으로 좁혔다: 예전 최대 3.67 m는
+        //   포스트(3.66 m) **밖**이라, GK가 골문을 벗어나는 공에 몸을 던지는 그림이었다.
+        stations: [shot, { ...end([beforeLine(depth), mouth(0.4, 44, 56)]), contact: true }],
         deliverArc,
       }
     }
@@ -732,7 +897,8 @@ export function buildScene(
   const build = mapLane(finish === 'chance' ? bv.stations.slice(1) : bv.stations, lane)
   const last = build[build.length - 1]
   const launch = last.movers[last.carrier] as [number, number]
-  const { stations: fin, deliverArc } = finishStations(finish, last, launch, fv, lane)
+  const { stations: fin, deliverArc } =
+    finishStations(finish, last, launch, fv, lane, family.id, mod(variants.buildup ?? 0, BUILDUP_VARIANT_COUNT))
   // ★ 배달 궤적은 **빌드업 마지막 스테이션에서 출발하는 구간**의 것이다(오프바이원 수정).
   const stations: Station[] = [...build.slice(0, -1), { ...last, arc: deliverArc }, ...fin]
   const dwell = SCENE_DWELL_MS[finish]

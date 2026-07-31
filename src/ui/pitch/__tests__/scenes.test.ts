@@ -7,6 +7,7 @@ import {
   buildScene, sceneLibrarySize, LANE_COUNT, buildupLabel, BUILDUP_BY_PATTERN,
   BUILDUP_VARIANT_COUNT, FINISH_VARIANT_COUNT, SCENE_DWELL_MS, SEGMENT_SPEED,
   CARRIER_RUN_SPEED, SUPPORT_RUN_SPEED, FOOT_OFFSET_M, TOUCH_MS,
+  MAX_SHOT_DIST_M,
   type ScenePoint, type SceneFinish,
 } from '../scenes'
 import { PITCH_H, PITCH_W } from '../geometry'
@@ -402,5 +403,150 @@ describe('★ 페이싱 — 1x가 진짜 축구다', () => {
 
   it('캐리어 주행 상한이 지원 무버 상한보다 낮다(공을 받을 사람이 먼저 도착한다)', () => {
     expect(CARRIER_RUN_SPEED).toBeLessThan(SUPPORT_RUN_SPEED)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ★ 슛 거리 — StatsBomb 실측 분포 계약 (사용자 지적 R5 ①)
+//
+// 대조군: statsbomb/open-data 4,235경기 중 무작위 350경기의 **오픈플레이 슛 8,348건**의
+// `location` → 골문 중앙 거리(야드→m).
+//   p10 7.4 · p25 10.7 · **p50 16.1** · p75 22.2 · p90 27.1 · p95 30.0 · p99 37.2 m
+//   페널티 박스 안 63.8% · 30 m 초과 5.0% · 박스 밖만 보면 p50 22.4 · p90 30.1
+//
+// 개편 전 실측(전수 576조합): **전 패턴 p50 26.9 m · 박스 안 0%**. 원인은 `finishStations`의
+// `launch`가 슈터가 아니라 마지막 패서였고, 그래서 clamp 상한이 하한보다 작아져 슛 지점이
+// 항상 하한(x=74)으로 붙은 것이다.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('★ 슛 발사점 — 실측 분포를 따른다', () => {
+  /** 슛 발사점에서 골문 중앙(x=100, y=50)까지의 거리(m). home 프레임. */
+  const shotDist = (pts: ScenePoint[]) => {
+    const s = shotOf(pts)!
+    return metres(s.ball, [100, 50])
+  }
+  /** 한 빌드업 계열의 전 조합(마무리 4 × 실행 2 × 변형 3 × 레인 6) 슛 거리. */
+  function dists(p: AttackPattern): number[] {
+    const out: number[] = []
+    for (const fin of ['goal', 'save', 'miss', 'shot'] as const) {
+      for (let b = 0; b < BUILDUP_VARIANT_COUNT; b++) {
+        for (let f = 0; f < FINISH_VARIANT_COUNT; f++) {
+          for (let l = 0; l < LANE_COUNT; l++) {
+            out.push(shotDist(buildScene(p, fin, l, { buildup: b, finish: f }).points))
+          }
+        }
+      }
+    }
+    return out.sort((a, b) => a - b)
+  }
+  const p50 = (a: number[]) => a[Math.floor(a.length / 2)]
+  /** 페널티 박스 깊이(m) — 실측 대조군의 "박스 안" 기준. */
+  const BOX_D = 16.5
+
+  it('★ 어떤 전술·조합에서도 슛 거리가 상한을 넘지 않는다 — 하프라인 중거리 금지', () => {
+    for (const p of PATTERNS) {
+      const d = dists(p)
+      expect(d[d.length - 1], `${p} 최원거리 ${d[d.length - 1].toFixed(1)} m`)
+        .toBeLessThanOrEqual(MAX_SHOT_DIST_M + 0.5)
+    }
+    // 상한 자체가 실측 p95(30.0 m) 근처에 있어야 의미가 있다.
+    expect(MAX_SHOT_DIST_M).toBeGreaterThanOrEqual(28)
+    expect(MAX_SHOT_DIST_M).toBeLessThanOrEqual(33)
+  })
+
+  it('★ longshot이 아니면 슛의 절반 이상이 박스 안이고 중앙값이 실측 근처다', () => {
+    // 실측 오픈플레이 p50 16.1 m. balanced(기본값)를 그 값에 맞추고, 크로스·스루는
+    // 그보다 가깝다(크로스 마무리와 뒷공간 침투는 실제로 문전에서 끝난다).
+    // "박스 안"의 기준은 **골문 중앙 16.5 m 이내**다 — 실측에서 그 비율은 51.6%다
+    // (박스 사각형 기준 63.8%보다 낮다: 박스 모서리는 골문에서 25 m다).
+    for (const [p, hi] of [['balanced', 18], ['cross', 14], ['through', 15]] as const) {
+      const d = dists(p)
+      expect(p50(d), `${p} p50 ${p50(d).toFixed(1)} m`).toBeLessThanOrEqual(hi)
+      const inBox = d.filter(v => v <= BOX_D).length / d.length
+      expect(inBox, `${p} 박스 안 ${(inBox * 100).toFixed(0)}%`).toBeGreaterThan(0.44)
+    }
+  })
+
+  it('★ longshot을 고르면 박스 밖으로 나가되 실측 중거리 띠에 머문다', () => {
+    const d = dists('longshot')
+    // 실측 "박스 밖 슛" p50 22.4 · p90 30.1 m.
+    expect(p50(d)).toBeGreaterThan(19)
+    expect(p50(d)).toBeLessThan(25)
+    expect(d.filter(v => v <= BOX_D).length / d.length, '중거리인데 박스 안이 많다')
+      .toBeLessThan(0.2)
+  })
+
+  it('★ 유저 전술이 화면에서 갈린다 — longshot 중앙값이 나머지보다 5 m 이상 멀다', () => {
+    const long = p50(dists('longshot'))
+    for (const p of ['balanced', 'cross', 'through'] as const) {
+      expect(long - p50(dists(p)), `longshot vs ${p}`).toBeGreaterThan(5)
+    }
+  })
+
+  it('슈터는 배달 한 구간에 갈 수 있는 곳에서만 찬다(허공 슛 방지)', () => {
+    for (const p of PATTERNS) {
+      for (const fin of ['goal', 'save', 'miss', 'shot'] as const) {
+        for (let b = 0; b < BUILDUP_VARIANT_COUNT; b++) {
+          for (let f = 0; f < FINISH_VARIANT_COUNT; f++) {
+            for (let l = 0; l < LANE_COUNT; l++) {
+              const s = buildScene(p, fin, l, { buildup: b, finish: f })
+              const i = s.points.findIndex(x => x.arc === 'shot')
+              // 배달 구간 = 슛 스텝 직전의 볼이 실제로 움직이는 스텝. 그 스텝의 슬롯 0이
+              // 슈터의 출발점이고, 슛 스텝의 슬롯 0이 도착점이다.
+              let from = -1
+              for (let k = i - 1; k >= 0; k--) if (metres(s.points[k].ball, s.points[k + 1].ball) > 1) { from = k; break }
+              const run = metres(s.points[from].movers[0], s.points[i].movers[0])
+              expect(run, `${s.key} 슈터 주행 ${run.toFixed(1)} m`).toBeLessThan(13.9)
+            }
+          }
+        }
+      }
+    }
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ★ 골은 골문 안으로 들어간다 (블라인드 감사 ⑥)
+//
+// > 득점 순간 리플레이 카메라에서 공이 골망 안이 아니라 골대 오른쪽 기둥 바깥 잔디에 떠 있다.
+//
+// 실측(전수 144조합): 96조합의 종점이 골 중앙에서 **3.47 m**(포스트 3.66 m — 여유 19 cm,
+// 공 반지름 0.11 + 포스트 반지름 0.09를 빼면 0)이고, x는 99 = 골라인 **1.05 m 앞**이었다.
+// 원근이 눌리는 골 뒤 카메라에서 그 공은 기둥 바깥으로 읽힌다.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('★ 골 종점 — 골라인 위, 기둥 안쪽, 크로스바 아래', () => {
+  it('전수 조합에서 골이 골문 프레임 안이다', () => {
+    for (const p of PATTERNS) {
+      for (let b = 0; b < BUILDUP_VARIANT_COUNT; b++) {
+        for (let f = 0; f < FINISH_VARIANT_COUNT; f++) {
+          for (let l = 0; l < LANE_COUNT; l++) {
+            const s = buildScene(p, 'goal', l, { buildup: b, finish: f })
+            const end = endOf(s.points)
+            // 골라인(x=100) 위 — 0~100 좌표계가 표현할 수 있는 최대치다.
+            expect(end.ball[0], `${s.key} x`).toBe(100)
+            // 기둥 안쪽 여유 ≥ 0.7 m(공 반지름 0.11 + 기둥 반지름 0.09를 빼고도 0.5 m).
+            const zM = (Math.abs(end.ball[1] - 50) / 100) * PITCH_H
+            expect(GOAL_HALF_M - zM, `${s.key} 기둥 여유 ${(GOAL_HALF_M - zM).toFixed(2)} m`)
+              .toBeGreaterThan(0.7)
+            // 골은 도착 높이를 저술하지 않는다 — 궤적 기본값(BALL_END.shot 1.05 m)이
+            // 크로스바 아래여야 한다.
+            expect(end.endY ?? 0, `${s.key} endY`).toBeLessThan(CROSSBAR_M)
+          }
+        }
+      }
+    }
+  })
+
+  it('세이브 접촉점도 기둥 안쪽이다 — 골문 밖으로 나가는 공을 막지 않는다', () => {
+    for (const p of PATTERNS) {
+      for (let b = 0; b < BUILDUP_VARIANT_COUNT; b++) {
+        for (let f = 0; f < FINISH_VARIANT_COUNT; f++) {
+          for (let l = 0; l < LANE_COUNT; l++) {
+            const s = buildScene(p, 'save', l, { buildup: b, finish: f })
+            const zM = (Math.abs(endOf(s.points).ball[1] - 50) / 100) * PITCH_H
+            expect(zM, `${s.key} 접촉 z ${zM.toFixed(2)} m`).toBeLessThan(GOAL_HALF_M)
+          }
+        }
+      }
+    }
   })
 })
