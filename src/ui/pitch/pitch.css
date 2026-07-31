@@ -247,6 +247,60 @@
 .an-lane--shot { stroke-dasharray: 0.6 1.2; stroke-width: 0.7; }
 .an-arrow__head { fill: var(--an-plan); }
 
+/* ── 템포 = 레인의 흐름 속도 ────────────────────────────────────
+   템포는 그릴 도형이 없는 유일한 축이라 **속도**로 말한다. 파선이 화살표 방향으로
+   흐르는 주기가 곧 템포다(--an-flow, AnalysisLayer.tempoFlowSeconds).
+   실선 레인에는 흐름을 걸지 않는다 — dasharray가 없어 움직임이 안 보이고,
+   억지로 파선을 만들면 "실선=현재 전개"라는 형태 규약이 깨진다. */
+.an-lane--through,
+.an-lane--shot {
+  animation: an-flow var(--an-flow, 3.9s) linear infinite;
+}
+@keyframes an-flow {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -3.5; }
+}
+
+/* ── 변경 강조 ──────────────────────────────────────────────────
+   "무엇을 바꿨는지"를 한 번만 말한다. 요소를 재마운트해(React key) 애니메이션이
+   다시 시작되고, 700ms 뒤 원래 상태로 돌아온다.
+   ★ 위치·크기·색은 건드리지 않는다 — 그러면 강조가 값 자체를 거짓말하게 된다.
+     굵기와 불투명도만 한 단계 올렸다 내린다. */
+/* 존·밴드는 채움이 아니라 **경계선**을 굵힌다. 채움 색을 진하게 하면 그 아래 도트가
+   가려지고, 옅은 채움은 애초에 "면적"을 말하는 표시라 밝기를 바꾸면 값이 달라 보인다. */
+.an-hl .an-line { animation: an-hl-line 700ms ease-out 1; }
+.an-hl .an-line__cap { animation: an-hl-cap 700ms ease-out 1; }
+.an-hl .an-press__edge,
+.an-hl .an-focus__edge { animation: an-hl-edge 700ms ease-out 1; }
+.an-hl .an-lane { animation: an-hl-lane 700ms ease-out 1; }
+@keyframes an-hl-line {
+  0% { stroke-width: 1.4; opacity: 1; }
+  100% { stroke-width: 0.5; opacity: 0.9; }
+}
+@keyframes an-hl-cap {
+  0% { stroke-width: 1.8; opacity: 1; }
+  100% { stroke-width: 0.7; opacity: 0.9; }
+}
+@keyframes an-hl-edge {
+  0% { stroke-width: 0.9; opacity: 1; }
+  100% { stroke-width: 0.3; opacity: 0.5; }
+}
+@keyframes an-hl-lane {
+  0% { stroke-width: 1.2; opacity: 1; }
+  100% { stroke-width: 0.55; opacity: 0.8; }
+}
+/* 모션 최소화 설정에서는 펄스도 흐름도 끈다 — 둘 다 "있으면 좋은" 강조지 정보가 아니다.
+   값은 선의 위치와 라인 태그 숫자가 이미 말하고 있다. */
+@media (prefers-reduced-motion: reduce) {
+  .an-lane--through,
+  .an-lane--shot,
+  .an-hl .an-line,
+  .an-hl .an-line__cap,
+  .an-hl .an-press__edge,
+  .an-hl .an-focus__edge,
+  .an-hl .an-lane { animation: none; }
+}
+
 /* 볼 소유 링 — 공이 지금 누구 발밑에 있는지. 흰색(공과 같은 계열). */
 .pv-carrier {
   fill: none;

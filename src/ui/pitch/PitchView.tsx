@@ -4,9 +4,10 @@ import { backlineIndices, blockMetrics, liveTeamCoords, separateDots, tacticalCo
 import type { Coord } from './formations'
 import type { ChoreoStep } from './choreography'
 import { sequenceOwner } from './cast'
-import { AnalysisLayer, analysisLabels, TAG_FS, type AnalysisGeom } from './AnalysisLayer'
+import { AnalysisLayer, analysisLabels, TAG_FS, type AnalysisGeom, type AnalysisHighlight } from './AnalysisLayer'
 import { DOT_BLOCK_R, layoutLabels, textWidth, type Box, type LabelReq, type PlacedLabel } from './labels'
 import { PITCH_W, PITCH_H, CENTER_CIRCLE_R, PENALTY_BOX_D, GOAL_AREA_D } from './geometry'
+import { displayCoord, endsSwapped } from './ends'
 import './pitch.css'
 
 // 피치 실측 비율(m) — viewBox 0 0 105 68. 치수 정본은 ./geometry(3개 렌더러 공용).
@@ -64,6 +65,8 @@ interface PitchViewProps {
   paused?: boolean
   /** 전술 시각화 레이어(수비 라인·압박 존·패스 레인) + 라이브 무브먼트 — 2D 작전판 전용. */
   analysis?: boolean
+  /** 방금 바뀐 전술 축 강조(작전판이 정착 후 한 번만 올린다). analysis일 때만 의미가 있다. */
+  analysisHighlight?: AnalysisHighlight
   /** 블록 지표(길이·폭 m) 콜백 — 작전판 칩이 실시간 수치를 띄운다. */
   onMetrics?: (m: { lengthM: number; widthM: number }) => void
 }
@@ -203,7 +206,7 @@ const easeShot = (t: number) => t * t
  *
  *  ★ analysis=true(2D 작전판)에서는 선수가 **미세하게 계속 움직인다**(shape.liveTeamCoords):
  *    선수별 ±1m 재정렬 + 공·점유에 따른 블록 슬라이드. 공만 왔다갔다 하던 화면을 고친다. */
-export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels = false, highlightId, ghost, onDotClick, sequence, dwellMs, sequenceSide: sideProp = 'home', analysis = false, paused = false, onMetrics }: PitchViewProps) {
+export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels = false, highlightId, ghost, onDotClick, sequence, dwellMs, sequenceSide: sideProp = 'home', analysis = false, analysisHighlight, paused = false, onMetrics }: PitchViewProps) {
   const playing = !!sequence && sequence.length > 0
   // ★ prop을 그대로 믿지 않는다 — `save`는 막은 팀의 사건이라 호출자가 반대로 준다(cast.ts).
   const sequenceSide = sequenceOwner(state, sequence, sideProp)
@@ -270,6 +273,22 @@ export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels 
     awayLineX: meanBackline(state.away, awayC),
   }
 
+  /**
+   * ── 표시 진영(ends.ts) ────────────────────────────────────────
+   * 후반이면 피치를 180° 돌려 그린다 — 실제 축구가 하프타임에 진영을 바꾸기 때문이고,
+   * 3D도 같은 규칙으로 돌아간다(three/types.rotateFrame). 계산은 전부 엔진 프레임에서
+   * 끝내고 **그리기 직전에만** 좌표를 돌린다: 라인 마커·블록 지표·전술 레이어가 전부
+   * 같은 엔진 좌표에서 파생돼야 "마커와 도트가 같은 숫자"라는 계약이 유지된다.
+   */
+  const swapped = endsSwapped(state.minute)
+  const rot = (c: Coord): Coord => displayCoord(c, swapped)
+  const homeD = swapped ? homeC.map(rot) : homeC
+  const awayD = swapped ? awayC.map(rot) : awayC
+  // 라벨은 화면 좌표에 붙으므로 돌린 값이 필요하다(전술 레이어 자체는 아래에서 그룹째 돌린다).
+  const geomD: AnalysisGeom = swapped
+    ? { homeLineX: 100 - geom.homeLineX, awayLineX: 100 - geom.awayLineX }
+    : geom
+
   const metrics = blockMetrics(homeC)
   const mRef = useRef(onMetrics)
   mRef.current = onMetrics
@@ -280,14 +299,14 @@ export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels 
   // ── 텍스트 배치 패스(labels.ts) — 피치 위 모든 글자가 여기서 자리를 받는다.
   const stickyRef = useRef(new Map<string, number>())
   const reqs: LabelReq[] = []
-  if (analysis) reqs.push(...analysisLabels(state, geom))
+  if (analysis) reqs.push(...analysisLabels(state, geomD))
   if (nameLabels) {
     const nameById = new Map(state.home.team.squad.map(p => [p.id, p.name.ko]))
     state.home.tactics.lineup.forEach((slot, i) => {
       const name = nameById.get(slot.playerId)
-      if (!name || !homeC[i]) return
-      const cx = sx(homeC[i].x)
-      const cy = sy(homeC[i].y)
+      if (!name || !homeD[i]) return
+      const cx = sx(homeD[i].x)
+      const cy = sy(homeD[i].y)
       reqs.push({
         id: `nm-${slot.playerId}`,
         text: name,
@@ -306,7 +325,7 @@ export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels 
   // 충돌 회피 패스(labels.ts)를 그대로 쓰고, rank 0으로 두어 먼저 자리를 잡는다.
   if (playing) {
     const attacking = sequenceSide === 'home' ? state.home : state.away
-    const coords = sequenceSide === 'home' ? homeC : awayC
+    const coords = sequenceSide === 'home' ? homeD : awayD
     const nameById = new Map(attacking.team.squad.map(p => [p.id, p.name.ko]))
     const already = new Set(reqs.map(r => r.id))
     const step = sequence![stepIdx]
@@ -329,7 +348,7 @@ export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels 
   }
   // 도트·배지는 텍스트가 아니지만 글자에 덮이면 안 된다 → 고정 장애물로 넘긴다.
   const blockers: Box[] = []
-  for (const c of [...homeC, ...awayC]) {
+  for (const c of [...homeD, ...awayD]) {
     blockers.push({ x: sx(c.x) - DOT_BLOCK_R, y: sy(c.y) - DOT_BLOCK_R, w: DOT_BLOCK_R * 2, h: DOT_BLOCK_R * 2 })
   }
   const layout = layoutLabels(reqs, { x: 0.6, y: 0.6, w: W - 1.2, h: H - 1.2 }, blockers, stickyRef.current)
@@ -343,12 +362,13 @@ export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels 
   // ── 볼 캐리어 — "지금 누가 갖고 있나"를 링으로 말한다.
   // 저술이 캐리어를 명시하면(scenes/flow) 그 선수의 **실제 도트**에 붙인다. 명시가 없으면
   // (공 비행 중) 공에 가장 가까운 도트로 근사한다 — 곧 받을 선수가 미리 표시된다.
-  const attackC = sequenceSide === 'home' ? homeC : awayC
+  const attackC = sequenceSide === 'home' ? homeD : awayD
   const carrierId = playing ? sequence![stepIdx].carrier : undefined
   const carrierIdx = carrierId
     ? (sequenceSide === 'home' ? state.home : state.away).tactics.lineup.findIndex(s => s.playerId === carrierId)
     : -1
-  const ballPos = playing ? interpBall(sequence!, stepIdx, ballEase, ballOffset) : null
+  const ballRaw = playing ? interpBall(sequence!, stepIdx, ballEase, ballOffset) : null
+  const ballPos = ballRaw && swapped ? rot(ballRaw) : ballRaw
   const carrier = !playing
     ? null
     : carrierIdx >= 0 && attackC[carrierIdx]
@@ -360,9 +380,9 @@ export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels 
   // 붙어 읽혔다(감사 ⑨). 재생 중이면 공격 팀, 아니면 언제나 우리 팀이 위다.
   const homeOnTop = !playing || sequenceSide === 'home'
   const homeDots = (
-    <SideDots side={state.home} which="home" coords={homeC} highlightId={highlightId} onDotClick={onDotClick} />
+    <SideDots side={state.home} which="home" coords={homeD} highlightId={highlightId} onDotClick={onDotClick} />
   )
-  const awayDots = <SideDots side={state.away} which="away" coords={awayC} />
+  const awayDots = <SideDots side={state.away} which="away" coords={awayD} />
 
   return (
     <svg
@@ -378,14 +398,20 @@ export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels 
     >
       <PitchMarkings />
       {/* 전술 레이어는 마킹 위·도트 아래 — 선수를 가리지 않는다. */}
-      {analysis && <AnalysisLayer state={state} geom={geom} />}
+      {/* ★ 전술 레이어는 엔진 좌표를 그대로 그리고, 후반이면 **그룹째** 180° 돌린다.
+          (레이어 안에는 글자가 없다 — 라벨은 analysisLabels가 따로 내보내 위에서 배치한다.) */}
+      {analysis && (
+        <g transform={swapped ? `rotate(180 ${W / 2} ${H / 2})` : undefined}>
+          <AnalysisLayer state={state} geom={geom} highlight={analysisHighlight} />
+        </g>
+      )}
       {homeOnTop ? <>{awayDots}{homeDots}</> : <>{homeDots}{awayDots}</>}
-      {ghost && <GhostDot side={state.home} slotIndex={ghost.slotIndex} number={ghost.number} />}
+      {ghost && <GhostDot side={state.home} slotIndex={ghost.slotIndex} number={ghost.number} swapped={swapped} />}
       {/* 시퀀스 재생 중엔 안무(공) 우선, 아니면 정적 lastEvent 마커.
           무버 고스트 원은 없앴다 — 진짜 도트가 이미 그 자리로 옮겨져 있다(감사 ⑤). */}
       {playing
         ? <ChoreoLayer ball={ballPos!} carrier={carrier} />
-        : lastEvent && <EventMarker event={lastEvent} state={state} />}
+        : lastEvent && <EventMarker event={lastEvent} state={state} swapped={swapped} />}
       {/* 라벨 레이어는 최상단 — 배치 패스가 서로 겹치지 않음을 보장한다. */}
       <g className="pv-labels" aria-hidden="true">
         {[...placedById.values()].map(p => <LabelText key={p.id} p={p} />)}
@@ -527,8 +553,8 @@ function ChoreoLayer({ ball, carrier }: { ball: Coord; carrier: Coord | null }) 
 }
 
 /** 교체 고스트 도트 — 아웃 선수 슬롯 위치에 반투명 도트+투입 선수 번호. */
-function GhostDot({ side, slotIndex, number }: { side: SideState; slotIndex: number; number?: number }) {
-  const c = tacticalCoords(side.tactics.formation, slotIndex, 'home', side.tactics.instructions)
+function GhostDot({ side, slotIndex, number, swapped }: { side: SideState; slotIndex: number; number?: number; swapped: boolean }) {
+  const c = displayCoord(tacticalCoords(side.tactics.formation, slotIndex, 'home', side.tactics.instructions), swapped)
   const cx = sx(c.x)
   const cy = sy(c.y)
   return (
@@ -594,6 +620,12 @@ function SideDots({ side, which, coords, highlightId, onDotClick }: {
             key={`${which}-${i}`}
             className={`pv-dotg${clickable ? ' pv-dotg--click' : ''}`}
             onClick={clickable ? () => onDotClick!(slot.playerId) : undefined}
+            // SVG <g>는 기본적으로 포커스를 받지 않는다 — tabIndex와 Enter/Space 처리를
+            // 직접 얹어야 키보드로도 보드에서 선수를 고를 수 있다(조작 규약의 접근성 요구).
+            tabIndex={clickable ? 0 : undefined}
+            onKeyDown={clickable ? (e => {
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onDotClick!(slot.playerId) }
+            }) : undefined}
             role={clickable ? 'button' : undefined}
             aria-label={clickable && name ? `${name} 선택` : undefined}
           >
@@ -639,8 +671,8 @@ function eventZone(event: MatchEvent, state: MatchState): { x: number; y: number
   }
 }
 
-function EventMarker({ event, state }: { event: MatchEvent; state: MatchState }) {
-  const z = eventZone(event, state)
+function EventMarker({ event, state, swapped }: { event: MatchEvent; state: MatchState; swapped: boolean }) {
+  const z = displayCoord(eventZone(event, state), swapped)
   const cx = sx(z.x)
   const cy = sy(z.y)
   if (event.type === 'goal') {
