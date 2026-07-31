@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { useCampaignStore } from '../../game/campaignStore'
 import type { CampaignStage } from '../../game/campaignStore'
+import * as bgm from '../../audio/bgm'
 import { loadTeam } from '../../data/loader'
 import type { TeamId } from '../../data/loader'
 import { GROUP_MATCHES } from '../../data/groupStage'
@@ -46,6 +48,10 @@ export function HubScreen({ onProceed }: { onProceed(): void }) {
   const currentOpponent = useCampaignStore(s => s.currentOpponent)
   const bans = useCampaignStore(s => s.bans)
   const cautions = useCampaignStore(s => s.cautions)
+
+  // 허브(여정) 루프 M02 — 경기 사이 화면. 랜딩에서 넘어온 첫 클릭이 오디오를 이미 열었으므로
+  // 여기서부터는 실제로 소리가 난다. 장면 선언은 멱등이고 전환은 크로스페이드다.
+  useEffect(() => { bgm.setScene('hub') }, [])
 
   if (stage === 'ended' || ending) return null
 

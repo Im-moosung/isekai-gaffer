@@ -32,6 +32,7 @@ import {
   pickDramaEvent, isImportantEvent, isHighlightEvent, eventIndex, type PlaybackSpeed,
 } from './playback'
 import * as sfx from '../../audio/sfx'
+import * as bgm from '../../audio/bgm'
 import './match.css'
 
 // ★ 코드 스플릿: PixiPitch(→ pixi.js 전체)는 메인 번들에서 제외하고 지연 로드한다.
@@ -382,8 +383,10 @@ export function MatchScreen({
     const prev = prevPhaseRef.current
     prevPhaseRef.current = phase
     if (prev === phase) return
-    if (phase === 'halftime') sfx.whistle('halftime')
-    else if (phase === 'fulltime') { sfx.whistle('fulltime'); sfx.crowdLoop('stop') }
+    // BGM 스팅도 같은 전이에 붙는다 — 하프타임 M07(5s) · 풀타임 M08(6s).
+    // 스팅이 끝나면 그 화면의 루프(하프타임 = 작전판 M04)가 이어받는다(bgm 모듈이 대기시킨다).
+    if (phase === 'halftime') { sfx.whistle('halftime'); bgm.playSting('M07') }
+    else if (phase === 'fulltime') { sfx.whistle('fulltime'); sfx.crowdLoop('stop'); bgm.playSting('M08') }
     else if (phase === 'paused-break') sfx.whistle('break')
   }, [phase])
 
@@ -432,6 +435,9 @@ export function MatchScreen({
     firedGoalMinuteRef.current = m
     if (goal.teamId !== engine.home.team.id) sfx.concedeMurmur()
     else sfx.goalBurst()
+    // 골·실점 순간 음악 덕킹(0.1배) — 관중음에 쓴 방식과 같다. 인플레이에 도는 음악은
+    // M09 클러치 베드뿐이므로 실제 대상도 대개 그것이다.
+    bgm.duck()
     setCrowdSwell(true)
     if (swellTimerRef.current) clearTimeout(swellTimerRef.current)
     swellTimerRef.current = setTimeout(() => setCrowdSwell(false), 4000)
@@ -487,6 +493,9 @@ export function MatchScreen({
   useEffect(() => {
     if (frozen) ctts.pauseSpeech()
     else ctts.resumeSpeech()
+    // 음악도 함께 멈춘다. 관중음은 낮은 웅성거림으로 남지만(경기장은 그대로 있다)
+    // 음악은 연출이라, 화면이 얼어 있는데 곡만 흘러가면 재개 지점의 소절이 어긋난다.
+    bgm.setPaused(frozen)
   }, [frozen])
 
   // 작전판으로 들어가면(감독 타임·하이드레이션·하프타임) 일시정지는 자동 해제한다.
@@ -505,11 +514,45 @@ export function MatchScreen({
     sfx.crowdLoop('start', frozen ? CROWD_FROZEN : crowdSwell ? 0.8 : clutch ? 0.5 : 0.3)
   }, [phase, engine, crowdSwell, frozen])
 
+  // ── BGM 장면 배선(docs/audio/bgm-spec.md) ───────────────────────────
+  //
+  // ★ **경기 중에는 음악을 깔지 않는다.** 관중 루프 + 원샷 효과음 + TTS 2화자가 이미
+  //   돌고 있고 실제 중계도 인플레이에 음악을 쓰지 않는다. 아래 표에서 재생 중(playing)
+  //   상태의 값이 null인 이유이며, 유일한 예외가 M09 클러치 베드다.
+  //
+  // 클러치 판정은 **노출된 스코어**로만 센다 — 아직 화면에 보이지 않은 골로 베드가
+  // 깔리면 음악이 결과를 미리 말한다(사용자가 지적한 "예지력"과 같은 구조의 누설).
+  const clutchBed = useMemo(() => {
+    if (!engine || engine.minute < 80) return false
+    let h = 0
+    let a = 0
+    for (const e of engine.events) {
+      if (e.type !== 'goal') continue
+      if (e.minute > engine.minute || (e.minute === engine.minute && !revealed)) continue
+      if (e.teamId === engine.home.team.id) h += 1
+      else a += 1
+    }
+    return Math.abs(h - a) <= 1
+  }, [engine, revealed])
+
+  const bgmScene: bgm.BgmScene | null =
+    entranceScr ? null // 입장은 스팅 M06이 독점한다
+      : shootoutOpen ? 'shootout' // M05
+        : tacticsMode ? 'tactics' // M04 — 작전판(감독 타임·하프타임)
+          : phase === 'pre' ? 'warroom' // M03 — 킥오프 전 전술 센터
+            : phase === 'playing' && clutchBed ? 'clutch' // M09 — 80분 이후 + 1골 차 이내
+              : null // 인플레이·풀타임 리포트 = 음악 없음
+  useEffect(() => { bgm.setScene(bgmScene) }, [bgmScene])
+
   // 언마운트: 스웰 타이머 정리 + 관중 루프 정지(다음 화면으로 함성이 새지 않게).
   useEffect(() => () => {
     if (swellTimerRef.current) clearTimeout(swellTimerRef.current)
     sfx.crowdLoop('stop')
     ctts.stopAll()
+    // 음악도 여기서 끊는다 — 기자회견·신문으로 경기 음악이 따라가면 안 된다.
+    bgm.setScene(null)
+    bgm.stopSting()
+    bgm.setPaused(false)
   }, [])
 
   // 킥오프: 유저 제스처에서 AudioContext init → 관중 루프 시작. TTS 보이스 탐색도 여기서.
@@ -525,7 +568,27 @@ export function MatchScreen({
     entranceClock.current = 0
     // 첫 경기는 전체 연출(스토리보드 4컷), 그 뒤로는 짧은 판이 기본이다 — 근거는
     // entrance.defaultEntranceMode 주석. 언제든 "선수 소개 보기"로 되돌릴 수 있다.
-    setEntranceScr(entranceScript(buildEntranceCast(engine), defaultEntranceMode()))
+    const scr = entranceScript(buildEntranceCast(engine), defaultEntranceMode())
+    setEntranceScr(scr)
+    startEntranceMusic(scr)
+  }
+
+  /**
+   * 입장 팡파르 M06(13.80s) — **끝을 킥오프 휘슬에 맞춘다.**
+   *
+   * 길이의 정본은 `entranceScript(...).totalMs`이고(short 13.00s / full 62.73s) 곡 길이와
+   * 다르다. 곡은 "11초쯤 정점 → 13.8초에 깨끗하게 해소, 이어서 휘슬"로 만들어졌으므로
+   * 지켜야 할 계약은 시작이 아니라 **끝**이다. 그래서 남은 시간이 곡보다 길면(full)
+   * 그만큼 늦게 시작하고, 짧으면(short) 앞 0.8초를 잘라 낸다.
+   *
+   * full의 앞 49초(터널·워크아웃·선수 소개)에 음악을 깔지 않은 것은 의도다 —
+   * 그 구간은 캐스터가 22명의 이름을 부르는 시간이고, 인플레이에 음악을 넣지 않는 것과
+   * 같은 이유로 말이 주인이어야 한다. 대신 관중 루프가 이미 0.3으로 깔려 있다.
+   * (대안이던 "M06 2.04회 루프"는 팡파르 중간에 이음매가 생기고 해소가 임의 지점에서
+   *  잘린다 — 계약을 지키지 못한다.)
+   */
+  function startEntranceMusic(scr: EntranceScript) {
+    bgm.playSting('M06', { alignEndAtMs: scr.totalMs })
   }
 
   /** short 모드에서 "선수 소개 보기" — 전체 연출로 갈아 끼우고 처음부터 다시 재생한다. */
@@ -534,7 +597,11 @@ export function MatchScreen({
     if (!eng) return
     ctts.stopAll()
     entranceClock.current = 0
-    setEntranceScr(entranceScript(buildEntranceCast(eng), mode))
+    const scr = entranceScript(buildEntranceCast(eng), mode)
+    setEntranceScr(scr)
+    // 대본이 통째로 갈리므로 팡파르도 새 길이에 맞춰 다시 건다.
+    bgm.stopSting(120)
+    startEntranceMusic(scr)
   }
 
   /**
@@ -555,6 +622,8 @@ export function MatchScreen({
     if (entranceScr?.mode === 'full') markEntranceSeen()
     ctts.stopAll()
     setEntranceScr(null)
+    // 자연 종료면 팡파르는 방금 해소됐고, 건너뛰기면 여기서 300ms에 걷힌다.
+    bgm.stopSting()
     sfx.whistle('kickoff')
     kickoff()
   }

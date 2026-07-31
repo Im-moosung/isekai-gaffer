@@ -7,6 +7,7 @@ import type { LeaderboardMode, LeaderboardRow, ScoreBreakdown } from '../../onli
 import { sanitizeNickname } from '../../online/nickname'
 import { buildEpilogue } from '../../game/pressconf'
 import { narrate } from '../../ai/aiClient'
+import * as bgm from '../../audio/bgm'
 import { AppShell } from '../shell/AppShell'
 import { JourneyLadder } from './JourneyLadder'
 import './campaign.css'
@@ -185,6 +186,15 @@ export function EndingScreen({ onRestart }: { onRestart(): void }) {
       .catch(() => { /* 폴백은 템플릿 — 실패를 화면에 노출하지 않는다 */ })
     return () => { alive = false }
   }, [ending, records])
+
+  // 엔딩 곡 — 우승 M10(20s) / 탈락 M11(16s). 루프가 아니라 **스팅**이다: 여정의 끝에
+  // 한 번 울리고 끝나야지, 리더보드를 읽는 내내 반복되면 결말이 배경음악이 된다.
+  useEffect(() => {
+    if (!ending) return
+    bgm.setScene(null)
+    bgm.playSting(ending.champion ? 'M10' : 'M11')
+    return () => bgm.stopSting()
+  }, [ending])
 
   if (!ending || !breakdown) return null
 

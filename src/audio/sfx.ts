@@ -46,8 +46,8 @@ type SampleName = keyof typeof SAMPLES
 const buffers: Partial<Record<SampleName, AudioBuffer | null>> = {}
 let loadState: 'idle' | 'loading' | 'ready' = 'idle'
 
-/** 정적 자산 경로(Vite base 고려). 예: '/sfx/crowd.mp3' 또는 '/base/sfx/crowd.mp3'. */
-function sfxUrl(file: string): string {
+/** public/ 아래 오디오 자산의 절대 경로(Vite base 고려). 예: audioAssetUrl('bgm/M01.mp3'). */
+export function audioAssetUrl(path: string): string {
   let base = '/'
   try {
     const env = (import.meta as unknown as { env?: { BASE_URL?: string } }).env
@@ -56,10 +56,19 @@ function sfxUrl(file: string): string {
     /* import.meta 미지원 — 루트 기준 */
   }
   if (!base.endsWith('/')) base += '/'
-  return `${base}sfx/${file}`
+  return `${base}${path}`
+}
+
+/** 정적 자산 경로. 예: '/sfx/crowd.mp3' 또는 '/base/sfx/crowd.mp3'. */
+function sfxUrl(file: string): string {
+  return audioAssetUrl(`sfx/${file}`)
 }
 
 /** decodeAudioData를 Promise/콜백 양식 모두 지원하도록 감싼다. */
+export function decodeAudio(c: AudioContext, data: ArrayBuffer): Promise<AudioBuffer> {
+  return decode(c, data)
+}
+
 function decode(c: AudioContext, data: ArrayBuffer): Promise<AudioBuffer> {
   return new Promise<AudioBuffer>((resolve, reject) => {
     try {
@@ -191,6 +200,37 @@ export function init(): void {
     if (c.state === 'suspended') void c.resume()
   } catch {
     /* no-op */
+  }
+  notifyUnlock()
+}
+
+// ── 형제 모듈(BGM)용 그래프 공유 ──────────────────────────────
+// ★ BGM은 별도 AudioContext·별도 음소거 토글을 만들지 않는다. 여기서 연 컨텍스트의
+//   masterGain에 붙어야 setMuted() 한 번이 효과음과 음악을 함께 끊는다(컨트롤 7개 유지).
+/**
+ * 이미 열려 있는 오디오 그래프를 돌려준다. **컨텍스트를 만들지 않는다** —
+ * 자동재생 정책상 컨텍스트 생성은 유저 제스처(=init())의 몫이고, 제스처 전에
+ * 만들면 suspended 컨텍스트와 콘솔 경고만 남는다. 아직 없으면 null.
+ */
+export function audioBus(): { ctx: AudioContext; master: GainNode } | null {
+  return ctx && masterGain ? { ctx, master: masterGain } : null
+}
+
+const unlockListeners = new Set<() => void>()
+
+/** init()으로 컨텍스트가 열리는 순간을 구독한다(BGM이 대기 중이던 트랙을 시작하는 지점). */
+export function onAudioUnlock(fn: () => void): () => void {
+  unlockListeners.add(fn)
+  return () => unlockListeners.delete(fn)
+}
+
+function notifyUnlock(): void {
+  for (const fn of [...unlockListeners]) {
+    try {
+      fn()
+    } catch {
+      /* no-op — 구독자 실패가 효과음을 멈추지 않는다 */
+    }
   }
 }
 

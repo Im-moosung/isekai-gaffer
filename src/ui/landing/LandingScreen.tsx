@@ -12,6 +12,7 @@
 //     StadiumBackdrop 내부가 받아 null을 렌더한다 → CSS 그라디언트 배경만 남는다.
 //  3. 모바일(좁은 뷰포트)에서는 3D를 아예 로드하지 않는다 — 근거는 shouldLoad3d 주석.
 import { Component, Suspense, lazy, useEffect, useState, type ReactNode } from 'react'
+import * as bgm from '../../audio/bgm'
 // 공통 프리미티브(.btn, .eyebrow)를 쓰므로 셸 스타일시트를 함께 싣는다.
 import '../shell/shell.css'
 
@@ -49,6 +50,12 @@ export function LandingScreen({ onCampaign, onDemo }: {
   onDemo(): void
 }) {
   const [show3d, setShow3d] = useState(false)
+
+  // 랜딩 테마 M01. ★ **첫 방문에는 울리지 않는다** — 자동재생 정책상 오디오 컨텍스트는
+  // 유저 제스처 뒤에만 열리고(sfx.init), 랜딩은 그 제스처보다 앞이다. 여기서는 "이 화면의
+  // 음악은 M01"이라고 선언만 하고, 컨텍스트가 열려 있을 때(= 캠페인을 마치고 돌아온 랜딩)만
+  // 실제로 소리가 난다. 첫 클릭 전에 강제로 틀면 브라우저가 막고 콘솔 경고가 남는다.
+  useEffect(() => { bgm.setScene('landing') }, [])
 
   useEffect(() => {
     // jsdom(테스트)에는 matchMedia가 없다 — 판단할 수 없으면 3D를 켜지 않는다(안전측).
