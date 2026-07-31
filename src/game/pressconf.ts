@@ -100,17 +100,94 @@ function optionsFor(pick: number): [string, string, string] {
   return [AGGRESSIVE[i], HUMBLE[i], HUMOR[i]]
 }
 
-// 로그 종류별 질문 프레임 — 추궁하되 중립("~습니까?", "동의하십니까?"). summary를 문안에 활용.
-function logQuestionText(e: DecisionEntry): string {
+// ── 기자의 입 — 내부 로그를 사람의 말로 옮긴다 ──────────────────
+// `DecisionEntry.summary`는 **감독 노트의 문법**이다: "HT 팀토크: 격려",
+// "63' 교체: 황희찬 IN, 손흥민 OUT", "47' 지시 변경: 압박 62→47".
+// 예전에는 이 문자열을 따옴표로 감싸 질문에 그대로 박았고, 그래서 기자가
+// 「"HT 팀토크: 격려"라는 선택이…」라고 말했다(감사 결함 ⑦). 기자는 우리 로그를 읽지 않는다 —
+// 경기를 보고 말한다. 아래에서 구조화 필드(detail)와 요약 파싱으로 사람의 문장을 만들고,
+// **해석에 실패하면 질문을 만들지 않는다**(null). 로그 원문을 노출하느니 결과 기반 질문으로
+// 채우는 편이 낫고, resultQuestions가 3문항을 보장하므로 빈자리는 생기지 않는다.
+
+/** 로그 요약 접두사("킥오프 전" / "HT" / "63'") → 기자가 쓰는 시점 표현. */
+function whenPhrase(summary: string): string {
+  if (summary.startsWith('킥오프 전')) return '킥오프 전에'
+  if (summary.startsWith('HT')) return '하프타임에'
+  const m = /^(\d+)'/.exec(summary)
+  return m ? `${m[1]}분에` : '경기 중'
+}
+
+/** 하프타임 팀토크 톤 → 기자가 전해 들은 장면. */
+const TONE_SCENE: Record<string, string> = {
+  rage: '선수들을 강하게 몰아세우셨다고 합니다',
+  encourage: '선수들을 북돋우셨다고 합니다',
+  calm: '선수들을 진정시키셨다고 합니다',
+  trust: '선수들에게 믿음을 보이셨다고 합니다',
+}
+/** 터치라인 외침 → 관중석에서도 보이던 장면. */
+const SHOUT_SCENE: Record<string, string> = {
+  urge: '더 밀어붙이라고 외치셨습니다',
+  work: '더 뛰라고 다그치셨습니다',
+  calm: '침착하라고 손짓하셨습니다',
+  praise: '잘하고 있다고 소리치셨습니다',
+}
+
+/** "압박 62→47" 한 조각을 "압박을 62에서 47까지 내리" 꼴로. 해석 불가면 null.
+ *
+ *  ★ 숫자 뒤에는 '로/으로'를 쓰지 않는다 — 받침 유무가 읽기에 따라 갈린다(90=구십'으로',
+ *    5=오'로'). 이 저장소가 여러 번 밟은 자리라, 수치 축은 조사 자체가 없는 '까지'로 끊는다.
+ *    비수치 축(공격방향)만 한글이므로 그쪽에서만 josa로 '로/으로'를 고른다. */
+function axisClause(piece: string): string | null {
+  const m = /^(.+?)\s(.+?)→(.+)$/.exec(piece.trim())
+  if (!m) return null
+  const [, axis, before, after] = m
+  const nb = Number(before), na = Number(after)
+  const head = josa(axis, '을', '를')
+  if (Number.isFinite(nb) && Number.isFinite(na)) {
+    const verb = na > nb ? '올리' : na < nb ? '내리' : '조정하'
+    return `${head} ${before}에서 ${after}까지 ${verb}`
+  }
+  return `${head} ${before}에서 ${josa(after, '으로', '로')} 바꾸`
+}
+
+/** 결정 로그 1건 → 기자 질문. 해석할 수 없으면 null(질문을 만들지 않는다). */
+function logQuestionText(e: DecisionEntry): string | null {
+  const when = whenPhrase(e.summary)
   switch (e.kind) {
-    case 'teamtalk':
-      return `라커룸 분위기가 화제입니다. "${e.summary}"라는 선택이 결과로 이어졌다는 평가에 동의하십니까?`
-    case 'sub':
-      return `승부처의 교체가 눈길을 끌었습니다. "${e.summary}", 계획된 승부수였습니까?`
-    case 'instructions':
-      return `경기 중 전술 변화가 있었습니다. "${e.summary}", 어떤 의도였는지 설명해 주시겠습니까?`
+    case 'teamtalk': {
+      const tone = typeof e.detail?.tone === 'string' ? TONE_SCENE[e.detail.tone] : undefined
+      if (tone) return `하프타임 라커룸 이야기가 나옵니다. ${tone} — 그 말이 후반의 흐름을 만들었다고 보십니까?`
+      const shout = typeof e.detail?.shout === 'string' ? SHOUT_SCENE[e.detail.shout] : undefined
+      if (shout) return `${when} 터치라인에서 ${shout} 그 한마디가 꼭 필요한 순간이었습니까?`
+      return null
+    }
+    case 'sub': {
+      const m = /교체: (.+) IN, (.+) OUT$/.exec(e.summary)
+      if (!m) return null
+      const [, inName, outName] = m
+      return `${when} ${josa(outName, '을', '를')} 빼고 ${josa(inName, '을', '를')} 투입하셨습니다. 계획된 승부수였습니까?`
+    }
+    case 'instructions': {
+      // 포메이션 변경은 before/after가 구조화돼 있다.
+      const before = e.detail?.before, after = e.detail?.after
+      if (typeof before === 'string' && typeof after === 'string') {
+        return `${when} 진형을 ${before}에서 ${after}로 바꾸셨습니다. 무엇을 노리신 변화였습니까?`
+      }
+      // detail.changed가 정본이지만, 그 필드가 없던 시절의 로그(저장된 캠페인)도 읽을 수 있게
+      // 요약 문자열에서 같은 조각을 뽑는 폴백을 둔다.
+      const changed = Array.isArray(e.detail?.changed)
+        ? (e.detail.changed as unknown[])
+        : (/지시 변경: (.+)$/.exec(e.summary)?.[1].split(', ') ?? [])
+      const clauses = changed
+        .filter((c): c is string => typeof c === 'string')
+        .map(axisClause)
+        .filter((c): c is string => c !== null)
+      if (clauses.length === 0) return null
+      return `${when} ${clauses.join(', ')}셨습니다. 어떤 의도였는지 설명해 주시겠습니까?`
+    }
     case 'shootout-setup':
-      return `승부차기를 앞두고 "${e.summary}" 준비가 있었습니다. 키커 선정 기준은 무엇이었습니까?`
+      // 이 로그는 자유 문자열이라 파싱할 구조가 없다. 사실만 말하고 요약은 인용하지 않는다.
+      return '승부차기를 앞두고 키커 순서를 직접 정하셨습니다. 선정 기준은 무엇이었습니까?'
   }
 }
 
@@ -226,7 +303,10 @@ export function buildQuestions(record: MatchRecord, log: DecisionEntry[], planDe
     const pq = planQuestion(planDeviation, out !== 'draw' && out !== 'loss')
     if (pq) push(pq.text, PLAN_ANSWERS[pq.branch])
   }
-  for (const { e } of ordered) push(logQuestionText(e))
+  for (const { e } of ordered) {
+    const t = logQuestionText(e)
+    if (t) push(t)
+  }
   for (const t of resultQuestions(record)) push(t)
 
   return items.slice(0, 3).map((q, i) => ({

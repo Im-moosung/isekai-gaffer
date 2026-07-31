@@ -21,7 +21,13 @@ const subLog: DecisionEntry[] = [
   { minute: 72, kind: 'sub', summary: "72' 교체: 오현규 IN, 조규성 OUT", detail: { in: 'x', out: 'y' } },
 ]
 const instrLog: DecisionEntry[] = [
-  { minute: 60, kind: 'instructions', summary: "60' 지시 변경: 압박 55→90", detail: {} },
+  { minute: 60, kind: 'instructions', summary: "60' 지시 변경: 압박 55→90", detail: { changed: ['압박 55→90'] } },
+]
+const shoutLog: DecisionEntry[] = [
+  { minute: 58, kind: 'teamtalk', summary: "58' 외침: 더 뛰어", detail: { shout: 'work' } },
+]
+const pkLog: DecisionEntry[] = [
+  { minute: 90, kind: 'shootout-setup', summary: 'PK: 키커 순서 확정' },
 ]
 
 // 모든 텍스트를 훑어 금지어가 없는지 확인하는 스모크 헬퍼.
@@ -57,14 +63,36 @@ describe('buildQuestions', () => {
   it('팀토크 로그가 있으면 그 로그를 반영한 질문이 존재한다', () => {
     const r = rec('sf', 'arg', [1, 0], { decisions: teamTalkLog })
     const qs = buildQuestions(r, r.decisions)
-    expect(qs.some(q => q.text.includes('HT 팀토크: 격노'))).toBe(true)
+    expect(qs.some(q => q.text.includes('선수들을 강하게 몰아세우셨다고 합니다'))).toBe(true)
   })
 
   it('교체·전술 로그도 질문에 반영된다', () => {
     const rs = buildQuestions(rec('r32', 'ecu', [2, 0], { decisions: subLog }), subLog)
-    expect(rs.some(q => q.text.includes("72' 교체: 오현규 IN, 조규성 OUT"))).toBe(true)
+    expect(rs.some(q => q.text.includes('72분에 조규성을 빼고 오현규를 투입하셨습니다'))).toBe(true)
     const ri = buildQuestions(rec('r32', 'ecu', [2, 0], { decisions: instrLog }), instrLog)
-    expect(ri.some(q => q.text.includes("60' 지시 변경: 압박 55→90"))).toBe(true)
+    expect(ri.some(q => q.text.includes('60분에 압박을 55에서 90까지 올리셨습니다'))).toBe(true)
+  })
+
+  // 감사 결함 ⑦의 회귀 방지선: 기자는 우리 내부 로그의 문법으로 말하지 않는다.
+  it('질문 문안에 결정 로그 원문(summary)이 그대로 들어가지 않는다', () => {
+    const log = [...teamTalkLog, ...subLog, ...instrLog, ...shoutLog, ...pkLog]
+    const qs = buildQuestions(rec('r16', 'eng', [1, 1], { shootout: [4, 3], decisions: log }), log)
+    for (const e of log) expect(qs.some(q => q.text.includes(e.summary))).toBe(false)
+    for (const q of qs) {
+      expect(q.text).not.toMatch(/팀토크:|교체:|지시 변경:|포메이션:|IN,|OUT|PK:/)
+    }
+  })
+
+  it('터치라인 외침도 사람의 말로 나간다', () => {
+    const qs = buildQuestions(rec('qf', 'nor', [1, 0], { decisions: shoutLog }), shoutLog)
+    expect(qs.some(q => q.text.includes("58분에 터치라인에서 더 뛰라고 다그치셨습니다"))).toBe(true)
+  })
+
+  it('해석할 수 없는 로그는 질문을 만들지 않는다(원문 노출 대신 결과 질문으로 채운다)', () => {
+    const junk: DecisionEntry[] = [{ minute: 30, kind: 'sub', summary: '알 수 없는 형식', detail: {} }]
+    const qs = buildQuestions(rec('group2', 'mex', [1, 1], { decisions: junk }), junk)
+    expect(qs).toHaveLength(3)
+    expect(qs.some(q => q.text.includes('알 수 없는 형식'))).toBe(false)
   })
 
   it('planDeviation 미지정이면 플랜 추궁 질문이 생기지 않는다(기존 호출부 불변)', () => {
@@ -125,7 +153,7 @@ describe('buildQuestions', () => {
     const log = [...teamTalkLog, ...subLog, ...instrLog]
     const qs = buildQuestions(rec('r16', 'eng', [4, 0], { decisions: log }), log, 5)
     expect(qs).toHaveLength(3)
-    expect(qs.some(q => q.text.includes('HT 팀토크: 격노'))).toBe(true)
+    expect(qs.some(q => q.text.includes('선수들을 강하게 몰아세우셨다고 합니다'))).toBe(true)
   })
 
   it('질문 문안에 금지어가 없다 (세이프가드 스모크)', () => {
