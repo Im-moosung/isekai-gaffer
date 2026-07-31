@@ -298,7 +298,9 @@ export function entranceSubtitle(cast: EntranceCast, ms: number): string {
     case 'walkout':
       return '양 팀 선수 입장'
     case 'lineup':
-      return `${cast.homeTeamKo} · ${cast.homeFormation}`
+      // 포메이션을 여기 넣지 않는다 — 오버레이 바가 이미 `ent__formation` 칩으로
+      // 상시 표시하므로 문장에 또 넣으면 "대한민국 · 4-2-3-1  4-2-3-1"이 된다.
+      return `${cast.homeTeamKo} 선발`
     case 'intro':
       return `${cast.homeTeamKo} 선발 라인업`
     case 'disperse':

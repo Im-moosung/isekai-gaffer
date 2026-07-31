@@ -90,7 +90,10 @@ describe('타임라인', () => {
     const at = (ms: number) => entranceSubtitle(cast, ms)
     expect(at(0)).toBe('심판진 입장')
     expect(at(ENTRANCE_TUNNEL_MS + 10)).toBe('양 팀 선수 입장')
-    expect(at(ENTRANCE_PHASES[2].start + 10)).toContain(cast.homeFormation)
+    // 포메이션은 자막이 아니라 오버레이 바의 `ent__formation` 칩이 상시 표시한다.
+    // 자막에도 넣으면 "대한민국 · 4-2-3-1  4-2-3-1"로 두 번 찍힌다(실제 캡처에서 확인).
+    expect(at(ENTRANCE_PHASES[2].start + 10)).toContain(cast.homeTeamKo)
+    expect(at(ENTRANCE_PHASES[2].start + 10)).not.toContain(cast.homeFormation)
     expect(at(ENTRANCE_PHASES[3].start + 10)).toContain(cast.homeTeamKo)
     expect(at(ENTRANCE_TOTAL_MS)).toBe('킥오프')
   })
