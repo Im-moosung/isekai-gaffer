@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import {
   useMatchStore, TEAM_TALK_TABLE, scoreSituation, SHOUT_TABLE, SHOUT_COOLDOWN,
   teamExpectation, recommendedTone, EXPECTATION_ADJUST, computeDeviation,
-  interventionLevel, nextBreakMinute, touchlineNotice,
+  interventionLevel, nextBreakMinute, touchlineNotice, touchlineOrderError,
 } from '../matchStore'
 import { makeTestTeam, pickBestXI } from '../../engine/fixtures/testTeams'
 import { loadTeam } from '../../data/loader'
@@ -698,12 +698,66 @@ describe('개입 권한 2등급 — 전원 소집 vs 터치라인', () => {
     expect(interventionLevel('fulltime', null)).toBe('none')
   })
 
-  it('감독 타임에서 instructions 명령은 거부된다', () => {
+  // ── 터치라인 지시(2026-08-01 개방) ───────────────────────────────
+  // "압박 올려!"·"템포 낮춰!"는 실제로 소리쳐 전달되는 지시라 터치라인에서 열렸다.
+  // 라인·공격방향·포메이션은 여전히 전원 소집 사항이고, 폭(±15)과 쿨다운이 걸린다.
+
+  it('감독 타임: 압박·템포는 ±15까지 열린다', () => {
     toManagerTime()
-    const before = store().engine!.home.tactics.instructions.pressing
-    expect(() => store().submitCommand('home', { type: 'instructions', instructions: INS }))
-      .toThrow('교체와 외침만')
-    expect(store().engine!.home.tactics.instructions.pressing).toBe(before)
+    const cur = store().engine!.home.tactics.instructions
+    store().submitCommand('home', {
+      type: 'instructions',
+      instructions: { ...cur, pressing: cur.pressing + 15, tempo: cur.tempo - 15 },
+    })
+    expect(store().engine!.home.tactics.instructions.pressing).toBe(cur.pressing + 15)
+    expect(store().engine!.home.tactics.instructions.tempo).toBe(cur.tempo - 15)
+  })
+
+  it('감독 타임: ±15를 넘는 지시는 거부된다(속도 제한)', () => {
+    toManagerTime()
+    const cur = store().engine!.home.tactics.instructions
+    expect(() => store().submitCommand('home', {
+      type: 'instructions', instructions: { ...cur, pressing: cur.pressing + 16 },
+    })).toThrow('15보다 크게')
+    expect(store().engine!.home.tactics.instructions.pressing).toBe(cur.pressing)
+  })
+
+  it('감독 타임: 라인·공격방향은 여전히 거부된다(전원 소집 사항)', () => {
+    toManagerTime()
+    const cur = store().engine!.home.tactics.instructions
+    expect(() => store().submitCommand('home', {
+      type: 'instructions', instructions: { ...cur, lineHeight: cur.lineHeight + 5 },
+    })).toThrow('백라인 전체')
+    expect(() => store().submitCommand('home', {
+      type: 'instructions', instructions: { ...cur, attackFocus: 'left' },
+    })).toThrow('공격 방향')
+    expect(store().engine!.home.tactics.instructions.lineHeight).toBe(cur.lineHeight)
+  })
+
+  it('감독 타임: 터치라인 지시는 외침과 쿨다운을 공유한다', () => {
+    toManagerTime()
+    const cur = store().engine!.home.tactics.instructions
+    store().submitCommand('home', { type: 'instructions', instructions: { ...cur, pressing: cur.pressing + 10 } })
+    expect(store().lastShoutMinute).toBe(store().engine!.minute)
+    const now = store().engine!.home.tactics.instructions
+    expect(() => store().submitCommand('home', {
+      type: 'instructions', instructions: { ...now, tempo: now.tempo + 5 },
+    })).toThrow('쿨다운')
+  })
+
+  it('감독 타임: 값이 그대로면 쿨다운을 소모하지 않는다', () => {
+    toManagerTime()
+    const cur = store().engine!.home.tactics.instructions
+    store().submitCommand('home', { type: 'instructions', instructions: { ...cur } })
+    expect(store().lastShoutMinute).toBeNull()
+  })
+
+  it('touchlineOrderError: 축·폭 규칙을 순수 함수로 고정한다', () => {
+    const base = { lineHeight: 50, pressing: 50, tempo: 50, attackFocus: 'balanced' as const }
+    expect(touchlineOrderError(base, { ...base, pressing: 65, tempo: 35 })).toBeNull()
+    expect(touchlineOrderError(base, { ...base, pressing: 66 })).toContain('15보다 크게')
+    expect(touchlineOrderError(base, { ...base, lineHeight: 51 })).toContain('백라인')
+    expect(touchlineOrderError(base, { ...base, attackFocus: 'right' })).toContain('공격 방향')
   })
 
   it('감독 타임에서 formation 명령은 거부된다(확장 필드 포함)', () => {
@@ -749,7 +803,7 @@ describe('개입 권한 2등급 — 전원 소집 vs 터치라인', () => {
   it('터치라인 안내에 다음 브레이크 분이 들어가고, 없으면 그 사실을 알린다', () => {
     const sched = { firstHydration: 22, secondHydration: 67 }
     expect(touchlineNotice(50, sched)).toContain('다음 브레이크(67분)')
-    expect(touchlineNotice(50, sched)).toContain('교체와 외침만')
+    expect(touchlineNotice(50, sched)).toContain('압박·템포 지시만 가능합니다')
     expect(touchlineNotice(80, sched)).toContain('남은 브레이크가 없습니다')
   })
 })

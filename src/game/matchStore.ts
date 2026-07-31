@@ -251,9 +251,58 @@ export function nextBreakMinute(minute: number, schedule: HydrationSchedule | nu
  *  잠긴 이유와 언제 풀리는지를 반드시 함께 말해야 한다. */
 export function touchlineNotice(minute: number, schedule: HydrationSchedule | null): string {
   const next = nextBreakMinute(minute, schedule)
+  const head = `경기 진행 중 — 교체·외침과 ${TOUCHLINE_AXIS_TEXT} 지시만 가능합니다.`
   return next === null
-    ? '경기 진행 중 — 교체와 외침만 가능합니다. 남은 브레이크가 없습니다 — 이번 전술로 끝까지 갑니다.'
-    : `경기 진행 중 — 교체와 외침만 가능합니다. 전술 변경은 다음 브레이크(${next}분)에서.`
+    ? `${head} 남은 브레이크가 없습니다 — 포메이션·태세는 이대로 끝까지 갑니다.`
+    : `${head} 포메이션·태세 변경은 다음 브레이크(${next}분)에서.`
+}
+
+// ── 터치라인 지시 (2026-08-01, round3 피드백 ②) ──────────────────────
+// 왜 여는가: 개입 등급을 나눈 원래 근거가 *"경기가 흐르는 중에 할 수 있는 것은 소리치기와
+// 교체뿐"*이었다. 그런데 "압박 올려!"·"템포 낮춰!"는 **바로 그 소리치기**다. 근거를 그대로
+// 따르면 이 두 축은 터치라인에서 열려 있어야 하고, 닫아 둔 쪽이 근거와 어긋나 있었다.
+//
+// 왜 압박·템포만인가(라인·공격방향을 닫는 이유):
+//  · 압박·템포는 **개인이 혼자 실행할 수 있는 노력 다이얼**이다. 한 명이 들어도 그 한 명이
+//    바로 반응할 수 있다 — 소리쳐 전달되는 지시의 정의에 맞는다.
+//  · 라인 높이는 백라인 네 명이 **동시에** 같은 오프사이드 선을 잡아야 성립한다. 한 명만
+//    들으면 라인이 깨져 오히려 실점 경로가 된다(shape.ts가 라인 축을 백라인 전체의
+//    평균 x로 정의하는 것도 같은 이유다). 공격방향은 공격 3~4명의 약속된 순환이라
+//    마찬가지로 모아 놓고 다시 그려야 한다.
+//  · 포메이션·태세·페이즈 포메이션·세트피스 루틴은 그보다 더 큰 구조 변경이라 그대로 잠근다.
+//
+// 왜 폭을 제한하는가: 소리쳐서 전달되는 것은 "지금보다 더/덜"이지 "68로 맞춰라"가 아니다.
+// 한 번에 ±15까지만 움직인다 — 세 번 외치면 어차피 끝에서 끝까지 갈 수 있으므로 상한이
+// 아니라 **속도 제한**이다.
+//
+// 왜 외침과 쿨다운을 공유하는가: 둘은 같은 행위다(터치라인에서 선수들의 주의를 끄는 일).
+// 자원을 나눠 주면 "10분마다 외치고 + 10분마다 지시"로 개입 밀도가 두 배가 되고,
+// "정지 시점이 곧 자원"이라는 설계가 pauseByUser 무제한과 맞물려 무너진다.
+// 하나로 묶으면 90분에 최대 9회이고, 그중 몇 번을 지시에 쓸지가 감독의 선택이 된다.
+
+/** 터치라인에서 소리쳐 전달할 수 있는 지시 축. */
+export const TOUCHLINE_AXES = ['pressing', 'tempo'] as const
+export type TouchlineAxis = (typeof TOUCHLINE_AXES)[number]
+/** 터치라인 지시 1회의 축당 최대 변화폭. */
+export const TOUCHLINE_STEP = 15
+const TOUCHLINE_AXIS_TEXT = TOUCHLINE_AXES.map(k => INSTRUCTION_LABEL[k]).join('·')
+
+/** 터치라인 지시로 성립하는 변경인가 — 축·폭만 본다(쿨다운은 store가 따로 본다).
+ *  UI(ConsolePanel)와 store가 같은 함수를 쓴다. 규칙이 갈리면 화면은 허용하는데
+ *  store가 throw하는 조합이 생긴다. */
+export function touchlineOrderError(before: Instructions, after: Instructions): string | null {
+  if (before.lineHeight !== after.lineHeight) {
+    return '라인 높이는 백라인 전체가 동시에 잡아야 합니다 — 다음 브레이크에서.'
+  }
+  if (before.attackFocus !== after.attackFocus) {
+    return '공격 방향 전환은 모아 놓고 다시 그려야 합니다 — 다음 브레이크에서.'
+  }
+  for (const k of TOUCHLINE_AXES) {
+    if (Math.abs(after[k] - before[k]) > TOUCHLINE_STEP) {
+      return `한 번에 ${INSTRUCTION_LABEL[k]}을(를) ${TOUCHLINE_STEP}보다 크게 바꿀 수 없습니다 — 소리쳐 전달되는 것은 "더/덜"입니다.`
+    }
+  }
+  return null
 }
 
 /** 홈 주전(라인업, 퇴장 제외) 중 최저 스태미나. 동적 순간 'fatigue' 판정용. */
@@ -554,9 +603,18 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     if (!engine) throw new Error('경기 미시작')
     if (!INTERVENTION_PHASES.includes(phase)) throw new Error('개입 불가 시점')
     // 스토어가 최종 방어선이다 — UI가 섹션을 접는 것만으로는 부족하다.
-    // 터치라인 등급에서는 교체만 통과시킨다(포메이션·멘탈리티·전술 축은 전원 소집 사항).
-    if (interventionLevel(phase, pauseReason) === 'touchline' && cmd.type !== 'sub') {
-      throw new Error(touchlineNotice(engine.minute, schedule))
+    // 터치라인 등급에서 통과하는 것은 둘뿐이다: 교체, 그리고 압박·템포 지시(소리쳐 전달되는
+    // 범위 — TOUCHLINE_AXES 주석 참조). 나머지는 전원 소집 사항이라 여기서 막는다.
+    const touchline = interventionLevel(phase, pauseReason) === 'touchline'
+    if (touchline && cmd.type !== 'sub') {
+      if (cmd.type !== 'instructions') throw new Error(touchlineNotice(engine.minute, schedule))
+      const axisErr = touchlineOrderError(engine[side].tactics.instructions, cmd.instructions)
+      if (axisErr) throw new Error(axisErr)
+      // 외침과 같은 자원을 쓴다 — 둘 다 "터치라인에서 주의를 끄는" 같은 행위다.
+      const last = get().lastShoutMinute
+      if (last !== null && engine.minute - last < SHOUT_COOLDOWN) {
+        throw new Error(`터치라인 지시 쿨다운 — ${SHOUT_COOLDOWN - (engine.minute - last)}분 뒤에 다시 외칠 수 있습니다.`)
+      }
     }
     const minute = engine.minute
     const sideState = engine[side]
@@ -574,7 +632,10 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
       const changed = instructionDiff(sideState.tactics.instructions, cmd.instructions)
       // 변경 축이 0개면 로그 스킵(엔진 적용은 그대로) — "45' 지시 변경: " 같은 빈 요약 방지.
       if (changed.length > 0) {
-        entry = { minute, kind: 'instructions', summary: `${when} 지시 변경: ${changed.join(', ')}`, detail: { changed } }
+        // 터치라인에서 내린 지시는 로그에서도 구분한다 — 기자회견이 "언제 어떻게 개입했나"를
+        // 추궁할 때 브레이크 지시와 경기 중 외침은 성격이 다른 결정이다.
+        const kindText = touchline ? '터치라인 지시' : '지시 변경'
+        entry = { minute, kind: 'instructions', summary: `${when} ${kindText}: ${changed.join(', ')}`, detail: { changed, touchline } }
       }
     } else if (cmd.type === 'sub') {
       const nameOf = (id: string) => sideState.team.squad.find(p => p.id === id)?.name.ko ?? id
@@ -597,10 +658,13 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     const structChanged = side === 'home' && !!matchPlan
       && (before.formation !== after.formation
         || (before.mentality ?? 'balanced') !== (after.mentality ?? 'balanced'))
+    // 터치라인 지시가 실제로 무언가를 바꿨을 때만 자원을 소모한다(같은 값 재전송은 무료).
+    const consumesShout = touchline && cmd.type === 'instructions' && !!entry
     set({
       engine: nextEngine,
       planDeviation: dev,
       ...(structChanged ? { adaptUntil: engine.minute + ADAPT_MINUTES } : {}),
+      ...(consumesShout ? { lastShoutMinute: engine.minute } : {}),
       ...(entry ? { decisionLog: [...decisionLog, entry] } : {}),
     })
   },
