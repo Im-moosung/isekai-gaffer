@@ -21,6 +21,18 @@ function share(h: number, a: number): number {
 }
 
 /**
+ * 점유율 두 값의 **짝 반올림**. 엔진은 소수 한 자리로 저장하는데(예: 53.5 / 46.5)
+ * 두 값을 각각 Math.round 하면 54% + 47% = 101%가 된다(감사 결함 ②, 실캡처).
+ * 점유율은 정의상 합이 100이어야 하므로 홈만 반올림하고 원정은 그 보수로 낸다.
+ * 방송 그래픽도 같은 규칙이다 — 두 숫자가 100을 벗어나면 표 전체의 신뢰가 깨진다.
+ */
+export function possessionPair(h: number, a: number): [number, number] {
+  const total = h + a
+  const us = total <= 0 ? 50 : Math.round((h / total) * 100)
+  return [us, 100 - us]
+}
+
+/**
  * 풀타임·하프타임 기록 리포트.
  *
  * 예전에는 3열 텍스트 표 + 헤어라인뿐이었고, 숫자에 팀 색(홈 빨강 / 원정 파랑)을
@@ -37,6 +49,8 @@ export function StatsTable({ home, away, homeCode, awayCode }: {
   homeCode?: string
   awayCode?: string
 }) {
+  // 점유율만 짝 반올림(합 100 보장). 나머지 행은 두 값이 독립이라 각자 반올림이 맞다.
+  const [pv0, pv1] = possessionPair(home.possession, away.possession)
   return (
     <div className="ms-stats" role="table" aria-label="경기 기록">
       {homeCode && awayCode && (
@@ -53,9 +67,11 @@ export function StatsTable({ home, away, homeCode, awayCode }: {
       )}
       {STAT_ROWS.map(({ key, label, fmt }) => {
         const pct = share(home[key], away[key])
+        const hTxt = key === 'possession' ? `${pv0}%` : fmt(home[key])
+        const aTxt = key === 'possession' ? `${pv1}%` : fmt(away[key])
         return (
           <div className="ms-stats__row" key={key} role="row">
-            <span className="ms-stats__val num" role="cell">{fmt(home[key])}</span>
+            <span className="ms-stats__val num" role="cell">{hTxt}</span>
             <span className="ms-stats__mid">
               <span className="ms-stats__label" role="rowheader">{label}</span>
               <span className="ms-stats__bar">
@@ -64,7 +80,7 @@ export function StatsTable({ home, away, homeCode, awayCode }: {
                 <span className="ms-stats__bar-them" style={{ width: `${(100 - pct).toFixed(1)}%` }} />
               </span>
             </span>
-            <span className="ms-stats__val num" role="cell">{fmt(away[key])}</span>
+            <span className="ms-stats__val num" role="cell">{aTxt}</span>
           </div>
         )
       })}

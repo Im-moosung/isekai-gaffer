@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { render, cleanup, act } from '@testing-library/react'
 import { useMatchStore } from '../../../game/matchStore'
-import { MatchStatsPanel } from '../StatsTable'
+import { MatchStatsPanel, StatsTable, possessionPair } from '../StatsTable'
 import { makeTestTeam } from '../../../engine/fixtures/testTeams'
 
 const home = makeTestTeam('kor', 76)
@@ -57,5 +57,33 @@ describe('MatchStatsPanel', () => {
       `${Math.round(engine.stats[1].passAccuracy)}%`,
     ])
     expect(container.querySelector('.mst__note')).toBeNull()
+  })
+})
+
+// 감사 결함 ②: 엔진은 점유율을 소수 한 자리로 저장하는데(53.5 / 46.5) 표가 두 값을
+// 각각 반올림해 "54% … 47%" = 101%를 냈다. 점유율은 정의상 합이 100이어야 한다.
+describe('점유율 짝 반올림 (합 100 보장)', () => {
+  it('53.5 / 46.5 → 54 / 46', () => {
+    expect(possessionPair(53.5, 46.5)).toEqual([54, 46])
+  })
+  it('어떤 조합에서도 두 값의 합이 정확히 100이다', () => {
+    for (let h = 0; h <= 1000; h++) {
+      const [a, b] = possessionPair(h / 10, 100 - h / 10)
+      expect(a + b).toBe(100)
+    }
+  })
+  it('합이 0이면 반반', () => {
+    expect(possessionPair(0, 0)).toEqual([50, 50])
+  })
+  it('리포트 표에 101%가 나오지 않는다', () => {
+    const stats = (possession: number) => ({
+      possession, passAccuracy: 0, passesAttempted: 0, passesCompleted: 0,
+      shots: 0, shotsOnTarget: 0, fouls: 0, corners: 0, xg: 0,
+    })
+    const { container } = render(<StatsTable home={stats(53.5)} away={stats(46.5)} />)
+    const vals = [...container.querySelectorAll('.ms-stats__row')][0]
+      .querySelectorAll('.ms-stats__val')
+    expect(vals[0].textContent).toBe('54%')
+    expect(vals[1].textContent).toBe('46%')
   })
 })
