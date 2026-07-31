@@ -36,14 +36,11 @@
   pointer-events: none;
 }
 
-/* ── 하이라이트 안무: 공(⚪ 원+그림자) + 무버 도트 ─────────────
-   위치 전환 길이는 컴포넌트가 --pv-dur(ms)로 주입한다. */
-.pv-choreo .pv-ball,
-.pv-choreo .pv-ball__shadow,
-.pv-choreo .pv-mover {
-  transition: cx var(--pv-dur, 0ms) cubic-bezier(0.34, 0.62, 0.4, 1),
-              cy var(--pv-dur, 0ms) cubic-bezier(0.34, 0.62, 0.4, 1);
-}
+/* ── 하이라이트 안무: 공(⚪ 원+그림자) ─────────────────────────
+   ★ 여기에는 transition이 없다. 예전에는 CSS가 키프레임 사이를 보간했는데, 그러면
+     "지금 이 프레임의 좌표"를 JS가 알 수 없어 **진짜 선수 도트를 옮길 수 없었다**
+     (그래서 번호 없는 반투명 고스트 원 .pv-mover를 따로 그렸다 — 감사 ⑤).
+     지금은 PitchView의 20 Hz 클럭이 공·선수 좌표를 같은 시간축으로 보간해 내려준다. */
 .pv-ball {
   fill: #fff;
   stroke: rgba(0, 0, 0, 0.4);
@@ -51,9 +48,6 @@
   filter: drop-shadow(0 0 1.4px rgba(255, 255, 255, 0.8));
 }
 .pv-ball__shadow { fill: rgba(0, 0, 0, 0.32); }
-.pv-mover { opacity: 0.55; stroke: rgba(255, 255, 255, 0.5); stroke-width: 0.3; }
-.pv-mover--home { fill: var(--bc-home); }
-.pv-mover--away { fill: var(--bc-away); }
 
 .pv-num {
   fill: #fff;
@@ -109,10 +103,7 @@
   .pv-dot,
   .pv-num,
   .pv-name,
-  .pv-mood,
-  .pv-choreo .pv-ball,
-  .pv-choreo .pv-ball__shadow,
-  .pv-choreo .pv-mover {
+  .pv-mood {
     transition: none;
   }
 }
@@ -148,6 +139,20 @@
 .pv-root--analysis .an-line__cap,
 .pv-root--analysis .an-press,
 .pv-root--analysis .an-press__edge { transition: none; }
+
+/* 안무 재생 중(하이라이트)도 마찬가지다 — 도트 좌표를 JS 클럭이 20 Hz로 직접 준다.
+   여기에 CSS transition이 남아 있으면 도트가 0.5~0.8초 뒤처져 공이 먼저 도착하고
+   선수가 나중에 따라오는 그림이 된다(패스를 주고받는 것으로 안 읽힌다).
+   ★ 선택자를 `--choreo.--tactics`로 겹쳐 쓰는 이유는 위 --analysis 블록과 같다:
+     나중에 로드되는 tactics.css의 `.pv-root--tactics .pv-dot`(0.5s)를 이겨야 한다. */
+.pv-root--choreo.pv-root--tactics .pv-dot,
+.pv-root--choreo.pv-root--tactics .pv-num,
+.pv-root--choreo.pv-root--tactics .pv-mood,
+.pv-root--choreo.pv-root--tactics .pv-name,
+.pv-root--choreo .pv-dot,
+.pv-root--choreo .pv-num,
+.pv-root--choreo .pv-mood,
+.pv-root--choreo .pv-labels text { transition: none; }
 
 /* ── 전술 시각화 레이어(2D 작전판) ─────────────────────────────
    하이라이트 사이 구간에서 3D가 못 그리는 것을 그린다: 수비 라인은 선으로,
