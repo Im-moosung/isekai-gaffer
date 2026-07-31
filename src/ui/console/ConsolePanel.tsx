@@ -7,8 +7,13 @@ import './console.css'
 // cost: 슬라이더 아래 트레이드오프 표시. threshold 이상일 때 강조.
 // 이모지(⚠·⚡) 대신 평문 한글 태그를 쓴다 — OS마다 모양·크기가 달라 톤이 무너지고,
 // 방송 관례도 카드 아이콘 대신 "DOWN TO 10 PLAYERS" 같은 평문 배너를 쓴다.
+// ★ 라인 경고 문구는 **양면으로** 적는다. 예전엔 "주의 · 뒷공간 노출"뿐이라 앱이
+//   "높은 라인 = 나쁜 선택"이라고 말하는 것처럼 읽혔고, 같은 앱의 코치가 하프타임에
+//   "라인 95까지 올립시다"라고 하면 앱이 자기 자신과 싸우는 화면이 됐다(감사 결함 ③).
+//   실측은 잉글랜드·프랑스 상대의 최적이 라인 최상단임을 보였다(game/scouting.ts 주석).
+//   경고는 "하지 마라"가 아니라 **대가를 알고 걸어라**여야 한다.
 const AXES: { key: 'lineHeight' | 'pressing' | 'tempo'; label: string; cost?: { tag: string; text: string; threshold: number } }[] = [
-  { key: 'lineHeight', label: '라인', cost: { tag: '주의', text: '뒷공간 노출', threshold: 70 } },
+  { key: 'lineHeight', label: '라인', cost: { tag: '거래', text: '뒷공간 노출 ↔ 전방 차단 이득', threshold: 70 } },
   { key: 'pressing', label: '압박', cost: { tag: '체력', text: '체력 소모 +40% · 지치면 파울 증가', threshold: 70 } },
   { key: 'tempo', label: '템포' },
 ]

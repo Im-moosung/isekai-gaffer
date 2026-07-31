@@ -75,21 +75,28 @@ const RECENT_WINDOW = 15
 /** 양 팀 슛이 이만큼 쌓이기 전엔 xG·유효슛 비교가 노이즈다.
  *  **0을 '열세'로 읽지 않기 위한 표본 게이트** — F2 결함 3의 재발 방지선. */
 const MIN_SHOT_SAMPLE = 3
-// ── 체력 경고선: **시간 대비** 판정한다 ────────────────────────
-// 고정선(예: 75)은 쓸 수 없다. 엔진 기본 소모가 분당 약 0.55라(simulate.ts) 하프타임엔
-// 주전 11명 전원이 자연히 75 아래로 내려간다 — 그러면 "전원 경고"가 되어 변별력이 0이 된다.
-// "지쳤다"는 시간이 흘렀다는 뜻이 아니라 **이 시점 기대치보다 밑돈다**는 뜻이다.
-const EXPECTED_DRAIN_PER_MIN = 0.55
-/** 기대 곡선 대비 이만큼 밑돌면 개인 사유(포지션 부하·낮은 stamina 스탯·압박 가중)가 있다. */
-const BEHIND_CURVE = 8
-/** 곡선과 무관한 절대 위험 수위. 엔진의 지속 압박 실효 반감 판정선(평균 55)과 같은 값이다. */
+// ── 체력 경고선: **팀 자신의 중앙값 대비** 판정한다 ─────────────
+// 고정선(예: 75)은 쓸 수 없다 — 하프타임이면 주전 전원이 자연히 그 아래다.
+// 그렇다고 절대 곡선(100 − 0.55·분 − 8)도 쓸 수 없다는 것이 실측으로 드러났다(감사 결함 ④).
+//  (1) 엔진 실측 소모는 분당 0.55가 아니다. 개인 스태미나 보정(100/max(40,stamina))이 곱해져
+//      kor 선발 평균은 분당 ≈0.72다. 45분 기대치가 8~10점 높게 잡혀 늘 전원이 걸렸다.
+//  (2) 캠페인 2경기부터는 킥오프 체력이 100이 아니다(잔여 피로 — campaignStore.RESIDUAL_LOAD).
+//      절대 곡선은 그 사실을 모른다.
+// 실제로 "주전 11명이 이 시점 기대치를 밑돕니다"가 8경기 내내 나왔다. 전원 경고는 변별력이 0이다.
+//
+// 그래서 기준을 **상대화**한다: 같은 경기·같은 시점의 우리 주전 중앙값보다 처졌는가.
+// 정의상 절반을 넘길 수 없고, 캠페인 잔여 피로·전술·시점과 무관하게 뜻이 같다.
+/** 팀 중앙값보다 이만큼 밑돌면 개인 사유(포지션 부하·낮은 stamina 스탯·압박 가중)가 있다. */
+const BEHIND_MEDIAN = 8
+/** 중앙값과 무관한 절대 위험 수위. 엔진의 지속 압박 실효 반감 판정선(평균 55)과 같은 값이다.
+ *  팀 전체가 이 아래로 내려가면 "처진 소수"가 아니라 팀 전체 문제이므로 경고선이 여기로 올라온다. */
 const STAMINA_DANGER_FLOOR = 55
-function staminaAlertLine(minute: number): number {
-  return Math.max(STAMINA_DANGER_FLOOR, Math.round(100 - EXPECTED_DRAIN_PER_MIN * minute - BEHIND_CURVE))
-}
 /** 지속 압박 누적 경고. 엔진(simulate.ts)의 체력 가중은 `floor(sustained/10)` 단계라
  *  10분이 첫 페널티가 붙는 지점이다. 압박이 정확히 70이면 excess=0이라 페널티가 없어 제외한다. */
 const SUSTAINED_PRESS_ALERT = 10
+/** 앱이 스스로 "주의 · 뒷공간 노출"을 띄우는 라인 값(ui/console/ConsolePanel AXES와 같은 값).
+ *  코치가 이 이상을 권할 때는 같은 대가를 문장으로 밝힌다 — 두 화면이 어긋나면 안 된다. */
+const HIGH_LINE_WARN = 70
 /** 수비 코치 발동선: 최근 창 내 상대 유효슛, 그리고 유효슛 격차. */
 const DEF_RECENT_ON_TARGET = 2
 const DEF_ON_TARGET_GAP = 2
@@ -99,6 +106,9 @@ const CONCEDE_WINDOW = 10
  *  엔진 xG가 실제 P(골|슛) 스케일로 재정의되면서(경기당 팀 xG 3.2 → 1.4) 0.6 → 0.25로 내렸다.
  *  새 스케일에서 좋은 찬스 하나가 약 0.13이므로 0.25는 여전히 "결정적 찬스 2개분" 차이다. */
 const XG_GAP_ALERT = 0.25
+/** "흐름이 우리 쪽"으로 읽는 점유율 하한. 방송·분석 관례에서 55%를 넘으면 '지배'라고 부른다
+ *  (50~54%는 사실상 대등이라 어느 쪽 흐름이라고 단정하지 않는다). */
+const FLOW_POSSESSION = 55
 /** 세트피스 코치 발동선(현행 유지). */
 const CORNER_ALERT = 4
 /** 종반엔 세트피스가 마지막 카드라 문턱을 낮춘다. */
@@ -151,6 +161,12 @@ function starterStamina(state: SideState): { name: string; stamina: number }[] {
   return rows
 }
 
+/** 주전 체력 중앙값(짝수면 아래쪽 — 결정론). 빈 배열이면 100. */
+function medianStamina(rows: readonly { stamina: number }[]): number {
+  if (rows.length === 0) return 100
+  return rows[Math.floor((rows.length - 1) / 2)].stamina // rows는 오름차순 정렬 상태
+}
+
 /** 라인업(퇴장 제외) 중 세트피스 최고 선수. 동점은 이름 순(결정론). */
 function bestSetPieceTaker(state: SideState): { name: string; setPiece: number } | null {
   const rows = state.tactics.lineup
@@ -189,12 +205,26 @@ const DEF_LEAD: PhaseLines = {
   'endgame': ['종반 실점 하나면 경기가 통째로 뒤집힙니다.', '남은 시간은 짧고 실점의 대가는 큽니다.'],
 }
 
+// 공격 코치의 도입 문구는 **흐름이 누구 쪽인가**로 갈린다.
+// ★ 예전에는 국면만 보고 골라서, 바로 윗줄 근거가 "점유율 60%"(우리 점유)인데 다음 줄이
+//   "초반 흐름은 상대 쪽입니다."로 나갔다(감사 결함 ③). 같은 카드 안에서 사실이 뒤집힌다.
+//   그래서 흐름 판정(atkHolding)에 따라 두 벌 중 하나를 쓴다.
+/** 흐름이 상대 쪽일 때 — 볼도 못 잡고 결과도 없다. */
 const ATK_LEAD: PhaseLines = {
   'early-first': ['초반 흐름은 상대 쪽입니다.', '아직 시간은 많지만 형태는 바꿔야 합니다.'],
   'late-first': ['전반이 끝나기 전에 한 방이 필요합니다.', '0으로 하프타임에 들어가면 후반이 무거워집니다.'],
   'halftime': ['후반은 시작부터 밀어붙여야 합니다.', '45분이 통째로 남았습니다 — 지금 방식을 바꿉시다.'],
   'mid-second': ['아직 되돌릴 시간이 있습니다.', '상대 다리가 무거워지는 구간을 노립시다.'],
   'endgame': ['남은 시간에 전부 걸어야 합니다.', '지금 안 걸면 기회는 없습니다.'],
+}
+
+/** 흐름은 우리 쪽인데 결과가 없을 때 — 처방이 "더 밀어붙이자"가 아니라 "다르게 열자"다. */
+const ATK_LEAD_HOLDING: PhaseLines = {
+  'early-first': ['볼은 우리가 갖고 있는데 마지막 30미터가 막혀 있습니다.', '초반 흐름은 우리 쪽입니다 — 다만 그게 슈팅으로 이어지지 않습니다.'],
+  'late-first': ['점유는 우리 것인데 전반이 그냥 지나갑니다.', '이대로 볼만 돌리다 하프타임에 들어갈 수는 없습니다.'],
+  'halftime': ['전반 내내 볼은 우리가 가졌습니다 — 후반엔 여는 방식을 바꿉시다.', '점유는 충분했습니다. 부족한 건 마지막 패스입니다.'],
+  'mid-second': ['볼은 계속 우리에게 있습니다 — 문제는 열지 못한다는 것입니다.', '점유를 득점으로 바꿀 경로를 하나 더 만듭시다.'],
+  'endgame': ['볼은 우리가 쥐고 있습니다 — 남은 시간엔 위험을 감수하고 열어야 합니다.', '점유만으로는 남은 시간을 못 넘깁니다.'],
 }
 
 const PHYS_LEAD: PhaseLines = {
@@ -236,6 +266,28 @@ export function buildCoachAdvice(engine: MatchState, side: 'home' | 'away'): Coa
 
   const advice: CoachAdvice[] = []
 
+  // ── 체력 상태를 **먼저** 읽는다 ──────────────────────────────
+  // ★ 순서가 계약이다(감사 결함 ③). 예전에는 수비 코치가 먼저 "압박을 68까지 올리자"고 하고
+  //   그 아래에서 피지컬 코치가 "압박을 한 단계 낮춥니다"라고 했다 — 같은 카드 묶음 안에서
+  //   서로를 모르는 채 반대 처방을 냈다. 코치진은 딜레마를 제시할 수는 있어도 **같은 사실을
+  //   서로 다르게 보고 있어서는 안 된다.** 그래서 체력 판정을 공통 입력으로 끌어올려
+  //   수비 코치가 그 값을 읽고 압박 처방을 스스로 접게 한다.
+  const staminaRows = starterStamina(ownState)
+  const medStamina = medianStamina(staminaRows)
+  // 팀 전체가 위험 수위 아래로 내려가면 "처진 소수"가 아니라 팀 전체 문제다 — 그때는 절대선을 쓴다.
+  const staminaLine = Math.max(medStamina - BEHIND_MEDIAN, STAMINA_DANGER_FLOOR)
+  /** 절대 위험 수위가 경고선을 지배하는 국면인가(= 팀 전체가 바닥). 문구가 달라진다. */
+  const floorMode = medStamina - BEHIND_MEDIAN < STAMINA_DANGER_FLOOR
+  const tiredAll = staminaRows.filter(r => r.stamina <= staminaLine)
+  const press = ownState.tactics.instructions.pressing
+  const pressMinutes = ownState.sustainedPressMinutes ?? 0
+  const sustained = press > 70 && pressMinutes >= SUSTAINED_PRESS_ALERT
+  const physFires = tiredAll.length > 0 || sustained
+  /** 다리가 압박을 감당하지 못하는 상태 — 수비 코치는 이때 압박을 올리지 않는다.
+   *  기준을 "피지컬 코치가 말을 하는가"로 잡으면 처진 선수 1명에도 압박 처방이 봉쇄되므로,
+   *  **팀 규모의 문제**(절대 바닥 국면이거나 주전 3명 이상)일 때만 봉쇄한다. */
+  const legsGone = sustained || floorMode || tiredAll.length >= 3
+
   // ── 수비 코치 ────────────────────────────────────────────────
   // 발동: 최근 15분 상대 유효슛 ≥ 2 / 유효슛 격차 ≥ 2 / 최근 10분 실점.
   // 셋 다 **양의 증거**라 데이터가 0이면 자동으로 침묵한다.
@@ -268,20 +320,35 @@ export function buildCoachAdvice(engine: MatchState, side: 'home' | 'away'): Coa
     if (conceded) facts.push(`최근 ${CONCEDE_WINDOW}분 안에 실점했습니다.`)
     facts.push(`상대 후방 전개 지표는 ${bu.index}입니다(GK 빌드업 ${bu.gkBuildup} · 점유 성향 ${bu.possession} · 기준 72).`)
 
-    const axisText = `라인 ${axis.lineHeight} · 압박 ${axis.pressing}`
+    // 압박 처방은 다리가 남아 있을 때만 올린다. 다리가 없으면 **현재 값을 유지**하고
+    // 압박 축의 판단을 피지컬 코치에게 넘긴다 — 그래야 두 카드가 같은 사실 위에 선다.
+    const wantPress = axis.pressing
+    const pressing = legsGone && wantPress > press ? press : wantPress
+    const pressDeferred = pressing !== wantPress
+    const axisText = `라인 ${axis.lineHeight} · 압박 ${pressing}`
     const direction = compress
       ? `기준 72보다 낮아 전방에서 가둘 수 있습니다 — 내려앉지 말고 ${axisText}까지 올려 상대 전개를 끊읍시다.`
       : block
         ? `기준 72를 넘어 우리 압박이 벗겨집니다 — ${axisText}까지 내려 블록을 세웁시다.`
         : `기준 72와 비슷해 어느 쪽도 크게 통하지 않습니다 — ${axisText}의 중간 강도로 형태를 고정합시다.`
+    // 대가를 말하지 않는 조언은 조언이 아니다. 앱 자신의 슬라이더가 라인 70+를
+    // "주의 · 뒷공간 노출"로 표시하므로(ui/console/ConsolePanel AXES), 그 값을 권할 때는
+    // 코치가 먼저 그 대가를 입에 올려야 한다 — 그러지 않으면 앱이 자기 경고와 모순된다.
+    const costs: string[] = []
+    if (axis.lineHeight >= HIGH_LINE_WARN) {
+      costs.push(`라인 ${axis.lineHeight}는 뒷공간을 내주는 값입니다 — 오프사이드 트랩과 GK 커버를 전제로 겁니다.`)
+    }
+    if (pressDeferred) {
+      costs.push(`다만 다리가 받쳐주지 않아 압박은 지금 값(${press})을 유지합니다 — 압박 조정은 피지컬 코치 판단을 따르십시오.`)
+    }
     const men = edgeMentality(edge)
 
     advice.push({
       coach: '수비 코치',
       rationale: facts.join(' '),
-      proposal: `${pickBy(DEF_LEAD[phase], `${seed}:def`)} ${direction} 수비 라인 적극성도 올립니다.`,
+      proposal: [pickBy(DEF_LEAD[phase], `${seed}:def`), direction, ...costs, '수비 라인 적극성도 올립니다.'].join(' '),
       apply: {
-        instructions: { lineHeight: axis.lineHeight, pressing: axis.pressing },
+        instructions: { lineHeight: axis.lineHeight, pressing },
         // ★ +1이 '적극(존 전력 1.06)', −1이 '자제(0.95)'다. 이전 판은 수비를 굳히자면서
         //   defense:-1을 걸어 수비 존을 오히려 약화시켰다(engine tactics.groupIntensityZoneFactor).
         groupIntensity: { defense: 1 },
@@ -316,10 +383,15 @@ export function buildCoachAdvice(engine: MatchState, side: 'home' | 'away'): Coa
       ? `상대 라인 높이 ${oppLine} — 높게 서 있어 뒷공간이 열려 있습니다`
       : `상대 라인 높이 ${oppLine} — 낮게 서 있어 박스를 여는 쪽이 낫습니다`
 
+    // 흐름 판정: 볼을 우리가 쥐고 있는가. 점유가 명확히 우리 쪽이거나 슛 수가 앞서면
+    // "흐름은 상대 쪽"이라고 말할 수 없다 — 바로 윗줄 근거가 그 반대를 적고 있기 때문이다.
+    const atkHolding = own.possession >= FLOW_POSSESSION || own.shots > opp.shots
+    const leadLines = atkHolding ? ATK_LEAD_HOLDING[phase] : ATK_LEAD[phase]
+
     advice.push({
       coach: '공격 코치',
       rationale: facts.join(' '),
-      proposal: `${pickBy(ATK_LEAD[phase], `${seed}:atk`)} ${patternWhy}. ${PATTERN_KO[pick]} 위주로 바꾸고 태세를 ${MENTALITY_KO[men]}으로 올려 공격 라인 적극성을 더합시다.`,
+      proposal: `${pickBy(leadLines, `${seed}:atk`)} ${patternWhy}. ${PATTERN_KO[pick]} 위주로 바꾸고 태세를 ${MENTALITY_KO[men]}으로 올려 공격 라인 적극성을 더합시다.`,
       apply: { mentality: men, groupIntensity: { attack: 1 }, attackPattern: pick },
     })
   }
@@ -328,24 +400,20 @@ export function buildCoachAdvice(engine: MatchState, side: 'home' | 'away'): Coa
   // 발동: 주전 체력이 경고선 이하인 선수가 실제로 존재 / 지속 압박 누적이 페널티 구간.
   // ★ 이전 판의 "체력 하위 3인"은 값과 무관하게 늘 3명을 뽑아 100/100/100을 경고했다.
   //   지금은 **경고선을 넘긴 선수만** 이름을 부르고, 아무도 없으면 등장하지 않는다.
-  const staminaLine = staminaAlertLine(minute)
-  const tiredAll = starterStamina(ownState).filter(r => r.stamina <= staminaLine)
+  // ★ 발동 판정(physFires)과 경고선은 이 블록 위에서 이미 계산했다 — 수비 코치가 같은 값을 읽는다.
   // 실명은 가장 심한 3명까지만 부른다(카드 한 장에 11명을 늘어놓을 수는 없다).
   // 다만 **인원 수는 전체를 말한다** — 3명만 세면 "하위 3인"을 늘 3명이라 부르던 옛 버그의 재발이다.
   const tired = tiredAll.slice(0, 3)
-  const press = ownState.tactics.instructions.pressing
-  const pressMinutes = ownState.sustainedPressMinutes ?? 0
-  const sustained = press > 70 && pressMinutes >= SUSTAINED_PRESS_ALERT
   const subsLeft = Math.max(0, MAX_SUBS - ownState.subsUsed)
 
-  if (tiredAll.length > 0 || sustained) {
+  if (physFires) {
     const facts: string[] = []
     if (tiredAll.length > 0) {
       const names = tired.map(r => `${r.name} ${r.stamina}`).join(', ')
-      // 절반을 넘으면 개인 문제가 아니라 팀 전체 문제다 — 그렇게 읽히도록 문장을 바꾼다.
-      facts.push(tiredAll.length > 5
-        ? `주전 ${tiredAll.length}명이 이 시점 기대치(${staminaLine})를 밑돕니다 — 최저 ${names}.`
-        : `기대치 ${staminaLine}를 밑도는 선수 ${tiredAll.length}명 — ${names}.`)
+      // 팀 전체가 바닥이면 "누가 처졌나"가 아니라 "팀이 위험하다"가 사실이다 — 문장을 나눈다.
+      facts.push(floorMode
+        ? `주전 ${tiredAll.length}명이 위험 수위(${STAMINA_DANGER_FLOOR})를 밑돕니다 — 최저 ${names}.`
+        : `팀 중앙값 ${medStamina} 기준 ${staminaLine} 아래로 처진 선수 ${tiredAll.length}명 — ${names}.`)
     }
     if (sustained) facts.push(`압박 ${press}를 ${pressMinutes}분째 유지 중이라 체력 소모 가중이 붙었습니다.`)
 
@@ -366,10 +434,17 @@ export function buildCoachAdvice(engine: MatchState, side: 'home' | 'away'): Coa
           ? `교체 카드 ${subsLeft}장을 준비하고 압박·중원 적극성을 낮춰 종반까지 다리를 남깁시다.`
           : `아직 ${remaining}분이 남았습니다. 압박을 낮추고 중원 적극성을 자제로 둬 체력을 아낍시다.`
 
+    // 수비 코치가 같은 브레이크에서 라인을 올리자고 했다면 그 사실을 인정하고 **역할을 나눈다**.
+    // "라인은 올리되 압박은 낮춘다"는 모순이 아니라 실제 축구의 표준 조합이다(높게 서서
+    // 간격을 줄이되 개인이 쫓아가지는 않는다). 이 문장이 없으면 두 카드가 싸우는 것처럼 읽힌다.
+    const withDef = advice.some(a => a.coach === '수비 코치')
+      ? ' 수비 코치의 라인 조정에는 동의합니다 — 라인은 올리되 개인 압박은 낮춰야 다리가 버팁니다.'
+      : ''
+
     advice.push({
       coach: '피지컬 코치',
       rationale: facts.join(' '),
-      proposal: `${pickBy(PHYS_LEAD[phase], `${seed}:phys`)} ${action}`,
+      proposal: `${pickBy(PHYS_LEAD[phase], `${seed}:phys`)} ${action}${withDef}`,
       apply: noPatch
         ? {}
         : { instructions: { pressing: Math.max(20, press - 15) }, groupIntensity: { midfield: -1 } },

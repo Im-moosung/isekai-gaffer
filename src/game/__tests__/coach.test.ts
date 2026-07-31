@@ -225,19 +225,37 @@ describe('buildCoachAdvice — R3 발동 조건', () => {
     const phys = find(m, '피지컬 코치')!
     expect(phys.rationale).toContain(`${n1} 22`)
     expect(phys.rationale).toContain(`${n2} 31`)
-    expect(phys.rationale).toContain('밑도는 선수 2명')
-    expect(phys.rationale).not.toContain(' 100')
+    expect(phys.rationale).toContain('처진 선수 2명')
+    // 체력 100인 선수는 실명으로 불리지 않는다(중앙값 표기의 100과 구분해서 본다).
+    expect(phys.rationale).not.toMatch(/kor선수\d+ 100/)
     expect(phys.apply.instructions!.pressing!).toBeLessThan(m.home.tactics.instructions.pressing)
     expect(phys.apply.groupIntensity!.midfield).toBe(-1)
   })
 
-  it('피지컬 코치: 경고선은 시간 대비다 — 같은 체력 70이 22\'엔 경고, 45\'엔 정상', () => {
-    // 엔진 기본 소모가 분당 약 0.55라 고정선(75)을 쓰면 하프타임에 11명 전원이 걸려
-    // 변별력이 사라진다. 기준은 "이 시점 기대치보다 밑도는가"다.
-    const early = base(); early.minute = 22; setLineupStamina(early, 3, 70)
-    expect(roles(buildCoachAdvice(early, 'home'))).toContain('피지컬 코치')
-    const half = base(); half.minute = 45; setLineupStamina(half, 3, 70)
-    expect(roles(buildCoachAdvice(half, 'home'))).not.toContain('피지컬 코치')
+  it('피지컬 코치: 경고선은 팀 중앙값 대비다 — 전원이 같으면 아무도 지목되지 않는다', () => {
+    // 절대 곡선(100 − 0.55·분 − 8)은 두 번 틀렸다: 실측 소모가 분당 ≈0.72이고,
+    // 캠페인 2경기부터는 킥오프 체력이 100이 아니다. 그래서 "주전 11명이 기대치를
+    // 밑돕니다"가 매 경기 나왔다(감사 결함 ④). 기준은 **우리 팀 중앙값 대비**다.
+    const flat = base(); flat.minute = 45
+    for (const l of flat.home.tactics.lineup) flat.home.staminaByPlayer[l.playerId] = 58
+    expect(roles(buildCoachAdvice(flat, 'home'))).not.toContain('피지컬 코치')
+
+    // 혼자 처지면 시점과 무관하게 지목된다(22'든 45'든 같은 뜻이어야 한다).
+    for (const minute of [22, 45, 70]) {
+      const m = base(); m.minute = minute
+      for (const l of m.home.tactics.lineup) m.home.staminaByPlayer[l.playerId] = 80
+      const n = setLineupStamina(m, 3, 60)
+      const phys = find(m, '피지컬 코치')!
+      expect(phys.rationale).toContain(`${n} 60`)
+      expect(phys.rationale).toContain('처진 선수 1명')
+    }
+  })
+
+  it('피지컬 코치: 팀 전체가 위험 수위 아래면 문장이 절대선으로 바뀐다', () => {
+    const m = base(); m.minute = 80
+    for (const l of m.home.tactics.lineup) m.home.staminaByPlayer[l.playerId] = 40
+    const phys = find(m, '피지컬 코치')!
+    expect(phys.rationale).toContain('위험 수위(55)를 밑돕니다')
   })
 
   it('피지컬 코치: 체력이 멀쩡해도 지속 압박 누적이면 발동한다', () => {
@@ -468,5 +486,77 @@ describe('buildCoachAdvice — 세이프가드', () => {
         }
       }
     }
+  })
+})
+
+// ─────────────────────────────────────────────────────────────
+// 감사 결함 ③ — 코치진이 같은 사실 위에 서 있는가
+// ─────────────────────────────────────────────────────────────
+describe('코치 정합 — 서로 반대로 말하지 않는다', () => {
+  /** 수비 코치를 발동시키는 최소 상태(상대 유효슛 격차). */
+  function defTrigger(m: MatchState) {
+    m.stats[0] = { ...m.stats[0], shots: 3, shotsOnTarget: 1 }
+    m.stats[1] = { ...m.stats[1], shots: 6, shotsOnTarget: 4, corners: 4 }
+  }
+
+  it('다리가 없으면 수비 코치가 압박을 올리지 않는다(피지컬 코치와 반대 방향 금지)', () => {
+    const m = base()
+    m.minute = 45
+    defTrigger(m)
+    // 팀 전체가 위험 수위 아래 — 피지컬 코치가 "압박을 낮추자"고 말할 상태.
+    for (const l of m.home.tactics.lineup) m.home.staminaByPlayer[l.playerId] = 40
+    // 수비 코치의 축 처방(55)이 현재 값보다 높아야 "올릴까 말까"가 실제 판단이 된다.
+    m.home.tactics.instructions.pressing = 40
+    const before = m.home.tactics.instructions.pressing
+    const def = find(m, '수비 코치')!
+    const phys = find(m, '피지컬 코치')!
+    expect(def.apply.instructions!.pressing).toBeLessThanOrEqual(before)
+    expect(phys.apply.instructions!.pressing!).toBeLessThan(before)
+    expect(def.proposal).toContain('피지컬 코치')
+    expect(phys.proposal).toContain('수비 코치')
+  })
+
+  it('다리가 멀쩡하면 수비 코치는 원래 처방(압박 상향)을 그대로 낸다', () => {
+    const m = base()
+    m.minute = 45
+    defTrigger(m)
+    const def = find(m, '수비 코치')!
+    expect(roles(buildCoachAdvice(m, 'home'))).not.toContain('피지컬 코치')
+    expect(def.proposal).not.toContain('피지컬 코치')
+  })
+
+  it('앱이 경고하는 라인(70+)을 권할 때는 그 대가를 문장으로 밝힌다', () => {
+    const m = base()
+    m.minute = 45
+    defTrigger(m)
+    const def = find(m, '수비 코치')!
+    if ((def.apply.instructions!.lineHeight ?? 0) >= 70) {
+      expect(def.proposal).toContain('뒷공간을 내주는 값입니다')
+    }
+  })
+
+  it('점유가 우리 쪽이면 공격 코치가 "흐름은 상대 쪽"이라고 말하지 않는다', () => {
+    const m = base()
+    m.minute = 20
+    m.score = [0, 1]
+    // 점유 60%인데 최근 유효슛이 0 — 감사가 캡처한 그 조합이다.
+    m.stats[0] = { ...m.stats[0], shots: 4, shotsOnTarget: 0, possession: 60 }
+    m.stats[1] = { ...m.stats[1], shots: 3, possession: 40 }
+    const atk = find(m, '공격 코치')!
+    expect(atk.rationale).toContain('점유율 60%')
+    expect(atk.proposal).not.toContain('흐름은 상대 쪽')
+  })
+})
+
+describe('감사 결함 ④ — 지친 명단이 고정되지 않는다', () => {
+  it('로테이션으로 체력이 높은 선수는 지목되지 않는다', () => {
+    const m = base()
+    m.minute = 60
+    for (const l of m.home.tactics.lineup) m.home.staminaByPlayer[l.playerId] = 60
+    const fresh = setLineupStamina(m, 2, 95) // 이 경기 교체 투입된 선수
+    const tiredName = setLineupStamina(m, 7, 40)
+    const phys = find(m, '피지컬 코치')!
+    expect(phys.rationale).toContain(tiredName)
+    expect(phys.rationale).not.toContain(fresh)
   })
 })
