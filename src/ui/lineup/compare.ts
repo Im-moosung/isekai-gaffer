@@ -13,6 +13,7 @@
 // 그래서 비교 뷰는 슬롯을 먼저 말하고, 적합도를 첫 지표로 놓는다.
 import type { Player, Position } from '../../engine/types'
 import { positionFitness } from '../../engine/fitness'
+import type { PlayerMatchStats } from '../../game/playerStats'
 import { FIELD_AXES, GK_AXES } from '../common/PlayerCard'
 
 /** 선택 조합이 정하는 동작. 규약 문서(2026-07-31-squad-interaction.md) 표와 1:1. */
@@ -80,6 +81,10 @@ export interface CompareInput {
   stamina?: Record<string, number>
   morale?: Record<string, number>
   cautions?: Record<string, number>
+  /** 이 경기 개인 기록. **작전판(경기 중)에서만** 넘긴다 — 킥오프 전에는 전원 0이라
+   *  "정보량 0"인 줄만 늘어나 상태 칩 규칙에 어긋난다(규약 문서 §작전판이 추가해야 할 것).
+   *  경기 중에는 반대로 가장 중요한 판단 재료다. */
+  matchStats?: Record<string, PlayerMatchStats>
 }
 
 export interface CompareModel {
@@ -95,6 +100,8 @@ export interface CompareModel {
   axes: CompareMetric[]
   /** 컨디션·징계. */
   condition: CompareMetric[]
+  /** 이 경기 기록. matchStats 미지정이거나 두 선수 다 0인 지표는 줄이 아예 생기지 않는다. */
+  match: CompareMetric[]
   /** 한 문장 결론 — "이 자리에는 누가 낫다". */
   verdict: string
   /** 결론의 방향. 'a'|'b'면 그 쪽이 낫다, 'tie'면 방향이 없다.
@@ -126,6 +133,40 @@ function axisMetrics(a: Player, b: Player): CompareMetric[] {
     }))
   }
   return []
+}
+
+/**
+ * 이 경기 기록 비교 줄.
+ *
+ * ★ 막대 정규화(span)를 능력치와 같이 쓰면 안 된다. 능력치는 0~100에 span 30이지만
+ *   슛·골은 90분 전체에서 한 자릿수다 — span 30을 그대로 쓰면 "2골 대 0골"의 막대가
+ *   화면 폭의 7%라 차이가 안 보인다. 지표별 실제 분포로 다시 정한다:
+ *    · 골·도움 1점이 곧 결정적이다 → span 2, epsilon 1(0.5골 같은 건 없다).
+ *    · 슛·선방은 3개 차이면 확연하다 → span 3.
+ *    · 파울은 3개면 경고권이다 → span 3, **적을수록 좋다**.
+ *    · 경고는 1장이 곧 퇴장 위험이다 → span 1, 적을수록 좋다.
+ * ★ 두 선수 다 0인 지표는 줄을 만들지 않는다 — "0 대 0"은 정보량이 0인데 자리만 먹는다.
+ */
+function matchMetrics(
+  stats: Record<string, PlayerMatchStats> | undefined, aId: string, bId: string,
+): CompareMetric[] {
+  if (!stats) return []
+  const rows: { key: keyof PlayerMatchStats; label: string; span: number; higherBetter: boolean }[] = [
+    { key: 'goals', label: '골', span: 2, higherBetter: true },
+    { key: 'assists', label: '도움', span: 2, higherBetter: true },
+    { key: 'shots', label: '슛', span: 3, higherBetter: true },
+    { key: 'saves', label: '선방', span: 3, higherBetter: true },
+    { key: 'fouls', label: '파울', span: 3, higherBetter: false },
+    { key: 'yellows', label: '이 경기 경고', span: 1, higherBetter: false },
+  ]
+  const out: CompareMetric[] = []
+  for (const r of rows) {
+    const a = stats[aId]?.[r.key] ?? 0
+    const b = stats[bId]?.[r.key] ?? 0
+    if (a === 0 && b === 0) continue
+    out.push({ key: `m-${r.key}`, label: r.label, a, b, digits: 0, higherBetter: r.higherBetter, epsilon: 1, span: r.span })
+  }
+  return out
 }
 
 /** 판단 기준 슬롯을 정한다.
@@ -195,6 +236,7 @@ export function buildCompare(input: CompareInput): CompareModel {
   const v = buildVerdict(input, kind, axes.length > 0)
   return {
     kind,
+    match: matchMetrics(input.matchStats, a.id, b.id),
     actionLabel: kind === 'swap' ? '자리 바꾸기' : '교체하기',
     slots,
     fitness: fitness ? { ...fitness, a: round2(fitness.a), b: round2(fitness.b) } : null,

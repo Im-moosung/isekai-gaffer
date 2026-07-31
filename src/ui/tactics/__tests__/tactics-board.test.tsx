@@ -142,23 +142,40 @@ describe('TacticsBoard — 코치 회의 (근거가 있는 코치만 등장)', (
     expect(container.querySelector('.tb-coach__quiet')!.textContent).toContain('특별히 드릴 말씀 없습니다')
   })
 
-  it('근거가 쌓이면 작전판 상단에 카드들 + [감독 판단대로 간다] 노출', () => {
+  it('근거가 쌓이면 팝업(role=dialog)으로 뜨고 [감독 판단대로 간다]가 있다', () => {
     const r = mountAt('halftime')
     seedCoachData()
-    const coach = r.container.querySelector('.tb-coach')!
-    expect(coach.querySelectorAll('.tb-coach__card').length).toBeGreaterThanOrEqual(2)
-    // 코치 회의가 tb-main(작전판 본체)보다 먼저 온다(상단·진입 시 가장 먼저).
-    const kids = Array.from(r.container.querySelector('.tb-root')!.children)
-    const coachIdx = kids.findIndex(k => k.classList.contains('tb-coach'))
-    const mainIdx = kids.findIndex(k => k.classList.contains('tb-main'))
-    expect(coachIdx).toBeGreaterThanOrEqual(0)
-    expect(coachIdx).toBeLessThan(mainIdx)
+    const pop = r.container.querySelector('.tb-coachpop')!
+    expect(pop).toBeTruthy()
+    expect(pop.getAttribute('role')).toBe('dialog')
+    expect(pop.getAttribute('aria-modal')).toBe('true')
+    expect(pop.querySelectorAll('.tb-coach__card').length).toBeGreaterThanOrEqual(2)
     expect(r.getByRole('button', { name: '감독 판단대로 간다' })).toBeTruthy()
+  })
+
+  it('[채택] → 반영되고 팝업이 사라진다(사용자 지시)', () => {
+    const r = mountAt('halftime')
+    seedCoachData()
+    const cards = r.container.querySelectorAll('.tb-coach__card')
+    const defCard = Array.from(cards).find(c => c.querySelector('.tb-coach__role')!.textContent === '수비 코치')!
+    fireEvent.click(defCard.querySelector('.tb-coach__adopt') as HTMLElement)
+    expect(store().engine!.home.tactics.instructions.lineHeight).toBe(55)
+    expect(r.container.querySelector('.tb-coachpop')).toBeNull()
+  })
+
+  it('닫은 뒤 [코치 회의 열기]로 다시 열 수 있다(실수로 닫았을 때)', () => {
+    const r = mountAt('halftime')
+    seedCoachData()
+    fireEvent.click(r.getByRole('button', { name: '감독 판단대로 간다' }))
+    expect(r.container.querySelector('.tb-coachpop')).toBeNull()
+    fireEvent.click(r.getByRole('button', { name: '코치 회의 열기' }))
+    expect(r.container.querySelector('.tb-coachpop')).toBeTruthy()
   })
 
   it('[채택] → 부분 전술이 draft(엔진 tactics)에 병합된다', () => {
     const r = mountAt('halftime')
     seedCoachData()
+    void r
     const cards = r.container.querySelectorAll('.tb-coach__card')
     const defCard = Array.from(cards).find(c => c.querySelector('.tb-coach__role')!.textContent === '수비 코치')!
     fireEvent.click(defCard.querySelector('.tb-coach__adopt') as HTMLElement)
@@ -170,12 +187,14 @@ describe('TacticsBoard — 코치 회의 (근거가 있는 코치만 등장)', (
     expect(after.groupIntensity!.defense).toBe(1)
   })
 
-  it('[감독 판단대로 간다] → 카드 접힘', () => {
+  it('[감독 판단대로 간다] → 아무것도 반영하지 않고 팝업만 닫는다(전부 무시 경로)', () => {
     const r = mountAt('paused-break')
     seedCoachData()
+    const before = JSON.stringify(store().engine!.home.tactics)
     expect(r.container.querySelectorAll('.tb-coach__card').length).toBeGreaterThan(0)
     fireEvent.click(r.getByRole('button', { name: '감독 판단대로 간다' }))
     expect(r.container.querySelector('.tb-coach')).toBeNull()
+    expect(JSON.stringify(store().engine!.home.tactics)).toBe(before)
   })
 })
 
@@ -223,10 +242,10 @@ describe('TacticsBoard — 교체 미리보기 → 확정 (Task 7)', () => {
     fireEvent.click(c.container.querySelector('.cs-sub__bench .cs-card') as HTMLElement)
     // 들어갈 슬롯 위치에 고스트 도트.
     expect(c.container.querySelector('.pv-ghost')).toBeTruthy()
-    // 두 선수 카드 나란히 비교(OUT→IN).
-    const compare = c.container.querySelector('.tb-pop__compare')
+    // 워룸과 **같은** 비교 컴포넌트(PlayerCompare)가 뜬다 — 조작 규약 공통.
+    const compare = c.container.querySelector('.tb-pop--cmp .cmp')
     expect(compare).toBeTruthy()
-    expect(compare!.querySelectorAll('.pc')).toHaveLength(2)
+    expect(compare!.querySelectorAll('.cmp__head')).toHaveLength(2)
   })
 
   it('[교체 확정] → submitCommand(sub) 호출 + subsUsed 증가 + 상태 리셋', () => {
@@ -239,7 +258,7 @@ describe('TacticsBoard — 교체 미리보기 → 확정 (Task 7)', () => {
     expect(store().engine!.home.subsUsed).toBe(before + 1)
     // 확정 후 고스트·비교 카드 사라짐(리셋).
     expect(c.container.querySelector('.pv-ghost')).toBeNull()
-    expect(c.container.querySelector('.tb-pop__compare')).toBeNull()
+    expect(c.container.querySelector('.tb-pop--cmp')).toBeNull()
   })
 })
 
@@ -291,7 +310,7 @@ describe('TacticsBoard — 개입 권한 2등급', () => {
   it('감독 타임: 포메이션 버튼이 잠기고, 잠긴 이유와 다음 브레이크 분을 알린다', () => {
     const { container, getByRole } = mountAt('paused-user')
     const notice = container.querySelector('.tb-touchline')!
-    expect(notice.textContent).toContain('교체와 외침만 가능합니다')
+    expect(notice.textContent).toContain('압박·템포 지시만 가능합니다')
     // 스케줄의 다음 브레이크 분이 문구에 그대로 들어간다(1분 시점 → 첫 하이드레이션).
     expect(notice.textContent).toContain(`${store().schedule!.firstHydration}분`)
     expect((getByRole('button', { name: '5-4-1' }) as HTMLButtonElement).disabled).toBe(true)
@@ -310,7 +329,7 @@ describe('TacticsBoard — 개입 권한 2등급', () => {
   it('감독 타임: 전술 탭은 잠금 안내를 띄우고 멘탈리티 버튼이 비활성이다', () => {
     const { getByRole, container } = mountAt('paused-user')
     fireEvent.click(getByRole('tab', { name: /전술/ }))
-    expect(container.querySelector('.tb-locked')!.textContent).toContain('교체와 외침만 가능합니다')
+    expect(container.querySelector('.tb-locked')!.textContent).toContain('포메이션·태세·세트피스는 잠김')
     expect((getByRole('button', { name: '매우 공격적' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
@@ -319,5 +338,114 @@ describe('TacticsBoard — 개입 권한 2등급', () => {
     expect(container.querySelector('.tb-touchline')).toBeNull()
     expect((getByRole('button', { name: '5-4-1' }) as HTMLButtonElement).disabled).toBe(false)
     expect((getByRole('button', { name: '매우 공격적' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+})
+
+describe('TacticsBoard — 전술 시각화 즉시 반영(사용자 지시 ②)', () => {
+  const pressRect = (c: HTMLElement) =>
+    c.querySelector('.an-team--home .an-press') as SVGRectElement | null
+
+  it('작전판 보드에 전술 레이어(수비 라인·압박 존·패스 레인)가 그려진다', () => {
+    const { container } = mountAt('paused-break')
+    expect(container.querySelector('.pv-root--analysis')).toBeTruthy()
+    expect(container.querySelector('.an-team--home .an-line')).toBeTruthy()
+    expect(pressRect(container as HTMLElement)).toBeTruthy()
+    expect(container.querySelector('.an-lane')).toBeTruthy()
+  })
+
+  it('압박 슬라이더를 만지면 [지시 적용] 전에도 압박 존이 즉시 움직인다(미리보기)', () => {
+    const { container, getByLabelText } = mountAt('paused-break')
+    const before = pressRect(container as HTMLElement)!.getAttribute('width')
+    const engineBefore = store().engine!.home.tactics.instructions.pressing
+    fireEvent.change(getByLabelText('압박'), { target: { value: String(engineBefore + 25) } })
+    // 존 폭이 그 자리에서 바뀐다.
+    expect(pressRect(container as HTMLElement)!.getAttribute('width')).not.toBe(before)
+    // 그러나 엔진은 아직 그대로다 — 반영은 [지시 적용]에서만 일어난다.
+    expect(store().engine!.home.tactics.instructions.pressing).toBe(engineBefore)
+  })
+
+  it('공격방향을 바꾸면 집중 밴드가 그 영역으로 옮겨 간다', () => {
+    const { container, getByRole } = mountAt('paused-break')
+    fireEvent.click(getByRole('button', { name: '좌측' }))
+    const band = container.querySelector('.an-focus__fill') as SVGRectElement
+    expect(band).toBeTruthy()
+    // left = y 0~30 → 상단 밴드(y=0).
+    expect(Number(band.getAttribute('y'))).toBe(0)
+  })
+
+  it('템포는 도형이 없으므로 패스 레인의 흐름 주기(--an-flow)로 표현한다', () => {
+    const { container, getByLabelText } = mountAt('paused-break')
+    const root = () => container.querySelector('.an-root') as SVGGElement
+    const before = root().getAttribute('style')
+    fireEvent.change(getByLabelText('템포'), { target: { value: '95' } })
+    expect(root().getAttribute('style')).not.toBe(before)
+    expect(root().getAttribute('style')).toContain('--an-flow')
+  })
+})
+
+describe('TacticsBoard — 세트피스 UI(결함 ④)', () => {
+  it('코너 루트·박스 인원·수비 마킹 3축이 있고 즉시 반영된다', () => {
+    const { getByRole } = mountAt('paused-break')
+    expect(store().engine!.home.tactics.setPiece).toBeUndefined()
+    fireEvent.click(getByRole('button', { name: '코너 루트 니어' }))
+    expect(store().engine!.home.tactics.setPiece!.route).toBe('near')
+    fireEvent.click(getByRole('button', { name: '박스 인원 많이' }))
+    expect(store().engine!.home.tactics.setPiece!.boxLoad).toBe('heavy')
+    fireEvent.click(getByRole('button', { name: '수비 마킹 맨투맨' }))
+    expect(store().engine!.home.tactics.setPiece!.marking).toBe('man')
+    // 앞서 고른 값이 유지된다(부분 갱신이 서로를 지우지 않는다).
+    expect(store().engine!.home.tactics.setPiece!.route).toBe('near')
+  })
+
+  it('추천의 근거(상대 GK 제공권·역습 위험 지수)를 화면에 적는다', () => {
+    const { container } = mountAt('paused-break')
+    const grp = container.querySelector('[aria-label="세트피스"]')!
+    expect(grp.textContent).toContain('상대 GK 제공권')
+    expect(grp.textContent).toContain('역습 위험 지수')
+    expect(grp.querySelector('.tx-btn__rec')).toBeTruthy()
+  })
+
+  it('터치라인 등급에서는 세트피스가 잠긴다(훈련장에서 약속하는 루틴)', () => {
+    const { getByRole } = mountAt('paused-user')
+    fireEvent.click(getByRole('tab', { name: /전술/ }))
+    expect((getByRole('button', { name: '코너 루트 니어' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+})
+
+describe('TacticsBoard — 터치라인 지시 개방(사용자 지시 ③)', () => {
+  it('감독 타임: 압박·템포 슬라이더는 열리고 라인·공격방향은 잠긴다', () => {
+    const { getByRole, getByLabelText } = mountAt('paused-user')
+    fireEvent.click(getByRole('tab', { name: /전술/ }))
+    expect((getByLabelText('압박') as HTMLInputElement).disabled).toBe(false)
+    expect((getByLabelText('템포') as HTMLInputElement).disabled).toBe(false)
+    expect((getByLabelText('라인') as HTMLInputElement).disabled).toBe(true)
+    expect((getByRole('button', { name: '좌측' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('감독 타임: 슬라이더 범위 자체가 ±15로 잘린다(끌 수 있는 폭이 곧 규칙)', () => {
+    const { getByRole, getByLabelText } = mountAt('paused-user')
+    fireEvent.click(getByRole('tab', { name: /전술/ }))
+    const cur = store().engine!.home.tactics.instructions.pressing
+    const el = getByLabelText('압박') as HTMLInputElement
+    expect(Number(el.min)).toBe(Math.max(0, cur - 15))
+    expect(Number(el.max)).toBe(Math.min(100, cur + 15))
+  })
+
+  it('감독 타임: [터치라인 지시]로 엔진에 반영되고 쿨다운이 걸린다', () => {
+    const { getByRole, getByLabelText } = mountAt('paused-user')
+    fireEvent.click(getByRole('tab', { name: /전술/ }))
+    const cur = store().engine!.home.tactics.instructions.pressing
+    fireEvent.change(getByLabelText('압박'), { target: { value: String(cur + 10) } })
+    fireEvent.click(getByRole('button', { name: '터치라인 지시' }))
+    expect(store().engine!.home.tactics.instructions.pressing).toBe(cur + 10)
+    expect(store().lastShoutMinute).toBe(store().engine!.minute)
+    // 쿨다운 중에는 같은 축이 다시 잠긴다.
+    expect((getByLabelText('압박') as HTMLInputElement).disabled).toBe(true)
+  })
+
+  it('하이드레이션 브레이크에서는 4축 전부 열리고 버튼 라벨이 [지시 적용]이다', () => {
+    const { getByRole, getByLabelText } = mountAt('paused-break')
+    expect((getByLabelText('라인') as HTMLInputElement).disabled).toBe(false)
+    expect(getByRole('button', { name: '지시 적용' })).toBeTruthy()
   })
 })

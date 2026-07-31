@@ -131,4 +131,36 @@ describe('buildCompare — 조합이 라벨·기준 자리·결론을 정한다'
     // 경고는 적을수록 좋다.
     expect(metricDiff(full.condition[2]).winner).toBe('b')
   })
+
+  // ── 이 경기 기록 (작전판 전용 — 규약 문서 §작전판이 추가해야 할 것) ──
+  const EMPTY_MS = { shots: 0, shotsOnTarget: 0, goals: 0, assists: 0, fouls: 0, yellows: 0, reds: 0, saves: 0 }
+
+  it('matchStats 미지정이면 이 경기 줄이 없다(킥오프 전에는 전원 0이라 무의미하다)', () => {
+    expect(buildCompare({ a: st0, aSlot: 'ST', b: st1 }).match).toHaveLength(0)
+  })
+
+  it('두 선수 다 0인 지표는 줄을 만들지 않는다', () => {
+    const c = buildCompare({
+      a: st0, aSlot: 'ST', b: st1,
+      matchStats: { [st0.id]: { ...EMPTY_MS }, [st1.id]: { ...EMPTY_MS } },
+    })
+    expect(c.match).toHaveLength(0)
+  })
+
+  it('골·슛·파울은 실제 분포에 맞는 span으로 잰다(능력치 span 30을 쓰면 막대가 안 보인다)', () => {
+    const c = buildCompare({
+      a: st0, aSlot: 'ST', b: st1,
+      matchStats: {
+        [st0.id]: { ...EMPTY_MS, goals: 1, shots: 3, fouls: 0 },
+        [st1.id]: { ...EMPTY_MS, goals: 0, shots: 1, fouls: 3 },
+      },
+    })
+    expect(c.match.map(m => m.key)).toEqual(['m-goals', 'm-shots', 'm-fouls'])
+    const goals = c.match[0]
+    expect(goals.span).toBe(2)
+    // 1골 차이면 막대가 절반은 차야 한다(30으로 재면 3%다).
+    expect(metricDiff(goals).ratio).toBeCloseTo(0.5)
+    // 파울은 적을수록 좋다 — 0개인 a가 이긴다.
+    expect(metricDiff(c.match[2]).winner).toBe('a')
+  })
 })

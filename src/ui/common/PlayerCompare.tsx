@@ -14,6 +14,7 @@
 // 빨강/파랑은 팀 전용, 라임은 --live 전용이므로 비교 막대에 쓰지 않는다. 우세는
 // --good(초록), 열세는 무채색 표면이다. 브랜드 파랑은 "감독의 행동"(실행 버튼)에만.
 import type { Player, Position } from '../../engine/types'
+import type { PlayerMatchStats } from '../../game/playerStats'
 import { buildCompare, metricDiff, type CompareMetric, type CompareModel } from '../lineup/compare'
 import { StatusChips, type StatusInput } from './StatusChips'
 import { PlayerRadar } from './PlayerCard'
@@ -29,22 +30,27 @@ export interface ComparePlayer {
 /** 두 선수 비교 패널. 실행 버튼은 부모가 넘긴다 — 실제 라인업 변경 권한은
  *  편집기(LineupEditor)에 있고 이 컴포넌트는 판단 재료만 그린다. */
 export function PlayerCompare({
-  a, b, stamina, morale, cautions, action,
+  a, b, stamina, morale, cautions, matchStats, action,
 }: {
   a: ComparePlayer
   b: ComparePlayer
   stamina?: Record<string, number>
   morale?: Record<string, number>
   cautions?: Record<string, number>
+  /** 이 경기 개인 기록 — 작전판(경기 중)만 넘긴다. 킥오프 전에는 전원 0이라 줄이 무의미하다. */
+  matchStats?: Record<string, PlayerMatchStats>
   /** 실행 버튼 슬롯(없으면 비교만). */
   action?: React.ReactNode
 }) {
   const model: CompareModel = buildCompare({
-    a: a.player, b: b.player, aSlot: a.slot, bSlot: b.slot, stamina, morale, cautions,
+    a: a.player, b: b.player, aSlot: a.slot, bSlot: b.slot, stamina, morale, cautions, matchStats,
   })
 
   const rows: { title: string; metrics: CompareMetric[] }[] = []
   if (model.fitness) rows.push({ title: '포지션', metrics: [model.fitness] })
+  // 경기 중이라면 **지금 무슨 일을 했는가**가 능력치보다 먼저다 — 90분 뛰고 슛 0개인
+  // 공격수를 뺄지 말지는 카탈로그 수치가 아니라 이 줄이 정한다.
+  if (model.match.length > 0) rows.push({ title: '이 경기', metrics: model.match })
   if (model.axes.length > 0) rows.push({ title: '능력치', metrics: model.axes })
   if (model.condition.length > 0) rows.push({ title: '컨디션·징계', metrics: model.condition })
 

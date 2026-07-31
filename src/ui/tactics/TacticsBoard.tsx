@@ -1,16 +1,18 @@
-import { useState } from 'react'
-import type { FormationId, GroupIntensity, Mentality, Player, TacticState } from '../../engine/types'
+import { useEffect, useRef, useState } from 'react'
+import type { FormationId, GroupIntensity, Instructions, Mentality, Player, TacticState } from '../../engine/types'
 import { canIntervene, interventionLevel, touchlineNotice, useMatchStore } from '../../game/matchStore'
 import { buildCoachAdvice, hasPatch, type TacticPatch } from '../../game/coach'
-import { playerMatchStats } from '../../game/playerStats'
+import { playerMatchStats, type PlayerMatchStats } from '../../game/playerStats'
 import { PitchView } from '../pitch/PitchView'
+import type { AnalysisAxis, AnalysisHighlight } from '../pitch/AnalysisLayer'
 import { ConsolePanel } from '../console/ConsolePanel'
 import { SubPanel } from '../console/SubPanel'
 import { OppPanel } from './OppPanel'
 import { PlayerCard } from '../common/PlayerCard'
+import { PlayerCompare, type ComparePlayer } from '../common/PlayerCompare'
 import { TacticsExtras } from './TacticsExtras'
 import { TeamTalk } from '../match/TeamTalk'
-import { autoFill } from '../lineup/swap'
+import { autoFill, swapPlayers } from '../lineup/swap'
 import './tactics.css'
 
 // 유저는 홈팀 감독 — 작전판은 home 고정.
@@ -51,6 +53,66 @@ function reasonText(
   }
 }
 
+/** 전술 축 스냅샷 — 강조 판정의 입력. 값이 아니라 "무엇이 바뀌었나"만 뽑는다. */
+interface AxisSnapshot {
+  lineHeight: number
+  pressing: number
+  tempo: number
+  attackFocus: Instructions['attackFocus']
+  attackPattern: string
+}
+
+/** 축 변경 → 보드 강조. **정착(settle) 후 한 번만** 올린다.
+ *
+ *  ★ 왜 즉시 올리지 않는가(사용자 지시: "드래그 중 화면이 요동치면 조작이 어렵다"):
+ *  슬라이더 드래그는 1px마다 change를 쏜다. 변경마다 펄스를 걸면 700ms 애니메이션이
+ *  프레임마다 재시작해 선이 계속 굵기를 바꾸며 깜박인다 — 값을 읽는 것 자체가 어려워진다.
+ *  SETTLE_MS 동안 아무 변화가 없을 때만 "이번 조작은 끝났다"로 보고 한 번 강조한다.
+ *  버튼 클릭(공격 패턴·공격방향)은 애초에 단발이라 SETTLE_MS 뒤 즉시 뜬다.
+ *
+ *  ★ 도형의 **이동 자체는 지연 없이** 매 프레임 반영된다(강조만 지연된다). 즉 "값이
+ *  즉시 보인다"와 "무엇이 바뀌었는지 강조된다"를 분리했다. */
+const SETTLE_MS = 260
+/** 강조를 걷어내는 시각(펄스 700ms보다 조금 길게). */
+const HIGHLIGHT_MS = 900
+
+function useAxisHighlight(snap: AxisSnapshot): AnalysisHighlight | undefined {
+  const [hl, setHl] = useState<AnalysisHighlight | undefined>(undefined)
+  const prev = useRef(snap)
+  const pending = useRef(new Set<AnalysisAxis>())
+  const tick = useRef(0)
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    const keys: AnalysisAxis[] = ['lineHeight', 'pressing', 'tempo', 'attackFocus', 'attackPattern']
+    let any = false
+    for (const k of keys) {
+      if (prev.current[k] !== snap[k]) { pending.current.add(k); any = true }
+    }
+    prev.current = snap
+    if (!any) return
+    if (settleTimer.current) clearTimeout(settleTimer.current)
+    settleTimer.current = setTimeout(() => {
+      if (pending.current.size === 0) return
+      tick.current += 1
+      setHl({ axes: [...pending.current], tick: tick.current })
+      pending.current.clear()
+      if (clearTimer.current) clearTimeout(clearTimer.current)
+      clearTimer.current = setTimeout(() => setHl(undefined), HIGHLIGHT_MS)
+    }, SETTLE_MS)
+    // snap 객체는 매 렌더 새로 만들어진다 — 의존성은 **값**이어야 한다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [snap.lineHeight, snap.pressing, snap.tempo, snap.attackFocus, snap.attackPattern])
+
+  useEffect(() => () => {
+    if (settleTimer.current) clearTimeout(settleTimer.current)
+    if (clearTimer.current) clearTimeout(clearTimer.current)
+  }, [])
+
+  return hl
+}
+
 /** 작전판(tactics 모드 본체) — 방송 관전과 확연히 다른 다크 전술판 정체성.
  *  중앙 대형 보드(PitchView 재사용, 이름 라벨 + 다크 variant) + 상단 포메이션 셀렉터,
  *  우측 지시 패널(전술=ConsolePanel·교체=SubPanel·상대=Phase 4A T7 예정),
@@ -74,15 +136,38 @@ export function TacticsBoard() {
   // 터치라인 등급으로 들어왔다면 유일하게 할 수 있는 일(교체) 탭을 먼저 연다
   // — 잠긴 전술 탭을 첫 화면으로 보여주면 "고장난 건가"로 읽힌다.
   const [tab, setTab] = useState<TacticsTab>(() => (full ? 'tactics' : 'sub'))
-  // 보드 상호작용 상태: 팝오버 대상(any) + 교체 아웃/인(교체 미리보기 고스트·비교 카드).
-  const [pop, setPop] = useState<string | null>(null)
-  const [subOut, setSubOut] = useState<string | null>(null)
-  const [subIn, setSubIn] = useState<string | null>(null)
+  // 선택은 **최대 2명, 클릭 순서 보존**이다(조작 규약 — 워룸 LineupEditor와 같은 규칙).
+  // 1명이면 상세, 2명이면 나란히 비교 + 실행 버튼. 순서가 비교 뷰의 좌/우를 정한다.
+  const [selection, setSelection] = useState<string[]>([])
+  // 지시 슬라이더 미리보기 — ConsolePanel의 draft를 보드가 [지시 적용] 전에 그린다.
+  const [preview, setPreview] = useState<Instructions | null>(null)
+  // 코치 회의 팝업 열림. 진입 시 한 번 자동으로 열고, 닫아도 다시 열 수 있다.
+  const [coachOpen, setCoachOpen] = useState(true)
+  // 조작 결과 안내(스크린리더 + 화면). 키보드·버튼 경로는 시각 피드백이 없으면
+  // 무슨 일이 일어났는지 알 수 없다.
+  const [say, setSay] = useState('')
+
+  // 보드가 실제로 그리는 지시값 = 미리보기가 있으면 미리보기, 없으면 엔진 값.
+  // 훅 순서를 지키려고 조기 반환보다 위에서 계산한다.
+  const engineIns = engine?.[SIDE].tactics.instructions
+  const shownIns: Instructions = preview ?? engineIns
+    ?? { lineHeight: 50, pressing: 50, tempo: 50, attackFocus: 'balanced' }
+  const highlight = useAxisHighlight({
+    lineHeight: shownIns.lineHeight,
+    pressing: shownIns.pressing,
+    tempo: shownIns.tempo,
+    attackFocus: shownIns.attackFocus,
+    attackPattern: engine?.[SIDE].tactics.attackPattern ?? 'balanced',
+  })
 
   if (!engine) return null
   const halftime = phase === 'halftime'
   const home = engine[SIDE]
   const formation = home.tactics.formation
+  // 미리보기를 얹은 표시용 상태. 엔진은 건드리지 않는다 — 반영은 [지시 적용]에서만.
+  const shownState = preview
+    ? { ...engine, home: { ...home, tactics: { ...home.tactics, instructions: preview } } }
+    : engine
   const byId = (id: string | null): Player | undefined =>
     id ? home.team.squad.find(p => p.id === id) : undefined
 
@@ -96,30 +181,91 @@ export function TacticsBoard() {
     submitCommand(SIDE, { type: 'formation', tactics: { ...home.tactics, formation: f, lineup } })
   }
 
-  // 보드 도트/이름 클릭 → 팝오버. 교체 탭이면 아웃 선수로도 선택(고스트 미리보기 리셋).
-  const onDotClick = (playerId: string) => {
-    setPop(playerId)
-    if (tab === 'sub') { setSubOut(playerId); setSubIn(null) }
-  }
-  const resetSub = () => { setSubOut(null); setSubIn(null); setPop(null) }
+  // ══ 조작 규약 (docs/superpowers/specs/2026-07-31-squad-interaction.md) ══
+  // 워룸(LineupEditor)과 **같은 규칙**이다: 클릭은 정보를 여는 동작이고, 두 명을 고르면
+  // 나란히 비교 + 실행 버튼이 켜진다. 클릭→클릭으로는 절대 교체되지 않는다.
+  // 보드 도트와 교체 탭 카드가 같은 `selection`을 공유해 어느 쪽을 눌러도 같은 상태가 된다.
+  const isStarter = (id: string) => home.tactics.lineup.some(l => l.playerId === id)
+  const pick = (id: string) => setSelection(prev => {
+    if (prev.includes(id)) return prev.filter(x => x !== id)
+    if (prev.length >= 2) return [id]
+    return [...prev, id]
+  })
+  const clearSelection = () => setSelection([])
+
+  // SubPanel(교체 탭)은 아웃/인 두 슬롯으로 말한다 — 같은 선택에서 파생한다.
+  const subOut = selection.find(isStarter) ?? null
+  const subIn = selection.find(id => !isStarter(id)) ?? null
 
   // 교체 미리보기 고스트: 아웃 선수의 슬롯 인덱스에 투입 선수 번호를 반투명 표시.
   const outIdx = subOut ? home.tactics.lineup.findIndex(l => l.playerId === subOut) : -1
   const inPlayer = byId(subIn)
-  const ghost = tab === 'sub' && subOut && subIn && outIdx >= 0
+  const ghost = subOut && subIn && outIdx >= 0
     ? { slotIndex: outIdx, number: inPlayer?.number }
     : null
-  const highlightId = tab === 'sub' ? subOut : pop
-  // 팝오버: 교체 비교(아웃+인) 우선, 없으면 단일 선택 카드.
-  const outPlayer = byId(subOut)
-  const popPlayer = byId(pop)
-  const compare = tab === 'sub' && outPlayer && inPlayer
+  const highlightId = selection[0] ?? null
+  const selPlayers = selection.map(id => byId(id)).filter((p): p is Player => !!p)
+  // 비교 뷰는 워룸과 같은 컴포넌트(PlayerCompare)를 쓴다. 다만 경기 중이므로
+  // **이 경기 기록**을 함께 넘긴다(규약 문서 §작전판이 추가해야 할 것).
+  const matchStats: Record<string, PlayerMatchStats> = {}
+  for (const p of selPlayers) matchStats[p.id] = playerMatchStats(engine.events, p.id)
+  const pair: [ComparePlayer, ComparePlayer] | null = selPlayers.length === 2
+    ? [
+        { player: selPlayers[0], slot: home.tactics.lineup.find(l => l.playerId === selPlayers[0].id)?.slot, status: { stamina: home.staminaByPlayer[selPlayers[0].id], morale: home.moraleByPlayer[selPlayers[0].id] } },
+        { player: selPlayers[1], slot: home.tactics.lineup.find(l => l.playerId === selPlayers[1].id)?.slot, status: { stamina: home.staminaByPlayer[selPlayers[1].id], morale: home.moraleByPlayer[selPlayers[1].id] } },
+      ]
+    : null
+  const bothBench = !!pair && !pair[0].slot && !pair[1].slot
+  const bothStarters = !!pair && !!pair[0].slot && !!pair[1].slot
+  // 선발+선발 자리 바꾸기는 lineup을 다시 쓰는 **구조 변경**이라 전원 소집에서만 연다
+  // (엔진에도 formation 명령으로 나가고, store가 터치라인에서 그 명령을 막는다).
+  const canRunAction = !!pair && !bothBench && (!bothStarters || full)
+
+  /** 실행 경로의 **단일 합류점**. 규약이 요구하는 대로 실행 버튼·(향후) 드롭·키보드 놓기가
+   *  전부 여기로 모인다 — 경로마다 규칙이 갈리면 같은 조작이 다른 결과를 낸다. */
+  function applyMove(aId: string, bId: string): string {
+    if (aId === bId) return ''
+    const a = byId(aId), b = byId(bId)
+    if (!a || !b) return ''
+    const aStarter = isStarter(aId), bStarter = isStarter(bId)
+    if (!aStarter && !bStarter) return '둘 다 벤치입니다 — 선발 한 명을 함께 고르십시오.'
+    try {
+      if (aStarter && bStarter) {
+        if (!full) return '자리 바꾸기는 선수를 모아 놓고 해야 합니다 — 다음 브레이크에서.'
+        submitCommand(SIDE, {
+          type: 'formation',
+          tactics: { ...home.tactics, lineup: swapPlayers(home.tactics.lineup, aId, bId) },
+        })
+        return `${a.name.ko}와 ${b.name.ko}의 자리를 바꿨습니다.`
+      }
+      const outId = aStarter ? aId : bId
+      const inId = aStarter ? bId : aId
+      submitCommand(SIDE, { type: 'sub', out: outId, in: inId })
+      return `${byId(outId)!.name.ko}를 빼고 ${byId(inId)!.name.ko}를 넣었습니다.`
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e)
+    }
+  }
+
+  const runAction = () => {
+    if (!pair) return
+    const msg = applyMove(pair[0].player.id, pair[1].player.id)
+    setSelection([])
+    setSay(msg)
+  }
 
   return (
     <div className="tb-root" role="dialog" aria-label="작전판" aria-modal="true">
       <div className="tb-head">
         <span className="tb-head__label">작전 타임</span>
         <span className="tb-head__reason">{reasonText(pauseReason, halftime)}</span>
+        {/* 팝업을 닫은 뒤 다시 부르는 유일한 경로. 상시 노출한다 — 숨겨 두면
+            "실수로 닫았을 때 다시 열 수 있다"가 발견되지 않는 기능이 된다. */}
+        {!coachOpen && (
+          <button type="button" className="btn btn--ghost btn--sm tb-head__coach" onClick={() => setCoachOpen(true)}>
+            코치 회의 열기
+          </button>
+        )}
       </div>
 
       {/* 터치라인 안내 — 잠긴 이유와 언제 풀리는지를 함께 말한다.
@@ -130,13 +276,22 @@ export function TacticsBoard() {
         </p>
       )}
 
+      {/* 조작 결과 안내 — 교체·자리 바꾸기는 보드 밖에서도 일어나므로 문장으로 확인시킨다.
+          실패(교체 기회 소진·IFAB 제3조 등)도 같은 자리에서 말한다. */}
+      {say && <p className="tb-say" role="status">{say}</p>}
+
       {/* 플랜 대비 — 킥오프 때 세운 계획과 지금의 차이를 축별로 보여준다.
           작전판에서 지시를 만질 때 "무엇을 계획했었는지"가 눈앞에 없으면
           이탈이 누적되는 줄도 모르고 매번 갈아엎게 된다. */}
       {matchPlan && <PlanDiff plan={matchPlan} current={home.tactics} />}
 
-      {/* 코치 회의 — 작전판 최상단(진입 시 가장 먼저). 멀티 코치·[감독 판단대로 간다] 포함. */}
-      <CoachMeeting canAdopt={full} />
+      {/* 코치 회의 — **팝업**이다(사용자 지시 2026-08-01). 예전에는 상단 상시 카드라
+          코치가 넷이면 세로 400px 가까이 먹었고, 정작 봐야 할 보드가 접힌 아래로 밀렸다.
+          ★ 팝업은 정지 상태에서만 뜬다 — 작전판 자체가 정지 화면이므로 조건이 이미 만족된다
+            (경기가 흐르는 중에 모달을 띄우면 관전을 막는다).
+          ★ 닫아도 헤더 버튼으로 다시 열 수 있다. 실수로 닫았을 때 조언이 영영 사라지면
+            "무시할 수 있다"가 아니라 "잃어버렸다"가 된다. */}
+      <CoachMeeting canAdopt={full} open={coachOpen} onOpenChange={setCoachOpen} />
 
       {halftime && (
         <div className="tb-talk">
@@ -162,32 +317,61 @@ export function TacticsBoard() {
             ))}
           </div>
           <div className="tb-board__pitch">
+            {/* analysis 레이어를 켠다 — 수비 라인(선)·압박 존(면)·패스 레인(화살표)·
+                공격 집중 밴드가 여기서 그려진다. 이 네 도형이 곧 슬라이더 네 축이라,
+                작전판에서 지시를 만지면 **무엇이 어디서 바뀌는지**가 보드에 바로 나타난다.
+                state는 미리보기가 얹힌 shownState다 — [지시 적용] 전에도 그림이 먼저 움직인다. */}
             <PitchView
-              state={engine}
+              state={shownState}
               variant="tactics"
+              analysis
+              analysisHighlight={highlight}
               nameLabels
               highlightId={highlightId}
               ghost={ghost}
-              onDotClick={onDotClick}
+              onDotClick={pick}
             />
-            {(compare || popPlayer) && (
+            {pair && (
+              <div className="tb-pop tb-pop--cmp" role="group" aria-label="선수 비교">
+                {/* 워룸과 같은 비교 컴포넌트. 다른 점은 **이 경기 기록**이 얹힌다는 것뿐이다. */}
+                <PlayerCompare
+                  a={pair[0]}
+                  b={pair[1]}
+                  stamina={home.staminaByPlayer}
+                  morale={home.moraleByPlayer}
+                  matchStats={matchStats}
+                  action={
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn--secondary btn--lg tb-pop__exec"
+                        disabled={!canRunAction}
+                        onClick={runAction}
+                      >
+                        {bothStarters ? '자리 바꾸기' : '교체하기'}
+                      </button>
+                      <button type="button" className="btn btn--ghost" onClick={clearSelection}>선택 해제</button>
+                      {bothBench && <span className="tb-pop__hint">둘 다 벤치입니다 — 선발 한 명을 함께 고르십시오.</span>}
+                      {bothStarters && !full && (
+                        <span className="tb-pop__hint">자리 바꾸기는 다음 브레이크에서 — 지금은 교체만 가능합니다.</span>
+                      )}
+                    </>
+                  }
+                />
+                <button type="button" className="tb-pop__close" aria-label="카드 닫기" onClick={clearSelection}>✕</button>
+              </div>
+            )}
+            {!pair && selPlayers.length === 1 && (
               <div className="tb-pop" role="group" aria-label="선수 카드">
-                {compare ? (
-                  <div className="tb-pop__compare">
-                    <PlayerCard player={outPlayer!} size="compact" side={SIDE} role="OUT" stamina={home.staminaByPlayer[outPlayer!.id]} matchStats={playerMatchStats(engine.events, outPlayer!.id)} />
-                    <span className="tb-pop__arrow" aria-hidden="true">→</span>
-                    <PlayerCard player={inPlayer!} size="compact" side={SIDE} role="IN" stamina={home.staminaByPlayer[inPlayer!.id]} matchStats={playerMatchStats(engine.events, inPlayer!.id)} />
-                  </div>
-                ) : (
-                  <PlayerCard
-                    player={popPlayer!}
-                    side={SIDE}
-                    stamina={home.staminaByPlayer[popPlayer!.id]}
-                    morale={home.moraleByPlayer[popPlayer!.id]}
-                    matchStats={playerMatchStats(engine.events, popPlayer!.id)}
-                  />
-                )}
-                <button type="button" className="tb-pop__close" aria-label="카드 닫기" onClick={() => { setPop(null) }}>✕</button>
+                <PlayerCard
+                  player={selPlayers[0]}
+                  side={SIDE}
+                  stamina={home.staminaByPlayer[selPlayers[0].id]}
+                  morale={home.moraleByPlayer[selPlayers[0].id]}
+                  matchStats={matchStats[selPlayers[0].id]}
+                />
+                <p className="tb-pop__next">한 명을 더 클릭하면 나란히 비교합니다.</p>
+                <button type="button" className="tb-pop__close" aria-label="카드 닫기" onClick={clearSelection}>✕</button>
               </div>
             )}
           </div>
@@ -202,7 +386,7 @@ export function TacticsBoard() {
               className={`tb-tab${tab === 'tactics' ? ' tb-tab--active' : ''}`}
               onClick={() => setTab('tactics')}
             >
-              전술{!full && <span className="tb-tab__lock">잠김</span>}
+              전술{!full && <span className="tb-tab__lock">일부</span>}
             </button>
             <button
               type="button"
@@ -228,10 +412,12 @@ export function TacticsBoard() {
               <div className="tb-tactics">
                 {!full && (
                   <p className="tb-locked" role="status">
-                    잠김 — {touchlineNotice(engine.minute, schedule)}
+                    {/* "전부 잠김"이 아니다 — 압박·템포는 아래 콘솔에서 열려 있다.
+                        무엇이 잠겼는지를 정확히 적지 않으면 열린 축까지 죽은 것으로 읽힌다. */}
+                    포메이션·태세·세트피스는 잠김 — {touchlineNotice(engine.minute, schedule)}
                   </p>
                 )}
-                <ConsolePanel side={SIDE} />
+                <ConsolePanel side={SIDE} onPreview={setPreview} />
                 <TacticsExtras side={SIDE} />
               </div>
             )}
@@ -240,9 +426,9 @@ export function TacticsBoard() {
                 side={SIDE}
                 outId={subOut}
                 inId={subIn}
-                onSelectOut={id => { setSubOut(id); setSubIn(null); setPop(id) }}
-                onSelectIn={id => { setSubIn(id); setPop(id) }}
-                onConfirmed={resetSub}
+                onSelectOut={pick}
+                onSelectIn={pick}
+                onConfirmed={clearSelection}
               />
             )}
             {tab === 'opp' && <OppPanel />}
@@ -298,15 +484,19 @@ const DEFAULT_GI: GroupIntensity = { attack: 0, midfield: 0, defense: 0 }
  *  맨 아래 [감독 판단대로 간다]는 전체 카드를 접는다(전부 무시 — 감독의 딜레마 존중).
  *  canAdopt=false(터치라인 등급)면 조언은 그대로 읽되 [채택]은 걸지 않는다 — 채택은
  *  전술 축을 바꾸는 일이라 전원 소집 사항이고, 열람까지 막으면 정보만 사라진다. */
-function CoachMeeting({ canAdopt }: { canAdopt: boolean }) {
+function CoachMeeting({ canAdopt, open, onOpenChange }: {
+  canAdopt: boolean
+  open: boolean
+  onOpenChange(v: boolean): void
+}) {
   const engine = useMatchStore(s => s.engine)
   const submitCommand = useMatchStore(s => s.submitCommand)
-  const [dismissed, setDismissed] = useState(false)
 
-  if (!engine || dismissed) return null
+  if (!engine || !open) return null
   const advice = buildCoachAdvice(engine, SIDE)
-  // 조언 0건은 정상 상태다(근거 없는 코치는 침묵한다). 다만 섹션을 통째로 감추면
-  // 기능이 고장난 것처럼 보이고 "아직 판단할 근거가 없다"는 정보도 사라지므로 한 줄만 남긴다.
+  // 조언 0건은 정상 상태다(근거 없는 코치는 침묵한다). 이때는 팝업을 띄우지 않는다 —
+  // "드릴 말씀 없습니다" 한 줄을 위해 화면을 덮는 모달을 여는 것은 방해다. 대신
+  // 작전판 흐름 안에 한 줄로 남겨 "기능이 죽은 것이 아니다"만 말한다.
   if (advice.length === 0) {
     return (
       <section className="tb-coach tb-coach--quiet" aria-label="코치 회의">
@@ -329,28 +519,37 @@ function CoachMeeting({ canAdopt }: { canAdopt: boolean }) {
   }
 
   return (
-    <section className="tb-coach" aria-label="코치 회의">
-      <h3 className="tb-coach__title">코치 회의</h3>
-      <ul className="tb-coach__list">
-        {advice.map((a, i) => (
-          <li key={`${a.coach}-${i}`} className="tb-coach__card">
-            <div className="tb-coach__role">{a.coach}</div>
-            <p className="tb-coach__rationale">{a.rationale}</p>
-            <p className="tb-coach__proposal">{a.proposal}</p>
-            {canAdopt && hasPatch(a.apply) && (
-              <div className="tb-coach__actions">
-                <button type="button" className="tb-coach__adopt btn btn--secondary btn--sm" onClick={() => adopt(a.apply)}>
-                  채택
-                </button>
-              </div>
-            )}
-          </li>
-        ))}
-      </ul>
-      {/* 점선 테두리 버튼 폐지 — 무시하기는 보조 동작이므로 ghost. */}
-      <button type="button" className="btn btn--ghost btn--sm" onClick={() => setDismissed(true)}>
-        감독 판단대로 간다
-      </button>
-    </section>
+    // 스크림 + 카드. role=dialog는 작전판 루트에도 있지만 중첩 대화상자는 정상이다
+    // (작전판이 '정지 화면', 이 팝업이 '지금 결정할 것' — 층이 다르다).
+    <div className="tb-coachpop" role="dialog" aria-modal="true" aria-label="코치 회의">
+      <section className="tb-coach">
+        <header className="tb-coach__head">
+          <h3 className="tb-coach__title">코치 회의</h3>
+          <button type="button" className="tb-coach__close" aria-label="코치 회의 닫기" onClick={() => onOpenChange(false)}>✕</button>
+        </header>
+        <ul className="tb-coach__list">
+          {advice.map((a, i) => (
+            <li key={`${a.coach}-${i}`} className="tb-coach__card">
+              <div className="tb-coach__role">{a.coach}</div>
+              <p className="tb-coach__rationale">{a.rationale}</p>
+              <p className="tb-coach__proposal">{a.proposal}</p>
+              {canAdopt && hasPatch(a.apply) && (
+                <div className="tb-coach__actions">
+                  {/* 채택하면 반영되고 **팝업이 사라진다**(사용자 지시). 회의는 결정하는
+                      자리지 머무는 자리가 아니다 — 고른 뒤에도 남아 있으면 다시 닫아야 한다. */}
+                  <button type="button" className="tb-coach__adopt btn btn--secondary btn--sm" onClick={() => { adopt(a.apply); onOpenChange(false) }}>
+                    채택
+                  </button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+        {/* 아무것도 고르지 않고 닫는 경로. 기획서 원칙 2 — 코치는 전부 무시할 수 있어야 한다. */}
+        <button type="button" className="btn btn--ghost btn--sm" onClick={() => onOpenChange(false)}>
+          감독 판단대로 간다
+        </button>
+      </section>
+    </div>
   )
 }

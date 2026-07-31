@@ -482,3 +482,106 @@
   gap: var(--sp-2);
   margin-top: var(--sp-1);
 }
+
+/* ── 코치 회의 팝업 (2026-08-01) ────────────────────────────────
+   상시 카드 → 팝업. 이유는 세로 예산이다: 코치 4명이면 카드 리스트가 400px 가까이
+   먹어 정작 봐야 할 보드가 스크롤 아래로 밀렸다. 회의는 **들어오자마자 결정하고
+   비우는** 것이지 화면에 상주할 정보가 아니다.
+   ★ position: fixed다. absolute로 두면 컨테이닝 블록이 스크롤되는 작전판이라 스크림이
+     보이는 영역과 어긋난다(실측: 보드·우측 패널이 안 덮여 클릭이 그대로 통과했다).
+     모달의 최소 조건은 "뒤를 못 누른다"이므로 뷰포트에 고정한다. */
+.tb-coachpop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal, 60);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: var(--sp-4);
+  box-sizing: border-box;
+  background: var(--s-scrim-soft);
+  overflow-y: auto;
+}
+.tb-coachpop .tb-coach {
+  width: min(720px, 100%);
+  box-shadow: var(--shadow-2);
+  border-color: var(--s-line-strong);
+}
+.tb-coach__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.tb-coach__close {
+  width: 28px;
+  min-height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--s-line-strong);
+  background: var(--s-2);
+  color: var(--t-hi);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-ui);
+  cursor: pointer;
+}
+/* 팝업을 다시 부르는 버튼은 헤더 오른쪽 끝에 붙인다. */
+.tb-head__coach { margin-left: auto; }
+
+/* 조작 결과 안내 한 줄(교체 성공·거부 사유). */
+.tb-say {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--s-1);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--t-hi);
+}
+
+/* 비교 팝오버 — 단일 카드보다 넓다(발산 막대 5열이 들어간다).
+   390px에서는 보드 위에 겹치지 않고 보드 아래로 흐르게 둔다(아래 미디어 쿼리). */
+.tb-pop--cmp { max-width: 420px; }
+.tb-pop__exec { width: 100%; }
+.tb-pop__hint {
+  font-size: var(--fs-xs);
+  color: var(--t-mid);
+}
+.tb-pop__next {
+  margin: var(--sp-1) 0 0;
+  font-size: var(--fs-xs);
+  color: var(--t-mid);
+}
+
+/* 세트피스 추천 태그 — 값 옆에 붙는 작은 라벨. 색이 아니라 글자로 말한다. */
+.tx-btn__rec {
+  margin-left: var(--sp-1);
+  font-size: var(--fs-eyebrow);
+  font-weight: 800;
+  letter-spacing: var(--ls-caps);
+  color: var(--t-low);
+}
+
+/* 터치라인 등급 안내 + 잠긴 축. 잠긴 슬라이더는 지우지 않고 흐리게 둔다 —
+   사라지면 "이 화면에 라인 축이 없다"로 읽히고, 다음 브레이크에 다시 나타나면 놀란다. */
+.cs-touchline {
+  margin: 0 0 var(--sp-2);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
+  color: var(--t-mid);
+}
+.cs-axis-wrap--locked { opacity: 0.5; }
+
+/* 390px — 비교 팝오버가 보드를 덮으면 보드를 볼 수 없다. 겹침을 풀어 아래로 보낸다. */
+@media (max-width: 480px) {
+  .tb-board__pitch { position: relative; }
+  .tb-pop,
+  .tb-pop--cmp {
+    position: static;
+    max-width: 100%;
+    margin-top: var(--sp-2);
+  }
+  .tb-pop__close { position: static; float: right; }
+  .tb-coachpop { padding: var(--sp-2); }
+}
