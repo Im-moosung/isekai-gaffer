@@ -1,0 +1,104 @@
+/* 선수 상태 칩 — 목록 스캔용 저면적 표식. 설계 근거는 StatusChips.tsx 상단 주석.
+   색은 전부 토큰이다: --warn(옐로카드·체력 저하) / --danger(레드·정지) / --good(고조).
+   팀 색(--team-us/--team-them)과 --live는 쓰지 않는다 — 뜻이 겹치면 안 된다. */
+
+.sx {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  /* 칩은 정보 밀도가 높은 행에 얹힌다. 줄바꿈을 막아 행 높이가 흔들리지 않게 한다. */
+  flex: none;
+  white-space: nowrap;
+}
+
+.sx__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 16px;
+  padding: 0 4px 0 3px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.sx__text {
+  font-family: var(--f-num);
+  font-size: 10px;
+}
+
+/* ── 실루엣 ─────────────────────────────────────────────────────────
+   색을 못 읽어도 세 도형이 서로 다르다. 마크는 ::before가 아니라 실제
+   span이다 — Windows에서 의사요소 크기가 폰트 메트릭에 끌려다녔다. */
+.sx__mark {
+  display: block;
+  flex: none;
+}
+
+/* 카드: 세로 직사각형(실제 축구 카드 비율 ≈ 2:3) */
+.sx__chip--card .sx__mark {
+  width: 7px;
+  height: 10px;
+  border-radius: 1px;
+}
+
+/* 체력: 가로 막대(배터리) */
+.sx__chip--bar .sx__mark {
+  width: 11px;
+  height: 5px;
+  border-radius: 1px;
+}
+
+/* 사기: 삼각형 */
+.sx__chip--tri-up .sx__mark,
+.sx__chip--tri-down .sx__mark {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+}
+.sx__chip--tri-up .sx__mark { border-bottom: 8px solid currentColor; }
+.sx__chip--tri-down .sx__mark { border-top: 8px solid currentColor; }
+
+/* ── 톤 ──────────────────────────────────────────────────────────── */
+.sx__chip--warn {
+  color: var(--warn);
+  background: var(--warn-weak);
+  border-color: var(--warn-line);
+}
+.sx__chip--warn .sx__mark { background: var(--warn); }
+
+.sx__chip--danger {
+  color: var(--danger);
+  background: var(--danger-weak);
+  border-color: var(--danger-line);
+}
+.sx__chip--danger .sx__mark { background: var(--danger); }
+
+.sx__chip--good {
+  color: var(--good);
+  background: var(--good-weak);
+  border-color: var(--good-line);
+}
+.sx__chip--good .sx__mark { background: var(--good); }
+
+/* 삼각형 마크는 background가 아니라 border로 그린다 — 위에서 깐 background를 지운다. */
+.sx__chip--tri-up .sx__mark,
+.sx__chip--tri-down .sx__mark { background: none; }
+
+/* '정지'·'퇴장'은 두 글자라 숫자 칩보다 넓다. 한글 글리프에 num 폰트를 쓰지 않는다. */
+.sx__chip[data-kind='susp'] .sx__text,
+.sx__chip[data-kind='sent'] .sx__text {
+  font-family: var(--f-ui);
+  font-size: 9px;
+}
+
+/* 390px: 칩을 유지하되 여백만 줄인다. 여기서 칩을 숨기면 이 기능의 목적이 사라진다
+   — 좁은 화면일수록 게이지를 펼칠 자리가 없어서 칩이 더 필요하다. */
+@media (width <= 480px) {
+  .sx { gap: 3px; }
+  .sx__chip { height: 15px; padding: 0 3px 0 2px; gap: 2px; }
+}
