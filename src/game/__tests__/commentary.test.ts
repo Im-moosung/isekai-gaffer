@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { pickDramaEvent } from '../drama'
 import {
   commentate, commentateAll, commentateAt, commentateTimeline,
   classifyGoal, hasBatchim, josaIGa, josaEunNeun, josaEulReul, josaEuRo,
@@ -576,6 +577,26 @@ describe('소강 구간 라인 (§3.4)', () => {
     for (const until of [20, 45, 70]) {
       const partial = commentateTimeline(events.filter(e => e.minute <= until), h, a, 2026, {}, until)
       expect(tl.slice(0, partial.length)).toEqual(partial)
+    }
+  })
+
+  // ★ 화면과 글이 어긋나던 버그의 회귀 가드.
+  //   엔진은 한 분에 여러 이벤트를 낸다(슛 → 세이브 → 코너). 3D는 그중 주인공 하나를
+  //   그 분 내내 그리는데, 티커가 배열 순서대로 흘려 마지막에 남는 줄이 코너였다.
+  //   화면은 세이브를 보여주고 글은 "코너에 공을 올립니다"를 말했다(실주행 캡처로 확인).
+  it('한 분의 마지막 캐스터 라인은 그 분의 주인공 이벤트의 것이다', () => {
+    for (const seed of [42, 7, 1003, 2026]) {
+      const { events } = realMatchLines(seed)
+      const base = commentateAll(events, h, a, seed) // 이벤트와 1:1
+      const tl = commentateTimeline(events, h, a, seed, {}, 90)
+      for (let m = 1; m <= 90; m++) {
+        const evs = events.filter(e => e.minute === m)
+        const drama = pickDramaEvent(evs)
+        if (!drama || evs.length < 2) continue
+        const expected = base[events.indexOf(drama)]
+        const mine = tl.filter(l => l.minute === m && l.speaker === 'caster')
+        expect(mine.at(-1)!.id, `seed=${seed} ${m}' 주인공=${drama.type}`).toBe(expected.id)
+      }
     }
   })
 })

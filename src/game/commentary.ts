@@ -29,6 +29,7 @@
 //     단정하지 않는다. 엔진은 "그 지시 때문에" 그렇게 됐는지 모른다. 전부 시간 서술
 //     ("압박을 올린 뒤로 ~")로만 쓴다 — 사실 서술은 틀릴 수 없다.
 import type { DecisionEntry, MatchEvent, MatchEventType, Team } from '../engine/types'
+import { dramaRank } from './drama'
 
 // ── 조사 자동 선택 (§5.5) ────────────────────────────────────
 // 왜 필요한가: 선수 이름이 데이터 주도라 `${player}가`는 `손흥민가`를 만든다.
@@ -1212,20 +1213,42 @@ export function commentateTimeline(
   const last = untilMinute ?? (events.length > 0 ? events[events.length - 1].minute : 0)
   const out: Line[] = []
   let i = 0
-  for (let m = 0; m <= last; m++) {
-    while (i < base.length && base[i].minute <= m) {
-      out.push(base[i])
-      if (base[i].follow) out.push(base[i].follow!)
-      i++
+
+  /** 같은 분의 라인들을 티커에 흘릴 순서로. 주인공을 **맨 뒤**에 둔다(아래 주석). */
+  const flush = (upTo: number) => {
+    const from = i
+    while (i < base.length && base[i].minute <= upTo) i++
+    // 이벤트와 1:1이라는 commentateAll 계약을 이용해 라인↔이벤트를 인덱스로 짝짓는다.
+    const all = Array.from({ length: i - from }, (_, k) => from + k)
+    // 주인공 하나만 뒤로 보낸다. 전체 정렬을 하면 같은 타입이 둘일 때(예: miss 둘)
+    // 3D가 그리는 **앞쪽** 이벤트가 아니라 뒤쪽이 마지막에 남아 다시 어긋난다
+    // (pickDramaEvent는 동점에서 배열 앞쪽을 택한다).
+    let bestK = -1
+    let bestRank = Infinity
+    for (const k of all) {
+      const r = dramaRank(events[k]?.type ?? 'foul')
+      if (r < bestRank) { bestRank = r; bestK = k }
     }
+    const idx = bestK < 0 ? all : [...all.filter(k => k !== bestK), bestK]
+    // ★ 왜 재정렬하는가: 엔진은 한 분에 여러 이벤트를 낸다(슛 → 세이브 → 코너).
+    //   3D는 그중 **주인공 하나**(pickDramaEvent)를 그 분 내내 그리는데, 티커는 배열
+    //   순서대로 흘려서 마지막에 남는 줄이 코너였다. 그래서 화면은 세이브를 보여주고
+    //   글은 "코너에 공을 올립니다"를 말했다(seed 42 실측: 주인공 있는 43분 중 6분).
+    //   로그의 내용은 그대로 두고 **눈이 닿는 마지막 줄만** 주인공으로 맞춘다.
+    //   안정 정렬 — 순위가 같으면 원래 순서(발생 순)를 지킨다.
+    for (const k of idx) {
+      out.push(base[k])
+      if (base[k].follow) out.push(base[k].follow!)
+    }
+  }
+
+  for (let m = 0; m <= last; m++) {
+    flush(m)
     const flow = flowLineAt(events, m, home, away, seed)
     if (flow) out.push(flow)
   }
-  // 남은 라인(untilMinute보다 뒤의 이벤트)은 그대로 이어 붙인다.
-  for (; i < base.length; i++) {
-    out.push(base[i])
-    if (base[i].follow) out.push(base[i].follow!)
-  }
+  // 남은 라인(untilMinute보다 뒤의 이벤트)도 같은 규칙으로 흘린다.
+  flush(Infinity)
   return out
 }
 

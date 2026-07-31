@@ -68,33 +68,11 @@ export const MAX_DWELL_MS = 9600
 //   dwell 가중치는 '그 분이 얼마나 큰 분인가'(리듬)를 재는 값이지 '무엇을 보여줄까'의
 //   기준이 아니다 — 동점(shot·save·miss 4300, corner·foul 2700)이 많아 순서를 정하지
 //   못한다. 그래서 **명시적 전순서 목록**(음성 쪽 규칙의 확장)을 단일 규칙으로 채택했다.
-/**
- * 주인공 이벤트 우선순위 — 앞일수록 우선. **안무가 있는 타입만** 넣는다
- * (choreography.buildSequence가 빈 배열을 돌려주는 타입은 주인공이 될 수 없다).
- * 근거: 결과(goal/save/miss) > 시도(shot/chance) > 징계(red/yellow) > 세트피스·반칙.
- */
-export const DRAMA_PRIORITY: readonly MatchEventType[] = [
-  'goal', 'save', 'miss', 'shot', 'chance', 'red', 'yellow', 'corner', 'foul',
-]
-
-/**
- * 그 분의 "주인공 이벤트"를 고른다 — 음성·안무가 **함께** 쓰는 단 하나의 선택자.
- * 티커는 그 분의 모든 이벤트를 계속 보여준다(로그이므로 전부가 맞다).
- * 결정론: 같은 배열 → 항상 같은 결과. 같은 타입이 둘이면 배열 앞쪽(먼저 발생)을 택한다.
- */
-export function pickDramaEvent(events: MatchEvent[]): MatchEvent | null {
-  let best: MatchEvent | null = null
-  let bestRank = Infinity
-  for (const e of events) {
-    const rank = DRAMA_PRIORITY.indexOf(e.type)
-    if (rank === -1) continue // 안무 없는 타입(kickoff·sub·halftime·fulltime)은 후보 아님
-    if (rank < bestRank) {
-      bestRank = rank
-      best = e
-    }
-  }
-  return best
-}
+// 주인공 선택자는 game/drama.ts가 정본이다 — commentary(game)도 같은 규칙을 써야 하는데
+// playback이 commentary를 import하므로 여기 두면 순환이 된다. 기존 import 경로 호환을 위해
+// 재수출만 남긴다.
+export { DRAMA_PRIORITY, dramaRank, pickDramaEvent } from '../../game/drama'
+import { pickDramaEvent } from '../../game/drama'
 
 /**
  * **3D 하이라이트로 보여줄** 이벤트 타입. 나머지(코너·파울·경고·찬스)와 무사건 분은
