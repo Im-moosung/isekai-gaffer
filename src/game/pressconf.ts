@@ -183,7 +183,11 @@ function logQuestionText(e: DecisionEntry): string | null {
         .map(axisClause)
         .filter((c): c is string => c !== null)
       if (clauses.length === 0) return null
-      return `${when} ${clauses.join(', ')}셨습니다. 어떤 의도였는지 설명해 주시겠습니까?`
+      // 축이 여러 개면 마지막만 종결하고 앞은 '고,'로 잇는다("…올리고, 템포를 …올리셨습니다").
+      const joined = clauses.length === 1
+        ? clauses[0]
+        : `${clauses.slice(0, -1).join('고, ')}고, ${clauses[clauses.length - 1]}`
+      return `${when} ${joined}셨습니다. 어떤 의도였는지 설명해 주시겠습니까?`
     }
     case 'shootout-setup':
       // 이 로그는 자유 문자열이라 파싱할 구조가 없다. 사실만 말하고 요약은 인용하지 않는다.

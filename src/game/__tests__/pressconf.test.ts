@@ -308,3 +308,30 @@ describe('buildEpilogue', () => {
     assertClean(ep)
   })
 })
+
+describe('지시 변경 질문의 한국어', () => {
+  it('축이 여러 개면 "…고, …셨습니다"로 이어진다', () => {
+    const log: DecisionEntry[] = [{
+      minute: 47, kind: 'instructions', summary: "47' 지시 변경: 압박 62→47, 템포 50→70",
+      detail: { changed: ['압박 62→47', '템포 50→70'] },
+    }]
+    const qs = buildQuestions(rec('qf', 'fra', [1, 0], { decisions: log }), log)
+    expect(qs.some(q => q.text.includes('47분에 압박을 62에서 47까지 내리고, 템포를 50에서 70까지 올리셨습니다'))).toBe(true)
+  })
+  it('공격방향처럼 수치가 아닌 축은 "…으로 바꾸셨습니다"', () => {
+    const log: DecisionEntry[] = [{
+      minute: 30, kind: 'instructions', summary: "30' 지시 변경: 공격방향 균형→좌측",
+      detail: { changed: ['공격방향 균형→좌측'] },
+    }]
+    const qs = buildQuestions(rec('qf', 'fra', [1, 0], { decisions: log }), log)
+    expect(qs.some(q => q.text.includes('30분에 공격방향을 균형에서 좌측으로 바꾸셨습니다'))).toBe(true)
+  })
+  it('포메이션 변경은 진형 문장으로 나간다', () => {
+    const log: DecisionEntry[] = [{
+      minute: 60, kind: 'instructions', summary: "60' 포메이션: 4-2-3-1→4-4-2",
+      detail: { before: '4-2-3-1', after: '4-4-2' },
+    }]
+    const qs = buildQuestions(rec('qf', 'fra', [1, 0], { decisions: log }), log)
+    expect(qs.some(q => q.text.includes('60분에 진형을 4-2-3-1에서 4-4-2로 바꾸셨습니다'))).toBe(true)
+  })
+})
