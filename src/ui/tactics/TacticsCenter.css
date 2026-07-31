@@ -82,47 +82,25 @@
 }
 .tc-head__ref { margin-left: auto; font-size: var(--fs-sm); color: var(--t-low); }
 
-/* ── 접이식 섹션 ───────────────────────────────────────────
-   ≥720px에서는 토글 자체를 렌더하지 않고 전부 펼쳐 둔다. FM25가 "한 눈에 보이던
-   정보를 클릭 뒤로 숨겨" 취소된 전례를 반복하지 않기 위해서다. sm에서만 아코디언. */
-.tc-acc {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-3);
+/* ── 탭 ────────────────────────────────────────────────────
+   탭이 나누는 것은 **작업 공간**이다(선발 / 팀 전술 / 상대 브리핑). 플랜의 현재
+   상태(.tc-summary)와 커밋(.tc-actions)은 탭 밖에 남아 어느 탭에서도 보인다 —
+   FM25가 취소된 원인은 "정보를 클릭 뒤로 숨긴 것"이지 작업 공간의 분리가 아니다. */
+.tc-tabs {
   min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none; /* 탭 3장은 390px에서도 다 들어간다. 안전판일 뿐이다 */
 }
-.tc-acc__head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  padding-bottom: var(--sp-2);
-  border-bottom: 1px solid var(--s-line);
+.tc-tabs::-webkit-scrollbar { display: none; }
+.tc-tabs__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  white-space: nowrap;
 }
-.tc-acc__title {
-  margin: 0;
-  font-size: var(--fs-h2);
-  font-weight: 800;
-  color: var(--t-hi);
-}
-.tc-acc__toggle { display: none; }
-.tc-acc__body { min-width: 0; }
-
-/* ── 본문 그리드: 상대 브리핑 | 선발 라인업(+벤치) ───────────
-   lg 이상에서 3:9. 라인업 섹션 안에서 보드와 벤치가 다시 갈라져 결과적으로 3:6:3이
-   되고, 남는 폭은 보드와 벤치가 흡수한다(감사 W-7: 430px 빈 공간). */
-.tc-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--sp-5);
-  min-width: 0;
-}
-@media (min-width: 1200px) {
-  .tc-grid {
-    grid-template-columns: minmax(300px, 3fr) minmax(0, 9fr);
-    align-items: start;
-  }
-}
+/* 탭 라벨의 유일한 배지 — 정지 인원은 탭을 열지 않아도 알아야 한다. */
+.tc-tabs__badge { flex: 0 0 auto; }
+.tc-panel { min-width: 0; }
 
 /* ── 코치진 권고 ───────────────────────────────────────────── */
 .tc-reasons {
@@ -164,16 +142,24 @@
   }
 }
 
-/* ── 검토 ──────────────────────────────────────────────────
-   4열 표를 문장 리스트로 바꿨다. 색은 텍스트에만 얹는다. */
+/* ── 검토 요약(탭 밖 고정 밴드) ────────────────────────────
+   4열 표를 문장 리스트로 바꿨다. 색은 텍스트에만 얹는다.
+   탭 위에 놓이므로 밀도가 중요하다 — 2열로 접어 4줄(형태·태도·루트·상대)과
+   리스크를 나란히 세운다. 카드 배경을 쓰지 않고 헤어라인으로만 구획한다. */
 .tc-summary {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--sp-4);
+  gap: var(--sp-2) var(--sp-5);
   min-width: 0;
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--s-line);
+}
+.tc-summary__title {
+  margin: 0;
+  grid-column: 1 / -1;
 }
 @media (min-width: 900px) {
-  .tc-summary { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .tc-summary { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
 }
 .tc-facts,
 .tc-risks {
@@ -239,27 +225,10 @@
   .tc-head__teams { font-size: var(--fs-h2); }
   .tc-head__ref { margin-left: 0; }
 
-  /* 토글이 제목을 겸한다 — 제목을 두 벌 그리지 않는다. */
-  .tc-acc__static { display: none; }
-  .tc-acc__toggle {
-    display: flex;
-    align-items: center;
-    gap: var(--sp-2);
-    min-height: var(--tap-min);
-    padding: 0;
-    border: none;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    cursor: pointer;
-  }
-  .tc-acc__toggle::before {
-    content: '▸';
-    color: var(--t-low);
-    font-size: var(--fs-sm);
-  }
-  .tc-acc--open .tc-acc__toggle::before { content: '▾'; }
-  .tc-acc:not(.tc-acc--open) .tc-acc__body { display: none; }
+  /* 390px에서는 탭이 아코디언을 대체한다 — 아코디언은 열 때마다 문서가 늘어나
+     "지금 무엇이 열려 있나"를 스크롤로 확인해야 했다. 탭은 항상 한 화면이다. */
+  .tc-tabs { gap: var(--sp-3); }
+  .tc-tabs__item { font-size: var(--fs-sm); }
 
   .tc-actions {
     flex-wrap: wrap;

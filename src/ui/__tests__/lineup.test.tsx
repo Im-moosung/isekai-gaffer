@@ -40,26 +40,43 @@ describe('LineupScreen 스모크', () => {
     expect(arg.instructions).toEqual(initial.instructions)
   })
 
-  it('클릭 스왑: 선발 칩 두 개를 차례로 클릭하면 슬롯이 맞교환된다', () => {
+  // ★ 조작 규약 변경(2026-07-31): 클릭 → 클릭은 더 이상 교체하지 않는다.
+  // 클릭은 정보를 여는 동작이고, 변경은 드래그앤드롭이거나 명시적 실행 버튼이다.
+  // 계약 전체는 squad-interaction.test.tsx가 지키고, 여기서는 단독 화면에서도
+  // 같은 규칙이 적용되는지만 확인한다(편집기를 공유하므로 갈리면 안 된다).
+  it('클릭 두 번은 교체가 아니라 비교를 연다', () => {
     const { container } = render(<LineupScreen team={team} initial={initial} onConfirm={() => {}} />)
     const chips = () => Array.from(container.querySelectorAll('.lu-chip')) as HTMLElement[]
     const numOf = (el: HTMLElement) => el.querySelector('.lu-chip__num')!.textContent
     const before = chips().map(numOf)
     fireEvent.click(chips()[3])
     fireEvent.click(chips()[10])
+    expect(chips().map(numOf)).toEqual(before)
+    expect(container.querySelector('.cmp')).toBeTruthy()
+  })
+
+  it('실행 버튼([자리 바꾸기])을 눌러야 슬롯이 맞교환된다', () => {
+    const { container, getByRole } = render(<LineupScreen team={team} initial={initial} onConfirm={() => {}} />)
+    const chips = () => Array.from(container.querySelectorAll('.lu-chip')) as HTMLElement[]
+    const numOf = (el: HTMLElement) => el.querySelector('.lu-chip__num')!.textContent
+    const before = chips().map(numOf)
+    fireEvent.click(chips()[3])
+    fireEvent.click(chips()[10])
+    fireEvent.click(getByRole('button', { name: '자리 바꾸기' }))
     const after = chips().map(numOf)
     expect(after[3]).toBe(before[10])
     expect(after[10]).toBe(before[3])
   })
 
-  it('클릭 스왑: 선발 → 벤치 카드 클릭으로 교체 투입된다', () => {
-    const { container } = render(<LineupScreen team={team} initial={initial} onConfirm={() => {}} />)
+  it('실행 버튼([교체하기])을 눌러야 벤치 선수가 투입된다', () => {
+    const { container, getByRole } = render(<LineupScreen team={team} initial={initial} onConfirm={() => {}} />)
     const firstChip = container.querySelector('.lu-chip') as HTMLElement
     const outNum = firstChip.querySelector('.lu-chip__num')!.textContent
     const benchCard = container.querySelector('.lu-card') as HTMLElement
     const inNum = benchCard.querySelector('.lu-card__num')!.textContent
     fireEvent.click(firstChip)
     fireEvent.click(benchCard)
+    fireEvent.click(getByRole('button', { name: '교체하기' }))
     const chipNums = Array.from(container.querySelectorAll('.lu-chip__num')).map(e => e.textContent)
     const cardNums = Array.from(container.querySelectorAll('.lu-card__num')).map(e => e.textContent)
     expect(chipNums).toContain(inNum) // 벤치 선수가 선발로

@@ -30,17 +30,32 @@
   font-family: var(--f-ui);
 }
 
-/* 임베드(전술 센터) — 보드와 벤치를 나란히. 피치는 세로라 폭이 남고, 그 폭을
-   벤치가 쓴다. lg 미만에서는 세로 스택으로 접힌다(아래 미디어 쿼리). */
+/* 헤더·조작 안내·라이브 리전 묶음. 그리드에서 한 덩어리로 전폭을 차지한다
+   (개별 아이템으로 두면 안내문이 벤치 열로 들어가 열이 한 칸씩 밀린다). */
+.lu-top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+/* 임베드(전술 센터 선발 탭) — 3열: 보드 | 벤치 | 선택 결과.
+   ★ 왜 3열인가: 탭으로 나누면서 선발 탭이 전폭을 받게 됐다. 2열(보드|벤치)로 두면
+   세로 피치(max 440px) 오른쪽에 1440px에서 500px 넘는 빈 공간이 남는다 —
+   감사 W-7이 지적한 바로 그 결함이다. 남는 폭을 "선택 결과"(상세·비교·배치 점검)에
+   주면 공간이 정보로 바뀌고, 비교가 보드 아래로 쌓이지 않아 문서도 짧아진다.
+   lg 미만에서는 세로 스택으로 접힌다. */
 @media (min-width: 1200px) {
   .lu-root--embed {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
-    grid-template-rows: auto auto;
+    grid-template-columns: minmax(360px, 480px) minmax(300px, 360px) minmax(340px, 1fr);
     align-items: start;
     gap: var(--sp-5);
   }
-  .lu-root--embed .lu-head { grid-column: 1 / -1; }
+  .lu-root--embed > .lu-top { grid-column: 1 / -1; grid-row: 1; }
+  .lu-root--embed > .lu-boardcol { grid-column: 1; grid-row: 2; }
+  .lu-root--embed > .lu-bench { grid-column: 2; grid-row: 2; }
+  .lu-root--embed > .lu-selcol { grid-column: 3; grid-row: 2; }
 }
 
 /* ── 헤더: 제목 + 포메이션 세그먼트 ─────────────────────── */
@@ -94,6 +109,29 @@
 .lu-pitch__spot {
   fill: var(--pitch-line);
   stroke: none;
+}
+
+/* ── 조작 안내 ──────────────────────────────────────────
+   드래그앤드롭·클릭·키보드가 서로 다른 일을 하므로 규칙을 상시 노출한다.
+   "왜 클릭했는데 교체가 안 되지"는 안내가 없을 때만 생기는 질문이다. */
+.lu-howto {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-md);
+  color: var(--t-mid);
+}
+.lu-howto b {
+  color: var(--t-hi);
+  font-weight: 800;
+}
+.lu-howto kbd {
+  padding: 1px var(--sp-1);
+  border: 1px solid var(--s-line-strong);
+  border-radius: var(--r-sm);
+  background: var(--s-2);
+  color: var(--t-hi);
+  font-family: var(--f-num);
+  font-size: var(--fs-xs);
 }
 
 /* 선수 카드 — 라인을 "피해서" 놓지 않는다. 불투명 카드로 라인을 가려버린다. */
@@ -157,6 +195,36 @@
 .lu-chip--sel { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand); }
 .lu-chip--over { box-shadow: 0 0 0 2px var(--brand); }
 .lu-chip--drag { opacity: 0.9; }
+/* 키보드로 "집은" 상태 — 마우스의 드래그 중에 대응한다. 점선으로 "떠 있음"을 말하고,
+   실선 선택(--sel)과 구분한다. 두 상태가 같은 모양이면 무엇이 집혔는지 알 수 없다. */
+.lu-chip--grab {
+  border-style: dashed;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-weak);
+}
+/* 선발에 정지 선수가 남는 것은 규정 위반이므로 enforceUnavailable이 미리 갈아끼운다.
+   그럼에도 상태가 어긋나면 화면에서 잠긴 것으로 보여야 한다(마지막 방어선). */
+.lu-chip--susp { border-color: var(--danger-line); cursor: not-allowed; }
+
+/* 선택 순서 배지 — 비교 뷰의 좌/우 번호와 같은 숫자. */
+.lu-chip .lu-ord {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+}
+.lu-ord {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--brand);
+  color: var(--t-on-brand);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  line-height: 1;
+}
 
 /* ── 컨디션 표시(칩·벤치 행) ────────────────────────────
    100%면 바를 그리지 않는다 — 전원 풀바는 정보량 0인데 면적만 먹는다(감사 T-9). */
@@ -189,11 +257,92 @@
 .lu-sta--mid .lu-sta__val { color: var(--warn); }
 .lu-sta--low .lu-sta__val { color: var(--danger); }
 
-/* 선택 선수 카드 — 피치 위 팝오버가 아니라 아래 흐름. 겹치면 반드시 잘린다. */
+/* ── 선택 결과 — 상세(1명) 또는 비교(2명) ────────────────
+   피치 위 팝오버가 아니라 아래 흐름에 둔다. 겹치면 반드시 잘린다(피치는 overflow:hidden).
+   1명일 때는 카드 폭(440)으로 좁히고, 2명 비교는 발산 막대가 길이를 써야 하므로
+   보드 열 전폭을 준다. */
+.lu-selcol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+.lu-sel {
+  align-self: stretch;
+  width: 100%;
+  min-width: 0;
+}
+
+/* ── 배치 점검(선택 없음일 때 선택 열을 채운다) ────────────
+   나쁠 때만 목록을 만든다 — 11자리가 전부 적합하면 한 줄로 끝낸다(상태 칩과 같은 규칙). */
+.lu-audit__ok {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-md);
+  color: var(--t-mid);
+}
+.lu-audit__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+.lu-audit__row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--tap-min);
+  padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--s-1);
+  color: var(--t-hi);
+  font-family: inherit;
+  font-size: var(--fs-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.lu-audit__row:hover { border-color: var(--s-line-strong); }
+.lu-audit__row--bad { border-color: var(--danger-line); }
+.lu-audit__row--ok { border-color: var(--warn-line); }
+.lu-audit__slot {
+  padding: 1px var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--s-3);
+  color: var(--t-hi);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  text-align: center;
+}
+.lu-audit__name {
+  min-width: 0;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.lu-audit__pos { font-size: var(--fs-xs); color: var(--t-low); }
+.lu-audit__level { font-size: var(--fs-xs); font-weight: 800; }
+.lu-audit__row--bad .lu-audit__level { color: var(--danger); }
+.lu-audit__row--ok .lu-audit__level { color: var(--warn); }
 .lu-pop {
   align-self: center;
   width: 100%;
   max-width: 440px;
+}
+.lu-sel__next {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-sm);
+  color: var(--t-low);
+  text-align: center;
+}
+.lu-exec__hint {
+  font-size: var(--fs-sm);
+  color: var(--warn);
 }
 
 /* ── 벤치 — 화면에서 유일하게 허용되는 내부 스크롤 컨테이너 ── */
@@ -226,7 +375,7 @@
   display: grid;
   /* 6열: 슬롯ID · 번호 · 이름 · 포지션 · 체력 · 상태칩.
      칩은 문제 있는 선수에게만 붙고 없으면 StatusChips가 null을 반환하므로 열이 접힌다. */
-  grid-template-columns: 30px 26px minmax(0, 1fr) auto auto auto;
+  grid-template-columns: 30px 26px minmax(0, 1fr) auto auto auto auto;
   align-items: center;
   gap: var(--sp-2);
   min-height: var(--tap-min);
@@ -270,6 +419,12 @@
 .lu-card--sel { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand) inset; }
 .lu-card--over { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand); }
 .lu-card--drag { opacity: 0.9; }
+/* 키보드로 집은 상태 — 피치 칩과 같은 언어(점선 + 약한 브랜드 후광). */
+.lu-card--grab {
+  border-style: dashed;
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px var(--brand-weak);
+}
 /* 출장정지 — 행이 disabled라 클릭·드래그가 통째로 막힌다. 왜 막혔는지 테두리로 말하고,
    칩('정지')이 사유를 적는다. 흐리게(opacity)만 처리하면 "왜"가 전달되지 않는다. */
 .lu-card--susp {
@@ -297,6 +452,12 @@
 @media (max-width: 719px) {
   .lu-screen { padding: var(--sp-3); }
   .lu-pitch { max-width: 340px; }
+  /* 화면 키보드로는 쓸 수 없는 경로다 — 좁은 화면에서 한 줄을 더 내줄 이유가 없다. */
+  .lu-howto__kb { display: none; }
+  /* 배치 점검은 넓은 화면의 빈 열을 채우려고 만든 패널이다. 390px에는 빈 열이 없으므로
+     "이상 없음"일 때는 통째로 접는다 — 할 말이 없는 패널이 세로 예산을 먹으면 안 된다.
+     문제가 있을 때(목록이 있을 때)는 그대로 보인다. */
+  .lu-audit:has(.lu-audit__ok) { display: none; }
   .lu-chip {
     width: auto;
     min-width: 0;

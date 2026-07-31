@@ -4,12 +4,29 @@
    좌측 3px 띠를 전부 걷어내고 4변 색조 카드(.card--warn/--good) + 아이브로우로 바꿨다.
    색은 텍스트와 테두리에만 얹는다. */
 .op {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-4);
+  min-width: 0;
+  color: var(--t-hi);
+  font-family: var(--f-ui);
+}
+/* 세 묶음 — 브리핑 / 도해 / 스쿼드. 좁으면 세로로 쌓인다(작전판 [상대] 탭). */
+.op__col {
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
   min-width: 0;
-  color: var(--t-hi);
-  font-family: var(--f-ui);
+}
+/* 워룸의 상대 브리핑 탭은 전폭을 받는다. 한 줄로 늘어놓으면 문서가 2200px까지 자라
+   탭으로 나눈 의미가 사라지므로, 폭이 있을 때는 반드시 폭을 쓴다. */
+@media (min-width: 1000px) {
+  .tc-panel .op {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr) minmax(0, 1fr);
+    align-items: start;
+  }
+  /* 도해는 세로 피치라 폭이 남는다 — 무한정 키우지 않는다(3456px에서 화면을 뒤덮는다). */
+  .tc-panel .op__col--board { max-width: 520px; }
 }
 .op__head {
   display: flex;

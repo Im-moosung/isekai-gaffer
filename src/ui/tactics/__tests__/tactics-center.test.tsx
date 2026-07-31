@@ -18,26 +18,68 @@ function mountPre() {
   return render(<TacticsCenter onKickoff={() => {}} referenceScore={[1, 2]} />)
 }
 
+/** 탭 전환 — 워룸은 작업 공간을 탭으로 나눈다(선발 / 팀 전술 / 상대 브리핑).
+ *  플랜 요약과 [킥오프]는 탭 밖 고정이라 전환과 무관하다. */
+function toTab(container: HTMLElement, label: string) {
+  const tab = Array.from(container.querySelectorAll('[role="tab"]'))
+    .find(el => el.textContent!.includes(label))
+  if (!tab) throw new Error(`탭 없음: ${label}`)
+  fireEvent.click(tab)
+}
+
 beforeEach(() => { store().reset() })
 afterEach(() => { cleanup() })
 
 describe('TacticsCenter — 킥오프 전 워룸', () => {
-  // ★ 재설계: 탭(① 선발 / ② 팀 전술)을 없애고 한 페이지 세로 흐름으로 폈다.
-  // 선발 → 팀 전술 → 검토는 순차 작업이지 배타 뷰가 아니다. 따라서 아래 테스트들은
-  // "탭을 눌러 전환한다"가 아니라 "처음부터 같은 화면에 있다"를 검증한다.
-  it("'pre'에서 상대 브리핑·선발·팀 전술·검토·킥오프가 한 화면에 있다", () => {
+  // ★ 재설계(2026-07-31): 세로 한 페이지(실측 2133~2184px)를 탭 3장으로 나눴다.
+  // 직전 판단("선발 → 팀 전술 → 검토는 순차 작업이지 배타 뷰가 아니다")은 **탭 밖
+  // 고정 영역**이 지킨다 — 플랜 요약(형태·태도·리스크·상대 상성)과 [킥오프]는 어느
+  // 탭에서도 보인다. 아래 테스트들이 그 두 성질을 함께 고정한다.
+  it("'pre'에서 탭 3장이 뜨고 기본은 선발이다", () => {
     const { container, getByRole } = mountPre()
     expect(store().phase).toBe('pre')
-    // 상대 리포트는 상시 노출.
-    expect(container.querySelector('.op')).toBeTruthy()
-    // 탭 없이 선발과 팀 전술이 동시에 렌더된다.
-    expect(container.querySelectorAll('[role="tab"]')).toHaveLength(0)
+    const tabs = Array.from(container.querySelectorAll('[role="tab"]')).map(e => e.textContent)
+    expect(tabs.length).toBe(3)
+    expect(tabs[0]).toContain('선발 라인업')
+    // 기본 탭은 선발 — 화면에 들어오자마자 첫 작업을 할 수 있어야 한다.
     expect(container.querySelector('.lu-root')).toBeTruthy()
-    expect(container.querySelector('.tx-panel')).toBeTruthy()
+    expect(container.querySelector('.tx-panel')).toBeNull()
+    expect(container.querySelector('.op')).toBeNull()
+    // 검토 요약과 킥오프는 탭 밖 고정.
     expect(container.querySelector('.tc-summary')).toBeTruthy()
     expect(getByRole('button', { name: '킥오프' })).toBeTruthy()
     // 참고 스코어(조별 실제 역사) 표기.
     expect(container.textContent).toContain('1-2')
+  })
+
+  it('탭을 바꿔도 검토 요약과 [킥오프]는 그대로 남는다', () => {
+    const { container, getByRole } = mountPre()
+    for (const label of ['팀 전술', '상대 브리핑', '선발 라인업']) {
+      toTab(container, label)
+      expect(container.querySelector('.tc-summary')).toBeTruthy()
+      expect(getByRole('button', { name: '킥오프' })).toBeTruthy()
+      expect(container.querySelector('.tc-actions')).toBeTruthy()
+    }
+  })
+
+  it('탭이 실제로 배타 전환된다 — 팀 전술과 상대 브리핑', () => {
+    const { container } = mountPre()
+    toTab(container, '팀 전술')
+    expect(container.querySelector('.tx-panel')).toBeTruthy()
+    expect(container.querySelector('.lu-root')).toBeNull()
+    toTab(container, '상대 브리핑')
+    expect(container.querySelector('.op')).toBeTruthy()
+    expect(container.querySelector('.tx-panel')).toBeNull()
+  })
+
+  // 상대 브리핑을 탭 뒤로 보냈으므로, 브리핑에서 실제로 판단에 쓰이는 한 줄
+  // (상대 포메이션 + 상성)은 탭을 열지 않아도 보여야 한다.
+  it('고정 요약이 상대 포메이션과 상성을 상시 노출한다', () => {
+    const { container } = mountPre()
+    const sum = container.querySelector('.tc-summary')!.textContent!
+    expect(sum).toContain(away.name.ko)
+    expect(sum).toContain(store().engine!.away.tactics.formation)
+    expect(sum).toMatch(/상성|대등/)
   })
 
   it('포메이션 변경이 엔진 tactics에 즉시 커밋된다', () => {
@@ -51,6 +93,7 @@ describe('TacticsCenter — 킥오프 전 워룸', () => {
 
   it('멘탈리티·공격 패턴이 활성이고 요약이 즉시 갱신된다', () => {
     const { getByRole, container } = mountPre()
+    toTab(container, '팀 전술')
 
     const attacking = getByRole('button', { name: '공격적' }) as HTMLButtonElement
     expect(attacking.disabled).toBe(false)
@@ -65,6 +108,7 @@ describe('TacticsCenter — 킥오프 전 워룸', () => {
 
   it('4축 슬라이더가 버튼 없이 즉시 요약에 반영된다', () => {
     const { getByLabelText, queryByRole, container } = mountPre()
+    toTab(container, '팀 전술')
     expect(queryByRole('button', { name: '지시 적용' })).toBeNull()
     fireEvent.change(getByLabelText('압박') as HTMLInputElement, { target: { value: '85' } })
     expect(store().engine!.home.tactics.instructions.pressing).toBe(85)
@@ -73,14 +117,16 @@ describe('TacticsCenter — 킥오프 전 워룸', () => {
 
   it('페이즈 포메이션(공격 시) 선택이 요약에 반영된다', () => {
     const { getByRole, container } = mountPre()
-    // 같은 페이지에 선발 포메이션 세그먼트가 있으므로 접근성 이름으로 구분한다.
+    toTab(container, '팀 전술')
+    // 슬롯 이름이 겹치지 않도록 접근성 이름으로 구분한다.
     fireEvent.click(getByRole('button', { name: '공격 시 3-5-2' }))
     expect(store().engine!.home.tactics.phaseFormations?.attack).toBe('3-5-2')
     expect(container.querySelector('.tc-summary')!.textContent).toContain('공격 3-5-2')
   })
 
   it('킥오프 전 설정이 킥오프 이후에도 그대로 유지된다(리셋 없음)', () => {
-    const { getByRole } = mountPre()
+    const { getByRole, container } = mountPre()
+    toTab(container, '팀 전술')
     fireEvent.click(getByRole('button', { name: '매우 수비적' }))
     fireEvent.change(getByRole('slider', { name: '라인' }) as HTMLInputElement, { target: { value: '20' } })
 

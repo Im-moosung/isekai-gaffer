@@ -1,0 +1,288 @@
+/* 2인 비교 뷰 — 값은 전부 tokens.css. 하드코딩 hex 0.
+   인라인 style은 발산 막대의 폭(%) 하나뿐(데이터 바인딩).
+
+   ★ 레이아웃 원칙: 다섯 열 고정 그리드.
+     [A 값] [A 막대] [라벨·델타] [B 막대] [B 값]
+   막대가 중앙 라벨을 축으로 우세한 쪽으로만 뻗으므로, 열여덟 쌍의 숫자를 눈으로 빼는
+   대신 실루엣 하나로 우열이 읽힌다. 열 폭이 고정이라 행마다 축이 어긋나지 않는다. */
+
+.cmp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-4);
+  border: 1px solid var(--s-line-strong);
+  border-radius: var(--r-lg);
+  background: var(--s-1);
+}
+
+/* ── 결론 한 줄 ─────────────────────────────────────────────
+   좌측 컬러 띠 금지 규칙에 따라 색은 텍스트에만 얹는다. */
+.cmp__verdict {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 800;
+  line-height: var(--lh-md);
+  color: var(--t-hi);
+}
+/* "대등하다"는 결론은 행동을 요구하지 않는다 — 단호한 결론과 같은 무게로 쓰지 않는다. */
+.cmp__verdict--soft {
+  color: var(--t-mid);
+  font-weight: 700;
+}
+
+/* ── 머리: 두 선수 신원 + 상태 칩 ───────────────────────── */
+.cmp__heads {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--s-line);
+}
+.cmp__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.cmp__head--b {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+.cmp__order {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--brand);
+  color: var(--t-on-brand);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+}
+.cmp__ident {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cmp__nameline {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+.cmp__head--b .cmp__nameline,
+.cmp__head--b .cmp__posline {
+  flex-direction: row-reverse;
+}
+.cmp__num {
+  font-size: var(--fs-sm);
+  font-weight: 800;
+  color: var(--t-mid);
+}
+.cmp__name {
+  min-width: 0;
+  font-size: var(--fs-lg);
+  font-weight: 800;
+  line-height: var(--lh-ui);
+  color: var(--t-hi);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cmp__posline {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.cmp__pos {
+  padding: 1px var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--s-3);
+  color: var(--t-mid);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+}
+.cmp__where {
+  font-size: var(--fs-xs);
+  color: var(--t-low);
+}
+.cmp__sx {
+  flex: 0 0 auto;
+}
+
+/* 가운데 맥락 — 무엇을 두고 비교하는가(자리). 결론은 verdict가 말한다. */
+.cmp__ctx {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  max-width: 150px;
+  text-align: center;
+}
+.cmp__ctx-mark {
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  letter-spacing: var(--ls-caps);
+  text-transform: uppercase;
+  color: var(--t-low);
+}
+.cmp__ctx-text {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: var(--lh-ui);
+  color: var(--t-mid);
+}
+
+/* ── 레이더 두 장 ──────────────────────────────────────────
+   막대가 못 주는 "형태"(전방위형인가 한 축 특화인가)만 담당한다. 수치 판단은 막대 몫. */
+.cmp__radars {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-4);
+  justify-items: center;
+}
+.cmp__radar {
+  max-width: 150px;
+}
+
+/* ── 발산 막대 ─────────────────────────────────────────── */
+.cmp__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+.cmp__group-title {
+  margin: 0;
+}
+.cmp__row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 132px minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: var(--sp-2);
+  min-width: 0;
+  min-height: 24px;
+}
+.cmp__val {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--t-mid);
+}
+.cmp__row > .cmp__val:first-child {
+  text-align: right;
+}
+/* 우세는 굵기 + 색 + 막대 + 델타 네 겹으로 말한다. 색 하나에 기대지 않는다. */
+.cmp__val--win {
+  font-weight: 900;
+  color: var(--t-hi);
+}
+.cmp__bar {
+  display: flex;
+  height: 8px;
+  min-width: 0;
+  border-radius: var(--r-pill);
+  background: var(--s-2);
+  overflow: hidden;
+}
+/* A는 중앙(오른쪽 끝)에서 왼쪽으로 자란다 — 중앙 라벨이 축이다. */
+.cmp__bar--a {
+  justify-content: flex-end;
+}
+.cmp__fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--good);
+}
+.cmp__mid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+.cmp__label {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  line-height: var(--lh-ui);
+  color: var(--t-mid);
+  text-align: center;
+  white-space: nowrap;
+}
+.cmp__d {
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums lining-nums;
+  color: var(--good);
+  white-space: nowrap;
+}
+.cmp__d--a {
+  text-align: right;
+}
+.cmp__d--b {
+  text-align: left;
+}
+
+.cmp__note {
+  margin: 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
+  color: var(--t-low);
+}
+
+/* ── 실행 ──────────────────────────────────────────────── */
+.cmp__action {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--s-line);
+}
+
+/* ── sm(<720) ───────────────────────────────────────────
+   390px에서 드래그앤드롭은 사실상 불가능하므로 **버튼이 주 경로**다. 실행 버튼을
+   가로 전폭으로 펴서 어느 것이 동작인지 오해할 여지를 없앤다. */
+@media (max-width: 719px) {
+  .cmp {
+    padding: var(--sp-3);
+  }
+  .cmp__heads {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    row-gap: var(--sp-2);
+  }
+  /* 맥락 줄은 두 이름 아래로 내려 전폭을 쓴다 — 3열로는 이름이 두 글자에서 잘린다. */
+  .cmp__ctx {
+    grid-column: 1 / -1;
+    order: 3;
+    max-width: none;
+    flex-direction: row;
+    gap: var(--sp-2);
+  }
+  .cmp__name {
+    font-size: var(--fs-md);
+  }
+  .cmp__radars {
+    display: none; /* 150px 레이더 두 장은 390px에서 읽히지 않는다 */
+  }
+  .cmp__row {
+    grid-template-columns: 34px minmax(0, 1fr) 92px minmax(0, 1fr) 34px;
+    gap: var(--sp-1);
+  }
+  .cmp__mid {
+    grid-template-columns: auto;
+  }
+  /* 델타는 라벨 자리를 빼앗지 않도록 접는다 — 두 수치가 이미 옆에 찍혀 있다. */
+  .cmp__d {
+    display: none;
+  }
+  /* 실행이 주 경로다 — [선택 해제]와 같은 폭으로 서면 무엇이 동작인지 흐려진다. */
+  .cmp__action .lu-exec { flex: 2 1 auto; }
+  .cmp__action .btn--ghost { flex: 1 1 auto; }
+}
