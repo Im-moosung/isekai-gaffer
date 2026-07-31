@@ -91,6 +91,29 @@ export const A_BRAKE = 6
 export const A_LATERAL = 5
 /** GK는 좁은 박스 안에서 스텝을 밟는다 — 반응이 필드 플레이어보다 민첩하다. */
 export const A_GK_SCALE = 1.35
+
+/**
+ * **다이브 중** GK의 가속 배율과 속도 상한(m/s).
+ *
+ * 왜 평시와 다른가: 다이브는 걷기가 아니라 **도약**이다. 두 다리로 지면을 밀어 몸을
+ * 던지므로 몸통 중심의 병진은 한 걸음 안에 4~6 m/s에 도달한다(문헌: 완전 신전 다이브가
+ * 550~700 ms에 2.5~3 m를 이동한다 — 평균 4.5~5.5 m/s, 즉 **가속 구간이 거의 없다**).
+ * 평시 클램프(A_GK_SCALE 1.35, 7 m/s² × 1.35 ≈ 9.5 m/s²)로는 0.5 s에 1.2 m밖에 못 가고,
+ * 그것이 곧 "GK가 몸을 던졌는데 손이 공에 0.5 m 못 미친다"였다(실측, 박스 안 슛 재저술 후).
+ * 슛이 골라인 26.9 m에서 나가던 시절에는 비행이 930 ms라 이 근사로도 닿았다.
+ */
+export const A_GK_DIVE_SCALE = 3.2
+/**
+ * 스플릿 스텝 — GK가 임팩트 **직전**에 몸을 실을 방향으로 체중을 옮기는 시간(ms).
+ *
+ * 예지가 아니다: 실제 GK는 슈터의 백스윙(임팩트 260 ms 전)을 보고 스플릿 스텝을 밟아
+ * 착지 순간 몸을 이미 한쪽으로 싣는다 — 이것이 골키핑 교본의 기본기다. 우리는 그 창을
+ * 백스윙의 70%만 준다(180 ms ≈ 11프레임). 이 시간이 없으면 GK는 정지 상태에서 출발해
+ * 박스 안 슛의 짧은 비행(0.5~0.6 s) 안에 접촉점까지 몸통을 옮기지 못한다.
+ */
+export const GK_SET_MS = 180
+/** 다이브 중 GK 몸통 병진 상한(m/s) — 위 문헌 구간의 상단. */
+export const GK_DIVE_SPEED = 6.5
 /**
  * 겹침 분리(밀어내기)에 허용하는 가속(m/s²).
  *
@@ -494,6 +517,46 @@ function anchoredBallXZ(
 const GRAVITY = 9.81
 
 /**
+ * 골이 들어간 뒤 공이 **골망 안에서 멈추는 깊이**(m, 골라인 뒤).
+ *
+ * 왜 필요한가: 저술 좌표계는 0~100이라 골라인(100)까지밖에 못 쓴다. 그래서 골 종점은
+ * 언제나 골라인 **위**이고, 여운 동안 공이 그 자리에 내려앉으면 화면에서는 골문 앞
+ * 잔디에 굴러 멈춘 그림이 된다 — 블라인드 감사의 "골망은 비어 있고 공은 기둥 옆
+ * 잔디에" 지적이 이것이다. 네트 깊이({@link props.NET_DEPTH})가 2.0 m이므로 1.35 m는
+ * 네트를 뚫지 않으면서 확실히 "안쪽"이다.
+ */
+export const GOAL_NET_REST_M = 1.35
+/** 골라인 통과 → 네트에 멈추기까지(ms). 25 m/s로 들어온 공이 그물에 잡히는 시간. */
+export const GOAL_NET_MS = 260
+
+/**
+ * 골 여운 — 골라인 위의 종점에서 **골망 안으로** 밀어 넣고 잔디로 내려앉힌다.
+ *
+ * @param at    골 키프레임의 월드 XZ(골라인 위).
+ * @param side  공격한 쪽. home은 +X 골문, away는 −X 골문으로 들어간다.
+ * @param after 여운 진행도 0~1(SeqSample.after).
+ * @param rest  여운 전체 길이(ms) — 네트 진입은 그중 앞 {@link GOAL_NET_MS}만 쓴다.
+ * @param y0    골라인 통과 높이(m).
+ */
+export function goalNetRest(
+  at: { x: number; z: number },
+  side: 'home' | 'away',
+  after: number,
+  rest: number,
+  y0: number,
+): { x: number; y: number; z: number } {
+  const u = clamp((after * rest) / GOAL_NET_MS, 0, 1)
+  // 그물에 잡히는 감속 — 선형이 아니라 빠르게 들어갔다가 멎는다(ease-out).
+  const e = 1 - (1 - u) * (1 - u)
+  const sign = side === 'home' ? 1 : -1
+  return {
+    x: at.x + sign * GOAL_NET_REST_M * e,
+    y: lerp(y0, BALL_RADIUS, e),
+    z: at.z,
+  }
+}
+
+/**
  * 마지막 키프레임 **이후**의 탄도 연장 — 크로스바를 넘긴 미스가 골문 뒤로 사라지게 한다.
  *
  * 마지막 구간의 수평 속도와, 포물선 y(u)의 u=1에서의 기울기를 초기 조건으로 삼아
@@ -631,6 +694,45 @@ export function kickAt(
       : KICK_IMPACT_T + (1 - KICK_IMPACT_T) * ((t - k.tImpact) / fwd)
     bestGap = gap
     best = { kick: k, actionT: clamp(actionT, 0, 1) }
+  }
+  return best
+}
+
+/**
+ * 임팩트 **전에** 몸을 목표로 열기 시작하는 선행 시간(ms). 백스윙 창에 이만큼을 더한다.
+ *
+ * 왜 선행이 필요한가: yaw는 {@link YAW_TAU}=0.12 s 지수 스무딩이라 목표 각을 즉시
+ * 따라가지 않는다. 백스윙 창(260 ms)만으로는 1−e^(−0.26/0.12) = 88.5%밖에 수렴하지
+ * 않아, 180° 뒤를 보고 달려오던 선수는 임팩트 순간에도 20.7° 어긋난다. 260+240 = 500 ms를
+ * 주면 98.5%가 되어 잔차가 2.7°로 떨어진다. GK 다이브에서 쓴 선행 보정과 같은 처방이다.
+ *
+ * 축구적으로도 이것이 맞다 — 슈터는 마지막 두세 걸음에서 디딤발을 심고 상체를 목표로 연다.
+ */
+export const KICK_YAW_LEAD_MS = 240
+
+/**
+ * 이 시각에 **몸을 목표로 열어야 하는** 킥. {@link kickAt}과 같은 창에
+ * {@link KICK_YAW_LEAD_MS}만 앞으로 넓힌 것이다.
+ *
+ * {@link kickAt}과 분리한 이유: 킥 모션(actionT)은 창 밖에서 재생하면 안 되지만, 몸의
+ * 방향은 창이 열리기 전부터 돌기 시작해야 제때 맞는다. 또 {@link KICK_REACH} 취소와도
+ * 무관해야 한다 — 공으로 달려가는 중이라 아직 닿지 않은 선수야말로 몸을 열어야 한다.
+ */
+export function kickFacingAt(
+  kicks: KickEvent[],
+  t: number,
+  dwellMs: number,
+): KickEvent | null {
+  const back = (KICK_BACKSWING_MS + KICK_YAW_LEAD_MS) / dwellMs
+  const fwd = KICK_FOLLOW_MS / dwellMs
+  let best: KickEvent | null = null
+  let bestGap = Infinity
+  for (const k of kicks) {
+    if (t < k.tImpact - back || t > k.tImpact + fwd) continue
+    const gap = Math.abs(t - k.tImpact)
+    if (gap >= bestGap) continue
+    bestGap = gap
+    best = k
   }
   return best
 }
@@ -878,6 +980,8 @@ interface Plan {
   index: number
   isGk: boolean
   mover: boolean
+  /** 다이브 앵커를 향해 몸을 던지는 중인 GK인가 — 가속·속도 예산이 다르다. */
+  diving?: boolean
   tx: number
   tz: number
 }
@@ -925,7 +1029,10 @@ function planSide(
       tx = a.x + shift + Math.cos(ph + clock * 1.1) * 1.1
       tz = a.z + Math.sin(ph * 1.7 + clock * 0.9) * 1.1
     }
-    out.push({ id, side, number: numberById.get(id) ?? 0, index, isGk, mover, tx, tz })
+    out.push({
+      id, side, number: numberById.get(id) ?? 0, index, isGk, mover, tx, tz,
+      ...(isGk && gkAnchor ? { diving: true as const } : {}),
+    })
   })
   return out
 }
@@ -935,7 +1042,16 @@ function gkTarget(side: 'home' | 'away', ball: { x: number; z: number }): { x: n
   const box = gkBox(side)
   const ownGoalX = side === 'home' ? -HALF_W : HALF_W
   const f = clamp(Math.abs(ball.x - ownGoalX) / PITCH_W, 0, 1)
-  const depth = lerp(0.6, GK_BOX_DEPTH - 0.3, f)
+  /**
+   * 골라인에서 떨어진 거리(m). 하한 2.2 — **골라인에 붙어 서는 GK는 없다.**
+   *
+   * 왜 0.6에서 올렸나: 세이브 접촉점은 골라인 앞 2.2~3.2 m 띠에 있고(scenes.SAVE_CONTACT_M),
+   * 손이 그 점에 닿으려면 몸통이 골라인 앞 약 3.1 m에 와야 한다(gkDiveAnchor). 0.6~1.4 m에
+   * 서 있으면 슛이 떠난 뒤 2 m를 **전진**하며 동시에 옆으로 몸을 던져야 한다 — 박스 안
+   * 슛의 비행(0.5~0.6 s)에는 물리적으로 불가능했다(실측 손-공 0.4~1.1 m 미달).
+   * 실제 GK도 박스 안 슛을 앞두고는 골라인이 아니라 골 에어리어 선 근처에 선다.
+   */
+  const depth = lerp(2.2, GK_BOX_DEPTH - 0.3, f)
   const x = side === 'home' ? ownGoalX + depth : ownGoalX - depth
   return {
     x: clamp(x, box.xMin, box.xMax),
@@ -987,6 +1103,12 @@ interface Posed {
   /** 이 프레임의 실제 속도 벡터(m/s) — 다음 프레임 관성의 출발점. */
   vx: number
   vz: number
+  /**
+   * 이 프레임에 **저술 위치로 컷된** 선수인가(장면 전환의 무버).
+   * 분리 단계의 이동 예산 재투영에서 제외해야 한다 — 예산은 직전 프레임과의 연속성을
+   * 강제하므로, 걸면 컷이 그대로 되돌려진다(실측: 되돌아가 슈터가 45 m 뒤에서 찼다).
+   */
+  snapped?: boolean
 }
 
 /**
@@ -1146,7 +1268,7 @@ function separatePoses(posed: Posed[], dt: number): void {
     // 결과를 잇는 선분 위의 점도 항상 그 안에 있다.
     q.x = q.box ? clamp(q.x, q.box.xMin, q.box.xMax) : clamp(q.x, -HALF_W + EDGE_MARGIN, HALF_W - EDGE_MARGIN)
     q.z = q.box ? clamp(q.z, q.box.zMin, q.box.zMax) : clamp(q.z, -HALF_H + EDGE_MARGIN, HALF_H - EDGE_MARGIN)
-    if (q.pp && dt > 0) {
+    if (q.pp && dt > 0 && !q.snapped) {
       // 이동 예산 재적용 — 분리·클램프로 인한 순간이동 금지.
       // ★ 속도 상한만으로는 부족하다: 밀어내기는 한 프레임에 0 → cap을 만들 수 있어
       //   |Δv|/dt가 450 m/s²까지 튄다(실측). 그래서 **가속도**로도 제한한다.
@@ -1175,11 +1297,13 @@ function separatePoses(posed: Posed[], dt: number): void {
     }
     // 분리·클램프로 위치가 바뀌었으면 **속도도 실제 이동량에서 다시 유도한다** —
     // 안 그러면 관성 상태가 화면의 움직임과 어긋나 다음 프레임이 엉뚱하게 가속한다.
-    if (q.pp && dt > 0) {
+    if (q.pp && dt > 0 && !q.snapped) {
       q.vx = (q.x - q.pp.x) / dt
       q.vz = (q.z - q.pp.z) / dt
     }
-    q.speed = q.pp && dt > 0 ? Math.hypot(q.x - q.pp.x, q.z - q.pp.z) / dt : 0
+    // 컷된 무버의 속도는 0이다 — 컷 거리를 dt로 나누면 수백 m/s가 되어 다음 프레임의
+    // 관성이 폭발한다(가속도 게이트도 함께 무너진다).
+    q.speed = q.pp && dt > 0 && !q.snapped ? Math.hypot(q.x - q.pp.x, q.z - q.pp.z) / dt : 0
   }
 }
 
@@ -1251,7 +1375,7 @@ export function computeFrame(input: FrameInput): FrameState {
    * 몸을 볼 라인에 맞춘다 — 인과(임팩트 이후)는 지켜지고 도달은 가능해진다.
    */
   const gkAnchor =
-    diveKind === 'save' && contactWorld && t >= tShot
+    diveKind === 'save' && contactWorld && t >= tShot - GK_SET_MS / dwellMs
       ? gkDiveAnchor(divingSide, contactWorld, shotWorld ?? undefined)
       : null
   /**
@@ -1287,6 +1411,10 @@ export function computeFrame(input: FrameInput): FrameState {
       //   던진 쪽으로 각을 틀어 걷어 낸다(문전으로 되돌리지 않는 것이 세이브의 목적이다).
       ballPos = punchAfter(contactWorld, shotWorld, gkAnchor?.dir ?? 1,
         ((t - tContact) * dwellMs) / 1000)
+    } else if (sample.finished && event?.type === 'goal') {
+      // ★ 골은 골라인에서 멈추지 않는다 — 골망 안으로 들어가야 "골"로 읽힌다.
+      const rest = Math.max(1e-6, (1 - seq[seq.length - 1].t) * dwellMs)
+      ballPos = goalNetRest(w, seqSide, sample.after, rest, ballHeight(arc, 1, endY))
     } else if (sample.finished && endY != null && endY > BALL_RADIUS + 0.5) {
       // ★ 크로스바를 넘긴 공은 **그 자리에 내려앉지 않는다.** 마지막 키프레임은 골라인
       //   1 m 앞이라, 여운 동안 높이만 0으로 줄이면 4.5 m 상공의 공이 골문 안으로
@@ -1330,15 +1458,32 @@ export function computeFrame(input: FrameInput): FrameState {
     const tz = box ? clamp(p.tz, box.zMin, box.zMax) : clamp(p.tz, -HALF_H + EDGE_MARGIN, HALF_H - EDGE_MARGIN)
     const pp = prevById.get(p.id)
     const stamina = clamp((input.state[p.side].staminaByPlayer[p.id] ?? 100) / 100, 0, 1)
-    const cap = (p.isGk ? GK_MAX_SPEED : MAX_SPEED) * (0.78 + 0.22 * stamina)
+    const cap = (p.isGk ? (p.diving ? GK_DIVE_SPEED : GK_MAX_SPEED) : MAX_SPEED) * (0.78 + 0.22 * stamina)
 
     let x = tx
     let z = tz
     let vx = 0
     let vz = 0
+    /**
+     * 장면 전환 프레임에서는 **무버만** 저술 시작 위치로 컷한다(관성 무시).
+     *
+     * 왜 필요한가: `cut` 프레임에서 볼은 이미 저술 좌표로 순간이동하고 카메라도 컷한다
+     * (§1.9·§6). 그런데 무버는 직전 분이 남긴 자리에서 속도 상한으로 걸어왔다. 배역이
+     * 자기 진영에 있던 분(엔진이 고른 득점자가 풀백이면 60 m 뒤다)에는 장면이 끝날
+     * 때까지 따라잡지 못한다 — 실측(90분 4시드, 97슛): 임팩트 시점 슈터-저술 슛지점
+     * 어긋남 p90 8.9 m · **max 46.2 m**. 공은 그 선수의 발에 앵커링되므로 저술이
+     * 12 m로 쓴 슛이 화면에서는 **58 m 하프라인 슛**이 됐다(사용자 지적 ①의 꼬리).
+     *
+     * 무버 3명만 컷하는 이유: 나머지 19명의 목표는 포메이션 좌표라 분이 바뀌어도
+     * 연속이다. 컷하면 이유 없이 22명이 튄다.
+     */
+    if (input.cut && p.mover) {
+      return { p, pp, box, cap, x: tx, z: tz, speed: 0, vx: 0, vz: 0, snapped: true }
+    }
     if (pp && dt > 0) {
       const st = inertialStep(
-        pp.x, pp.z, pp.vx ?? 0, pp.vz ?? 0, tx, tz, cap, p.isGk ? A_GK_SCALE : 1, dt,
+        pp.x, pp.z, pp.vx ?? 0, pp.vz ?? 0, tx, tz, cap,
+        p.diving ? A_GK_DIVE_SCALE : p.isGk ? A_GK_SCALE : 1, dt,
       )
       x = st.x
       z = st.z
@@ -1371,6 +1516,27 @@ export function computeFrame(input: FrameInput): FrameState {
         kickerId = q.p.id
         kickT = kickNow.actionT
       }
+    }
+  }
+  /**
+   * 몸을 여는 킥과 그 **볼 출발 방향**(월드 각). 킥 모션 창보다 {@link KICK_YAW_LEAD_MS}
+   * 먼저 열린다.
+   *
+   * 왜 저술 구간 방향이 아니라 **차는 사람 → 목표점**인가: 공은 캐리어의 발 앞에
+   * 앵커링되므로(anchorPoint) 실제 비행은 언제나 "그 선수의 발 → 저술 도착점"이다.
+   * 저술 구간의 방향을 쓰면 선수가 저술 위치에서 벗어난 만큼 몸이 엉뚱한 데를 본다.
+   */
+  const facingKick = seq ? kickFacingAt(kicks, t, dwellMs) : null
+  let kickFace: { id: string; aim: number } | null = null
+  if (facingKick && seq) {
+    const q = posed.find(o => o.p.id === facingKick.playerId)
+    if (q) {
+      const si = facingKick.stepIndex
+      const target = toWorld(seq[Math.min(seq.length - 1, si + 1)].ball.x, seq[Math.min(seq.length - 1, si + 1)].ball.y)
+      const dx = target.x - q.x
+      const dz = target.z - q.z
+      // 목표가 발밑이면(0 거리) 방향이 정의되지 않는다 — 그때는 기존 규칙에 맡긴다.
+      if (Math.hypot(dx, dz) > 0.2) kickFace = { id: q.p.id, aim: Math.atan2(dz, dx) }
     }
   }
   // 세리머니: 골 키프레임 이후 CELEBRATE_MS 동안 득점팀 전원.
@@ -1409,12 +1575,27 @@ export function computeFrame(input: FrameInput): FrameState {
     // ★ 다이브하는 GK는 **접촉 기하가 정한 방향**을 본다. yaw가 자유롭게 흔들리면
     //   손의 측방 도달(로컬 ±Z)이 접촉점을 빗나가고, 그것이 "공 따로 골키퍼 따로"가 된다.
     const facingDive = gkAnchor && p.isGk && p.side === divingSide && diving
+    /**
+     * ★ 차는 사람은 **공이 나갈 방향**을 본다(임팩트 전 선행 창부터).
+     *
+     * 왜 이동 방향으로는 안 되는가: 킥 순간 슈터는 공을 향해 달려가는 중이라 이동
+     * 방향이 곧 주력 방향이고, 공은 목표로 나간다. 뒤로 흘려주는 패스면 "뒤를 보고
+     * 차는데 공은 반대로"가 정확히 나온다 — 실측(90분 4시드 361킥): 임팩트 순간
+     * |yaw − 볼 방향| **p50 83.3° · 90° 초과 46%**.
+     * 다이브 GK는 접촉 기하가 우선한다(손이 공에 닿아야 한다).
+     */
     const aim = facingDive
       ? gkAnchor.yaw
-      : moving
-        ? Math.atan2(z - (pp?.z ?? z), x - (pp?.x ?? x))
-        : Math.atan2(ball.z - z, ball.x - x)
-    const yaw = pp ? approachAngle(pp.yaw, aim, dt > 0 ? 1 - Math.exp(-dt / YAW_TAU) : 0) : aim
+      : kickFace && kickFace.id === p.id
+        ? kickFace.aim
+        : moving
+          ? Math.atan2(z - (pp?.z ?? z), x - (pp?.x ?? x))
+          : Math.atan2(ball.z - z, ball.x - x)
+    // ★ 장면 첫 프레임(cut)에 이미 차고 있는 선수는 스무딩을 건너뛴다. 빌드업 첫 패스와
+    //   흐름(flow)의 첫 터치는 t=0이 곧 임팩트라 선행 창이 아예 없다 — 직전 장면이 남긴
+    //   yaw에서 12%만 돌다가 차게 되고, 그것이 'ground'·'pass' 킥의 남은 오차였다.
+    const cutFacing = input.cut && kickFace != null && kickFace.id === p.id
+    const yaw = pp && !cutFacing ? approachAngle(pp.yaw, aim, dt > 0 ? 1 - Math.exp(-dt / YAW_TAU) : 0) : aim
 
     // 보폭 위상 — **이동거리 / 공유 보폭 모델**로 누적한다. 액션과 무관하게 항상 진행해야
     // 킥·세리머니 뒤 러닝으로 복귀할 때 다리가 튀지 않는다. 최초 프레임은 선수별 해시로

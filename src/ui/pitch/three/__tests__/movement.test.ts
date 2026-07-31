@@ -11,7 +11,8 @@ import {
   computeFrame, ballHeight, arcKindFor, sampleSequence, gkBox,
   BALL_PEAK, BALL_END, BALL_RADIUS, BALL_SHIFT, CONVERGE_MAX, GK_MAX_SPEED, MAX_SPEED,
   STANDOFF, MOVER_LOOKAHEAD_MS, DEFAULT_DWELL_MS,
-  kickEvents, kickAt, dragProgress, diveScheduleAt, gkDiveAnchor, gkHandWorld,
+  kickEvents, kickAt, kickFacingAt, KICK_YAW_LEAD_MS, KICK_FOLLOW_MS, dragProgress,
+  goalNetRest, GOAL_NET_MS, GOAL_NET_REST_M, diveScheduleAt, gkDiveAnchor, gkHandWorld,
   GK_DIVE_MS, GK_REACTION_MS, KICK_IMPACT_T, KICK_BACKSWING_MS,
   GK_DIVE_REACH, GK_HAND_HEIGHT, GK_BEATEN_LATE_MS, DIVE_LAY_U, A_SEPARATE,
   type FrameInput,
@@ -1327,8 +1328,11 @@ describe('★ R7 — 슛 국면에 슈터가 프레임 안에 남는다', () => 
     const idx = (t: number) => Math.round(t * (frames.length - 1))
     // 빌드업 초반(임팩트 2 s 전)에는 닫혀 있다.
     expect(frames[idx(Math.max(0, tShot - 2 / 8.4))].focusRadius ?? 0).toBeLessThan(1)
-    // 임팩트에서는 슈터-접촉점 반경(≈10 m 이상)이 열려 있다.
-    expect(frames[idx(tShot)].focusRadius ?? 0).toBeGreaterThan(8)
+    // 임팩트에서는 슈터-접촉점 반경이 열려 있다.
+    // ★ 하한을 8 → 5로 내렸다. 예전 저술은 모든 슛이 골문 26.9 m에서 나가 반경이 항상
+    //   12 m를 넘었는데, 그 값 자체가 사용자 지적 ①("너무 먼 곳에서 중거리 슛")이었다.
+    //   실측 분포로 재저술한 지금 세이브 슛은 16.8~20.6 m이고 반경은 6.6~9 m다.
+    expect(frames[idx(tShot)].focusRadius ?? 0).toBeGreaterThan(5)
     // dwell 끝(여운)에는 다시 닫혀 결과 지점에 붙는다.
     expect(frames[frames.length - 1].focusRadius ?? 0).toBeLessThan(1)
   })
@@ -1676,5 +1680,266 @@ describe('★ ④ 세이브는 손에 닿고, 잡거나 쳐낸다', () => {
       return
     }
     throw new Error('punch 세이브를 하나도 찾지 못했다')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ★ 킥 폼이 방향과 맞는다 (사용자 지적 R5 ③)
+//
+// > 슛/패스 하는 방향을 바라보고 해야 하는데 뒤를 바라보고 슛을 하는데 공은 반대로 가고 있어.
+//
+// 원인은 yaw가 **이동 방향**이었던 것이다. 킥 순간 슈터는 공을 향해 달려가는 중이라
+// yaw가 주력 방향을 가리키고, 공은 목표로 나간다. 실측(90분 4시드 361킥):
+// |yaw − 볼 방향| **p50 83.3° · 30° 초과 79% · 90° 초과 46%**.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('★ 차는 사람은 공이 나갈 방향을 본다', () => {
+  /** 각도 차를 −π~π로 접어 절댓값(도)으로. */
+  const angleGap = (a: number, b: number) => {
+    let d = a - b
+    while (d > Math.PI) d -= Math.PI * 2
+    while (d < -Math.PI) d += Math.PI * 2
+    return Math.abs((d * 180) / Math.PI)
+  }
+
+  /**
+   * 한 장면을 **직전 장면을 물려받은 채** 프레임 단위로 돌려, 임팩트 프레임의
+   * (yaw, 볼이 실제로 날아갈 방향) 각도 차를 모은다.
+   * 직전 장면을 물려받는 것이 중요하다 — prev=null로 시작하면 첫 프레임에 모두가
+   * 안무 좌표로 스냅해 yaw가 이미 맞아 있고, 실제 게임 조건이 아니다.
+   */
+  function impactGaps(type: MatchEvent['type']): { arc: string; gap: number }[] {
+    const st = structuredClone(base)
+    const dwell = 8400
+    const warm = buildSequence(ev('goal', { minute: 29, playerId: homeId(7) }), st.home, st.away)
+    let prev: FrameState | null = null
+    for (let k = 0; k <= 200; k++) {
+      prev = computeFrame(input({
+        state: st, prev, dt: 1 / 60, t: k / 200, sequence: warm, sequenceSide: 'home',
+        event: ev('goal', { minute: 29, playerId: homeId(7) }), minute: 29, dwellMs: dwell,
+      }))
+    }
+    const e = ev(type, { minute: 30, playerId: homeId(9) })
+    const seq = buildSequence(e, st.home, st.away)
+    const kicks = kickEvents(seq)
+    const out: { arc: string; gap: number }[] = []
+    const N = 504
+    for (let k = 0; k <= N; k++) {
+      const t = k / N
+      const f: FrameState = computeFrame(input({
+        state: st, prev, dt: 1 / 60, t, sequence: seq, sequenceSide: 'home',
+        event: e, minute: 30, dwellMs: dwell, ...(k === 0 ? { cut: true } : {}),
+      }))
+      prev = f
+      for (const kick of kicks) {
+        if (Math.abs(t - kick.tImpact) > 0.5 / N) continue
+        const p = f.players.find(q => q.id === kick.playerId)
+        if (!p) continue
+        // 공은 차는 사람의 발에 앵커링되므로 실제 비행은 "그 선수 → 다음 키프레임"이다.
+        const to = toWorld(seq[kick.stepIndex + 1].ball.x, seq[kick.stepIndex + 1].ball.y)
+        out.push({
+          arc: seq[kick.stepIndex].arc ?? 'pass',
+          gap: angleGap(p.yaw, Math.atan2(to.z - p.z, to.x - p.x)),
+        })
+      }
+    }
+    return out
+  }
+
+  it('★ 임팩트 순간 yaw가 볼 출발 방향과 15° 안에서 맞는다(슛·패스·크로스 전부)', () => {
+    for (const type of ['goal', 'save', 'miss', 'shot'] as const) {
+      const gaps = impactGaps(type)
+      expect(gaps.length, `${type}: 임팩트 프레임이 없다`).toBeGreaterThanOrEqual(3)
+      for (const g of gaps) {
+        expect(g.gap, `${type} arc=${g.arc}: yaw가 ${g.gap.toFixed(0)}° 어긋났다`).toBeLessThan(15)
+      }
+    }
+  })
+
+  it('★ 뒤돌아 차는 프레임이 하나도 없다(90° 초과 금지)', () => {
+    for (const type of ['goal', 'save', 'miss'] as const) {
+      for (const g of impactGaps(type)) expect(g.gap).toBeLessThan(90)
+    }
+  })
+
+  it('몸을 여는 창은 킥 모션 창보다 앞에서 열리고 뒤로는 같이 닫힌다', () => {
+    const kicks = kickEvents(buildScene('balanced', 'goal', 0).points.map(p => ({
+      t: p.t, ball: { x: p.ball[0], y: p.ball[1] }, movers: [],
+      ...(p.carrier != null ? { carrier: `slot${p.carrier}` } : {}),
+      ...(p.arc ? { arc: p.arc } : {}),
+    })))
+    expect(kicks.length).toBeGreaterThan(0)
+    const k = kicks[kicks.length - 1]
+    const dwell = 8600
+    // 킥 모션은 아직 안 열렸는데 몸은 이미 돌기 시작하는 시각이 존재한다.
+    const early = k.tImpact - (KICK_BACKSWING_MS + KICK_YAW_LEAD_MS / 2) / dwell
+    expect(kickAt(kicks, early, dwell)).toBeNull()
+    expect(kickFacingAt(kicks, early, dwell)?.tImpact).toBe(k.tImpact)
+    // 선행 창보다 더 앞이면 둘 다 닫혀 있다.
+    const tooEarly = k.tImpact - (KICK_BACKSWING_MS + KICK_YAW_LEAD_MS + 60) / dwell
+    expect(kickFacingAt(kicks, tooEarly, dwell)).toBeNull()
+    // 팔로스루가 끝나면 둘 다 닫힌다(몸의 방향까지 붙잡아 두지 않는다).
+    const late = k.tImpact + (KICK_FOLLOW_MS + 60) / dwell
+    expect(kickFacingAt(kicks, late, dwell)).toBeNull()
+  })
+
+  it('선행 시간이 yaw 시상수의 2배 이상이다 — 안 그러면 제때 못 돈다', () => {
+    // YAW_TAU = 0.12 s. 백스윙 260 + 선행 240 = 500 ms → 1−e^(−0.5/0.12) = 98.5% 수렴.
+    const window = (KICK_BACKSWING_MS + KICK_YAW_LEAD_MS) / 1000
+    expect(1 - Math.exp(-window / 0.12)).toBeGreaterThan(0.97)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ★ 장면 전환에서 무버가 저술 위치로 컷된다 (사용자 지적 R5 ①의 꼬리)
+//
+// 볼과 카메라는 이미 컷하는데 무버만 직전 분 자리에서 걸어왔다. 배역이 자기 진영에
+// 있던 분에는 끝까지 따라잡지 못했고, 공이 그 선수 발에 앵커링되므로 저술이 12 m로
+// 쓴 슛이 화면에서는 58 m 하프라인 슛이 됐다(실측 90분 4시드: 어긋남 max 46.2 m).
+// ═══════════════════════════════════════════════════════════════════════════
+describe('★ 장면 전환 — 무버는 저술 위치에서 시작한다', () => {
+  function firstFrameAfterCut() {
+    const st = structuredClone(base)
+    const dwell = 8400
+    // 반대편 골문으로 향하는 장면을 먼저 끝까지 돌려 배역을 멀리 떨어뜨린다.
+    const warmEv = ev('goal', { minute: 29, teamId: away.id, playerId: awayId(9) })
+    const warm = buildSequence(warmEv, st.home, st.away)
+    let prev: FrameState | null = null
+    for (let k = 0; k <= 200; k++) {
+      prev = computeFrame(input({
+        state: st, prev, dt: 1 / 60, t: k / 200, sequence: warm, sequenceSide: 'away',
+        event: warmEv, minute: 29, dwellMs: dwell,
+      }))
+    }
+    const e = ev('goal', { minute: 30, playerId: homeId(9) })
+    const seq = buildSequence(e, st.home, st.away)
+    const f = computeFrame(input({
+      state: st, prev, dt: 1 / 60, t: 0, sequence: seq, sequenceSide: 'home',
+      event: e, minute: 30, dwellMs: dwell, cut: true,
+    }))
+    return { f, seq, prev: prev! }
+  }
+
+  it('컷 프레임에서 무버 3명이 안무 좌표에 있다', () => {
+    const { f, seq } = firstFrameAfterCut()
+    for (const m of seq[0].movers) {
+      const p = find(f, m.playerId)
+      const w = toWorld(m.x, m.y)
+      // 선행(MOVER_LOOKAHEAD_MS)과 분리 밀어내기만큼의 여유만 허용한다.
+      expect(Math.hypot(p.x - w.x, p.z - w.z), `${m.playerId}`).toBeLessThan(3)
+    }
+  })
+
+  it('컷된 무버의 속도는 0이다 — 컷 거리를 dt로 나누면 관성이 폭발한다', () => {
+    const { f, seq } = firstFrameAfterCut()
+    for (const m of seq[0].movers) {
+      const p = find(f, m.playerId)
+      expect(Math.hypot(p.vx ?? 0, p.vz ?? 0), `${m.playerId} 속도`).toBeLessThan(0.1)
+      expect(p.speed).toBeLessThan(0.1)
+    }
+  })
+
+  it('무버가 아닌 19명은 컷하지 않는다(이유 없이 22명이 튀지 않는다)', () => {
+    const { f, seq, prev } = firstFrameAfterCut()
+    const moverIds = new Set(seq[0].movers.map(m => m.playerId))
+    for (const p of f.players) {
+      if (moverIds.has(p.id)) continue
+      const q = prev.players.find(o => o.id === p.id)!
+      // 한 프레임 이동은 속도 상한 안이다.
+      expect(Math.hypot(p.x - q.x, p.z - q.z) * 60, p.id).toBeLessThanOrEqual(MAX_SPEED + 0.5)
+    }
+  })
+
+  it('컷 이후에는 슈터가 저술 슛 지점에 제때 도착한다', () => {
+    const st = structuredClone(base)
+    const dwell = 8600
+    const warmEv = ev('goal', { minute: 29, teamId: away.id, playerId: awayId(9) })
+    const warm = buildSequence(warmEv, st.home, st.away)
+    let prev: FrameState | null = null
+    for (let k = 0; k <= 200; k++) {
+      prev = computeFrame(input({
+        state: st, prev, dt: 1 / 60, t: k / 200, sequence: warm, sequenceSide: 'away',
+        event: warmEv, minute: 29, dwellMs: dwell,
+      }))
+    }
+    const e = ev('goal', { minute: 30, playerId: homeId(9) })
+    const seq = buildSequence(e, st.home, st.away)
+    const kicks = kickEvents(seq)
+    const shot = kicks[kicks.length - 1]
+    const N = 516
+    let gap = Infinity
+    for (let k = 0; k <= N; k++) {
+      const t = k / N
+      const f: FrameState = computeFrame(input({
+        state: st, prev, dt: 1 / 60, t, sequence: seq, sequenceSide: 'home',
+        event: e, minute: 30, dwellMs: dwell, ...(k === 0 ? { cut: true } : {}),
+      }))
+      prev = f
+      if (Math.abs(t - shot.tImpact) > 0.5 / N) continue
+      const p = find(f, shot.playerId)
+      const w = toWorld(shot.ball.x, shot.ball.y)
+      gap = Math.hypot(p.x - w.x, p.z - w.z)
+    }
+    expect(gap, `임팩트 시점 슈터-저술 슛지점 ${gap.toFixed(1)} m`).toBeLessThan(2)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ★ 골 여운 — 공이 골망 안에 멈춘다 (블라인드 감사 ⑥)
+//
+// 저술 좌표계(0~100)는 골라인까지밖에 못 쓴다. 그래서 골 종점은 늘 골라인 **위**이고,
+// 예전에는 여운 동안 그 자리에 내려앉아 "골망은 비어 있고 공은 골문 앞 잔디"가 됐다.
+// ═══════════════════════════════════════════════════════════════════════════
+describe('★ 골은 골망 안에서 멈춘다', () => {
+  /** 골문 반폭(m). */
+  const POST_Z = 3.66
+  /** 네트 깊이(m) — props.NET_DEPTH. 공이 이보다 뒤로 가면 그물을 뚫은 것이다. */
+  const NET_DEPTH = 2.0
+
+  const playGoal = (side: 'home' | 'away', minute: number) => {
+    const st = structuredClone(base)
+    const team = side === 'home' ? st.home : st.away
+    const e = ev('goal', { minute, teamId: team.team.id, playerId: team.tactics.lineup[9].playerId })
+    const seq = buildSequence(e, st.home, st.away)
+    let prev: FrameState | null = null
+    const N = 600
+    for (let k = 0; k <= N; k++) {
+      prev = computeFrame(input({
+        state: st, prev, dt: 1 / 60, t: k / N, sequence: seq, sequenceSide: side,
+        event: e, minute, dwellMs: 8600, ...(k === 0 ? { cut: true } : {}),
+      }))
+    }
+    return prev!
+  }
+
+  it('여운 끝에 공이 골라인 뒤·기둥 사이·크로스바 아래에 있다(양 팀)', () => {
+    for (const side of ['home', 'away'] as const) {
+      for (const minute of [7, 23, 44, 66, 88]) {
+        const f = playGoal(side, minute)
+        const sign = side === 'home' ? 1 : -1
+        const depth = sign * f.ball.x - PITCH_W / 2
+        const tag = `${side}/${minute}': 깊이 ${depth.toFixed(2)} m · z ${f.ball.z.toFixed(2)}`
+        expect(depth, `${tag} — 골라인을 못 넘었다`).toBeGreaterThan(0.5)
+        expect(depth, `${tag} — 그물을 뚫었다`).toBeLessThan(NET_DEPTH)
+        expect(Math.abs(f.ball.z), `${tag} — 기둥 밖이다`).toBeLessThan(POST_Z - 0.5)
+        expect(f.ball.y, `${tag} — 크로스바 위다`).toBeLessThan(2.44)
+      }
+    }
+  })
+
+  it('goalNetRest는 여운 앞부분에서 네트에 안착하고 그 뒤로는 움직이지 않는다', () => {
+    const at = { x: PITCH_W / 2, z: 1.2 }
+    const rest = 2000
+    const early = goalNetRest(at, 'home', GOAL_NET_MS / rest / 2, rest, 1.05)
+    const settled = goalNetRest(at, 'home', GOAL_NET_MS / rest, rest, 1.05)
+    const late = goalNetRest(at, 'home', 1, rest, 1.05)
+    expect(early.x).toBeGreaterThan(at.x)
+    expect(early.x).toBeLessThan(settled.x)
+    expect(late.x).toBeCloseTo(settled.x, 6)
+    expect(late.z).toBe(at.z)
+    // 안착하면 잔디에 놓인다(공 반지름).
+    expect(late.y).toBeCloseTo(BALL_RADIUS, 6)
+    // away는 반대 골문으로 들어간다.
+    expect(goalNetRest({ x: -PITCH_W / 2, z: 0 }, 'away', 1, rest, 1.05).x)
+      .toBeCloseTo(-PITCH_W / 2 - GOAL_NET_REST_M, 6)
   })
 })
