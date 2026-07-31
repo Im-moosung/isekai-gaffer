@@ -18,7 +18,7 @@ import { createCameraRig } from './camera'
 import { entranceCameraMode, entranceFrame, type EntranceCast } from './entrance'
 import { FLASH_CONCEDED, FLASH_SCORED, createBall, flashQuad, goalBurst, type GoalBurst } from './fx3d'
 import { bindResize, createRendererHost, webgl2Available } from './host'
-import { computeFrame } from './movement'
+import { DIVE_LAY_U, KICK_IMPACT_T, computeFrame } from './movement'
 import { createRenderScaler, readStoredScale, writeStoredScale } from './perf'
 import { createPlayer, disposePlayerCaches, type PlayerRig } from './player3d'
 import { createPostFX } from './postfx'
@@ -91,6 +91,23 @@ const CELEBRATE_TOTAL_S = 4.5
 const CROWD_WINDOW_S = 4
 /** 카메라 셰이크 임펄스(m). */
 const GOAL_IMPULSE = 0.35
+
+// ── 임팩트 연출(발-공 / 손-공) ────────────────────────────────────
+// 리서치(§2.3)는 "타격감의 본체는 임팩트 프레임을 볼 출발 시각에 맞추는 것이고 히트스톱은
+// 그 위의 화장"이라고 결론냈다. 본체(역방향 스케줄링·GK 인과)는 c9daccf에서 끝났으므로
+// 이제 화장을 올린다. **히트스톱은 채택하지 않았다** — 우리 볼 위치는 dwell 상대 t의
+// 순수 함수라 몇 프레임 정지시키려면 시간축에 오프셋 상태를 들여야 하고, 그러면 실측으로
+// 캘리브레이션한 구간 소요(볼 속도)가 화면에서 그대로 나오지 않는다. 결정론 계약에도
+// 상태가 하나 늘어난다. 대신 **접촉 프레임에 셰이크 + 잔디 파편**만 붙인다(비용 0의 상태).
+/** 킥 접촉 셰이크(m) — 골(0.35)의 1/3. 화면이 흔들렸다고 인지되는 최소치. */
+const KICK_IMPULSE = 0.11
+/** 세이브 접촉 셰이크(m) — 킥보다 크다(막아 낸 쪽이 더 큰 사건이다). */
+const SAVE_IMPULSE = 0.18
+/** 임팩트 파편 수·수명(s) — 접촉점에 붙어 0.3 s 만에 사라지는 잔디 조각. */
+const IMPACT_COUNT = 16
+const IMPACT_LIFE = 0.34
+/** 잔디 파편 색(마른 잔디·흙). 팀 컬러를 쓰면 골 콘페티와 구분되지 않는다. */
+const IMPACT_COLOR = 0xcfd6c4
 /** 교체·퇴장으로 새 선수가 등장해도 리그 수는 여기서 멈춘다(무한 증식 방지). */
 const MAX_RIGS = 40
 
@@ -282,6 +299,13 @@ export function Match3D(props: Match3DProps) {
       let goalAt = -1
       let crowdActive = false
       /**
+       * 직전 프레임의 킥·다이브 진행도. **접촉 프레임 검출**에만 쓴다 —
+       * 진행도가 임팩트 지점(킥 {@link KICK_IMPACT_T} / 다이브 {@link DIVE_LAY_U})을
+       * 넘어서는 그 한 프레임에만 셰이크·파편이 발동한다(매 프레임 쌓이지 않게).
+       */
+      let prevKickT = -1
+      let prevDiveT = -1
+      /**
        * 최후의 수단(블룸 끄기)을 이미 썼는가. 해상도 하한에서도 계속 느릴 때 **한 번만**
        * 발동한다. 그래도 관중·파티클 같은 연출은 끝까지 살려 둔다.
        */
@@ -394,8 +418,39 @@ export function Match3D(props: Match3DProps) {
 
         ball.update(frame.ball, dt)
 
-        // ── 골 연출: goal-cam → celebrate, 파티클·플래시·관중 ──
         const ev = frame.event
+        // ── 임팩트: 발이 공에 닿는 프레임 · GK 손이 공에 닿는 프레임 ──
+        // 포즈 진행도가 접촉 지점을 **넘어서는 프레임**을 경계로 잡는다. computeFrame이
+        // 이미 두 진행도를 볼 이벤트 시각에 역산해 맞춰 두었으므로(kickAt·diveScheduleAt),
+        // 여기서 별도의 시간 계산 없이 "지금이 접촉"을 알 수 있다.
+        const kicker = frame.players.find(pl => pl.action === 'kick')
+        const kickT = kicker ? kicker.actionT : -1
+        if (kicker && prevKickT >= 0 && prevKickT < KICK_IMPACT_T && kickT >= KICK_IMPACT_T) {
+          camRig.impulse(KICK_IMPULSE)
+          if (!reduced) {
+            const puff = goalBurst(THREE, IMPACT_COLOR, { x: frame.ball.x, y: 0.12, z: frame.ball.z }, {
+              seed: p.state.seed + minute * 31, count: IMPACT_COUNT, life: IMPACT_LIFE, speed: 0.3, size: 0.34,
+            })
+            scene.add(puff.mesh)
+            bursts.push(puff)
+          }
+        }
+        prevKickT = kickT
+        const diver = frame.players.find(pl => pl.action === 'dive')
+        const diveT = diver ? diver.actionT : -1
+        if (diver && ev === 'save' && prevDiveT >= 0 && prevDiveT < DIVE_LAY_U && diveT >= DIVE_LAY_U) {
+          camRig.impulse(SAVE_IMPULSE)
+          if (!reduced) {
+            const puff = goalBurst(THREE, IMPACT_COLOR, { x: frame.ball.x, y: 0.12, z: frame.ball.z }, {
+              seed: p.state.seed + minute * 57, count: IMPACT_COUNT, life: IMPACT_LIFE, speed: 0.34, size: 0.36,
+            })
+            scene.add(puff.mesh)
+            bursts.push(puff)
+          }
+        }
+        prevDiveT = diveT
+
+        // ── 골 연출: goal-cam → celebrate, 파티클·플래시·관중 ──
         // 분당 1회만 발동(같은 골에 파티클이 매 프레임 쌓이지 않게).
         if (minute !== goalMinute) {
           goalMinute = minute
@@ -453,7 +508,7 @@ export function Match3D(props: Match3DProps) {
         }
 
         // ── 카메라 적용 + 렌더 ───────────────────────────────────
-        camRig.update({ focus: frame.focus, t: elapsed, dt, camera })
+        camRig.update({ focus: { ...frame.focus, r: frame.focusRadius ?? 0 }, t: elapsed, dt, camera })
         post.render(dt)
       }
 

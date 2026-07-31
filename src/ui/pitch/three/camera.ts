@@ -50,6 +50,11 @@ export interface CameraShot {
 export interface Focus {
   x: number
   z: number
+  /**
+   * focus 주위로 **반드시 프레임에 담아야 할 반경(m)**. 생략·0이면 기존 동작 그대로.
+   * `highlight`만 소비한다(FrameState.focusRadius가 정본 — movement가 계산한다).
+   */
+  r?: number
 }
 
 // ── 경기장 지오메트리(scene.ts 실측 미러) ─────────────────────────
@@ -140,6 +145,21 @@ export const HIGHLIGHT_FOV = 34
 export const HIGHLIGHT_Y_TIGHT = 11
 export const HIGHLIGHT_DIST_TIGHT = 24
 export const HIGHLIGHT_FOV_TIGHT = 24
+
+// ── 프레이밍(배역을 담는 최소 조건) ───────────────────────────────
+// **왜 필요한가**(실측, tools/scene-timing): 20 m짜리 슛의 배역은 슈터와 접촉점 둘인데
+// 타이트 프리셋(24° @ 24 m)의 가시 폭이 약 16 m다. 볼만 쫓으면 볼 도착 시각에 슈터가
+// 프레임 밖(NDC x = -1.29 ~ -2.26)으로 밀린다 — "누가 찼는지"가 사라진다.
+/** 프레이밍 반경 계산에 쓰는 최소 종횡비. 실제 뷰포트가 이보다 넓으면 여유가 더 생긴다. */
+export const FRAME_ASPECT = 1.5
+/** 배역 외접원 바깥에 남기는 여백(m) — 딱 맞게 담으면 팔다리가 프레임 선에 붙는다. */
+export const FRAME_MARGIN = 2.5
+/** 프레이밍이 요구할 수 있는 최대 화각. 이보다 넓히면 원근이 과장돼 중계로 안 읽힌다. */
+export const HIGHLIGHT_FOV_WIDE = 38
+/** 프레이밍이 요구할 수 있는 최대 거리(m). 이보다 물러나면 선수가 점이 된다. */
+export const HIGHLIGHT_DIST_MAX = 40
+/** 프레이밍으로 물러날 때 높이를 함께 올리는 상한 배수(부감이 과해지지 않게). */
+const FRAME_Y_GAIN_MAX = 1.45
 
 // ── set-piece(코너·프리킥 전용 하이 대각) ─────────────────────────
 /** 박스 전체를 담기 위한 높이(m) — 롱사이드 스탠드 상단보다 훨씬 위. */
@@ -330,7 +350,7 @@ export function cameraFor(mode: CameraMode, focus: Focus, t: number, seed: numbe
   const fz = clamp(focus.z, -HALF_H - 4, HALF_H + 4)
   switch (mode) {
     case 'highlight':
-      return clampShot(highlightShot(fx, fz, t, seed))
+      return clampShot(highlightShot(fx, fz, t, seed, focus.r ?? 0))
     case 'goal-cam':
       return clampShot(goalCamShot(fx, fz, t, seed))
     case 'celebrate':
@@ -371,13 +391,35 @@ function broadcastShot(fx: number, fz: number, t: number, seed: number): CameraS
   }
 }
 
+/** 화각 f(°)·거리 d(m)에서 프레임이 담는 수평 반폭(m). {@link FRAME_ASPECT} 기준. */
+export function frameHalfWidth(fov: number, dist: number): number {
+  return Math.tan((fov * Math.PI) / 360) * FRAME_ASPECT * dist
+}
+
 /**
  * 액션 존 근접 컷 — focus 기준 사이드라인 쪽에 선다.
  * 위험도에 따라 거리 40→24m, 높이 17→11m, 화각 34→24°로 **연속** 변한다.
+ *
+ * @param r 프레임에 담아야 할 배역 외접 반경(m). 0이면 예전과 완전히 같은 샷이다.
+ *          0보다 크면 **줌을 먼저 풀고**(화각 ≤ {@link HIGHLIGHT_FOV_WIDE}) 그래도
+ *          모자랄 때만 물러난다(거리 ≤ {@link HIGHLIGHT_DIST_MAX}) — 카메라를 먼저
+ *          물리면 인물이 작아지지만 줌을 푸는 것은 실제 방송 카메라의 첫 반응이다.
  */
-function highlightShot(fx: number, fz: number, t: number, seed: number): CameraShot {
+function highlightShot(fx: number, fz: number, t: number, seed: number, r = 0): CameraShot {
   const g = danger(fx, fz)
-  const dist = lerp(HIGHLIGHT_DIST, HIGHLIGHT_DIST_TIGHT, g)
+  const dist0 = lerp(HIGHLIGHT_DIST, HIGHLIGHT_DIST_TIGHT, g)
+  const y0 = lerp(HIGHLIGHT_Y, HIGHLIGHT_Y_TIGHT, g)
+  let dist = dist0
+  let fov = lerp(HIGHLIGHT_FOV, HIGHLIGHT_FOV_TIGHT, g)
+  const need = r > 0 ? r + FRAME_MARGIN : 0
+  if (need > 0 && frameHalfWidth(fov, dist) < need) {
+    // 1) 화각을 넓혀 본다.
+    fov = Math.min(HIGHLIGHT_FOV_WIDE, (360 / Math.PI) * Math.atan(need / (FRAME_ASPECT * dist)))
+    // 2) 화각 상한에서도 모자라면 물러난다.
+    if (frameHalfWidth(fov, dist) < need) {
+      dist = Math.min(HIGHLIGHT_DIST_MAX, need / (Math.tan((fov * Math.PI) / 360) * FRAME_ASPECT))
+    }
+  }
   // 공이 골문 쪽일수록 대각선으로 붙어 "공격 방향"이 화면에 담긴다.
   const bias = clamp(fx / HALF_W, -1, 1) * 0.42
   // 각도만 흔들어 focus와의 방향각만 미세하게 살아 있게 한다.
@@ -386,11 +428,12 @@ function highlightShot(fx: number, fz: number, t: number, seed: number): CameraS
   return {
     pos: {
       x: fx + Math.cos(az) * dist,
-      y: lerp(HIGHLIGHT_Y, HIGHLIGHT_Y_TIGHT, g),
+      // 물러난 만큼만 높이를 올린다 — 낮은 렌즈로 멀리서 보면 앞 선수에 뒤 선수가 가린다.
+      y: y0 * Math.min(FRAME_Y_GAIN_MAX, dist / dist0),
       z: fz + Math.sin(az) * dist,
     },
     lookAt: { x: fx, y: 1.4, z: fz },
-    fov: lerp(HIGHLIGHT_FOV, HIGHLIGHT_FOV_TIGHT, g),
+    fov,
   }
 }
 

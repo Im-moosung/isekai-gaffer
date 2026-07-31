@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Application, Container, Graphics, Text } from 'pixi.js'
 import type { MatchState, MatchEvent } from '../../../engine/types'
 import { slotCoords } from '../formations'
-import type { ChoreoStep } from '../choreography'
+import { attackingSideOf, type ChoreoStep } from '../choreography'
 import { PitchView } from '../PitchView'
 import {
   PITCH_W, PITCH_H, ZOOM, toWorld, clamp, lerp, clampFocus,
@@ -323,7 +323,12 @@ export function PixiPitch(props: PixiPitchProps) {
           const s = sampleSeq(curSeq, prog)
           ballWorld = s.ball
           const ballPx = { x: offX + s.ball.x * scale, y: offY + s.ball.y * scale }
-          const side = p.sequenceSide ?? 'home'
+          // ★ 공격 팀은 이벤트에서 다시 계산한다 — `save`의 teamId는 막은 팀(수비)이라
+          //   prop을 그대로 믿으면 무버 도트가 **반대 팀 색**으로 찍힌다
+          //   (choreography.attackingSideOf 참조).
+          const side = p.lastEvent
+            ? attackingSideOf(p.lastEvent, p.state.home.team.id)
+            : (p.sequenceSide ?? 'home')
           const moverColor = side === 'home' ? homeColor : awayColor
           // 무버(공격 팀 동반 러너 — 작은 팀컬러 도트 + 흰 링으로 선수임을 명확히).
           for (const m of s.movers) {
@@ -338,9 +343,28 @@ export function PixiPitch(props: PixiPitchProps) {
             shakeStart = now
             goalArmed = null
           }
-          // 모션 트레일(잔상 페이드) — reduced-motion 시 생략.
+          /**
+           * 모션 트레일(잔상 페이드) — reduced-motion 시 생략.
+           *
+           * **3D에서는 트레일을 제거했지만(a91d378) 여기서는 남긴다.** 그 4가지 근거를
+           * 이 렌더러에 그대로 적용해 보면 셋이 성립하지 않는다:
+           *  1) "중계에 트레일은 없다" — 이 뷰는 중계 카메라가 아니라 **부감 작전판**이다.
+           *     선수도 원근 없는 색 도트다. 도식의 어휘와 방송의 어휘가 다르다.
+           *  2) "균일한 불투명 구체 10개는 번짐이 아니다" — 여기 트레일은 반경 0.3→1.0배,
+           *     알파 0→0.5로 실제로 감쇠하는 꼬리다(3D 버전은 균일 크기였다).
+           *  3) "높이는 컨택트 섀도우가 준다" — 2D에는 그림자도 높이도 없다. 부감에서
+           *     **속도와 진행 방향**을 말하는 단서가 트레일뿐이다.
+           *  4) 비용: Graphics 하나에 원 14개. 3D의 메시·머티리얼 10개와 급이 다르다.
+           *
+           * ★ 다만 **정지 중에는 쌓지 않는다**: 장면에 컨트롤 정지(scenes.TOUCH_MS = 380 ms)가
+           *   생기면서, 무조건 push하던 예전 코드는 같은 픽셀에 14개를 겹쳐 공 옆에
+           *   덩어리를 만들었다. 이동한 프레임만 기록하면 꼬리가 곧 속도가 된다.
+           */
           if (!reduced) {
-            trail.push({ x: ballPx.x, y: ballPx.y })
+            const tip = trail[trail.length - 1]
+            const moved = !tip || Math.hypot(ballPx.x - tip.x, ballPx.y - tip.y) > R * 0.3
+            if (moved) trail.push({ x: ballPx.x, y: ballPx.y })
+            else if (trail.length > 0) trail.shift() // 멈춰 있으면 꼬리가 스스로 줄어든다
             if (trail.length > 14) trail.shift()
             for (let i = 0; i < trail.length; i++) {
               const a = (i / trail.length) * 0.5

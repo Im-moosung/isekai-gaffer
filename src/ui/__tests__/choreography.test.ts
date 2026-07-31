@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { MatchEvent, MatchEventType } from '../../engine/types'
-import { buildSequence, type ChoreoStep } from '../pitch/choreography'
+import { attackingSideOf, buildSequence, type ChoreoStep } from '../pitch/choreography'
 import { makeTestTeam } from '../../engine/fixtures/testTeams'
 import { createMatch } from '../../engine/simulate'
 
@@ -165,5 +165,52 @@ describe('buildSequence — 안무 유무', () => {
       expect(h[h.length - 1].ball.x + a[a.length - 1].ball.x).toBeCloseTo(100, 5)
       expect(a[a.length - 1].ball.x).toBeLessThan(a[0].ball.x)
     }
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ★ 2026-07-31 거울상 버그 회귀 가드.
+//   엔진은 `save`만 **막은 팀**의 사건으로 기록한다(simulate.ts L649:
+//   `teamId: def.team.id, playerId: gk.id`). 안무가 teamId를 공격 팀으로 믿는 바람에
+//   실제 재생된 세이브 장면이 사건의 완전한 거울상이었다 — 실측(seed 42 / 10분):
+//   볼이 x 42 → 98로 **반대편 골문**을 향했고, 슈터 슬롯에 **골키퍼**가 꽂혔고,
+//   몸을 던진 것도 실제로 막은 GK가 아니라 반대편 GK였다.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('★ save는 막은 팀의 사건이다 — 화면이 거울상이 되지 않는다', () => {
+  const gkHome = state.home.tactics.lineup[0].playerId
+  const gkAway = state.away.tactics.lineup[0].playerId
+
+  it('attackingSideOf: save만 teamId의 반대, 나머지는 teamId 그대로', () => {
+    expect(attackingSideOf(ev('save', { teamId: home.id }), home.id)).toBe('away')
+    expect(attackingSideOf(ev('save', { teamId: away.id }), home.id)).toBe('home')
+    for (const t of ['goal', 'miss', 'shot', 'chance', 'corner', 'foul'] as MatchEventType[]) {
+      expect(attackingSideOf(ev(t, { teamId: home.id }), home.id), t).toBe('home')
+      expect(attackingSideOf(ev(t, { teamId: away.id }), home.id), t).toBe('away')
+    }
+  })
+
+  it('홈 GK가 막은 세이브는 **홈 골문 쪽으로** 공이 간다(반대편이 아니다)', () => {
+    const s = buildSequence(ev('save', { teamId: home.id, playerId: gkHome }), state.home, state.away)
+    // away가 공격 → 볼은 x가 줄어드는 방향(홈 골문 = x 0)으로 끝난다.
+    expect(s[s.length - 1].ball.x).toBeLessThan(10)
+    expect(s[s.length - 1].ball.x).toBeLessThan(s[0].ball.x)
+    // 어웨이 GK가 막았다면 정확히 미러여야 한다.
+    const a = buildSequence(ev('save', { teamId: away.id, playerId: gkAway }), state.home, state.away)
+    expect(a[a.length - 1].ball.x).toBeGreaterThan(90)
+  })
+
+  it('골키퍼는 절대 슈터 슬롯(무버 0)에 배정되지 않는다', () => {
+    for (const [teamId, gkId] of [[home.id, gkHome], [away.id, gkAway]] as const) {
+      const s = buildSequence(ev('save', { teamId, playerId: gkId }), state.home, state.away)
+      for (const step of s) {
+        for (const m of step.movers) expect(m.playerId).not.toBe(gkId)
+      }
+    }
+  })
+
+  it('세이브 접촉 스텝이 존재하고 마지막 키프레임이다', () => {
+    const s = buildSequence(ev('save', { teamId: home.id, playerId: gkHome }), state.home, state.away)
+    expect(s[s.length - 1].contact).toBe(true)
+    expect(s.filter(x => x.contact)).toHaveLength(1)
   })
 })

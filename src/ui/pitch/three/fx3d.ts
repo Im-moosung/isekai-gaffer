@@ -235,6 +235,14 @@ export interface BurstOptions {
   reducedMotion?: boolean
   /** 수명(s). 기본 {@link BURST_LIFE}. */
   life?: number
+  /**
+   * 초기 속도 배수. 1이 골 세리머니용 콘페티(6~15 m/s)다.
+   * 임팩트 퍼프처럼 접촉점에 붙어 있어야 하는 연출은 0.3 안팎을 쓴다 —
+   * 그러지 않으면 0.3 s 수명 안에 파티클이 4 m를 날아가 "폭발"로 읽힌다.
+   */
+  speed?: number
+  /** 조각 크기 배수. 1이 콘페티(0.24 m 판). 잔디 파편은 0.3~0.4. */
+  size?: number
 }
 
 export interface GoalBurst {
@@ -264,6 +272,8 @@ export function goalBurst(
   const life = opts.life != null && opts.life > 0 ? opts.life : BURST_LIFE
   const seed = opts.seed ?? 1
   const reduced = opts.reducedMotion === true
+  const speedK = opts.speed != null && opts.speed > 0 ? opts.speed : 1
+  const sizeK = opts.size != null && opts.size > 0 ? opts.size : 1
 
   const geo = new THREE.BoxGeometry(0.24, 0.24, 0.05)
   const mat = new THREE.MeshBasicMaterial({
@@ -290,12 +300,12 @@ export function goalBurst(
     const az = h(1) * TAU
     // 위로 치솟는 원뿔(14°~91°) — 잔디에 깔리지 않고 화면에 뜬다.
     const el = 0.25 + h(2) * 1.35
-    const sp = 6 + h(3) * 9
+    const sp = (6 + h(3) * 9) * speedK
     const flat = Math.cos(el) * sp
     vel[i * 3] = Math.cos(az) * flat
     vel[i * 3 + 1] = Math.sin(el) * sp
     vel[i * 3 + 2] = Math.sin(az) * flat
-    size[i] = 0.7 + h(4) * 0.8
+    size[i] = (0.7 + h(4) * 0.8) * sizeK
     spin[i * 2] = (h(5) - 0.5) * 26
     spin[i * 2 + 1] = (h(6) - 0.5) * 26
     // 0.62~1.0 배 — instanceColor가 [0,1]을 벗어나지 않는다(과노출 방지).

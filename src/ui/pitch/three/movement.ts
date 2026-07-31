@@ -12,7 +12,7 @@
 //    GK 5.5 m/s). prev=null(첫 프레임)일 때만 목표 위치로 스냅한다.
 //  - 좌표계·타입 계약은 ./types.ts가 정본이다.
 import type { MatchEvent, MatchEventType, MatchState, SideState } from '../../../engine/types'
-import type { BallArc, ChoreoStep } from '../choreography'
+import { attackingSideOf, type BallArc, type ChoreoStep } from '../choreography'
 import { possessingSide } from '../flow'
 // 정적 배치의 정본은 **전술이 반영된** 좌표다. slotCoords(포메이션 원형)를 쓰면
 // 라인 높이를 올린 유저가 라이브(3D)→분석(2D) 디졸브에서 수비진이 최대 15m
@@ -77,6 +77,23 @@ export const DEFAULT_DWELL_MS = 3000
 export const MOVER_LOOKAHEAD_MS = 200
 /** focus 스무딩 시상수(s). */
 const FOCUS_TAU = 0.4
+/**
+ * 접촉(세이브 손-공 / 골 통과) 이후에도 **두 배역 프레임을 유지**하는 시간(ms).
+ * 방송 편집 관행상 컷 하나가 3~5 s는 유지돼야 시청자가 공간을 파악한다
+ * (docs/research/football-sim-physics.md §4.3). 접촉 직후 바로 볼로 붙으면
+ * "무엇이 막았는지"를 확인할 프레임이 남지 않는다.
+ */
+const FRAME_HOLD_MS = 900
+/**
+ * 슛 임팩트보다 이만큼 **먼저** 두 배역 프레임을 잡기 시작한다(ms).
+ *
+ * 왜 백스윙(260 ms)으로 부족한가: focus·반경은 {@link FOCUS_TAU}(0.4 s)로 풀리므로
+ * 260 ms에 잡으면 임팩트 순간 반경이 목표의 48%에 불과하다(실측 r 6.1 / 11.4).
+ * 그러면 정작 "발이 공에 닿는" 프레임이 아직 타이트해서 골문 쪽이 안 보인다.
+ * 900 ms ≈ 2.2 시상수라 임팩트 시점에 90%까지 열린다. 카메라가 슛을 미리 준비하는 것은
+ * 실제 중계 오퍼레이터의 행동이기도 하다(표시 계층이므로 인과 위반이 아니다).
+ */
+const FRAME_LEAD_MS = 900
 /** yaw 스무딩 시상수(s). */
 const YAW_TAU = 0.12
 /** 이 속도(m/s) 이상이면 run으로 진입한다. */
@@ -422,8 +439,25 @@ export const GK_REACTION_MS = 200
 export const GK_DIVE_MS = 550
 /** 접촉 이후 착지·정착(ms). */
 export const GK_SETTLE_MS = 450
-/** `pose.diveAngles`가 완전 측와가 되는 진행도 — 이 값이 볼 도착과 일치해야 한다. */
-const DIVE_LAY_U = 0.55
+/** `pose.diveAngles`가 완전 측와가 되는 진행도 — 이 값이 볼 도착과 일치해야 한다.
+ *  렌더러(Match3D)가 **접촉 프레임을 검출**하는 데도 쓰므로 공개한다. */
+export const DIVE_LAY_U = 0.55
+/**
+ * GK가 완전히 누웠을 때 손이 몸통 루트에서 뻗는 거리(m).
+ *
+ * 유도: `pose.ts`의 어깨 높이 HIP_Y(0.94)+SHOULDER_Y(0.5)=1.44 m와 팔 길이
+ * UPPER_ARM(0.3)+FOREARM(0.26)=0.56 m. `diveAngles`가 armReach=-2.2 rad로 팔을 머리 위로
+ * 뻗은 채 roll=π/2로 눕히므로, 세로였던 1.44+0.56이 그대로 **수평 도달거리**가 된다.
+ */
+export const GK_DIVE_REACH = 2.0
+/**
+ * 골(=막지 못한 슛)에서 GK의 최대 신전이 볼 통과보다 이만큼 **늦다**(ms).
+ *
+ * 왜 필요한가: 예전엔 세이브에만 다이브를 붙여, 골 장면의 GK는 공이 옆으로 지나가는 동안
+ * 가만히 서 있었다. 관객에게 그것은 "GK가 포기했다"로 읽힌다. 실제로는 몸을 던졌으나
+ * 손끝이 스쳤을 뿐이므로, **닿지는 않되 던지기는 하는** 타이밍을 준다.
+ */
+export const GK_BEATEN_LATE_MS = 110
 
 /**
  * 다이브 스케줄 — **최대 신전 순간이 볼 도착과 정확히 일치**하도록 역산한다.
@@ -447,6 +481,23 @@ export function diveScheduleAt(
   if (t <= tArrive) return DIVE_LAY_U * ((t - start) / span)
   const settle = Math.max(1e-6, GK_SETTLE_MS / dwellMs)
   return DIVE_LAY_U + (1 - DIVE_LAY_U) * clamp((t - tArrive) / settle, 0, 1)
+}
+
+/**
+ * 접촉점(월드)에서 **손이 닿는 GK 몸통 자리**를 구한다.
+ *
+ * 완전 신전 상태의 손은 몸통에서 {@link GK_DIVE_REACH}만큼 떨어져 있으므로, 몸통을
+ * 접촉점에서 자기 골문 중앙 쪽으로 정확히 그만큼 물린 자리에 두면 손과 공이 만난다.
+ * 방향을 골문 중앙으로 잡는 이유: 그래야 GK가 골문을 등지고 볼 쪽으로 몸을 던지는
+ * 그림이 되고, 결과 좌표가 항상 {@link gkBox} 안에 남는다(골문 중앙이 박스 안이므로).
+ */
+export function gkDiveAnchor(side: 'home' | 'away', contact: { x: number; z: number }): { x: number; z: number } {
+  const goalX = side === 'home' ? -HALF_W : HALF_W
+  const dx = goalX - contact.x
+  const dz = -contact.z
+  const len = Math.hypot(dx, dz)
+  if (len < 1e-6) return { x: contact.x, z: contact.z }
+  return { x: contact.x + (dx / len) * GK_DIVE_REACH, z: contact.z + (dz / len) * GK_DIVE_REACH }
 }
 
 /** 무사건 분의 패스 체인 단계 수(t를 4등분해 4명을 거친다). */
@@ -574,6 +625,8 @@ function planSide(
   minute: number,
   t: number,
   seed: number,
+  /** 이 팀 GK를 보낼 자리(다이브 준비). null이면 평소의 {@link gkTarget}. */
+  gkAnchor: { x: number; z: number } | null,
 ): Plan[] {
   const numberById = new Map(st.team.squad.map(p => [p.id, p.number]))
   const sentOff = new Set(st.sentOff)
@@ -594,7 +647,7 @@ function planSide(
       tz = w.z
       mover = true
     } else if (isGk) {
-      const g = gkTarget(side, ball)
+      const g = gkAnchor ?? gkTarget(side, ball)
       tx = g.x
       tz = g.z
     } else {
@@ -728,10 +781,20 @@ export function computeFrame(input: FrameInput): FrameState {
   const t = clamp(input.t, 0, 1)
   const dwellMs = input.dwellMs != null && input.dwellMs > 0 ? input.dwellMs : DEFAULT_DWELL_MS
   const seq = input.sequence && input.sequence.length > 0 ? input.sequence : null
-  const seqSide: 'home' | 'away' = input.sequenceSide ?? 'home'
   const event = resolveEvent(input)
   const prev = input.prev
   const homeTeamId = input.state.home.team.id
+  /**
+   * 안무를 재생하는(= 공격) 팀. **이벤트가 있으면 이벤트가 정본이다.**
+   *
+   * 왜 prop을 그대로 믿지 않는가: `save`의 `event.teamId`는 막은 팀(수비)이라
+   * 호출부가 `teamId === home ? 'home' : 'away'`로 계산하면 정확히 반대가 된다
+   * (choreography.attackingSideOf 주석의 실측 참조). 그 반대값이 그대로
+   * `divingSide`를 뒤집어 **엉뚱한 쪽 GK가 몸을 던졌다.**
+   */
+  const seqSide: 'home' | 'away' = event
+    ? attackingSideOf(event, homeTeamId)
+    : (input.sequenceSide ?? 'home')
 
   // ── 1) 볼 ────────────────────────────────────────────────────────────
   const sample = seq ? sampleSequence(seq, t, MOVER_LOOKAHEAD_MS / dwellMs) : null
@@ -754,12 +817,46 @@ export function computeFrame(input: FrameInput): FrameState {
   const spinRaw = (prev?.ball.spin ?? 0) + rolled / BALL_RADIUS
   const ball: BallPose = { ...ballPos, spin: ((spinRaw % TAU) + TAU) % TAU }
 
+  // ── 1.5) 슛·접촉 시간표 ───────────────────────────────────────────────
+  // GK를 어디로 보낼지(목표 위치)가 여기서 나오므로 planSide보다 **먼저** 계산한다.
+  const kicks = seq ? kickEvents(seq) : []
+  const tArrive = seq ? seq[seq.length - 1].t : 0
+  const tShot = kicks.length > 0 ? kicks[kicks.length - 1].tImpact : tArrive
+  /** 접촉 스텝(세이브). 없으면 마지막 스텝을 접촉으로 본다(기존 규약). */
+  const contactStep = seq ? (seq.find(s => s.contact) ?? seq[seq.length - 1]) : null
+  const contactWorld = contactStep ? toWorld(contactStep.ball.x, contactStep.ball.y) : null
+  const tContact = contactStep ? contactStep.t : tArrive
+  /** 슛을 받는 쪽(안무의 볼이 향하는 골문) GK. */
+  const divingSide: 'home' | 'away' = seqSide === 'home' ? 'away' : 'home'
+  /**
+   * 다이브 종류 — 세이브는 **닿고**(접촉점으로 몸통을 보낸다), 골은 **닿지 않는다**
+   * (제자리에서 던지되 최대 신전이 볼 통과보다 {@link GK_BEATEN_LATE_MS} 늦다).
+   * 예전엔 세이브에만 다이브가 붙어 골 장면의 GK가 서서 구경했다.
+   */
+  const diveKind: 'save' | 'beaten' | null =
+    seq && event?.type === 'save' ? 'save' : seq && event?.type === 'goal' ? 'beaten' : null
+  const tLay = diveKind === 'beaten' ? tArrive + GK_BEATEN_LATE_MS / dwellMs : tContact
+  const diveU = diveKind ? diveScheduleAt(tShot, tLay, t, dwellMs) : null
+  const diving = diveU != null
+  const diveT = diveU ?? 0
+  /**
+   * GK 몸통 목표 — 세이브는 임팩트 순간부터 접촉점을 향해 **미리** 움직인다.
+   *
+   * 왜 다이브 창이 아니라 임팩트부터인가: 다이브 창은 550 ms뿐이고 GK 상한은 5.5 m/s라
+   * 도착 감속까지 감안하면 2 m도 못 간다. 실제 GK도 슛이 떠난 순간 스텝을 밟아
+   * 몸을 볼 라인에 맞춘다 — 인과(임팩트 이후)는 지켜지고 도달은 가능해진다.
+   */
+  const gkAnchor =
+    diveKind === 'save' && contactWorld && t >= tShot ? gkDiveAnchor(divingSide, contactWorld) : null
+
   // ── 2) 목표 위치 ─────────────────────────────────────────────────────
   const moverById = new Map<string, { x: number; y: number }>()
   if (sample) for (const m of sample.movers) moverById.set(m.playerId, { x: m.x, y: m.y })
 
-  const homePlans = planSide('home', input.state.home, ball, moverById, input.minute, t, input.seed)
-  const awayPlans = planSide('away', input.state.away, ball, moverById, input.minute, t, input.seed)
+  const homePlans = planSide('home', input.state.home, ball, moverById, input.minute, t, input.seed,
+    divingSide === 'home' ? gkAnchor : null)
+  const awayPlans = planSide('away', input.state.away, ball, moverById, input.minute, t, input.seed,
+    divingSide === 'away' ? gkAnchor : null)
   applyConvergence(homePlans, ball, 'home')
   applyConvergence(awayPlans, ball, 'away')
   const plans = [...homePlans, ...awayPlans]
@@ -796,7 +893,6 @@ export function computeFrame(input: FrameInput): FrameState {
   // 킥: **저술이 지정한 캐리어**가 찬다. 임팩트 프레임(actionT ≈ 0.45)이 볼 출발 시각과
   // 정확히 일치하도록 백스윙 260 ms를 앞당겨 창을 연다(역방향 스케줄링).
   // KICK_REACH 밖이면 취소한다 — 속도 클램프로 뒤처졌다면 "허공 슛"이 되기 때문이다.
-  const kicks = seq ? kickEvents(seq) : []
   const kickNow = seq ? kickAt(kicks, t, dwellMs) : null
   let kickerId: string | null = null
   let kickT = 0
@@ -817,18 +913,9 @@ export function computeFrame(input: FrameInput): FrameState {
   const celebrating = event?.type === 'goal' && scored && t <= goalT + celebrateSpan
   const scoringSide: 'home' | 'away' = event?.teamId === homeTeamId ? 'home' : 'away'
   const celebrateT = celebrating ? clamp((t - goalT) / celebrateSpan, 0, 1) : 0
-  // 다이브: 슛을 받는 쪽(안무의 볼이 향하는 골문) GK.
-  // **최대 신전 = 볼 도착**이 되도록 역산한다(§R4). 예전엔 슛 임팩트와 동시에 시작해
-  // 볼보다 473 ms 먼저 잔디에 누웠다.
-  const divingSide: 'home' | 'away' = seqSide === 'home' ? 'away' : 'home'
-  const tArrive = seq ? seq[seq.length - 1].t : 0
-  const tShot = kicks.length > 0 ? kicks[kicks.length - 1].tImpact : tArrive
-  const diveU = seq && event?.type === 'save' ? diveScheduleAt(tShot, tArrive, t, dwellMs) : null
-  const diving = diveU != null
-  const diveT = diveU ?? 0
-  // 다이브 방향 — 볼이 향하는 쪽(월드 Z)으로 눕는다. 예전엔 선수 id 해시로 좌우를
-  // 아무렇게나 골랐다(볼과 반대로 뛰는 GK가 절반).
-  const diveDir = seq ? (toWorld(seq[seq.length - 1].ball.x, seq[seq.length - 1].ball.y).z >= 0 ? 1 : -1) : 1
+  // 다이브 방향 — 접촉점(없으면 결과 지점)의 월드 Z 쪽으로 눕는다. 예전엔 선수 id
+  // 해시로 좌우를 아무렇게나 골랐다(볼과 반대로 뛰는 GK가 절반).
+  const diveDir = contactWorld ? (contactWorld.z >= 0 ? 1 : -1) : 1
   // 다운: 파울 성립 후 볼에 가장 가까운 안무 팀 선수 1명.
   const fouled = !!sample && sample.finished && (event?.type === 'foul' || event?.type === 'yellow' || event?.type === 'red')
   let downId: string | null = null
@@ -887,14 +974,33 @@ export function computeFrame(input: FrameInput): FrameState {
     }
   })
 
-  // ── 6) focus 스무딩 ──────────────────────────────────────────────────
-  const focusTarget = seq
-    ? { x: ball.x, z: ball.z }
-    : { x: ball.x * 0.3, z: ball.z * 0.3 } // 평시엔 중앙 근처에서 볼을 약하게 추종
+  // ── 6) focus·프레이밍 반경 스무딩 ────────────────────────────────────
+  /**
+   * 슛 국면에는 **볼이 아니라 슈터-접촉점 두 배역**을 프레임의 기준으로 삼는다.
+   *
+   * 실측(tools/scene-timing): 볼을 그대로 추종하면 볼 도착 시각에 슈터의 NDC x가
+   * -1.29(세이브) · -2.26(골)로 프레임 밖이었다. 슛은 19 m를 날아가는데 highlight 타이트
+   * 프리셋의 가시 폭이 16 m라 구조적으로 담기지 않는다. 방송 카메라는 이 국면에서
+   * 공을 쫓지 않고 **슈터와 골문을 함께 문 채 정지**한다 — 그 문법을 반경으로 표현한다.
+   */
+  const strikeFrom = tShot - FRAME_LEAD_MS / dwellMs
+  const strikeTo = tLay + FRAME_HOLD_MS / dwellMs
+  const striking = seq != null && kicks.length > 0 && contactWorld != null && t >= strikeFrom && t <= strikeTo
+  const shotWorld = kicks.length > 0 ? toWorld(kicks[kicks.length - 1].ball.x, kicks[kicks.length - 1].ball.y) : null
+  const focusTarget = striking && shotWorld && contactWorld
+    ? { x: (shotWorld.x + contactWorld.x) / 2, z: (shotWorld.z + contactWorld.z) / 2 }
+    : seq
+      ? { x: ball.x, z: ball.z }
+      : { x: ball.x * 0.3, z: ball.z * 0.3 } // 평시엔 중앙 근처에서 볼을 약하게 추종
+  const radiusTarget = striking && shotWorld && contactWorld
+    ? Math.hypot(contactWorld.x - shotWorld.x, contactWorld.z - shotWorld.z) / 2
+    : 0
   const fa = prev ? (dt > 0 ? 1 - Math.exp(-dt / FOCUS_TAU) : 0) : 1
   const focus = prev
     ? { x: lerp(prev.focus.x, focusTarget.x, fa), z: lerp(prev.focus.z, focusTarget.z, fa) }
     : focusTarget
+  // 반경도 같은 시상수로 푼다 — 계단처럼 바뀌면 화각이 툭 튄다(줌 컷으로 읽힌다).
+  const focusRadius = prev ? lerp(prev.focusRadius ?? 0, radiusTarget, fa) : radiusTarget
 
-  return { players, ball, focus, event: frameEvent(event, homeTeamId, scored) }
+  return { players, ball, focus, focusRadius, event: frameEvent(event, homeTeamId, scored) }
 }

@@ -11,10 +11,12 @@ import {
   computeFrame, ballHeight, arcKindFor, sampleSequence, gkBox,
   BALL_PEAK, BALL_END, BALL_RADIUS, BALL_SHIFT, CONVERGE_MAX, GK_MAX_SPEED, MAX_SPEED,
   KICK_REACH, STANDOFF, MOVER_LOOKAHEAD_MS, DEFAULT_DWELL_MS,
-  kickEvents, kickAt, dragProgress, diveScheduleAt,
+  kickEvents, kickAt, dragProgress, diveScheduleAt, gkDiveAnchor,
   GK_DIVE_MS, GK_REACTION_MS, KICK_IMPACT_T, KICK_BACKSWING_MS,
+  GK_DIVE_REACH, GK_BEATEN_LATE_MS,
   type FrameInput,
 } from '../movement'
+import { createCameraRig, type CameraShot } from '../camera'
 
 const home = makeTestTeam('kor', 82)
 const away = makeTestTeam('esp', 84)
@@ -545,11 +547,13 @@ describe('액션 판정', () => {
     expect(after.players.some(p => p.action === 'celebrate')).toBe(false)
   })
 
-  it('save 이벤트에서 슛을 받는 쪽 GK가 dive', () => {
-    const e = ev('save')
+  it('save 이벤트에서 **막은 팀의** GK가 dive한다', () => {
+    // save의 teamId는 막은 팀이다 → 홈이 막았으면 몸을 던지는 것도 홈 GK다.
+    const e = ev('save', { teamId: base.home.team.id, playerId: homeId(0) })
     const seq = buildSequence(e, base.home, base.away)
-    const f = computeFrame(input({ sequence: seq, sequenceSide: 'home', t: seq[seq.length - 1].t - 0.01, event: e }))
-    expect(find(f, awayId(0)).action).toBe('dive')
+    const f = computeFrame(input({ sequence: seq, sequenceSide: 'away', t: seq[seq.length - 1].t - 0.01, event: e }))
+    expect(find(f, homeId(0)).action).toBe('dive')
+    expect(find(f, awayId(0)).action).not.toBe('dive')
     expect(f.event).toBe('save')
   })
 
@@ -582,9 +586,11 @@ describe('액션 판정', () => {
       for (let k = 0; k <= N; k++) {
         const t = k / N
         const f: FrameState = computeFrame(input({ prev, dt: 0.033, t, sequence: seq, sequenceSide: 'home', event: e }))
+        // 공격 팀은 이벤트가 정한다 — save만 teamId가 막은 팀이라 반대편이 찬다.
+        const atk = type === 'save' ? 'away' : 'home'
         for (const p of f.players.filter(q => q.action === 'kick')) {
           kickFrames++
-          expect(p.side).toBe('home')
+          expect(p.side).toBe(atk)
           expect(carriers.has(p.id), `${type}: ${p.id}는 캐리어가 아니다`).toBe(true)
           const hit = kickAt(kicks, t, DEFAULT_DWELL_MS)!
           const kb = toWorld(hit.kick.ball.x, hit.kick.ball.y)
@@ -1043,7 +1049,10 @@ describe('★ R4 — GK가 볼보다 먼저 넘어지지 않는다', () => {
     for (const pattern of ['balanced', 'cross', 'through', 'longshot'] as const) {
       const st = structuredClone(base)
       st.home.tactics.attackPattern = pattern
-      const e = ev('save', { minute: 55, playerId: st.home.tactics.lineup[9].playerId })
+      // ★ save의 teamId·playerId는 **막은 팀과 그 GK**다(simulate.ts L649). 홈이 공격하는
+      //   세이브를 만들려면 teamId를 어웨이로 준다 — 예전 픽스처는 이 규약을 반대로 알고
+      //   있었고, 그래서 화면이 사건의 거울상이라는 사실을 아무 테스트도 잡지 못했다.
+      const e = ev('save', { minute: 55, teamId: st.away.team.id, playerId: st.away.tactics.lineup[0].playerId })
       const seq = buildSequence(e, st.home, st.away)
       const dwell = 8400
       const tArrive = seq[seq.length - 1].t
@@ -1068,7 +1077,7 @@ describe('★ R4 — GK가 볼보다 먼저 넘어지지 않는다', () => {
 
   it('다이브 방향이 볼이 향하는 쪽을 따른다(해시 난수가 아니다)', () => {
     const st = structuredClone(base)
-    const e = ev('save', { minute: 55 })
+    const e = ev('save', { minute: 55, teamId: st.away.team.id, playerId: st.away.tactics.lineup[0].playerId })
     const seq = buildSequence(e, st.home, st.away)
     const endZ = toWorld(seq[seq.length - 1].ball.x, seq[seq.length - 1].ball.y).z
     const f = computeFrame(input({ sequence: seq, sequenceSide: 'home', t: seq[seq.length - 1].t, event: e, dwellMs: 8400 }))
@@ -1126,5 +1135,161 @@ describe('★ R2 — 공은 캐리어의 발에 있다', () => {
         expect(kicks[kicks.length - 1].playerId, `${pattern}/${minute}`).toBe(shooter)
       }
     }
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ★ 2026-07-31 "읽힘" 개편 — 수치는 맞는데 화면이 안 읽히던 간극.
+//   사용자 캡처(docs/audit/shots/entrance-after-1600x900-play-2.png): GK는 이미 완전히
+//   누워 있고 공은 8 m 밖 빈 잔디에, 슈터는 프레임 밖. 실측으로 셋 다 재현됐다 —
+//   GK-볼 최소거리 7.03 m / 볼 도착 시각 슈터 NDC x = -1.29. 아래가 그 회귀 가드다.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** 카메라 샷에 점을 투영해 NDC를 얻는다(three 없이 — camera.ts와 같은 up=(0,1,0) 규약). */
+function ndc(shot: CameraShot, p: { x: number; y: number; z: number }, aspect: number) {
+  const f = { x: shot.lookAt.x - shot.pos.x, y: shot.lookAt.y - shot.pos.y, z: shot.lookAt.z - shot.pos.z }
+  const fl = Math.hypot(f.x, f.y, f.z)
+  const fw = { x: f.x / fl, y: f.y / fl, z: f.z / fl }
+  const rl = Math.hypot(fw.z, fw.x) || 1
+  const r = { x: fw.z / rl, y: 0, z: -fw.x / rl }
+  const u = {
+    x: r.y * fw.z - r.z * fw.y,
+    y: r.z * fw.x - r.x * fw.z,
+    z: r.x * fw.y - r.y * fw.x,
+  }
+  const d = { x: p.x - shot.pos.x, y: p.y - shot.pos.y, z: p.z - shot.pos.z }
+  const zc = d.x * fw.x + d.y * fw.y + d.z * fw.z
+  if (zc <= 0.01) return { x: 99, y: 99 }
+  const th = Math.tan((shot.fov * Math.PI) / 360)
+  return {
+    x: (d.x * r.x + d.y * r.y + d.z * r.z) / (zc * th * aspect),
+    y: (d.x * u.x + d.y * u.y + d.z * u.z) / (zc * th),
+  }
+}
+
+/**
+ * 한 장면을 dwell 전체에 걸쳐 60 fps로 재생하며 프레임을 모은다.
+ *
+ * ★ 이벤트를 **엔진과 같은 규약**으로 만든다: `save`의 teamId·playerId는 막은 팀과 그
+ *   팀의 GK다(simulate.ts L649). 그래서 홈이 공격하는 세이브를 만들려면 teamId를
+ *   어웨이로 줘야 한다. 슈터는 안무가 역할 좌표로 뽑으므로 무버 0에서 읽는다.
+ */
+function playScene(type: MatchEvent['type'], pattern: 'balanced' | 'cross' | 'through' | 'longshot', minute = 55) {
+  const st = structuredClone(base)
+  st.home.tactics.attackPattern = pattern
+  const e: MatchEvent = type === 'save'
+    ? ev('save', { minute, teamId: st.away.team.id, playerId: st.away.tactics.lineup[0].playerId })
+    : ev(type, { minute, playerId: st.home.tactics.lineup[9].playerId })
+  const seq = buildSequence(e, st.home, st.away)
+  const shooter = seq[0].movers[0].playerId
+  const dwell = 8400
+  const gkId = st.away.tactics.lineup[0].playerId // 홈이 공격하므로 막는 쪽은 어웨이 GK
+  const frames: FrameState[] = []
+  let prev: FrameState | null = null
+  const N = 504 // 8.4 s × 60 fps
+  for (let k = 0; k <= N; k++) {
+    const f: FrameState = computeFrame(
+      input({ state: st, prev, dt: 1 / 60, t: k / N, sequence: seq, sequenceSide: 'home', event: e, minute, dwellMs: dwell }),
+    )
+    frames.push(f)
+    prev = f
+  }
+  return { seq, frames, gkId, shooter, dwell }
+}
+
+describe('★ R6 — 세이브에 접촉 프레임이 존재한다', () => {
+  it('접촉 스텝이 저술돼 있고 GK 손이 닿는 거리까지 들어온다(전 패턴)', () => {
+    for (const pattern of ['balanced', 'cross', 'through', 'longshot'] as const) {
+      const { seq, frames, gkId } = playScene('save', pattern)
+      expect(seq.some(s => s.contact), pattern).toBe(true)
+      let best = Infinity
+      for (const f of frames) {
+        const gk = f.players.find(p => p.id === gkId)!
+        best = Math.min(best, Math.hypot(f.ball.x - gk.x, f.ball.z - gk.z))
+      }
+      // 예전 실측 7.03 m — 신전 반경 2 m를 5 m 초과해 접촉이 불가능했다.
+      expect(best, `${pattern}: GK-볼 최소거리 ${best.toFixed(2)} m`).toBeLessThanOrEqual(GK_DIVE_REACH + 0.05)
+    }
+  })
+
+  it('골에서는 GK가 던지되 닿지 않는다 — 최대 신전이 볼 통과보다 늦다', () => {
+    const { seq, frames, gkId, dwell } = playScene('goal', 'balanced')
+    const tArrive = seq[seq.length - 1].t
+    let laidAt: number | null = null
+    frames.forEach((f, i) => {
+      const gk = f.players.find(p => p.id === gkId)!
+      if (laidAt == null && gk.action === 'dive' && gk.actionT >= 0.55) laidAt = i / (frames.length - 1)
+    })
+    expect(laidAt, '골 장면에서 GK가 몸을 던지지 않았다').not.toBeNull()
+    // 늦는다 = 못 막았다. 프레임 격자(1/504 dwell ≈ 17 ms) 오차를 뺀 하한.
+    expect((laidAt! - tArrive) * dwell).toBeGreaterThan(GK_BEATEN_LATE_MS - 25)
+  })
+
+  it('gkDiveAnchor는 접촉점에서 정확히 신전 반경만큼 물러난 자리이고 GK 박스 안이다', () => {
+    for (const side of ['home', 'away'] as const) {
+      const box = gkBox(side)
+      for (const cz of [-4.5, -2, 0, 2, 4.5]) {
+        const gx = side === 'home' ? -PITCH_W / 2 : PITCH_W / 2
+        const contact = { x: gx - (side === 'home' ? -2.6 : 2.6), z: cz }
+        const a = gkDiveAnchor(side, contact)
+        expect(Math.hypot(a.x - contact.x, a.z - contact.z)).toBeCloseTo(GK_DIVE_REACH, 6)
+        expect(a.x).toBeGreaterThanOrEqual(box.xMin - 1e-9)
+        expect(a.x).toBeLessThanOrEqual(box.xMax + 1e-9)
+        expect(Math.abs(a.z)).toBeLessThanOrEqual(Math.abs(cz) + 1e-9)
+      }
+    }
+  })
+})
+
+describe('★ R7 — 슛 국면에 슈터가 프레임 안에 남는다', () => {
+  const ASPECT = 16 / 9
+
+  it('임팩트·볼 도착 두 시각 모두에서 슈터·GK·볼이 전부 프레임 안이다', () => {
+    for (const type of ['save', 'goal', 'miss'] as const) {
+      for (const pattern of ['balanced', 'cross', 'through', 'longshot'] as const) {
+        const { seq, frames, gkId, shooter } = playScene(type, pattern)
+        const tShot = seq.filter(s => s.arc === 'shot').pop()!.t
+        const tArrive = seq[seq.length - 1].t
+        const rig = createCameraRig({ seed: 42, mode: 'highlight' })
+        let atShot: CameraShot | null = null
+        let atArrive: CameraShot | null = null
+        frames.forEach((f, i) => {
+          const t = i / (frames.length - 1)
+          const shot = rig.update({ focus: { ...f.focus, r: f.focusRadius ?? 0 }, t: i / 60, dt: 1 / 60 })
+          if (atShot == null && t >= tShot) atShot = shot
+          if (atArrive == null && t >= tArrive) atArrive = shot
+        })
+        const idx = (t: number) => Math.round(t * (frames.length - 1))
+        for (const [label, shot, f] of [
+          ['임팩트', atShot!, frames[idx(tShot)]],
+          ['도착', atArrive!, frames[idx(tArrive)]],
+        ] as const) {
+          const sh = f.players.find(p => p.id === shooter)!
+          const gk = f.players.find(p => p.id === gkId)!
+          for (const [who, pt] of [
+            ['슈터', { x: sh.x, y: 1, z: sh.z }],
+            ['GK', { x: gk.x, y: 1, z: gk.z }],
+            ['볼', { x: f.ball.x, y: f.ball.y, z: f.ball.z }],
+          ] as const) {
+            const n = ndc(shot, pt, ASPECT)
+            const tag = `${type}/${pattern}/${label}/${who} → NDC ${n.x.toFixed(2)},${n.y.toFixed(2)}`
+            expect(Math.abs(n.x), tag).toBeLessThanOrEqual(1)
+            expect(Math.abs(n.y), tag).toBeLessThanOrEqual(1)
+          }
+        }
+      }
+    }
+  })
+
+  it('focusRadius는 슛 국면에만 열리고 빌드업·여운에는 0에 수렴한다', () => {
+    const { seq, frames } = playScene('save', 'balanced')
+    const tShot = seq.filter(s => s.arc === 'shot').pop()!.t
+    const idx = (t: number) => Math.round(t * (frames.length - 1))
+    // 빌드업 초반(임팩트 2 s 전)에는 닫혀 있다.
+    expect(frames[idx(Math.max(0, tShot - 2 / 8.4))].focusRadius ?? 0).toBeLessThan(1)
+    // 임팩트에서는 슈터-접촉점 반경(≈10 m 이상)이 열려 있다.
+    expect(frames[idx(tShot)].focusRadius ?? 0).toBeGreaterThan(8)
+    // dwell 끝(여운)에는 다시 닫혀 결과 지점에 붙는다.
+    expect(frames[frames.length - 1].focusRadius ?? 0).toBeLessThan(1)
   })
 })

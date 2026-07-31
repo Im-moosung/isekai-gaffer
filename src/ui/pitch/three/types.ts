@@ -71,5 +71,15 @@ export interface FrameState {
   ball: BallPose
   /** 카메라가 바라볼 지점 */
   focus: { x: number; z: number }
+  /**
+   * 카메라가 focus 주위로 **반드시 담아야 할 반경(m)**. 0이면 기존 동작(볼 근접).
+   *
+   * 왜 필요한가: 슛 국면의 배역은 슈터와 골문 앞 접촉점 둘이고 그 사이가 15~20 m다.
+   * 카메라가 볼만 쫓으면(=반경 0) 타이트 프리셋의 가시 폭 16 m 안에 슈터가 남지 않아
+   * "누가 찼는지"가 프레임에서 사라진다. 무브먼트가 배역의 외접 반경을 계산해 넘기고
+   * 카메라가 화각·거리로 그것을 담는다(camera.highlightShot).
+   * 선택 필드인 이유는 구버전 프레임·단위 테스트가 폴백 경로를 타게 하기 위함이다.
+   */
+  focusRadius?: number
   event?: FrameEvent
 }

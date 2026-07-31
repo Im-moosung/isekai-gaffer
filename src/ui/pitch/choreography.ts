@@ -44,6 +44,12 @@ export interface ChoreoStep {
    *   일반 선수**였다(docs/research/football-sim-physics.md §1.1). 소유자는 저술이 안다.
    */
   carrier?: string
+  /**
+   * 이 스텝이 **GK의 손이 공에 닿는 순간**인가(세이브 전용). movement가 다이브 최대
+   * 신전 시각과 GK 몸통 목표를 이 스텝에서 역산한다 — "마지막 키프레임 = 접촉"이라는
+   * 암묵 규약을 명시 계약으로 바꾼 것이다.
+   */
+  contact?: boolean
 }
 
 const clamp = (v: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v))
@@ -81,6 +87,26 @@ function finishFor(type: MatchEvent['type']): SceneFinish | null {
     // kickoff·sub·halftime·fulltime — 안무 없음.
     default: return null
   }
+}
+
+/**
+ * 이 이벤트에서 **공격(=안무를 재생하는) 팀**은 어느 쪽인가.
+ *
+ * ★ 2026-07-31 발견한 거울상 버그. 엔진은 이벤트 대부분을 공격 팀 사건으로 기록하지만
+ *   **`save`만 막은 팀(수비)의 사건**이다 — `simulate.ts` L649:
+ *   `{ type: 'save', teamId: def.team.id, playerId: gk.id }`.
+ *   그런데 안무는 `event.teamId`를 공격 팀으로 믿고 좌표를 미러했다. 그 결과 실제 재생된
+ *   세이브 장면은 사건의 **완전한 거울상**이었다(실측, seed 42 / 10분):
+ *     - 볼이 x 42 → 98로 **반대편 골문**을 향했다(실제 슛은 우리 골문 쪽이었다)
+ *     - 역할 슬롯 0(=슈터)에 `event.playerId`, 즉 **골키퍼**가 꽂혔다
+ *     - 몸을 던진 GK도 실제로 막은 GK가 아니라 반대편 GK였다
+ *   사용자 캡처의 "GK 혼자 넘어져 있고 공은 딴 데"가 여기서도 나온다 — 화면에 그려진
+ *   세이브는 애초에 그 사건이 아니었다.
+ */
+export function attackingSideOf(event: MatchEvent, homeTeamId: string): 'home' | 'away' {
+  const owner: 'home' | 'away' = event.teamId === homeTeamId ? 'home' : 'away'
+  // save = 수비 팀의 사건 → 공격은 그 반대. 나머지는 teamId가 곧 공격 팀이다.
+  return event.type === 'save' ? (owner === 'home' ? 'away' : 'home') : owner
 }
 
 /**
@@ -130,11 +156,13 @@ function pickByRole(side: SideState, roles: [number, number][], primary?: string
 export function buildSequence(event: MatchEvent, homeState: SideState, awayState: SideState): ChoreoStep[] {
   const finish = finishFor(event.type)
   if (!finish) return []
-  const isHome = event.teamId === homeState.team.id
+  const isHome = attackingSideOf(event, homeState.team.id) === 'home'
   const attacking = isHome ? homeState : awayState
   const pattern: AttackPattern = attacking.tactics.attackPattern ?? 'balanced'
   const scene = buildScene(pattern, finish, laneFor(event), variantsFor(event))
-  const ids = pickByRole(attacking, scene.roles, event.playerId)
+  // ★ 주인공을 슬롯 0에 꽂는 것은 그 선수가 **공격 팀의 필드 플레이어**일 때만이다.
+  //   save의 playerId는 막은 팀의 GK다 — 넘기면 골키퍼가 슈터로 배정된다(실측).
+  const ids = pickByRole(attacking, scene.roles, primaryOf(event, attacking))
 
   // away면 x 미러(100-x). y는 불변.
   const fx = (x: number) => (isHome ? x : 100 - x)
@@ -148,7 +176,19 @@ export function buildSequence(event: MatchEvent, homeState: SideState, awayState
     ...(p.arc ? { arc: p.arc } : {}),
     // 캐리어 슬롯 → 실제 선수 id. 슬롯보다 배정된 선수가 적으면(퇴장 등) 소유자 없음.
     ...(p.carrier != null && ids[p.carrier] ? { carrier: ids[p.carrier] } : {}),
+    ...(p.contact ? { contact: true as const } : {}),
   }))
+}
+
+/**
+ * 슬롯 0(슈터)에 강제로 꽂을 선수. 공격 팀의 **필드 플레이어**일 때만 유효하다.
+ * GK(슬롯 0)와 다른 팀 선수는 걸러진다 — 그러면 역할 좌표로 정상 배정된다.
+ */
+function primaryOf(event: MatchEvent, attacking: SideState): string | undefined {
+  const id = event.playerId
+  if (!id) return undefined
+  const i = attacking.tactics.lineup.findIndex(s => s.playerId === id)
+  return i > 0 ? id : undefined
 }
 
 /** 이벤트 → 레인 변형 인덱스(0~5). 분·타입·선수·팀을 섞어 같은 분에 몰리지 않게 한다. */
@@ -179,7 +219,7 @@ function variantsFor(event: MatchEvent): SceneVariants {
 export function sceneKeyFor(event: MatchEvent, homeState: SideState, awayState: SideState): string | null {
   const finish = finishFor(event.type)
   if (!finish) return null
-  const isHome = event.teamId === homeState.team.id
+  const isHome = attackingSideOf(event, homeState.team.id) === 'home'
   const attacking = isHome ? homeState : awayState
   const pattern: AttackPattern = attacking.tactics.attackPattern ?? 'balanced'
   return `${isHome ? 'H' : 'A'}/${buildScene(pattern, finish, laneFor(event), variantsFor(event)).key}`

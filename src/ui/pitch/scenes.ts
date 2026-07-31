@@ -80,6 +80,16 @@ const MIN_SEGMENT_MS = 140
 export const FOOT_OFFSET_M = 0.45
 
 /**
+ * 세이브 접촉점이 골라인에서 떨어지는 거리(m). 변형별로 2.2 / 2.6 / 3.2를 쓴다.
+ *
+ * 왜 이 범위인가: GK는 골라인 0.6~6 m의 박스 안에 살고(movement.GK_BOX_DEPTH),
+ * 문전 상황에서는 골라인 약 1 m 지점에 선다. 완전 신전 반경이 2.0 m
+ * (movement.GK_DIVE_REACH — 어깨 높이 1.44 + 팔 0.56)이므로 접촉점이 골라인에서
+ * 3.4 m를 넘으면 손이 물리적으로 닿지 못한다. 2~3 m 띠가 "몸을 던져 닿는" 구간이다.
+ */
+export const SAVE_CONTACT_M = 2.6
+
+/**
  * 도착 키프레임에서 **캐리어가 아닌** 무버를 목표의 몇 %에 두는가.
  * 100%면 컨트롤 정지 동안 세 명이 함께 얼어붙는다. 88%로 두면 나머지 12%를 정지
  * 구간에서 마저 달려 화면이 굳지 않는다.
@@ -120,6 +130,14 @@ export interface ScenePoint {
    * ★ 렌더러는 이 값으로 **누가 차는가**를 정한다 — "볼에서 가장 가까운 아무나"가 아니라.
    */
   carrier?: number
+  /**
+   * 이 스텝이 **GK의 손이 공에 닿는 순간**인가(세이브 전용).
+   *
+   * 왜 별도 플래그인가: 무브먼트는 다이브 최대 신전을 "마지막 키프레임"에 맞추고 있었는데,
+   * 그 규약은 마지막 키프레임이 곧 접촉일 때만 성립한다. 접촉을 명시하면 뒤에 여운·리바운드
+   * 스텝을 붙여도 인과가 흔들리지 않고, GK를 **어디로 보낼지**도 이 좌표에서 나온다.
+   */
+  contact?: boolean
 }
 
 /** 저술 단위 — 한 순간의 무버 배치와 소유자. 볼 좌표는 여기서 유도한다. */
@@ -134,6 +152,8 @@ interface Station {
   arc?: BallArc
   /** true면 컨트롤 정지를 넣지 않는다(원터치). 첫 스테이션은 항상 정지가 없다. */
   oneTouch?: boolean
+  /** GK 손이 공에 닿는 스테이션(세이브 전용) — {@link ScenePoint.contact}로 그대로 나간다. */
+  contact?: boolean
 }
 
 /** 빌드업 종류 — attackPattern 4택과 1:1. */
@@ -424,16 +444,30 @@ function finishStations(
   /** 슈팅 스테이션 — 캐리어는 반드시 슬롯 0(엔진이 정한 주인공)이다. */
   const shot: Station = { movers: boxMovers, carrier: 0, arc: 'shot', oneTouch: V.oneTouch }
   const end = (ball: [number, number]): Station => ({ movers: netMovers, carrier: -1, ball })
+  /** 골라인에서 m 미터 앞의 x(0~100). 세이브 접촉점을 미터로 저술하기 위한 환산. */
+  const beforeLine = (m: number) => clamp(100 - (m / PITCH_W) * 100)
 
   switch (finish) {
     case 'goal':
       return { stations: [shot, end([99, mouth(0.35, 44, 56)])], deliverArc }
-    case 'save':
-      // GK가 쳐낸다 — 골라인 앞에서 멈춘다. 문전 원터치는 더 가까이서 막힌다.
+    case 'save': {
+      /**
+       * GK가 **잡는다** — 접촉점은 골라인 앞 {@link SAVE_CONTACT_M} 띠 안이다.
+       *
+       * ★ 2026-07-31 재저술. 예전 종점은 x 92.5~94.5, 즉 골라인에서 **5.8~7.9 m 앞**이었다.
+       *   GK 박스는 골라인에서 0.6~6 m(movement.gkTarget)이고 볼이 문전에 오면 GK는
+       *   골라인 1 m 지점에 선다. 그래서 실측 GK-볼 최소거리가 **7.03 m**, 완전 신전
+       *   반경(2 m)을 5 m 초과했다 — 접촉 프레임이 존재할 수 없었다. 사용자가 캡처에서
+       *   본 "GK는 누워 있고 공은 8 m 밖 빈 잔디"가 정확히 이 숫자다.
+       *   지금은 GK가 신전으로 닿을 수 있는 유일한 띠에 접촉점을 두고, 무브먼트가
+       *   그 점을 향해 GK 몸통을 보낸다(movement.gkDiveAnchor).
+       */
+      const depth = V.post === 1 ? SAVE_CONTACT_M - 0.4 : V.post === -1 ? SAVE_CONTACT_M + 0.6 : SAVE_CONTACT_M
       return {
-        stations: [shot, end([V.post === 1 ? 94.5 : V.post === -1 ? 92.5 : 93.5, mouth(0.45, 43, 57)])],
+        stations: [shot, { ...end([beforeLine(depth), mouth(0.45, 43, 57)]), contact: true }],
         deliverArc,
       }
+    }
     case 'miss': {
       // 골문 밖 — 어느 쪽으로 얼마나 벗어나는지가 변형이다(골문 안으로는 절대 안 간다).
       const wideY = V.post === 0 ? (ly > 50 ? 84 : 16) : clamp(50 + V.post * sideSign * (V.post === 1 ? 13 : 22), 8, 92)
@@ -548,6 +582,7 @@ function timeline(stations: Station[], dwellMs: number): ScenePoint[] {
       // 같은 선수가 계속 소유하면 드리블이다 — 드리블하는 공은 뜨지 않는다.
       ...(dribble ? { arc: 'ground' as BallArc } : s.arc ? { arc: s.arc } : {}),
       ...(s.carrier >= 0 ? { carrier: s.carrier } : {}),
+      ...(s.contact ? { contact: true as const } : {}),
     })
     if (isLast) break
     const arc: BallArc = dribble ? 'ground' : (s.arc ?? 'pass')

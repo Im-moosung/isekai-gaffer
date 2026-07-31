@@ -112,9 +112,14 @@ describe('변형 축 — 같은 결과를 다른 그림으로', () => {
             // 골: 골라인에 닿고 골문 폭(레인 압축 후에도 중앙) 안에 들어간다.
             expect(endOf(goal).ball[0], tag).toBeGreaterThan(98)
             expect(Math.abs(endOf(goal).ball[1] - 50), tag).toBeLessThanOrEqual(6)
-            // 세이브: 골라인 앞에서 멈추고 골문 폭 안(GK가 잡는다).
-            expect(endOf(save).ball[0], tag).toBeLessThan(95)
-            expect(endOf(save).ball[0], tag).toBeGreaterThan(90)
+            // 세이브: **GK가 손으로 닿을 수 있는 띠**에서 멈추고 골문 폭 안이다.
+            // ★ 예전 계약은 90 < x < 95, 즉 골라인에서 5.3~10.5 m 앞이었다. GK 박스는
+            //   골라인 0.6~6 m이고 신전 반경이 2 m라 그 띠에서는 접촉이 물리적으로
+            //   불가능했다(실측 GK-볼 최소거리 7.03 m). 지금은 골라인 1.5~4 m 안이다.
+            const saveGap = ((100 - endOf(save).ball[0]) / 100) * PITCH_W
+            expect(saveGap, tag).toBeGreaterThan(1.5)
+            expect(saveGap, tag).toBeLessThan(4)
+            expect(endOf(save).contact, tag).toBe(true)
             expect(Math.abs(endOf(save).ball[1] - 50), tag).toBeLessThanOrEqual(7)
             // 미스: 골라인까지 가지만 골문 폭 밖으로 벗어난다.
             expect(endOf(miss).ball[0], tag).toBeGreaterThan(98)
@@ -206,9 +211,10 @@ describe('★ attackPattern이 화면을 바꾼다', () => {
     const goal = buildScene('balanced', 'goal', 0).points
     const save = buildScene('balanced', 'save', 0).points
     const miss = buildScene('balanced', 'miss', 0).points
-    // 골만 골라인(99)에 닿는다. 세이브는 GK 앞에서, 미스는 골문 밖으로.
+    // 골만 골라인(99)에 닿는다. 세이브는 GK 손이 닿는 띠에서, 미스는 골문 밖으로.
     expect(goal[goal.length - 1].ball[0]).toBeGreaterThan(98)
-    expect(save[save.length - 1].ball[0]).toBeLessThan(95)
+    expect(save[save.length - 1].ball[0]).toBeLessThan(goal[goal.length - 1].ball[0])
+    expect(save[save.length - 1].contact).toBe(true)
     expect(Math.abs(miss[miss.length - 1].ball[1] - 50)).toBeGreaterThan(25)
   })
 })
