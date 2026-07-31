@@ -135,9 +135,10 @@ describe('ShootoutPanel 렌더 스모크', () => {
 
   it('서든데스로 넘어가면 순번이 SD 표기로 바뀌고 구분 표시가 붙는다', () => {
     vi.useFakeTimers()
-    // seed 6은 기본 키커·기본 방향에서 서든데스까지 가는 시드다(엔진 결정론).
+    // seed 1은 기본 키커·기본 방향에서 서든데스까지 가는 시드다(엔진 결정론).
+    // 성공률 재보정(40.3%→71.4%) 이후 옛 시드 6은 정규 5라운드에서 갈린다 — 시드를 다시 찾았다.
     const { container, getByRole } = render(
-      <ShootoutPanel home={home} away={away} seed={6} onDone={() => {}} />,
+      <ShootoutPanel home={home} away={away} seed={1} onDone={() => {}} />,
     )
     fireEvent.click(getByRole('button', { name: '승부차기 시작' }))
     for (let i = 0; i < 40; i++) act(() => { vi.advanceTimersByTime(800) })

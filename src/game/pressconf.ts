@@ -132,6 +132,16 @@ const SHOUT_SCENE: Record<string, string> = {
   praise: '잘하고 있다고 소리치셨습니다',
 }
 
+/** 요약에 박힌 한국어 라벨 → 톤 키(detail이 없는 옛 로그용 역인덱스).
+ *  matchStore의 TONE_LABEL·SHOUT_LABEL과 짝이다 — 그쪽을 바꾸면 여기도 바꿔야 한다.
+ *  (matchStore를 import하면 UI 스토어가 순수 템플릿 모듈로 딸려 들어와 계층이 뒤집힌다.) */
+const TONE_BY_LABEL: Record<string, string> = {
+  격노: 'rage', 격려: 'encourage', 침착: 'calm', 신뢰: 'trust',
+}
+const SHOUT_BY_LABEL: Record<string, string> = {
+  독려: 'urge', '더 뛰어': 'work', 침착: 'calm', 칭찬: 'praise',
+}
+
 /** "압박 62→47" 한 조각을 "압박을 62에서 47까지 내리" 꼴로. 해석 불가면 null.
  *
  *  ★ 숫자 뒤에는 '로/으로'를 쓰지 않는다 — 받침 유무가 읽기에 따라 갈린다(90=구십'으로',
@@ -155,9 +165,12 @@ function logQuestionText(e: DecisionEntry): string | null {
   const when = whenPhrase(e.summary)
   switch (e.kind) {
     case 'teamtalk': {
-      const tone = typeof e.detail?.tone === 'string' ? TONE_SCENE[e.detail.tone] : undefined
+      // detail이 정본이고, 그 필드가 없던 시절의 로그는 요약의 한국어 라벨로 되짚는다.
+      const tone = (typeof e.detail?.tone === 'string' ? TONE_SCENE[e.detail.tone] : undefined)
+        ?? TONE_SCENE[TONE_BY_LABEL[/팀토크: (.+)$/.exec(e.summary)?.[1] ?? ''] ?? '']
       if (tone) return `하프타임 라커룸 이야기가 나옵니다. ${tone} — 그 말이 후반의 흐름을 만들었다고 보십니까?`
-      const shout = typeof e.detail?.shout === 'string' ? SHOUT_SCENE[e.detail.shout] : undefined
+      const shout = (typeof e.detail?.shout === 'string' ? SHOUT_SCENE[e.detail.shout] : undefined)
+        ?? SHOUT_SCENE[SHOUT_BY_LABEL[/외침: (.+)$/.exec(e.summary)?.[1] ?? ''] ?? '']
       if (shout) return `${when} 터치라인에서 ${shout} 그 한마디가 꼭 필요한 순간이었습니까?`
       return null
     }

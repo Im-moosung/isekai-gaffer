@@ -889,6 +889,16 @@
   word-break: keep-all;
 }
 /* 자격 안내 — 좌측 컬러 띠 + 회색 카드 금지 패턴을 피해 헤어라인 위 캡션으로 둔다. */
+/* 연장전 미구현 고지 — 규정과 다른 지점을 헤더에서 먼저 밝힌다.
+   자격 안내(.so-rule)와 클래스를 나눈 이유는 둘이 다른 것을 말하기 때문이다. */
+.so-et {
+  margin: 0;
+  max-width: 40em;
+  color: var(--t-low);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
+  word-break: keep-all;
+}
 .so-rule {
   margin: 0;
   max-width: 40em;

@@ -335,3 +335,18 @@ describe('지시 변경 질문의 한국어', () => {
     expect(qs.some(q => q.text.includes('60분에 진형을 4-2-3-1에서 4-4-2로 바꾸셨습니다'))).toBe(true)
   })
 })
+
+// detail 필드가 없던 시절의 로그(저장된 캠페인)도 사람의 말로 나가야 한다 —
+// 해석에 실패해 질문이 통째로 사라지면 로그 기반 서사가 조용히 비어버린다.
+describe('detail 없는 옛 로그 폴백', () => {
+  it('팀토크 요약의 한국어 라벨로 톤을 되짚는다', () => {
+    const log: DecisionEntry[] = [{ minute: 45, kind: 'teamtalk', summary: 'HT 팀토크: 격려' }]
+    const qs = buildQuestions(rec('r16', 'eng', [2, 1], { decisions: log }), log)
+    expect(qs.some(q => q.text.includes('선수들을 북돋우셨다고 합니다'))).toBe(true)
+  })
+  it('외침 요약도 마찬가지', () => {
+    const log: DecisionEntry[] = [{ minute: 58, kind: 'teamtalk', summary: "58' 외침: 독려" }]
+    const qs = buildQuestions(rec('r16', 'eng', [2, 1], { decisions: log }), log)
+    expect(qs.some(q => q.text.includes('더 밀어붙이라고 외치셨습니다'))).toBe(true)
+  })
+})
