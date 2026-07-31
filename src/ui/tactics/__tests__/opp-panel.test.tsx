@@ -2,7 +2,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { render, fireEvent, cleanup, act } from '@testing-library/react'
 import { useMatchStore } from '../../../game/matchStore'
-import { OppPanel, matchupHint } from '../OppPanel'
+import { OppPanel, matchupHint, briefingRoster } from '../OppPanel'
+import { loadTeam } from '../../../data/loader'
+import { pickBestXI } from '../../../engine/lineup'
 import { makeTestTeam } from '../../../engine/fixtures/testTeams'
 
 const home = makeTestTeam('kor', 76)
@@ -76,5 +78,26 @@ describe('OppPanel', () => {
     const my = store().engine!.home.tactics.formation
     const opp = store().engine!.away.tactics.formation
     expect(note.textContent).toContain(`${my} vs ${opp}`)
+  })
+})
+
+// 감사 결함 ⑧: 고정 브리핑 문안이 오늘의 XI와 어긋난다.
+// 체코 styleNotes는 "소우체크·시크·호리 등 … 슐츠 외 중앙 창의성이 부족해…"인데
+// 실제 선발 XI에는 소우체크도 슐츠도 없다. 문안을 다시 쓰지 않고 사실만 정정한다.
+describe('briefingRoster — 브리핑 이름 × 오늘의 XI', () => {
+  it('체코 브리핑이 부른 이름을 선발/벤치로 정확히 가른다', () => {
+    const cze = loadTeam('cze')
+    const xi = pickBestXI(cze)
+    const notes = (cze.profile as { styleNotes?: string }).styleNotes
+    const { starters, bench } = briefingRoster(notes, cze.squad, xi.lineup.map(l => l.playerId))
+    // 문안이 부른 네 명이 빠짐없이 분류된다.
+    expect([...starters, ...bench].sort()).toEqual(['소우체크', '슐츠', '시크', '호리'].sort())
+    // 감사가 지적한 두 명은 벤치다.
+    expect(bench).toContain('소우체크')
+    expect(bench).toContain('슐츠')
+  })
+
+  it('문안이 없으면 아무것도 만들지 않는다', () => {
+    expect(briefingRoster(undefined, [], [])).toEqual({ starters: [], bench: [] })
   })
 })

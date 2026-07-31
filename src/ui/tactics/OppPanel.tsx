@@ -10,6 +10,36 @@ import './opp.css'
 
 export interface MatchupHint { tone: 'up' | 'even' | 'down'; text: string }
 
+/**
+ * 브리핑 문안(styleNotes)에 이름이 나오는 선수를 **오늘 선발 / 오늘 벤치**로 가른다.
+ *
+ * ★ styleNotes는 대회 전체를 요약한 고정 문안이라 그날의 XI를 모른다. 그래서 체코 브리핑이
+ *   "소우체크·시크·호리 등 장신 표적이 강점이나 슐츠 외 중앙 창의성이 부족해…"라고 하는데
+ *   실제 선발에는 소우체크도 슐츠도 없는 일이 생겼다(감사 결함 ⑧). 문안을 지우면 팀 성향
+ *   서술까지 함께 사라지고, 문장을 기계로 고쳐 쓰면 조사·어미가 깨진다.
+ *   그래서 **문안은 그대로 두고 사실 관계만 아래 한 줄로 정정한다** — 실제 방송 브리핑도
+ *   "오늘은 벤치입니다"를 덧붙이지 문장을 다시 쓰지 않는다.
+ *
+ * 매칭은 성(姓)이 아니라 **한국어 표기 전체 이름의 마지막 어절**로 한다(데이터의 name.ko는
+ * "토마시 소우체크" 꼴이고 문안은 "소우체크"만 쓴다). 두 글자 이상만 후보로 삼아
+ * 흔한 한 글자가 우연히 걸리는 것을 막는다.
+ */
+export function briefingRoster(
+  notes: string | undefined,
+  squad: readonly Player[],
+  startingIds: readonly string[],
+): { starters: string[]; bench: string[] } {
+  if (!notes) return { starters: [], bench: [] }
+  const on = new Set(startingIds)
+  const starters: string[] = [], bench: string[] = []
+  for (const p of squad) {
+    const last = p.name.ko.split(' ').pop() ?? ''
+    if (last.length < 2 || !notes.includes(last)) continue
+    ;(on.has(p.id) ? starters : bench).push(last)
+  }
+  return { starters, bench }
+}
+
 /** 포메이션 상성(내 포메이션 vs 상대) → 한 줄 매치업 힌트.
  *  edge>0이면 홈(유저) 우위. 부호·크기로 톤·문구를 결정(결정론). */
 export function matchupHint(edge: number): MatchupHint {
@@ -46,6 +76,7 @@ export function OppPanel() {
     .map(l => ({ slot: l.slot, player: byId(l.playerId) }))
     .filter((x): x is { slot: Player['position']; player: Player } => !!x.player)
   const styleNotes = (away.team.profile as { styleNotes?: string }).styleNotes
+  const roster = briefingRoster(styleNotes, away.team.squad, away.tactics.lineup.map(l => l.playerId))
   const preferred = away.team.profile.preferredFormations
   const selected = sel ? byId(sel) : null
 
@@ -87,6 +118,14 @@ export function OppPanel() {
           <PitchView state={engine} variant="tactics" />
         </div>
         {styleNotes && <p className="op__notes">{styleNotes}</p>}
+        {/* 브리핑이 부른 이름과 오늘의 XI를 대조해 사실만 정정한다(문안은 건드리지 않는다). */}
+        {roster.bench.length > 0 && (
+          <p className="op__notes op__notes--correction" role="note">
+            브리핑이 언급한 {roster.bench.join('·')}
+            {roster.bench.length > 1 ? '는' : '은'} 오늘 선발이 아닙니다
+            {roster.starters.length > 0 && ` (선발로 나온 이름: ${roster.starters.join('·')})`}.
+          </p>
+        )}
       </div>
 
       <div className="op__col op__col--squad">

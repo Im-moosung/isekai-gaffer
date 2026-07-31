@@ -115,6 +115,14 @@
   color: var(--t-mid);
 }
 
+/* 브리핑 정정 한 줄 — 고정 문안과 오늘의 XI가 어긋날 때만 나온다. 본문보다 한 단계 낮은
+   톤으로 두되, 좌측 라인으로 "이건 원문이 아니라 정정"임을 시각적으로 분리한다. */
+.op__notes--correction {
+  padding-left: var(--sp-2);
+  border-left: 2px solid var(--s-line);
+  color: var(--t-low);
+}
+
 .op__subtitle {
   margin: var(--sp-1) 0 0;
   font-size: var(--fs-eyebrow);
