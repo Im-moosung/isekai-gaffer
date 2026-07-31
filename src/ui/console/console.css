@@ -227,6 +227,14 @@
   border-color: var(--danger-line);
   background: color-mix(in srgb, var(--danger) 7%, var(--s-2));
 }
+/* 교체로 나간 선수(IFAB 제3조 — 재출전 불가). 정지와 달리 잘못이 아니므로 붉게 물들이지
+   않는다. 채도를 빼고 한 단계 물러나게 해서 "여기 기록은 남아 있지만 이제 대상이 아니다"를
+   말한다. 행을 지우지 않는 이유는 SubPanel의 subbedOff 주석 참조. */
+.cs-card--out {
+  border-color: var(--s-line);
+  background: var(--s-1);
+  opacity: 0.62;
+}
 .cs-card__stamina {
   grid-column: 1 / -1;
   height: 5px;

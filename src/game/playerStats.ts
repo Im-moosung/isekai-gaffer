@@ -92,6 +92,34 @@ export function teamCardTally(
   return out
 }
 
+/** 교체 이벤트의 `detail`에 나간 선수 id를 싣는 접두사(simulate.ts applyCommand 규약). */
+const SUB_OUT_PREFIX = 'out:'
+
+/**
+ * 이 경기에서 **교체로 나간** 선수 id 목록(발생 순).
+ *
+ * 규정 근거: IFAB 경기규칙 제3조 — 교체되어 나간 선수는 그 경기에 다시 출전할 수 없다.
+ * (2026 대회에 부상 교체·복귀 예외는 없고, 이 게임에는 부상 시스템 자체가 없다.)
+ *
+ * ★ 왜 상태 필드가 아니라 파생인가: 같은 사실을 엔진 상태와 UI 스토어가 나눠 들면
+ *   반드시 어긋난다(교체 취소·세그먼트 분할·이월 경로마다 동기화가 필요해진다).
+ *   엔진은 이미 교체마다 이벤트를 남기므로 `teamCardTally`와 같은 규약으로 events를
+ *   진실의 원천으로 삼는다 — 순수·결정론이고 엔진 수정이 필요 없다.
+ *
+ * 엔진 규약: `{ type:'sub', teamId, playerId: 들어온 선수, detail: 'out:<나간 선수>' }`
+ * — playerId가 IN이고 detail이 OUT이라 방향을 뒤집어 읽으면 정반대 결과가 나온다.
+ */
+export function subbedOffIds(events: readonly MatchEvent[], teamId: string): string[] {
+  const out: string[] = []
+  for (const e of events) {
+    if (e.type !== 'sub' || e.teamId !== teamId) continue
+    if (!e.detail?.startsWith(SUB_OUT_PREFIX)) continue
+    const id = e.detail.slice(SUB_OUT_PREFIX.length)
+    if (id && !out.includes(id)) out.push(id)
+  }
+  return out
+}
+
 /** 화면에 내보일 만한 기록이 하나라도 있는가(전부 0이면 표시를 접기 위한 판정). */
 export function hasPlayerMatchStats(s: PlayerMatchStats): boolean {
   return s.shots > 0 || s.goals > 0 || s.assists > 0 || s.fouls > 0

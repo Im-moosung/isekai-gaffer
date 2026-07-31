@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMatchStore } from '../../game/matchStore'
 import { MAX_SUBS, MAX_SUB_WINDOWS } from '../../engine/simulate'
 import type { MatchEvent, Player, SideState } from '../../engine/types'
-import { playerMatchStats, hasPlayerMatchStats, type PlayerMatchStats } from '../../game/playerStats'
+import { playerMatchStats, hasPlayerMatchStats, subbedOffIds, type PlayerMatchStats } from '../../game/playerStats'
 import { StatusChips } from '../common/StatusChips'
 import '../shell/shell.css'
 import './console.css'
@@ -53,6 +53,12 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
     .filter((x): x is { slot: Player['position']; player: Player } => !!x.player)
   const bench = squad.filter(p => !lineupIds.includes(p.id))
 
+  // IFAB 제3조 — 교체로 나간 선수는 그 경기에 다시 못 들어온다. 벤치는 "선발이 아닌
+  // 전원"이라 나간 선수도 그대로 벤치에 다시 나타났다(감사 재현: 손흥민 OUT 후 재선택 가능).
+  // ★ 목록에서 지우지 않고 잠그는 이유: 이 카드에는 방금 뺀 선수의 이 경기 기록
+  //   (골·도움·슛)이 붙어 있고, 그게 "그 교체가 옳았나"를 되짚는 유일한 자리다.
+  //   행이 통째로 사라지면 기록도 함께 사라지고, 사라진 행은 규칙이 아니라 버그로 읽힌다.
+  const subbedOff = new Set(engine ? subbedOffIds(engine.events, state.team.id) : [])
   // 상대 벤치에는 우리 징계가 적용되지 않는다(캠페인이 추적하는 것은 우리 팀뿐).
   const suspended = side === 'home' ? new Set(discipline.suspendedIds) : new Set<string>()
   const cautionOf = (id: string) => (side === 'home' ? discipline.cautions[id] ?? 0 : 0)
@@ -60,6 +66,7 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
   const swap = () => {
     setError(null)
     if (!out || !inSel) { setError('아웃/인 선수를 선택하세요'); return }
+    if (subbedOff.has(inSel)) { setError('교체로 나간 선수는 다시 투입할 수 없습니다 (IFAB 제3조)'); return }
     if (suspended.has(inSel)) { setError('출장정지 선수는 투입할 수 없습니다'); return }
     try {
       submitCommand(side, { type: 'sub', out, in: inSel })
@@ -145,9 +152,10 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
             morale={state.moraleByPlayer[player.id]}
             cautions={cautionOf(player.id)}
             suspended={suspended.has(player.id)}
+            subbedOff={subbedOff.has(player.id)}
             stats={events ? playerMatchStats(events, player.id) : null}
             selected={inSel === player.id}
-            disabled={!open || !out || suspended.has(player.id)}
+            disabled={!open || !out || suspended.has(player.id) || subbedOff.has(player.id)}
             onSelect={() => pickIn(player.id)}
           />
         ))}
@@ -162,7 +170,7 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
   )
 }
 
-function SubCard({ player, slot, stamina, morale, cautions, suspended, stats, selected, disabled, onSelect }: {
+function SubCard({ player, slot, stamina, morale, cautions, suspended, subbedOff, stats, selected, disabled, onSelect }: {
   player: Player; slot: Player['position']; stamina: number
   /** 사기 0~100. 상태 칩이 밴드를 벗어날 때만 표시한다. */
   morale?: number
@@ -170,6 +178,8 @@ function SubCard({ player, slot, stamina, morale, cautions, suspended, stats, se
   cautions?: number
   /** 이번 경기 출장정지 — 벤치에 남아 있어도 투입 불가. */
   suspended?: boolean
+  /** 이 경기에서 이미 교체로 나갔다 — 벤치에 남아 있어도 재투입 불가(IFAB 제3조). */
+  subbedOff?: boolean
   /** 이 경기 개인 기록. null이면 아직 경기가 진행되지 않은 것(표시 안 함). */
   stats: PlayerMatchStats | null
   selected: boolean; disabled: boolean; onSelect: () => void
@@ -179,7 +189,7 @@ function SubCard({ player, slot, stamina, morale, cautions, suspended, stats, se
   return (
     <button
       type="button"
-      className={`cs-card${selected ? ' cs-card--sel' : ''}${suspended ? ' cs-card--susp' : ''}`}
+      className={`cs-card${selected ? ' cs-card--sel' : ''}${suspended ? ' cs-card--susp' : ''}${subbedOff ? ' cs-card--out' : ''}`}
       aria-pressed={selected}
       disabled={disabled}
       onClick={onSelect}
@@ -192,7 +202,7 @@ function SubCard({ player, slot, stamina, morale, cautions, suspended, stats, se
       <StatusChips
         className="cs-card__sx"
         input={{
-          suspended, cautions, morale,
+          subbedOff, suspended, cautions, morale,
           matchYellows: stats?.yellows ?? 0,
           sentOff: (stats?.reds ?? 0) > 0,
           stamina,

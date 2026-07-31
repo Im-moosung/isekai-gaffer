@@ -29,12 +29,14 @@ const FIT_LOW = 40
 const MOOD_LOW = 55
 const MOOD_HIGH = 85
 
-export type ChipTone = 'warn' | 'danger' | 'good'
-export type ChipShape = 'card' | 'bar' | 'tri-up' | 'tri-down'
+/** 'mute'는 상태가 아니라 **자격 소멸**을 말한다 — 잘못한 것이 없으므로 경고색을 쓰지 않는다. */
+export type ChipTone = 'warn' | 'danger' | 'good' | 'mute'
+/** 'out'(원)은 카드(직사각)·체력(막대)·사기(삼각) 어느 것과도 겹치지 않는 네 번째 실루엣이다. */
+export type ChipShape = 'card' | 'bar' | 'tri-up' | 'tri-down' | 'out'
 
 export interface StatusChip {
   /** React key·테스트 훅. */
-  kind: 'susp' | 'sent' | 'caution' | 'fit' | 'mood'
+  kind: 'susp' | 'sent' | 'caution' | 'fit' | 'mood' | 'out'
   shape: ChipShape
   tone: ChipTone
   /** 칩에 찍히는 짧은 글자(숫자 또는 2글자). 빈 문자열이면 도형만. */
@@ -44,6 +46,8 @@ export interface StatusChip {
 }
 
 export interface StatusInput {
+  /** 이 경기에서 이미 교체로 나갔다(IFAB 제3조 — 재출전 불가). 참이면 다른 칩을 만들지 않는다. */
+  subbedOff?: boolean
   /** 이번 경기 출장정지(캠페인 징계). 참이면 다른 칩을 만들지 않는다. */
   suspended?: boolean
   /** 대회 미소멸 누적 경고 장수(이번 경기 이전까지). */
@@ -68,9 +72,20 @@ const CAUTION_THRESHOLD = 2
  * 잘리는 상황에서 먼저 잘려도 되는 것을 뒤에 둔다.
  */
 export function statusChips(input: StatusInput): StatusChip[] {
-  const { suspended, sentOff, stamina, morale } = input
+  const { subbedOff, suspended, sentOff, stamina, morale } = input
   const cautions = input.cautions ?? 0
   const matchYellows = input.matchYellows ?? 0
+
+  // 교체 아웃도 단독 표시다. 다시 못 들어오는 선수의 체력·사기는 잡음이고,
+  // 정지와 같은 이유로 "왜 선택이 막혔는가"만 남긴다. 정지보다 먼저 판정하는 이유:
+  // 이 경기에 뛴 선수는 애초에 이 경기 정지 대상이 아니므로 둘이 겹칠 일이 없고,
+  // 겹친다면 그건 이번 경기의 사실(교체 아웃)이 더 구체적이다.
+  if (subbedOff) {
+    return [{
+      kind: 'out', shape: 'out', tone: 'mute', text: '아웃',
+      label: '교체 아웃 — 이 경기에 다시 출전할 수 없습니다(IFAB 제3조)',
+    }]
+  }
 
   // 출장정지는 단독 표시. 뛰지 않는 선수의 컨디션은 판단 재료가 아니다.
   if (suspended) {

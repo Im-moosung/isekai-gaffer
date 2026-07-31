@@ -4,6 +4,7 @@ import { createMatch, simulateSegment, applyCommand, type MatchCommand, type Sim
 import type { DecisionEntry, Instructions, MatchEvent, MatchState, TacticState, Team } from '../engine/types'
 import { breakSchedule, detectMoment, type DecisionMoment, type HydrationSchedule } from './matchSession'
 import { decideAwayActions } from './oppAi'
+import { subbedOffIds } from './playerStats'
 
 /** 재생 세션 상태 머신.
  *  - 'pre'          킥오프 대기
@@ -425,6 +426,9 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     let firedNext = oppFired
     let noticesNext = oppNotices
     for (const a of decideAwayActions(next, minute, firedNext)) {
+      // 최종 방어선 — 상대 AI가 어떤 이유로든 재투입을 시도하면 여기서 버린다.
+      // oppAi가 이미 후보에서 제외하지만, applyCommand(엔진)는 이 규칙을 모른다.
+      if (a.cmd.type === 'sub' && subbedOffIds(next.events, next.away.team.id).includes(a.cmd.in)) continue
       try {
         next = applyCommand(next, 'away', a.cmd)
       } catch {
@@ -511,6 +515,12 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     }
     const minute = engine.minute
     const sideState = engine[side]
+    // IFAB 제3조 — 교체되어 나간 선수는 그 경기에 다시 출전할 수 없다. 스토어가 최종
+    // 방어선이다: 교체 탭은 이미 카드를 잠그지만, 작전판 보드 등 다른 호출부가 늘어나면
+    // UI 잠금만으로는 샌다. 양 팀 모두에 같은 규칙을 적용한다(엔진은 이 규칙을 모른다).
+    if (cmd.type === 'sub' && subbedOffIds(engine.events, sideState.team.id).includes(cmd.in)) {
+      throw new Error('교체로 나간 선수는 다시 투입할 수 없습니다 (IFAB 제3조)')
+    }
     // 시점 라벨: 킥오프 전 / HT / N'. 결정 로그는 기자회견의 근거가 되므로
     // "언제 내린 결정인가"가 서사적으로 중요하다. 세 명령 분기가 같은 규칙을 쓴다.
     const when = phase === 'pre' ? '킥오프 전' : phase === 'halftime' ? 'HT' : `${minute}'`

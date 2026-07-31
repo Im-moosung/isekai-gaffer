@@ -52,6 +52,16 @@
   border-radius: 1px;
 }
 
+/* 교체 아웃: 원. 카드(직사각)·체력(막대)·사기(삼각)와 겹치지 않는 네 번째 실루엣.
+   채우지 않고 링으로 그린다 — "이미 빠져나간 자리"를 뜻하고, 색을 못 읽어도
+   속이 빈 도형이 다른 세 칩과 즉시 구분된다. */
+.sx__chip--out .sx__mark {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+}
+
 /* 사기: 삼각형 */
 .sx__chip--tri-up .sx__mark,
 .sx__chip--tri-down .sx__mark {
@@ -85,13 +95,23 @@
 }
 .sx__chip--good .sx__mark { background: var(--good); }
 
+/* 교체 아웃은 잘못이 아니다 — 경고/위험색을 쓰지 않고 중립 회색으로 물러난다.
+   교체 탭에서 이 칩은 "선택이 막힌 이유"만 말하면 되고, 시선을 끌 이유가 없다. */
+.sx__chip--mute {
+  color: var(--t-low);
+  background: var(--s-3);
+  border-color: var(--s-line-strong);
+}
+.sx__chip--mute .sx__mark { background: none; }
+
 /* 삼각형 마크는 background가 아니라 border로 그린다 — 위에서 깐 background를 지운다. */
 .sx__chip--tri-up .sx__mark,
 .sx__chip--tri-down .sx__mark { background: none; }
 
 /* '정지'·'퇴장'은 두 글자라 숫자 칩보다 넓다. 한글 글리프에 num 폰트를 쓰지 않는다. */
 .sx__chip[data-kind='susp'] .sx__text,
-.sx__chip[data-kind='sent'] .sx__text {
+.sx__chip[data-kind='sent'] .sx__text,
+.sx__chip[data-kind='out'] .sx__text {
   font-family: var(--f-ui);
   font-size: 9px;
 }

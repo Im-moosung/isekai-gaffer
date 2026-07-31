@@ -4,6 +4,7 @@
 import type { MatchCommand } from '../engine/simulate'
 import type { Instructions, MatchState, Position, SideState, TeamProfile, TeamStyle } from '../engine/types'
 import { positionFitness } from '../engine/fitness'
+import { subbedOffIds } from './playerStats'
 
 export interface OppAction {
   cmd: MatchCommand
@@ -46,11 +47,15 @@ function tiredIn(side: SideState, slots: Position[]): { slot: Position; playerId
   return cands[0] ?? null
 }
 
-/** 벤치(라인업 밖)에서 지정 슬롯 적합도 최상위. 없으면 null. */
-function bestBench(side: SideState, slot: Position): string | null {
+/** 벤치(라인업 밖)에서 지정 슬롯 적합도 최상위. 없으면 null.
+ *
+ *  ★ `unavailable`은 이미 교체로 나간 선수다. 라인업 밖이라는 조건만으로는 걸러지지
+ *  않는다 — 교체로 빠진 순간 그 선수도 "라인업 밖"이 되므로, 다음 창(60'→70')에서
+ *  적합도 1위로 다시 뽑혀 재투입됐다(감사 재현: 선발 CB 다비트 지마가 70'에 IN). */
+function bestBench(side: SideState, slot: Position, unavailable: ReadonlySet<string>): string | null {
   const inXI = new Set(side.tactics.lineup.map(l => l.playerId))
   const cands = side.team.squad
-    .filter(p => !inXI.has(p.id) && !side.sentOff.includes(p.id))
+    .filter(p => !inXI.has(p.id) && !side.sentOff.includes(p.id) && !unavailable.has(p.id))
     .sort((a, b) => {
       const d = positionFitness(b, slot) - positionFitness(a, slot)
       return d !== 0 ? d : a.id.localeCompare(b.id)
@@ -129,10 +134,12 @@ export function decideAwayActions(st: MatchState, minute: number, done: string[]
 
   // ── 2) 교체 ──
   if (away.subsUsed < MAX_AI_SUBS) {
+    // IFAB 제3조 — 이미 교체로 나간 선수는 후보에서 뺀다(events가 진실의 원천).
+    const subbedOff = new Set(subbedOffIds(st.events, away.team.id))
     const { outSlots, inSlot } = subPlan(pattern, leading, trailing)
     const target = tiredIn(away, outSlots)
     if (target) {
-      const inId = bestBench(away, inSlot ?? target.slot)
+      const inId = bestBench(away, inSlot ?? target.slot, subbedOff)
       if (inId) {
         const nameOf = (id: string) => away.team.squad.find(p => p.id === id)?.name.ko ?? id
         const notice = `📢 ${away.team.name.ko} 교체 — ${nameOf(target.playerId)} OUT, ${nameOf(inId)} IN`
