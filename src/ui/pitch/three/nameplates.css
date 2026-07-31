@@ -53,3 +53,20 @@
     transition: none;
   }
 }
+
+/* ★ 2D 작전판 구간에는 이름표를 내린다.
+   이 레이어는 캔버스 위에 얹힌 **DOM 오버레이**라, 3D를 언마운트하지 않고 작전판을
+   위에 겹치는 설계(match.css `.ab-root--on`)에서 혼자 살아남아 보드 위를 떠다녔다
+   (실주행에서 확인). 이름표는 3D 하이라이트의 장치이므로 3D가 보일 때만 뜬다.
+
+   신호는 `.ms-pitch-wrap[data-mode]`다 — MatchScreen이 `live3d`로 정하는 값이고,
+   `.ab-root--on`이 켜지는 조건과 정확히 반대다. 전환은 보드의 0.26s 디졸브에 맞춘다
+   (하드 컷이면 이름표만 먼저 사라져 눈에 띈다). */
+[data-mode='2d'] .m3d-plates {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.26s var(--ease-out), visibility 0s linear 0.26s;
+}
+[data-mode='3d'] .m3d-plates {
+  transition: opacity 0.26s var(--ease-out), visibility 0s;
+}

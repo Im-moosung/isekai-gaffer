@@ -300,10 +300,16 @@ export function Match3D(props: Match3DProps) {
       const plateText = (ko: string): string => {
         const t = ko.trim()
         if (t.length === 0) return ''
-        // 한글 이름(김민재)은 3~4자라 통째로 쓴다 — 성만 쓰면 김/이/박이 화면에 즐비하다.
-        if (/[가-힣]/.test(t)) return t.length <= 4 ? t : t.slice(0, 4)
+        // ★ 한글 여부로 가르면 안 된다 — 외국 선수 이름도 **한글로 음역**돼 있어서
+        //   `/[가-힣]/`가 참이 되고, 그러면 "페란 토레스"가 slice(0,4)로 "페란 토"가
+        //   된다(실주행에서 확인: 로빈 흐 / 블라디미 / 옌스 카).
+        //   진짜 신호는 **공백**이다. 한국식 이름은 한 낱말(김민재), 음역명은
+        //   이름+성 두 낱말이다. 실측: 312명 중 음역 284 · 한국식 28, 성이 6자를
+        //   넘는 경우 0건 — 그래서 자를 필요가 없다.
         const parts = t.split(/\s+/)
-        return parts[parts.length - 1]
+        // 성만 쓴다 — 방송 자막도 라이브 중에는 성만 띄운다. 한국식은 성만 쓰면
+        // 김/이/박이 즐비하므로 통째로 둔다.
+        return parts.length > 1 ? parts[parts.length - 1] : t
       }
       /** id → 이름표 문자열. 스쿼드는 경기 중 바뀌지 않으므로 팀별로 한 번만 만든다. */
       const nameCache = new Map<string, Map<string, string>>()
