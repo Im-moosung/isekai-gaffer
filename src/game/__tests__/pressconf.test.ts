@@ -221,4 +221,62 @@ describe('buildEpilogue', () => {
     expect(buildEpilogue(groupRecs, { reached: 'group3', champion: false }))
       .toEqual(buildEpilogue(groupRecs, { reached: 'group3', champion: false }))
   })
+
+  it('승부차기로 **졌으면** "살아남았다"고 쓰지 않는다', () => {
+    const recs: MatchRecord[] = [
+      rec('group1', 'cze', [2, 0]), rec('group2', 'mex', [1, 0]), rec('group3', 'rsa', [1, 0]),
+      rec('r32', 'ecu', [2, 1]),
+      rec('r16', 'eng', [1, 1], { shootout: [3, 4] }), // 승부차기 패배 → 탈락
+    ]
+    const ep = buildEpilogue(recs, { reached: 'r16', champion: false })
+    expect(ep.some(s => s.includes('살아남았다'))).toBe(false)
+    expect(ep.some(s => s.includes('승부차기'))).toBe(true)
+    assertClean(ep)
+  })
+
+  it('승부차기를 이긴 경기가 있으면 그 경기를 하이라이트로 쓴다', () => {
+    const recs: MatchRecord[] = [
+      rec('group1', 'cze', [2, 0]), rec('group2', 'mex', [1, 0]), rec('group3', 'rsa', [1, 0]),
+      rec('r32', 'ecu', [1, 1], { shootout: [5, 4] }),
+      rec('r16', 'eng', [0, 2]),
+    ]
+    const ep = buildEpilogue(recs, { reached: 'r16', champion: false })
+    expect(ep.some(s => s.includes('살아남았다'))).toBe(true)
+  })
+
+  it('대패를 "가장 인상적인 경기"로 소개하지 않는다 — 결과가 좋은 경기를 고른다', () => {
+    const recs: MatchRecord[] = [
+      rec('group1', 'cze', [0, 2]),
+      rec('group2', 'mex', [0, 3]), // 최다 득점 합계 경기 = 최악의 패배
+      rec('group3', 'rsa', [1, 1]),
+    ]
+    const ep = buildEpilogue(recs, { reached: 'group3', champion: false })
+    const line = ep.find(s => s.includes('경기는'))!
+    expect(line).toContain('1-1')
+    expect(line).not.toContain('0-3')
+    assertClean(ep)
+  })
+
+  it('전패 조별리그에서는 상찬("가장 인상적인") 대신 중립 서술을 쓴다', () => {
+    const recs: MatchRecord[] = [
+      rec('group1', 'cze', [0, 1]),
+      rec('group2', 'mex', [0, 3]),
+      rec('group3', 'rsa', [1, 2]),
+    ]
+    const ep = buildEpilogue(recs, { reached: 'group3', champion: false })
+    const line = ep.find(s => s.includes('경기는'))!
+    expect(line).not.toContain('가장 인상적인')
+    expect(line).toContain('1-2') // 가장 근접했던 경기
+    assertClean(ep)
+  })
+
+  it('토너먼트에서 한 번도 못 이겼으면 "0번의 승리"라고 쓰지 않는다', () => {
+    const recs: MatchRecord[] = [
+      rec('group1', 'cze', [2, 0]), rec('group2', 'mex', [1, 0]), rec('group3', 'rsa', [1, 0]),
+      rec('r32', 'ecu', [0, 1]),
+    ]
+    const ep = buildEpilogue(recs, { reached: 'r32', champion: false })
+    expect(ep.some(s => s.includes('0번의 승리'))).toBe(false)
+    assertClean(ep)
+  })
 })

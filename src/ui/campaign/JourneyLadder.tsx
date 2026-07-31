@@ -230,7 +230,10 @@ export function JourneyLadder({
         <p className="jl__cutnote">
           {cutIdx === 2 && groupRank === 3
             ? '조별리그에서 여정이 멈췄다. 남은 다섯 경기는 치르지 못했다.'
-            : `${ROWS[cutIdx].label}에서 여정이 멈췄다. 남은 ${ROWS.length - 1 - cutIdx}경기는 치르지 못했다.`}
+            // 결승 패배는 "남은 0경기"가 된다 — 여덟 칸을 다 채운 결말이므로 문장이 달라야 한다.
+            : cutIdx === ROWS.length - 1
+              ? '결승까지 여덟 경기를 모두 치렀다. 마지막 한 걸음에서 멈췄다.'
+              : `${ROWS[cutIdx].label}에서 여정이 멈췄다. 남은 ${ROWS.length - 1 - cutIdx}경기는 치르지 못했다.`}
         </p>
       )}
       {ending?.champion && <p className="jl__cutnote jl__cutnote--champion">여덟 경기를 모두 넘어 정상에 섰다.</p>}

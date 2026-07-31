@@ -849,23 +849,68 @@
 .so-panel {
   text-align: center;
   width: 100%;
+  /* 8경기의 생사가 갈리는 장면인데 예전에는 화면 상단 400px만 쓰고 나머지가 검은 공백이었다.
+     리포트 컨테이너를 채우고 내용을 세로 중앙에 세운다. */
+  min-height: min(72vh, 720px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  padding: var(--sp-5) 0;
+}
+.so-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-1);
 }
 .so-title {
-  margin: 0 0 var(--sp-3);
-  font-size: var(--fs-h1);
+  margin: 0;
+  font-size: var(--fs-display);
   font-weight: 800;
   line-height: var(--lh-tight);
+  letter-spacing: var(--ls-display);
+  word-break: keep-all;
+}
+.so-sub {
+  margin: 0;
+  max-width: 34em;
+  color: var(--t-mid);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-md);
+  word-break: keep-all;
 }
 .so-note {
-  margin: 0 0 var(--sp-4);
+  margin: var(--sp-3) 0 0;
   color: var(--t-mid);
   font-size: var(--fs-md);
   line-height: var(--lh-md);
+  word-break: keep-all;
+}
+/* 자격 안내 — 좌측 컬러 띠 + 회색 카드 금지 패턴을 피해 헤어라인 위 캡션으로 둔다. */
+.so-rule {
+  margin: 0;
+  max-width: 40em;
+  color: var(--t-low);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
+  word-break: keep-all;
+}
+.so-opp {
+  margin: 0 0 var(--sp-3);
+  color: var(--t-low);
+  font-size: var(--fs-xs);
+  word-break: keep-all;
+}
+.so-score {
+  margin: var(--sp-2) 0;
 }
 .so-setup {
   list-style: none;
-  margin: 0 0 var(--sp-4);
+  margin: var(--sp-3) 0;
   padding: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
@@ -905,6 +950,7 @@
   list-style: none;
   margin: 0;
   padding: 0;
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: var(--sp-1);
@@ -919,6 +965,42 @@
   border: 1px solid var(--s-line);
   background: var(--s-1);
   font-size: var(--fs-sm);
+  animation: so-kick-in var(--dur-2) var(--ease-out);
+}
+/* 방금 공개된 한 발만 강조한다 — 시선이 어디로 가야 하는지 화면이 말해야 한다. */
+.so-kick--latest {
+  border-color: color-mix(in srgb, var(--brand) 55%, var(--s-line));
+  background: color-mix(in srgb, var(--brand) 8%, var(--s-1));
+}
+/* 서든데스 첫 발 위에 구분선 — 규정 국면이 바뀌었음을 표시한다. */
+.so-kick--sudden {
+  margin-top: var(--sp-3);
+  position: relative;
+}
+.so-kick--sudden::before {
+  content: '서든데스';
+  position: absolute;
+  top: calc(-1 * var(--sp-3));
+  left: 0;
+  transform: translateY(-50%);
+  padding-right: var(--sp-2);
+  background: var(--s-0);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  letter-spacing: var(--ls-caps);
+  color: var(--t-low);
+}
+@keyframes so-kick-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+.so-kick__no {
+  flex: 0 0 auto;
+  min-width: 28px;
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  color: var(--t-low);
+  text-align: left;
 }
 .so-kick__who {
   flex: 1 1 auto;
@@ -932,6 +1014,30 @@
 .so-kick--miss .so-kick__mark {
   color: var(--danger);
   font-weight: 800;
+}
+/* 승패 확정 — 예전에는 마지막 킥 0.8초 뒤 자동으로 넘어가 이 순간이 화면에 없었다. */
+.so-verdict {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--s-line);
+  width: 100%;
+}
+.so-verdict__line {
+  margin: 0;
+  font-size: var(--fs-h1);
+  font-weight: 800;
+  line-height: var(--lh-tight);
+  word-break: keep-all;
+}
+.so-verdict--win .so-verdict__line {
+  color: var(--good);
+}
+.so-verdict--loss .so-verdict__line {
+  color: var(--t-mid);
 }
 
 /* ============================================================================

@@ -347,20 +347,42 @@ export function buildEpilogue(
       else d++
     }
     sentences.push(`조별리그에서 ${w}승 ${d}무 ${l}패, ${gf}득점 ${ga}실점을 기록했다.`)
-    // 2) 최고의 순간(최다 득점 조별 경기).
+    // 2) 기억에 남는 경기 한 판.
+    //    예전에는 "최다 득점 경기"를 골라 "가장 인상적인 경기"라고 불렀다. 그 결과
+    //    전패한 캠페인에서 0-3 대패가 "가장 인상적인 경기"로 소개됐다 — 팀을 조롱하는
+    //    문장으로 읽힌다. 결과(승>무>패) → 득실차 → 다득점 순으로 고르고, 이긴 경기가
+    //    없으면 "가장 인상적인"이라는 상찬 대신 중립적으로 서술한다.
+    const rank = (r: MatchRecord) => (r.score[0] > r.score[1] ? 2 : r.score[0] === r.score[1] ? 1 : 0)
     const best = [...group].sort((a, b) =>
-      (b.score[0] + b.score[1]) - (a.score[0] + a.score[1]) || a.stage.localeCompare(b.stage))[0]
-    sentences.push(`가장 인상적인 경기는 ${oppName(best.opponentId)}전으로, ${best.score[0]}-${best.score[1]}로 마쳤다.`)
+      rank(b) - rank(a)
+      || (b.score[0] - b.score[1]) - (a.score[0] - a.score[1])
+      || b.score[0] - a.score[0]
+      || a.stage.localeCompare(b.stage))[0]
+    sentences.push(
+      rank(best) > 0
+        // "2-0로"처럼 숫자 뒤 조사가 틀리는 자리다(받침 유무가 숫자 읽기에 따라 갈린다).
+        // "스코어로"를 끼워 조사를 고정한다.
+        ? `가장 인상적인 경기는 ${oppName(best.opponentId)}전으로, ${best.score[0]}-${best.score[1]} 스코어로 마쳤다.`
+        : `가장 근접했던 경기는 ${oppName(best.opponentId)}전으로, ${best.score[0]}-${best.score[1]} 스코어로 마쳤다.`,
+    )
   }
 
-  // 3) 토너먼트 하이라이트(승부차기·최다 골 경기).
+  // 3) 토너먼트 하이라이트(승부차기·승수).
   if (tour.length) {
-    const wins = tour.filter(r => r.score[0] > r.score[1] || (r.shootout && r.shootout[0] > r.shootout[1])).length
-    const shootout = tour.find(r => r.shootout)
-    if (shootout) {
-      sentences.push(`토너먼트에서 ${wins}번의 승리를 거뒀고, ${oppName(shootout.opponentId)}전에서는 승부차기 혈투 끝에 살아남았다.`)
-    } else {
+    const wonPk = (r: MatchRecord) => !!r.shootout && r.shootout[0] > r.shootout[1]
+    const wins = tour.filter(r => r.score[0] > r.score[1] || wonPk(r)).length
+    // 승부차기를 **이긴** 경기가 있으면 그걸 하이라이트로 쓴다. 예전에는 첫 승부차기를
+    // 무조건 "혈투 끝에 살아남았다"로 서술해, 승부차기로 탈락한 결말에서 사실이 뒤집혔다.
+    const pkWin = tour.find(wonPk)
+    const pkLoss = tour.find(r => !!r.shootout && r.shootout[0] < r.shootout[1])
+    if (pkWin) {
+      sentences.push(`토너먼트에서 ${wins}번의 승리를 거뒀고, ${oppName(pkWin.opponentId)}전에서는 승부차기 혈투 끝에 살아남았다.`)
+    } else if (pkLoss) {
+      sentences.push(`토너먼트에서 ${wins}번의 승리를 거뒀고, ${oppName(pkLoss.opponentId)}전은 승부차기까지 간 끝에 갈렸다.`)
+    } else if (wins > 0) {
       sentences.push(`토너먼트 무대에 올라 ${wins}번의 승리를 거뒀다.`)
+    } else {
+      sentences.push('토너먼트 무대에 올랐지만 승리를 더하지는 못했다.')
     }
   }
 

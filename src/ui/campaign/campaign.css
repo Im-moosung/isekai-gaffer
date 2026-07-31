@@ -412,6 +412,9 @@
   letter-spacing: var(--ls-display);
   color: var(--t-hi);
   text-wrap: balance;
+  /* 한국어는 어절 단위로 끊어야 한다. 기본값이면 "조별리그 탈락"이 "탈 / 락"처럼
+     낱말 한가운데서 꺾인다 — 390·1440 실주행에서 실제로 그랬다. */
+  word-break: keep-all;
 }
 .end-root--champion .end-headline {
   color: var(--gold);
@@ -421,6 +424,7 @@
   line-height: var(--lh-loose);
   color: var(--t-mid);
   text-wrap: balance;
+  word-break: keep-all;
 }
 .end-summary {
   display: flex;
@@ -452,6 +456,9 @@
   inset: 0;
   z-index: var(--z-base);
   pointer-events: none;
+  /* 파티클을 이 레이어 안에서 자른다. 히어로에 맡기면 낙하 거리가 히어로의
+     scrollHeight를 늘려 감사 하니스가 "숨은 스크롤"로 잡는다(실제로는 의도된 클립). */
+  overflow: hidden;
 }
 .end-confetti__bit {
   position: absolute;
@@ -481,18 +488,37 @@
 .end-confetti__bit:nth-child(11) { left: 88%; animation-delay: 240ms; }
 .end-confetti__bit:nth-child(12) { left: 95%; animation-delay: 20ms; }
 
+/* 낙하 거리와 종료 상태가 중요하다. 예전에는 220px에서 opacity 0.35로 **멈춰 서서**
+   (fill-mode: forwards) 파티클이 헤드라인·본문 글자 사이에 영구히 박혔다 — 우승 화면의
+   글자 위에 부스러기가 얹힌 것처럼 보였다. 히어로 밖으로 떨어뜨리고 완전히 지운다. */
 @keyframes end-fall {
   0% {
     transform: translateY(0) rotate(0deg);
     opacity: 0;
   }
-  15% {
+  12% {
     opacity: 1;
   }
-  100% {
-    transform: translateY(220px) rotate(220deg);
-    opacity: 0.35;
+  78% {
+    opacity: 0.7;
   }
+  100% {
+    /* 낙하 거리는 히어로 높이(최소 뷰포트 기준 ~330px)를 넘지 않게 잡는다 —
+       넘기면 클립이 발생해 감사 하니스의 "숨은 스크롤"에 잡힌다. */
+    transform: translateY(300px) rotate(300deg);
+    opacity: 0;
+  }
+}
+/* 모션을 끈 사용자에게는 애니메이션이 1ms로 끝나 종료 상태(투명)만 남는다.
+   그러면 우승 화면에서 축포가 통째로 사라지므로, 히어로 최상단에 정지 이미지로 흩뿌린다.
+   글자 영역을 침범하지 않는 얇은 띠라 가독성에는 영향이 없다. */
+@media (prefers-reduced-motion: reduce) {
+  .end-confetti__bit {
+    opacity: 0.55;
+  }
+  .end-confetti__bit:nth-child(2n) { top: 10px; }
+  .end-confetti__bit:nth-child(2n + 1) { top: 22px; }
+  .end-confetti__bit:nth-child(3n) { top: 34px; }
 }
 
 /* 본문 2열 — 최종 여정(수미상관)과 기록/리더보드. lg 미만에서 1열로 접힌다. */

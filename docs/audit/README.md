@@ -8,6 +8,8 @@
   / `clippedLH`(한글 글리프 잘림) / `tinyTap` / `overlaps`(면적 20% 초과 박스 교차)
 - `drive.mjs` — 랜딩 → 허브 → 워룸 → 킥오프 → 입장 → 경기 → 감독 타임 주행
 - `drive2.mjs` — 브레이크 → 하프타임 → 후반 → 종료 → 기자회견 → 신문 주행 (`setTimeout` 워프로 90분 압축)
+- `ending-drive.mjs` — 엔딩 7결말(우승·준우승·4강/8강/16강/32강 탈락·조별 탈락) × 4뷰포트
+- `shootout-drive.mjs` — 토너먼트 무승부 → 승부차기 전 과정 → 기자회견 → 캠페인 반영
 
 ## 실행
 ```sh
@@ -16,7 +18,18 @@ npm run dev                    # http://localhost:5173
 
 VPS='[[1440,900],[390,844]]' SCHEME=light node docs/audit/drive.mjs
 W=1440 H=900 WARP=20            node docs/audit/drive2.mjs
+
+# 엔딩: 결말 7종 × 뷰포트 4종 (ONLY=champion 으로 하나만)
+node docs/audit/ending-drive.mjs
+# 승부차기: 32강 무승부 → 세팅 → 킥 → 승패 확정 → (FULLFLOW=1이면) 캠페인 반영까지
+FULLFLOW=1 W=1440 H=900 node docs/audit/shootout-drive.mjs
+SEED=6 NOEDIT=1        node docs/audit/shootout-drive.mjs   # 서든데스까지 가는 시드
 ```
+
+`ending-drive.mjs`/`shootout-drive.mjs`는 **소스에 디버그 훅을 심지 않는다.** Vite dev 서버가
+앱과 같은 URL로 모듈을 서빙한다는 점을 이용해 페이지에서 `import('/src/game/campaignStore.ts')`로
+같은 store 인스턴스를 잡아 상태만 주입한다. 승부차기 하니스가 조작하는 것은 두 가지뿐이다 —
+캠페인 단계(32강)와 풀타임 동점. 승부차기 자체와 캠페인 반영은 실제 경로로 돈다.
 결과: 스크린샷 `docs/audit/shots/`, 측정 JSON `docs/audit/audit-*.json` (둘 다 gitignore).
 
 `BASE` 환경변수로 서버 주소를 바꿀 수 있다. **전/후 비교의 정석**은 `git worktree`로 비교 대상

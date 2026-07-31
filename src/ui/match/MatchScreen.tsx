@@ -15,6 +15,7 @@ import { TacticsBoard } from '../tactics/TacticsBoard'
 import { TacticsCenter } from '../tactics/TacticsCenter'
 import { PlanBadge } from '../tactics/PlanBadge'
 import { ShootoutPanel } from './ShootoutPanel'
+import { onPitchIds } from './shootout-setup'
 // 스탯 표는 워룸·작전판과 공유하기 위해 별도 모듈로 뽑았다(StatsTable.tsx).
 import { StatsTable } from './StatsTable'
 import { ShoutBar } from './ShoutBar'
@@ -896,7 +897,17 @@ export function MatchScreen({
         {finished && (
           <section className="ms-report" aria-label="경기 결과">
             {shootoutOpen ? (
-              <ShootoutPanel home={home} away={away} seed={seed} onDone={result => finishMatch(result)} />
+              <ShootoutPanel
+                home={home}
+                away={away}
+                seed={seed}
+                regulationScore={[engine.score[0], engine.score[1]]}
+                /* 규정: 종료 휘슬 시점에 필드에 있던 선수만 킥을 찬다. lineup은 교체가
+                   반영된 현재 XI이므로 퇴장자만 덜어내면 자격 명단이 된다. */
+                homeEligibleIds={onPitchIds(engine.home.tactics.lineup, engine.home.sentOff)}
+                awayEligibleIds={onPitchIds(engine.away.tactics.lineup, engine.away.sentOff)}
+                onDone={result => finishMatch(result)}
+              />
             ) : (
               <>
                 <header className="ms-report__head">

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useCampaignStore } from '../../game/campaignStore'
 import type { CampaignStage, MatchRecord } from '../../game/campaignStore'
 import { loadAllTeams } from '../../data/loader'
@@ -6,6 +6,7 @@ import { computeScore, submitScore, topScores } from '../../online/leaderboard'
 import type { LeaderboardMode, LeaderboardRow, ScoreBreakdown } from '../../online/leaderboard'
 import { sanitizeNickname } from '../../online/nickname'
 import { buildEpilogue } from '../../game/pressconf'
+import { narrate } from '../../ai/aiClient'
 import { AppShell } from '../shell/AppShell'
 import { JourneyLadder } from './JourneyLadder'
 import './campaign.css'
@@ -64,10 +65,16 @@ const SCORE_ROWS: [keyof Pick<ScoreBreakdown, 'roundPts' | 'matchPts' | 'goalDif
   ['cleanSheetPts', '무실점'],
 ]
 
-/** 라운드별 엔딩 헤드라인 — 사실 서술형. 실존 인물·팀 비하 금지. */
-function headlineFor(reached: CampaignStage, champion: boolean): { title: string; body: string } {
+/** 라운드별 엔딩 헤드라인 — 사실 서술형. 실존 인물·팀 비하 금지.
+ *  eyebrow는 제목 위 한 줄. 제목에 다 넣으면 display 56px가 두 줄로 꺾여
+ *  8경기의 보상 화면이 문단처럼 읽힌다(조별 탈락 결말에서 실제로 그랬다). */
+function headlineFor(
+  reached: CampaignStage,
+  champion: boolean,
+): { eyebrow: string; title: string; body: string } {
   if (champion) {
     return {
+      eyebrow: '최종 결과',
       title: '세계를 제패하다',
       body: '대한민국, 월드컵 정상에 올랐다. 조별리그부터 결승까지 이어진 완주의 끝에서 이룬 위대한 성취.',
     }
@@ -75,33 +82,39 @@ function headlineFor(reached: CampaignStage, champion: boolean): { title: string
   switch (reached) {
     case 'final':
       return {
+        eyebrow: '최종 결과',
         title: '준우승, 위대한 여정',
         body: '결승에서 아쉽게 멈췄지만, 세계 무대 정상을 눈앞에 둔 역사에 남을 여정이었다.',
       }
     case 'sf':
       return {
+        eyebrow: '최종 결과',
         title: '4강 진출, 세계 4위',
         body: '준결승 무대까지 오르며 세계 네 팀 안에 이름을 올린 값진 대회였다.',
       }
     case 'qf':
       return {
+        eyebrow: '최종 결과',
         title: '8강 진출',
         body: '아시아를 넘어 세계 강호들과 어깨를 나란히 한 대회, 8강에서 여정을 마쳤다.',
       }
     case 'r16':
       return {
+        eyebrow: '최종 결과',
         title: '16강 진출',
         body: '조별리그를 통과해 토너먼트 무대에서 당당히 겨룬 대회였다.',
       }
     case 'r32':
       return {
+        eyebrow: '최종 결과',
         title: '32강 진출',
         body: '조별리그를 넘어 토너먼트에 올랐다. 다음을 기약하는 경험이 된 대회.',
       }
     case 'group3':
     default:
       return {
-        title: '실제 역사와 같은 결말 — 조별리그 탈락',
+        eyebrow: '실제 역사와 같은 결말',
+        title: '조별리그 탈락',
         body: '조별리그에서 여정을 마쳤다. 아쉬움을 뒤로하고 다음 대회를 준비한다.',
       }
   }
@@ -152,9 +165,30 @@ export function EndingScreen({ onRestart }: { onRestart(): void }) {
     [records, ending],
   )
 
+  // AI 엔딩 서술. **템플릿을 먼저 그려 놓고** 성공한 경우에만 갈아끼운다 —
+  // 키가 없거나(503) 프록시가 없는 환경(로컬 vite dev)에서는 narrate가 조용히 null을
+  // 반환하므로 화면은 언제나 사전 문안으로 완결된다. 심사자가 키를 준비할 필요가 없다.
+  const [aiEpilogue, setAiEpilogue] = useState<string[] | null>(null)
+  useEffect(() => {
+    if (!ending) return
+    let alive = true
+    narrate('epilogue', {
+      reached: ending.reached,
+      champion: ending.champion,
+      records: records.map(r => ({ stage: r.stage, opponent: r.opponentId, score: r.score, shootout: r.shootout })),
+    })
+      .then(text => {
+        if (!alive || !text) return
+        const lines = text.split('\n').map(s => s.trim()).filter(Boolean)
+        if (lines.length) setAiEpilogue(lines)
+      })
+      .catch(() => { /* 폴백은 템플릿 — 실패를 화면에 노출하지 않는다 */ })
+    return () => { alive = false }
+  }, [ending, records])
+
   if (!ending || !breakdown) return null
 
-  const { title, body } = headlineFor(ending.reached, ending.champion)
+  const { eyebrow, title, body } = headlineFor(ending.reached, ending.champion)
   const t = tally(records)
   const diff = t.gf - t.ga
   const diffLabel = diff > 0 ? `+${diff}` : `${diff}`
@@ -198,7 +232,7 @@ export function EndingScreen({ onRestart }: { onRestart(): void }) {
         {ending.champion && <Confetti />}
         <div className="end-hero__inner">
           {ending.champion && <TrophyMark />}
-          <span className="eyebrow">최종 결과</span>
+          <span className="eyebrow">{eyebrow}</span>
           <h1 className="end-headline">{title}</h1>
           <p className="end-body">{body}</p>
 
@@ -239,8 +273,9 @@ export function EndingScreen({ onRestart }: { onRestart(): void }) {
             <section className="section end-epilogue" aria-label="여정 에필로그">
               <div className="section__head">
                 <h2 className="section__title">에필로그</h2>
+                {aiEpilogue && <span className="badge">AI 서술</span>}
               </div>
-              {epilogue.map((p, i) => (
+              {(aiEpilogue ?? epilogue).map((p, i) => (
                 <p key={i} className="end-epilogue__p">{p}</p>
               ))}
             </section>

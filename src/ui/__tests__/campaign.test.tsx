@@ -143,6 +143,18 @@ describe('여정 사다리(JourneyLadder)', () => {
     expect(container.querySelectorAll('.jl-row--cut')).toHaveLength(5)
   })
 
+  it('준우승 엔딩: 여덟 칸을 다 채웠으므로 "남은 0경기" 문구가 나오지 않는다', () => {
+    store().startCampaign(9)
+    win(); win(); win()
+    for (let i = 0; i < 4; i++) win() // r32~sf 전승 → 결승
+    store().recordResult([0, 1], {}) // 결승 패
+    expect(store().ending).toEqual({ reached: 'final', champion: false })
+    const { container } = render(<EndingScreen onRestart={() => {}} />)
+    const note = container.querySelector('.jl__cutnote')!.textContent!
+    expect(note).not.toContain('남은 0경기')
+    expect(note).toContain('여덟 경기')
+  })
+
   it('우승 엔딩: 끊긴 칸이 없고 완주 문구가 붙는다', () => {
     store().startCampaign(1)
     win(); win(); win()
@@ -188,6 +200,8 @@ describe('EndingScreen 스모크', () => {
     const groupText = container.querySelector('.end-root')!.textContent!
     for (const w of BANNED) expect(groupText).not.toContain(w)
     expect(container.querySelector('.end-headline')!.textContent).toContain('조별리그 탈락')
+    // 대체역사 훅은 아이브로로 올렸다 — display 56px 제목이 낱말 한가운데서 꺾이지 않게.
+    expect(container.querySelector('.eyebrow')!.textContent).toBe('실제 역사와 같은 결말')
     unmount()
 
     // 각 토너먼트 패배 라운드(r32·r16·qf·sf) + 준우승(final) 헤드라인 금지어 검사
