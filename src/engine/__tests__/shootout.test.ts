@@ -2,6 +2,8 @@
 import { describe, it, expect } from 'vitest'
 import { simulateShootout, type ShootoutKicker } from '../shootout'
 import { makeTestTeam } from '../fixtures/testTeams'
+import { loadTeam } from '../../data/loader'
+import { pickBestXI } from '../lineup'
 
 const a = makeTestTeam('a', 80), b = makeTestTeam('b', 80)
 const kickers = (t: ReturnType<typeof makeTestTeam>): ShootoutKicker[] =>
@@ -71,5 +73,35 @@ describe('simulateShootout', () => {
       }
     }
     expect(savedWhenGuessed / guessed).toBeGreaterThan((savedWhenWrong / wrong) * 2)
+  })
+
+  // 감사 결함 ⑥: 관측 10킥 중 2골(20%), 모델 기대값도 약 40%였다. 실제 월드컵 승부차기는
+  // 70~72%다(통산 집계 기준). 이 게이트는 그 대역을 고정한다 — 성공률이 다시 무너지면
+  // 손흥민(PK 85)·이강인(80)이 연달아 실축하는 화면이 돌아온다.
+  it('실팀 성공률이 월드컵 대역(68~75%)에 든다', () => {
+    let tot = 0, ok = 0
+    for (const oppId of ['can', 'ecu', 'eng', 'esp', 'mar'] as const) {
+      const kor = loadTeam('kor'), opp = loadTeam(oppId)
+      const kt = pickBestXI(kor), ot = pickBestXI(opp)
+      const line = (team: ReturnType<typeof loadTeam>, t: ReturnType<typeof pickBestXI>): ShootoutKicker[] =>
+        t.lineup.filter(l => l.slot !== 'GK')
+          .map(l => team.squad.find(p => p.id === l.playerId)!)
+          .sort((a, b) => b.penalty - a.penalty)
+          .map((player, i) => ({ player, direction: (['left', 'center', 'right'] as const)[i % 3] }))
+      const gkOf = (team: ReturnType<typeof loadTeam>, t: ReturnType<typeof pickBestXI>) =>
+        team.squad.find(p => p.id === t.lineup.find(l => l.slot === 'GK')!.playerId)!
+      for (let s = 0; s < 120; s++) {
+        const r = simulateShootout({
+          seed: s * 977 + 13,
+          homeKickers: line(kor, kt), awayKickers: line(opp, ot),
+          homeGk: gkOf(kor, kt), awayGk: gkOf(opp, ot),
+        })
+        tot += r.kicks.length
+        ok += r.kicks.filter(k => k.scored).length
+      }
+    }
+    const rate = ok / tot
+    expect(rate).toBeGreaterThan(0.68)
+    expect(rate).toBeLessThan(0.75)
   })
 })

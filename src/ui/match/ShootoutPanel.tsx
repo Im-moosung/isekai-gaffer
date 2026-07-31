@@ -107,6 +107,12 @@ export function ShootoutPanel({
         </span>
         <h2 className="so-title">승부차기</h2>
         <p className="so-sub">다섯 번씩 차고도 갈리지 않으면 승자가 나올 때까지 한 발씩 이어 찬다</p>
+        {/* 규정과 다른 지점은 감춘 채로 두지 않는다 — 화면이 90'에서 곧장 승부차기로 넘어가는
+            이유를 유저가 알아야 한다. 연장전 미구현 판단의 근거는 아래 주석 참조. */}
+        <p className="so-rule" role="note">
+          이 게임은 정규 90분이 무승부면 <strong>연장전 없이 곧바로</strong> 승부차기로 간다 —
+          실제 규정의 연장 30분은 재생 시간을 위해 생략했다.
+        </p>
       </div>
 
       {!started ? (
