@@ -415,15 +415,81 @@ function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
   )
   if (rng.chance(chanceP)) resolveChance(st, atkIdx, defIdx, fx, rng, atkZone / Math.max(30, defZone))
 
-  // 4) 체력 감소: 지속 압박 가중 + 그룹 적극성 가중(기본값 전부 1.0 → 불변).
+  // 4) 체력 감소: 지속 압박 가중 + 그룹 적극성 가중(기본값 전부 1.0 → 불변) + **포지션 부하**.
   for (const [idx, side] of [[0, st.home], [1, st.away]] as const) {
     const drain = 0.55 * fx[idx].staminaDrain * staminaWeight[idx] * groupIntensityStaminaFactor(side.tactics.groupIntensity)
-    for (const { playerId } of side.tactics.lineup) {
+    for (const { playerId, slot } of side.tactics.lineup) {
       if (side.sentOff.includes(playerId)) continue
       const p = side.team.squad.find(q => q.id === playerId)!
-      side.staminaByPlayer[playerId] = Math.max(0, side.staminaByPlayer[playerId] - drain * (100 / Math.max(40, p.stamina)))
+      side.staminaByPlayer[playerId] = Math.max(
+        0,
+        side.staminaByPlayer[playerId] - drain * POSITION_DRAIN[slot] * (100 / Math.max(40, p.stamina)),
+      )
     }
   }
+}
+
+// ── 스코어와 사기 ───────────────────────────────────────────────
+// `moraleByPlayer`는 초기값 70에서 출발해 **팀토크와 터치라인 외침으로만** 움직였다.
+// 그래서 1-2로 뒤진 하프타임에도 팀토크 헤더가 "선수들이 차분하게 준비돼 있습니다 · 사기 70"
+// 이었다(감사 결함 ⑤). 라커룸의 공기가 스코어를 모른다는 뜻이다.
+//
+// ★ 그런데 스코어의 **경기력** 반영은 이미 `momentum`이 맡고 있다(골당 ±0.35 → 찬스율 ±15%,
+//   감쇠 없음). 사기를 스코어에 연동해 zoneStrength(×(1 ± 0.20·(avg−70)/100))까지 태우면
+//   같은 심리 효과를 두 번 세는 것이고, 실측이 그 대가를 정확히 보여줬다:
+//     esp-arg 홈 슛/경기 20.9(기준 16.8 · +24.6%, 게이트 ±25%) → 골당 ±5 누적 시 21.7(+29.2%),
+//     골차 상한 ±2·골차당 ±6으로 묶어도 21.4(+27.1%). 어느 크기로도 게이트가 깨진다.
+//   → 그래서 **스코어는 라커룸의 표시 사기만 움직인다.** 상태(전력)는 momentum이, 표시는
+//     아래 scoreMoraleShift가 담당하고, 감독의 레버(팀토크·외침)만 moraleByPlayer에 남는다.
+//     둘을 합쳐 읽는 지점은 UI(TeamTalk)다.
+/** 표시 사기가 반응하는 골차 상한. 2골 차를 넘어가면 라커룸의 공기는 더 바뀌지 않는다. */
+export const MORALE_MARGIN_CAP = 2
+/** 골차 1당 표시 사기 변위. 한 골 차 열세면 −6이다. */
+export const MORALE_PER_MARGIN = 6
+
+/**
+ * 스코어가 라커룸에 주는 **표시** 사기 변위(−12~+12).
+ *
+ * ★ 이 값은 엔진 계산에 들어가지 않는다(위 주석의 이중 계상 문제). 팀토크 헤더·선수 카드처럼
+ *   "지금 라커룸 공기가 어떤가"를 읽는 화면이 moraleByPlayer에 더해서 쓴다.
+ * ★ 골차를 자르는 이유: 3-0에서 넣는 4번째 골은 라커룸을 더 바꾸지 않는다. 그리고 따라잡으면
+ *   변위가 그대로 되돌아온다(0-1에서 1-1이면 정확히 0).
+ */
+export function scoreMoraleShift(ownScore: number, oppScore: number): number {
+  return clamp(ownScore - oppScore, -MORALE_MARGIN_CAP, MORALE_MARGIN_CAP) * MORALE_PER_MARGIN
+}
+
+/** 득점자·도움 개인 사기 가산. 팀 평균에는 사실상 영향이 없고(11명 중 1~2명, 평균 +0.3 이하)
+ *  선수 카드의 표정과 캠페인 사기 이월에만 남는다 — 골을 넣은 선수는 실제로 그 경기를 다르게 끝낸다. */
+const SCORER_MORALE = 3
+const ASSIST_MORALE = 2
+
+/** 득점 직후 득점자·도움 개인 사기 갱신. 팀 전체 사기는 건드리지 않는다(위 주석). */
+function applyGoalMorale(st: MatchState, atkIdx: 0 | 1, scorerId?: string, assistId?: string) {
+  const atk = atkIdx === 0 ? st.home : st.away
+  if (scorerId && scorerId in atk.moraleByPlayer) {
+    atk.moraleByPlayer[scorerId] = clamp(atk.moraleByPlayer[scorerId] + SCORER_MORALE, 0, 100)
+  }
+  if (assistId && assistId in atk.moraleByPlayer) {
+    atk.moraleByPlayer[assistId] = clamp(atk.moraleByPlayer[assistId] + ASSIST_MORALE, 0, 100)
+  }
+}
+
+// ── 포지션별 체력 소모 배수 ─────────────────────────────────────
+// 예전엔 골키퍼가 필드 플레이어와 **같은 비율로** 지쳤다. 그 결과 스태미나 능력치가 팀 최저인
+// GK(김승규 70)가 매 경기·매 시점 "가장 지친 선수" 1위로 고정됐고, 피지컬 코치 카드가
+// 8경기 내내 "최저 김승규, 손흥민, 이한범"이라는 같은 문장을 냈다(감사 결함 ④).
+//
+// 근거는 포지션별 경기 주행거리다(월드컵·5대리그 트래킹 평균, km/경기):
+//   GK ~5.0 · CB ~9.5 · FB ~10.6 · DM/CM ~11.0 · AM ~10.6 · W ~10.3 · ST ~9.9
+// 중앙 미드필더(11.0)를 1.00으로 놓고 비율을 취했다. GK는 그중에서도 대부분이 걷기·서 있기라
+// 주행거리 비(0.45)보다 더 낮게 잡는 것이 맞지만, 세이브·킥의 순간 부하가 있으므로
+// 거리비를 그대로 쓴다(보수적 선택 — 밸런스를 덜 움직인다).
+const POSITION_DRAIN: Record<Position, number> = {
+  GK: 0.45,
+  CB: 0.86, LB: 0.96, RB: 0.96,
+  DM: 1.00, CM: 1.00, AM: 0.96,
+  LW: 0.94, RW: 0.94, ST: 0.90,
 }
 
 // ── 패스 추적 ───────────────────────────────────────────────────
@@ -645,6 +711,7 @@ function resolveChance(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: ReturnT
     st.score[atkIdx]++
     st.events.push({ minute: st.minute, type: 'goal', teamId: atk.team.id, playerId: shooter.id, xg })
     st.momentum = clamp(st.momentum + (atkIdx === 0 ? 0.35 : -0.35), -1, 1)
+    applyGoalMorale(st, atkIdx, shooter.id)
   } else {
     st.events.push({ minute: st.minute, type: 'save', teamId: def.team.id, playerId: gk.id, xg })
     if (rng.chance(clamp(0.45 * ap.cornerBias * ft.cornerBias, 0, 0.9))) awardCorner(st, atkIdx, defIdx, fx, rng, spDepth)
@@ -792,6 +859,7 @@ function resolveSetPiece(st: MatchState, atkIdx: 0 | 1, defIdx: 0 | 1, fx: Retur
     // 모멘텀은 다음 분의 찬스 확률에 곱해져 복리로 쌓이므로 대량 득점 꼬리를 만든다
     // (0.35로 두면 esp-arg 100경기에서 한 팀 9골 경기가 나와 현실성 게이트를 깼다).
     st.momentum = clamp(st.momentum + (atkIdx === 0 ? 0.20 : -0.20), -1, 1)
+    applyGoalMorale(st, atkIdx, scorer.id, assist?.assistId)
     return
   }
   if (rng.chance(0.52)) {

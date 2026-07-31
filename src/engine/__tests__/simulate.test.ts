@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createMatch, simulateSegment, applyCommand } from '../simulate'
+import { createMatch, simulateSegment, applyCommand, scoreMoraleShift } from '../simulate'
 import { makeTestTeam, pickBestXI } from '../fixtures/testTeams'
 import { loadTeam } from '../../data/loader'
 
@@ -281,5 +281,59 @@ describe('교체 기회(IFAB Law 3: 경기당 3회)', () => {
     st = at(st, 46)
     st = applyCommand(st, 'home', { type: 'sub', out: outs[1], in: ins[1] })
     expect(st.home.subWindowsUsed).toBe(1)
+  })
+})
+
+// 감사 결함 ④: 골키퍼가 필드 플레이어와 같은 비율로 지쳐, 스태미나 능력치가 팀 최저인 GK가
+// 매 경기·매 시점 "가장 지친 선수" 1위로 고정됐다. 포지션 부하를 넣어 그 고정을 푼다.
+describe('포지션별 체력 소모 (GK는 필드 플레이어만큼 뛰지 않는다)', () => {
+  it('90분 뒤 GK 체력이 모든 필드 플레이어보다 높다', () => {
+    const kor = loadTeam('kor')
+    const st = simulateSegment(createMatch(kor, loadTeam('cze'), { seed: 4242 }), 90)
+    const byId = (id: string) => st.home.staminaByPlayer[id]
+    const gkId = st.home.tactics.lineup.find(l => l.slot === 'GK')!.playerId
+    const field = st.home.tactics.lineup.filter(l => l.slot !== 'GK').map(l => byId(l.playerId))
+    expect(byId(gkId)).toBeGreaterThan(Math.max(...field))
+  })
+
+  it('중앙 미드필더가 센터백보다 더 지친다(주행거리 차)', () => {
+    const kor = loadTeam('kor')
+    const st = simulateSegment(createMatch(kor, loadTeam('cze'), { seed: 4242 }), 90)
+    const slotAvg = (slots: string[]) => {
+      const v = st.home.tactics.lineup
+        .filter(l => slots.includes(l.slot))
+        .map(l => st.home.staminaByPlayer[l.playerId])
+      return v.reduce((a, b) => a + b, 0) / v.length
+    }
+    expect(slotAvg(['CM', 'DM'])).toBeLessThan(slotAvg(['CB']))
+  })
+})
+
+// 감사 결함 ⑤: 1-2로 뒤진 하프타임에도 팀토크 헤더가 "차분하게 준비돼 있습니다 · 사기 70"이었다.
+describe('scoreMoraleShift — 라커룸 표시 사기는 스코어를 안다', () => {
+  it('동점이면 0, 뒤지면 음수, 앞서면 양수', () => {
+    expect(scoreMoraleShift(1, 1)).toBe(0)
+    expect(scoreMoraleShift(1, 2)).toBeLessThan(0)
+    expect(scoreMoraleShift(2, 1)).toBeGreaterThan(0)
+  })
+  it('골차 2를 넘으면 더 움직이지 않는다(라커룸 공기는 이미 정해졌다)', () => {
+    expect(scoreMoraleShift(5, 0)).toBe(scoreMoraleShift(2, 0))
+    expect(scoreMoraleShift(0, 5)).toBe(scoreMoraleShift(0, 2))
+  })
+  it('따라잡으면 변위가 정확히 되돌아온다', () => {
+    expect(scoreMoraleShift(1, 1)).toBe(0)
+  })
+  // ★ 전력 경로(zoneStrength)에는 태우지 않는다 — momentum이 이미 같은 일을 한다.
+  //   태웠더니 esp-arg 슛이 +27%가 되어 실팀 캘리브레이션(±25%)이 깨졌다.
+  it('득점자·도움만 개인 사기가 오르고 팀 전체 사기는 스코어로 움직이지 않는다', () => {
+    const kor = loadTeam('kor')
+    const st = simulateSegment(createMatch(kor, loadTeam('rsa'), { seed: 909 }), 90)
+    const scorers = new Set(
+      st.events.filter(e => e.type === 'goal' && e.teamId === kor.id).flatMap(e => [e.playerId, e.assistId]),
+    )
+    for (const l of st.home.tactics.lineup) {
+      if (scorers.has(l.playerId)) continue
+      expect(st.home.moraleByPlayer[l.playerId]).toBe(70)
+    }
   })
 })
