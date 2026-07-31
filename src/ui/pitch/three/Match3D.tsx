@@ -392,10 +392,13 @@ export function Match3D(props: Match3DProps) {
 
         // ── 분 내 진행도 t: 분(또는 시퀀스)이 바뀌면 클럭을 리셋한다 ──
         const minute = p.state.minute
+        // 장면 전환 첫 프레임인가 — 무브먼트가 focus를 컷하고 볼 앵커를 저술로 되돌린다.
+        let cut = false
         if (minute !== lastMinute || p.sequence !== lastSeq) {
           lastMinute = minute
           lastSeq = p.sequence
           minuteStart = elapsed
+          cut = true
           // prevFrame은 일부러 유지한다 — null로 리셋하면 분 경계마다 22명이 순간이동한다.
         }
         const dwellS = Math.max(0.2, (p.dwellMs ?? 3000) / 1000)
@@ -412,6 +415,7 @@ export function Match3D(props: Match3DProps) {
           sequenceSide: p.sequenceSide ?? null,
           seed: p.state.seed,
           dwellMs: p.dwellMs ?? 0,
+          cut,
           // undefined면 movement가 역추적한다 — 호출부가 명시하면 그 값을 신뢰한다.
           ...(p.event !== undefined ? { event: p.event } : {}),
         })

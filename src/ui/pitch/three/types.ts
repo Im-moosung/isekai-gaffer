@@ -36,6 +36,20 @@ export interface PlayerPose {
   yaw: number
   /** m/s — 러닝 사이클 속도·자세를 결정 */
   speed: number
+  /**
+   * 월드 속도 벡터(m/s). **관성의 상태**다 — 다음 프레임의 가속도 클램프가 이 값에서
+   * 출발한다(movement.A_ACCEL / A_BRAKE / A_LATERAL).
+   *
+   * 왜 speed만으로 부족한가: speed는 크기라서 방향 전환을 막지 못한다. 예전 무브먼트는
+   * 위치만 상태로 들고 매 프레임 목표를 향해 직선 이동했고, 목표가 바뀌면 속도 벡터가
+   * **한 프레임에** 꺾였다(실측 |Δv|/dt p99 320 m/s², 문헌 상한은 7~8). 얼음판을
+   * 미끄러지는 인상의 직접 원인이다.
+   *
+   * 선택 필드인 이유는 구버전 프레임·단위 테스트가 폴백(관성 없음)으로 진입할 수 있게
+   * 하기 위함이다 — 미지정이면 정지 상태에서 출발한 것으로 본다.
+   */
+  vx?: number
+  vz?: number
   action: PlayerAction
   /** 액션 진행도 0~1 */
   actionT: number

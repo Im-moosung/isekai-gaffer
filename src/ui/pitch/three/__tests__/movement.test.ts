@@ -10,12 +10,14 @@ import { PITCH_H, PITCH_W, toWorld, type FrameState } from '../types'
 import {
   computeFrame, ballHeight, arcKindFor, sampleSequence, gkBox,
   BALL_PEAK, BALL_END, BALL_RADIUS, BALL_SHIFT, CONVERGE_MAX, GK_MAX_SPEED, MAX_SPEED,
-  KICK_REACH, STANDOFF, MOVER_LOOKAHEAD_MS, DEFAULT_DWELL_MS,
-  kickEvents, kickAt, dragProgress, diveScheduleAt, gkDiveAnchor,
+  STANDOFF, MOVER_LOOKAHEAD_MS, DEFAULT_DWELL_MS,
+  kickEvents, kickAt, dragProgress, diveScheduleAt, gkDiveAnchor, gkHandWorld,
   GK_DIVE_MS, GK_REACTION_MS, KICK_IMPACT_T, KICK_BACKSWING_MS,
-  GK_DIVE_REACH, GK_BEATEN_LATE_MS,
+  GK_DIVE_REACH, GK_HAND_HEIGHT, GK_BEATEN_LATE_MS, DIVE_LAY_U, A_SEPARATE,
   type FrameInput,
 } from '../movement'
+import { buildScene } from '../../scenes'
+import { buildFlowSequence } from '../../flow'
 import { createCameraRig, type CameraShot } from '../camera'
 
 const home = makeTestTeam('kor', 82)
@@ -582,7 +584,9 @@ describe('액션 판정', () => {
       const kicks = kickEvents(seq)
       const carriers = new Set(kicks.map(k => k.playerId))
       let prev: FrameState | null = null
-      const N = 60
+      const N = 240
+      /** 킥마다 "그 킥이 재생되는 동안의 최소 볼-발 거리". */
+      const bestPerKick = new Map<number, number>()
       for (let k = 0; k <= N; k++) {
         const t = k / N
         const f: FrameState = computeFrame(input({ prev, dt: 0.033, t, sequence: seq, sequenceSide: 'home', event: e }))
@@ -593,10 +597,19 @@ describe('액션 판정', () => {
           expect(p.side).toBe(atk)
           expect(carriers.has(p.id), `${type}: ${p.id}는 캐리어가 아니다`).toBe(true)
           const hit = kickAt(kicks, t, DEFAULT_DWELL_MS)!
-          const kb = toWorld(hit.kick.ball.x, hit.kick.ball.y)
-          expect(Math.hypot(p.x - kb.x, p.z - kb.z)).toBeLessThan(KICK_REACH)
+          expect(hit).not.toBeNull()
+          // ★ 저술 좌표가 아니라 **화면에 그려진 볼**과 잰다(볼은 캐리어의 발에 앵커링된다).
+          //   그리고 킥 창 **전체**가 아니라 그 창의 **최솟값**을 본다: 백스윙 구간에는
+          //   공이 아직 날아오는 중이고 팔로스루 구간에는 이미 떠난 뒤라, 둘 다 거리가
+          //   벌어지는 것이 정상이다. 계약은 "킥 한 번에 공이 실제로 그 발을 거친다"이다.
+          const d = Math.hypot(p.x - f.ball.x, p.z - f.ball.z)
+          const key = hit.kick.stepIndex
+          bestPerKick.set(key, Math.min(bestPerKick.get(key) ?? Infinity, d))
         }
         prev = f
+      }
+      for (const [step, d] of bestPerKick) {
+        expect(d, `${type}: step${step} 킥의 최소 볼-발 ${d.toFixed(2)} m`).toBeLessThan(1.0)
       }
     }
     // 규칙이 kick을 죽이지 않았는지도 확인 — 공 옆에 실제로 선 프레임에서는 발동한다.
@@ -919,6 +932,9 @@ describe('저속 히스테리시스', () => {
           for (const p of f.players) {
             const q = prev.players.find((o) => o.id === p.id)!
             if (q.action !== 'run') continue
+            // 킥·다이브·세리머니·다운은 run/idle 판정을 **덮어쓴다**(computeFrame §5).
+            // 이 테스트가 고정하는 것은 그 아래의 히스테리시스뿐이다.
+            if (p.action === 'kick' || p.action === 'dive' || p.action === 'celebrate' || p.action === 'down') continue
             if (p.speed >= 0.24 && p.speed < 0.4) {
               band++
               expect(p.action).toBe('run') // 히스테리시스가 없으면 여기서 idle이 된다
@@ -1075,16 +1091,31 @@ describe('★ R4 — GK가 볼보다 먼저 넘어지지 않는다', () => {
     }
   })
 
-  it('다이브 방향이 볼이 향하는 쪽을 따른다(해시 난수가 아니다)', () => {
+  it('다이브가 볼 쪽을 향한다 — **손이 접촉점에 오는 쪽**으로 눕는다', () => {
+    // ★ 예전 계약은 `actionDir`의 부호를 월드 Z와 직접 비교했다. 그것은 GK의 yaw를
+    //   통제하지 않던 시절의 근사다(그래서 home/away를 뒤집는 보정이 붙어 있었다).
+    //   지금은 접촉 기하가 yaw와 dir을 함께 정하므로, 계약은 부호가 아니라
+    //   **손이 실제로 볼 쪽에 있는가**로 적는 것이 옳다(더 강한 조건이다).
     const st = structuredClone(base)
     const e = ev('save', { minute: 55, teamId: st.away.team.id, playerId: st.away.tactics.lineup[0].playerId })
     const seq = buildSequence(e, st.home, st.away)
-    const endZ = toWorld(seq[seq.length - 1].ball.x, seq[seq.length - 1].ball.y).z
-    const f = computeFrame(input({ sequence: seq, sequenceSide: 'home', t: seq[seq.length - 1].t, event: e, dwellMs: 8400 }))
-    const gk = f.players.find(p => p.id === st.away.tactics.lineup[0].playerId)!
-    expect(gk.action).toBe('dive')
-    // away GK는 로컬 +Z가 월드 +Z와 같다(yaw 0 기준). 부호가 볼 쪽을 가리켜야 한다.
-    expect(Math.sign(gk.actionDir ?? 0)).toBe(endZ >= 0 ? 1 : -1)
+    const tEnd = (seq.find(s2 => s2.contact) ?? seq[seq.length - 1]).t
+    let prev: FrameState | null = null
+    let best = Infinity
+    const N = 600
+    for (let k = 0; k <= N; k++) {
+      const t = (k / N) * Math.min(1, tEnd + 0.05)
+      const f: FrameState = computeFrame(input({
+        state: st, prev, dt: 1 / 60, t, sequence: seq, sequenceSide: 'home', event: e, minute: 55, dwellMs: 8400,
+      }))
+      prev = f
+      const gk = f.players.find(p => p.id === st.away.tactics.lineup[0].playerId)!
+      if (gk.action !== 'dive') continue
+      const hand = gkHandWorld({ x: gk.x, z: gk.z }, gk.yaw, gk.actionT, gk.actionDir ?? 1)
+      best = Math.min(best, Math.hypot(hand.x - f.ball.x, hand.y - f.ball.y, hand.z - f.ball.z))
+    }
+    expect(Number.isFinite(best), 'GK가 다이브하지 않았다').toBe(true)
+    expect(best, `최소 손-공 ${best.toFixed(2)} m`).toBeLessThan(0.33)
   })
 })
 
@@ -1225,17 +1256,26 @@ describe('★ R6 — 세이브에 접촉 프레임이 존재한다', () => {
     expect((laidAt! - tArrive) * dwell).toBeGreaterThan(GK_BEATEN_LATE_MS - 25)
   })
 
-  it('gkDiveAnchor는 접촉점에서 정확히 신전 반경만큼 물러난 자리이고 GK 박스 안이다', () => {
+  it('gkDiveAnchor는 손이 접촉점에 닿는 몸통 자리를 주고, 그 자리는 GK 박스 안이다', () => {
+    // ★ 예전 계약은 "접촉점에서 스칼라 반경 2.0 m만큼 물러난 자리"였다. 실제 손의 도달은
+    //   방향이 있다 — 로컬 (−0.40, 1.01, ±1.80)이라 거의 전부 **측방**이다. 그래서 스칼라
+    //   반경으로 물린 몸통의 손은 접촉점에 닿지 않았다(실측 손-공 최소 1.42~3.46 m, 접촉 0프레임).
+    //   지금 계약은 순기구학의 역함수라는 것 자체다.
     for (const side of ['home', 'away'] as const) {
       const box = gkBox(side)
       for (const cz of [-4.5, -2, 0, 2, 4.5]) {
         const gx = side === 'home' ? -PITCH_W / 2 : PITCH_W / 2
         const contact = { x: gx - (side === 'home' ? -2.6 : 2.6), z: cz }
-        const a = gkDiveAnchor(side, contact)
+        const from = { x: side === 'home' ? contact.x + 18 : contact.x - 18, z: cz * 0.4 }
+        const a = gkDiveAnchor(side, contact, from)
+        const hand = gkHandWorld(a, a.yaw, DIVE_LAY_U, a.dir)
+        expect(Math.hypot(hand.x - contact.x, hand.z - contact.z)).toBeLessThan(1e-9)
+        expect(hand.y).toBeCloseTo(GK_HAND_HEIGHT, 6)
+        // 수평 도달 거리는 순기구학이 정한 값이다(상수 GK_DIVE_REACH가 그것을 재수출한다).
         expect(Math.hypot(a.x - contact.x, a.z - contact.z)).toBeCloseTo(GK_DIVE_REACH, 6)
         expect(a.x).toBeGreaterThanOrEqual(box.xMin - 1e-9)
         expect(a.x).toBeLessThanOrEqual(box.xMax + 1e-9)
-        expect(Math.abs(a.z)).toBeLessThanOrEqual(Math.abs(cz) + 1e-9)
+        expect(Math.abs(a.z)).toBeLessThanOrEqual(box.zMax + 1e-9)
       }
     }
   })
@@ -1291,5 +1331,350 @@ describe('★ R7 — 슛 국면에 슈터가 프레임 안에 남는다', () => 
     expect(frames[idx(tShot)].focusRadius ?? 0).toBeGreaterThan(8)
     // dwell 끝(여운)에는 다시 닫혀 결과 지점에 붙는다.
     expect(frames[frames.length - 1].focusRadius ?? 0).toBeLessThan(1)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 2026-07-31 4대 연출 결함 — 사용자가 세 번째로 지적한 항목들의 회귀 고정.
+//
+// 계측 도구: `node tools/sim-audit/run.mjs` (90분 실주행 60 fps 프레임 단위).
+// 아래 테스트는 그 계측이 잡아낸 것을 **단위 수준에서 다시 못박는다.**
+// ═══════════════════════════════════════════════════════════════════════════
+
+describe('★ ① 공은 차는 것과 무관하게 움직이지 않는다 — 장면 전환 후에도', () => {
+  /**
+   * 왜 기존 R2 테스트로 부족했나: 기존 테스트는 매 장면을 `prev = null`로 시작한다.
+   * 그러면 첫 프레임에 22명이 안무 좌표로 **스냅**하므로 무버가 항상 제자리에 있다.
+   * 실제 게임은 다르다 — Match3D가 분 경계에서 prev를 **일부러 유지**하므로(리셋하면
+   * 22명이 순간이동한다) 새 장면은 직전 분이 남긴 자리에서 시작한다. 실측(90분 실주행)에서
+   * 그 조건의 소유 중 볼-발 거리는 t 0.1~0.2 구간 **p50 11.76 m**였다.
+   */
+  const heldDistances = (type: MatchEvent['type'], warmType: MatchEvent['type']) => {
+    const st = structuredClone(base)
+    const dwell = 8400
+    // ① 먼저 다른 장면을 끝까지 재생해 22명을 "엉뚱한 자리"에 남긴다.
+    const warm = buildSequence(ev(warmType, { minute: 29, playerId: homeId(7) }), st.home, st.away)
+    let prev: FrameState | null = null
+    for (let k = 0; k <= 200; k++) {
+      prev = computeFrame(input({
+        state: st, prev, dt: 1 / 60, t: k / 200, sequence: warm, sequenceSide: 'home',
+        event: ev(warmType, { minute: 29, playerId: homeId(7) }), minute: 29, dwellMs: dwell,
+      }))
+    }
+    // ② 그 prev를 그대로 물려 새 장면을 시작한다(= 실제 게임의 분 경계).
+    const e = ev(type, { minute: 30, playerId: homeId(9) })
+    const seq = buildSequence(e, st.home, st.away)
+    const out: { t: number; d: number }[] = []
+    const N = 400
+    for (let k = 0; k <= N; k++) {
+      const t = k / N
+      const f: FrameState = computeFrame(input({
+        state: st, prev, dt: 1 / 60, t, sequence: seq, sequenceSide: 'home',
+        event: e, minute: 30, dwellMs: dwell, ...(k === 0 ? { cut: true } : {}),
+      }))
+      prev = f
+      // 구간 양끝의 캐리어가 같은 "소유" 구간만 본다(비행 중에 멀어지는 것은 정상).
+      let i = 0
+      for (let j = 0; j < seq.length - 1; j++) if (t >= seq[j].t) i = j
+      const a = seq[i]
+      const b = seq[i + 1]
+      if (!a?.carrier || !b || a.carrier !== b.carrier) continue
+      const p = f.players.find(q => q.id === a.carrier)
+      if (p) out.push({ t, d: Math.hypot(p.x - f.ball.x, p.z - f.ball.z) })
+    }
+    return out
+  }
+
+  it('소유 구간에서 볼-발 거리가 항상 1.0 m 이내다(직전 장면을 물려받아도)', () => {
+    for (const [warm, type] of [['goal', 'save'], ['save', 'miss'], ['miss', 'goal']] as const) {
+      const ds = heldDistances(type, warm)
+      expect(ds.length, `${warm}→${type}: 소유 프레임이 없다`).toBeGreaterThan(20)
+      const worst = ds.reduce((a, b) => (b.d > a.d ? b : a))
+      expect(worst.d, `${warm}→${type}: 최악 볼-발 ${worst.d.toFixed(2)} m @ t=${worst.t.toFixed(2)}`)
+        .toBeLessThan(1.0)
+    }
+  })
+
+  it('무사건 분(flow)에도 소유자가 있고 공이 그 발에 있다', () => {
+    const st = structuredClone(base)
+    const fl = buildFlowSequence(st, 34, 42)
+    expect(fl.seq.length).toBeGreaterThan(1)
+    // 예전엔 carrier가 없어 무사건 분에는 킥이 한 번도 나오지 않았다.
+    expect(fl.seq.filter(s => s.carrier).length).toBe(fl.seq.length)
+    expect(kickEvents(fl.seq).length).toBeGreaterThan(0)
+  })
+})
+
+describe('★ ② 선수 관성 — 목표가 바뀌어도 속도 벡터가 한 프레임에 꺾이지 않는다', () => {
+  /** 실측(개편 전, 90분): |Δv|/dt p50 15.7 · p99 320 · max 445 m/s². 문헌 상한은 7~8. */
+  it('프레임 간 속도 변화가 A_SEPARATE 상한을 넘지 않는다', () => {
+    const st = structuredClone(base)
+    const dwell = 8400
+    const e = ev('goal', { minute: 30, playerId: homeId(9) })
+    const seq = buildSequence(e, st.home, st.away)
+    let prev: FrameState | null = null
+    let worst = 0
+    let worstId = ''
+    const dt = 1 / 60
+    const N = 500
+    for (let k = 0; k <= N; k++) {
+      const f: FrameState = computeFrame(input({
+        state: st, prev, dt, t: k / N, sequence: seq, sequenceSide: 'home',
+        event: e, minute: 30, dwellMs: dwell,
+      }))
+      if (prev) {
+        const pm = new Map(prev.players.map(p => [p.id, p]))
+        for (const p of f.players) {
+          const q = pm.get(p.id)
+          if (!q || q.vx == null) continue
+          const a = Math.hypot((p.vx ?? 0) - q.vx, (p.vz ?? 0) - (q.vz ?? 0)) / dt
+          if (a > worst) { worst = a; worstId = p.id }
+        }
+      }
+      prev = f
+    }
+    // 자력 가속은 A_ACCEL/A_BRAKE/A_LATERAL, 밀어내기(외력)는 A_SEPARATE가 상한이다.
+    expect(worst, `최악 |Δv|/dt ${worst.toFixed(1)} m/s² (${worstId})`).toBeLessThanOrEqual(A_SEPARATE + 0.5)
+  })
+
+  it('한 프레임에 진행 방향이 60° 넘게 꺾이지 않는다(관성 없는 급회전 금지)', () => {
+    const st = structuredClone(base)
+    const e = ev('save', { minute: 30, teamId: away.id, playerId: awayId(0) })
+    const seq = buildSequence(e, st.home, st.away)
+    let prev: FrameState | null = null
+    let flips = 0
+    let samples = 0
+    const N = 500
+    for (let k = 0; k <= N; k++) {
+      const f: FrameState = computeFrame(input({
+        state: st, prev, dt: 1 / 60, t: k / N, sequence: seq, sequenceSide: 'home',
+        event: e, minute: 30, dwellMs: 8400,
+      }))
+      if (prev) {
+        const pm = new Map(prev.players.map(p => [p.id, p]))
+        for (const p of f.players) {
+          const q = pm.get(p.id)
+          if (!q || q.vx == null) continue
+          const l1 = Math.hypot(q.vx, q.vz ?? 0)
+          const l2 = Math.hypot(p.vx ?? 0, p.vz ?? 0)
+          if (l1 < 1.2 || l2 < 1.2) continue // 걷는 속도 미만은 방향이 의미 없다
+          samples++
+          const cos = (q.vx * (p.vx ?? 0) + (q.vz ?? 0) * (p.vz ?? 0)) / (l1 * l2)
+          if (cos < Math.cos((60 * Math.PI) / 180)) flips++
+        }
+      }
+      prev = f
+    }
+    expect(samples).toBeGreaterThan(500)
+    expect(flips, `1프레임 60°+ 전환 ${flips}/${samples}`).toBe(0)
+  })
+
+  it('정지에서 최고속까지 A_ACCEL이 요구하는 시간(≥1.0 s)이 걸린다', () => {
+    // 목표를 멀리 두고 정지 상태에서 출발시킨다 — 관성이 없으면 1프레임에 상한에 닿는다.
+    const st = structuredClone(base)
+    const dt = 1 / 60
+    let prev: FrameState | null = computeFrame(input({ state: st, minute: 30, t: 0 }))
+    // 시작 프레임의 속도를 0으로 만든다.
+    prev = { ...prev, players: prev.players.map(p => ({ ...p, speed: 0, vx: 0, vz: 0 })) }
+    const seq = pinnedBall(95, 50)
+    let framesToTop = 0
+    for (let k = 1; k <= 200; k++) {
+      const f: FrameState = computeFrame(input({
+        state: st, prev, dt, t: k / 200, sequence: seq, sequenceSide: 'home', minute: 30, dwellMs: 8400,
+      }))
+      const fastest = Math.max(...f.players.map(p => Math.hypot(p.vx ?? 0, p.vz ?? 0)))
+      if (fastest >= MAX_SPEED * 0.95) { framesToTop = k; break }
+      prev = f
+    }
+    // 7.5 m/s ÷ 7 m/s² ≈ 1.07 s ≈ 64 프레임. 관성이 없으면 1~2 프레임이었다.
+    expect(framesToTop, `최고속 도달 ${framesToTop} 프레임`).toBeGreaterThan(50)
+  })
+})
+
+describe('★ ③ 빗나간 슛은 골대 근처로 간다', () => {
+  /**
+   * 실측 기준: StatsBomb open-data 오프타깃 슛 7,772건.
+   *  · 포스트 밖 수평 간극 p50 2.10 m · 크로스바 위 p50 2.04 m
+   *  · 프레임에서 2 m 안 40.5% · 3 m 안 60.9%
+   * 개편 전 우리 값은 포스트 밖 5.18 / 11.30 / 19.46 m — 전부 p90~p99 꼬리였다.
+   */
+  const GOAL_HALF_Z = 3.66
+  const CROSSBAR = 2.44
+
+  /** 라이브러리 전수(패턴 4 × 빌드업 2 × 마무리 3 × 레인 6)의 미스 종점. */
+  const allMisses = () => {
+    const out: { key: string; outZ: number; over: number; frame: number }[] = []
+    for (const pattern of ['balanced', 'cross', 'through', 'longshot'] as const) {
+      for (let b = 0; b < 2; b++) {
+        for (let fv = 0; fv < 3; fv++) {
+          for (let lane = 0; lane < 6; lane++) {
+            const sc = buildScene(pattern, 'miss', lane, { buildup: b, finish: fv })
+            const last = sc.points[sc.points.length - 1]
+            const w = toWorld(last.ball[0], last.ball[1])
+            const outZ = Math.max(0, Math.abs(w.z) - GOAL_HALF_Z)
+            const over = Math.max(0, (last.endY ?? BALL_END.shot) - CROSSBAR)
+            out.push({ key: sc.key, outZ, over, frame: Math.hypot(outZ, over) })
+          }
+        }
+      }
+    }
+    return out
+  }
+
+  it('골대 프레임에서 8 m 넘게 벗어나는 미스가 없다', () => {
+    const ms = allMisses()
+    expect(ms).toHaveLength(144)
+    const worst = ms.reduce((a, b) => (b.frame > a.frame ? b : a))
+    expect(worst.frame, `최악 ${worst.frame.toFixed(2)} m @ ${worst.key}`).toBeLessThan(8)
+  })
+
+  it('절반 이상이 골대에서 3 m 안을 지난다(실측 60.9%)', () => {
+    const ms = allMisses()
+    const near = ms.filter(m => m.frame <= 3).length
+    expect(near / ms.length, `3 m 안 ${((near / ms.length) * 100).toFixed(1)}%`).toBeGreaterThan(0.5)
+  })
+
+  it('세 범주(옆·위·옆+위)가 모두 나오고 실측 비율에 가깝다', () => {
+    const ms = allMisses()
+    const wideOnly = ms.filter(m => m.outZ > 0 && m.over === 0).length / ms.length
+    const overOnly = ms.filter(m => m.outZ === 0 && m.over > 0).length / ms.length
+    const both = ms.filter(m => m.outZ > 0 && m.over > 0).length / ms.length
+    expect(wideOnly).toBeGreaterThan(0.35) // 실측 45.4%
+    expect(overOnly).toBeGreaterThan(0.2) // 실측 27.9%
+    expect(both).toBeGreaterThan(0.2) // 실측 26.6%
+    expect(wideOnly + overOnly + both).toBeCloseTo(1, 6)
+  })
+
+  it('크로스바를 넘긴 공은 여운에서 골문으로 가라앉지 않고 뒤로 넘어간다', () => {
+    const st = structuredClone(base)
+    const e = ev('miss', { minute: 30, playerId: homeId(9) })
+    const seq = buildSequence(e, st.home, st.away)
+    const endY = seq[seq.length - 1].endY
+    if (endY == null || endY <= CROSSBAR) return // 이 조합은 낮은 미스다
+    const tEnd = seq[seq.length - 1].t
+    let prev: FrameState | null = null
+    let lastX = -Infinity
+    for (let k = 0; k <= 400; k++) {
+      const t = k / 400
+      const f: FrameState = computeFrame(input({
+        state: st, prev, dt: 1 / 60, t, sequence: seq, sequenceSide: 'home',
+        event: e, minute: 30, dwellMs: 8400,
+      }))
+      prev = f
+      if (t > tEnd) lastX = Math.max(lastX, f.ball.x)
+    }
+    // 골라인(52.5 m)을 실제로 넘어간다 — 그 앞에서 멈춰 내려앉으면 "골대 맞고 떨어짐"이다.
+    expect(lastX, `여운 끝 볼 x=${lastX.toFixed(1)} (골라인 ${PITCH_W / 2})`).toBeGreaterThan(PITCH_W / 2)
+  })
+})
+
+describe('★ ④ 세이브는 손에 닿고, 잡거나 쳐낸다', () => {
+  /**
+   * 실측(개편 전, 90분 실주행): 다이브 프레임의 **실제 손-공 최소 거리 1.42 ~ 3.46 m**,
+   * 손이 공에 닿은 프레임 **0개**. 예전 `gkDiveAnchor`가 손의 도달을 스칼라 반경 2.0 m로
+   * 근사하고 방향을 "골문 중앙 쪽"으로 잡았기 때문이다 — 실제 도달은 거의 전부 **측방**
+   * (로컬 ±Z 1.80 m)이고 몸통보다 0.40 m 뒤이며 높이는 1.01 m다.
+   */
+  const savePlay = (minute: number) => {
+    const st = structuredClone(base)
+    // 엔진과 같은 형태: save는 **막은 팀(away)**의 사건이고 playerId는 그 팀 GK.
+    const e = ev('save', { minute, teamId: away.id, playerId: awayId(0) })
+    const seq = buildSequence(e, st.home, st.away)
+    const dwell = 8400
+    const gkId = awayId(0)
+    const rows: { t: number; handD: number; ballX: number; ballY: number; ballZ: number; diveT: number }[] = []
+    let prev: FrameState | null = null
+    const N = 600
+    for (let k = 0; k <= N; k++) {
+      const t = k / N
+      const f: FrameState = computeFrame(input({
+        state: st, prev, dt: 1 / 60, t, sequence: seq, sequenceSide: 'home',
+        event: e, minute, dwellMs: dwell,
+      }))
+      prev = f
+      const gk = f.players.find(p => p.id === gkId)!
+      if (gk.action !== 'dive') continue
+      const hand = gkHandWorld({ x: gk.x, z: gk.z }, gk.yaw, gk.actionT, gk.actionDir ?? 1)
+      rows.push({
+        t,
+        handD: Math.hypot(hand.x - f.ball.x, hand.y - f.ball.y, hand.z - f.ball.z),
+        ballX: f.ball.x, ballY: f.ball.y, ballZ: f.ball.z, diveT: gk.actionT,
+      })
+    }
+    return rows
+  }
+
+  it('다이브 중 손이 실제로 공에 닿는다(공 반지름 안)', () => {
+    for (const minute of [12, 30, 55, 71]) {
+      const rows = savePlay(minute)
+      expect(rows.length, `${minute}': 다이브 프레임 없음`).toBeGreaterThan(30)
+      const best = Math.min(...rows.map(r => r.handD))
+      // 공 반지름 0.11 + 손 반지름 0.055 = 접촉 판정 0.165 m. 여유 두 배로 잡는다.
+      expect(best, `${minute}': 최소 손-공 ${best.toFixed(2)} m`).toBeLessThan(0.33)
+    }
+  })
+
+  it('gkDiveAnchor는 순기구학의 역함수다 — 손이 접촉점에 정확히 온다', () => {
+    for (const side of ['home', 'away'] as const) {
+      for (const cz of [-3, -1, 0, 2, 3.4]) {
+        const contact = { x: side === 'home' ? -49.9 : 49.9, z: cz }
+        const from = { x: side === 'home' ? -30 : 30, z: cz * 0.4 }
+        const a = gkDiveAnchor(side, contact, from)
+        const hand = gkHandWorld(a, a.yaw, DIVE_LAY_U, a.dir)
+        expect(Math.hypot(hand.x - contact.x, hand.z - contact.z), `${side}/z=${cz}`).toBeLessThan(1e-9)
+        // 결과 몸통 자리는 GK 박스 안이어야 한다.
+        const box = gkBox(side)
+        expect(a.x).toBeGreaterThanOrEqual(box.xMin - 1e-6)
+        expect(a.x).toBeLessThanOrEqual(box.xMax + 1e-6)
+        expect(Math.abs(a.z)).toBeLessThanOrEqual(box.zMax + 1e-6)
+      }
+    }
+  })
+
+  it('잡는 세이브와 쳐내는 세이브가 둘 다 나오고, 그림이 다르다', () => {
+    const kinds: string[] = []
+    for (const minute of [8, 12, 19, 26, 30, 37, 44, 55, 61, 71, 78, 84]) {
+      const rows = savePlay(minute)
+      const contact = rows.filter(r => r.handD <= 0.33)
+      if (contact.length === 0) continue
+      // 접촉이 오래 유지되면 잡은 것(공이 손에 붙어 함께 내려온다),
+      // 잠깐이면 쳐낸 것(공이 튕겨 나가 손에서 멀어진다).
+      kinds.push(contact.length >= 30 ? 'catch' : 'punch')
+    }
+    expect(kinds.length).toBeGreaterThan(6)
+    expect(kinds.filter(k => k === 'catch').length, `catch 없음: ${kinds.join(',')}`).toBeGreaterThan(0)
+    expect(kinds.filter(k => k === 'punch').length, `punch 없음: ${kinds.join(',')}`).toBeGreaterThan(0)
+  })
+
+  it('잡은 공은 손을 따라 내려온다(접촉 이후 손-공 거리가 유지된다)', () => {
+    // 12개 분 중 catch가 나오는 것을 찾아 접촉 이후 전 프레임을 검사한다.
+    for (const minute of [8, 12, 19, 26, 30, 37, 44, 55, 61, 71, 78, 84]) {
+      const rows = savePlay(minute)
+      const first = rows.findIndex(r => r.handD <= 0.33)
+      if (first < 0) continue
+      const after = rows.slice(first)
+      if (after.filter(r => r.handD <= 0.33).length < 30) continue // punch
+      // 잡았으면 **끝까지** 손에 붙어 있어야 한다.
+      const worst = Math.max(...after.map(r => r.handD))
+      expect(worst, `${minute}' catch: 접촉 후 최악 손-공 ${worst.toFixed(2)} m`).toBeLessThan(0.33)
+      return
+    }
+    throw new Error('catch 세이브를 하나도 찾지 못했다')
+  })
+
+  it('쳐낸 공은 골문에서 멀어진다(문전 정면 반사 금지)', () => {
+    for (const minute of [8, 12, 19, 26, 30, 37, 44, 55, 61, 71, 78, 84]) {
+      const rows = savePlay(minute)
+      const first = rows.findIndex(r => r.handD <= 0.33)
+      if (first < 0) continue
+      const after = rows.slice(first)
+      if (after.filter(r => r.handD <= 0.33).length >= 30) continue // catch
+      const goalX = PITCH_W / 2 // away 골문(+X) — 홈이 공격한다
+      const d0 = Math.hypot(after[0].ballX - goalX, after[0].ballZ)
+      const dN = Math.hypot(after[after.length - 1].ballX - goalX, after[after.length - 1].ballZ)
+      expect(dN, `${minute}' punch: 골문 거리 ${d0.toFixed(1)} → ${dN.toFixed(1)} m`).toBeGreaterThan(d0 + 2)
+      return
+    }
+    throw new Error('punch 세이브를 하나도 찾지 못했다')
   })
 })
