@@ -24,7 +24,7 @@ const MAST_PX = END_INNER + STAND_DEPTH * 0.85
 const MAST_PZ = SIDE_INNER + STAND_DEPTH * 0.85
 const MAST_TOP_Y = 44
 
-const MODES = ['broadcast', 'highlight', 'set-piece', 'goal-cam', 'reaction', 'celebrate']
+const MODES = ['broadcast', 'highlight', 'set-piece', 'goal-cam', 'reaction', 'celebrate', 'entrance', 'entrance-close']
 const TIMES = [0, 0.37, 1.9, 5.5, 13.2, 30]
 const SEEDS = [1, 7, 4242]
 

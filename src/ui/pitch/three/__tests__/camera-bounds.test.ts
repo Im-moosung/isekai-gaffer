@@ -52,6 +52,8 @@ export const ALL_MODES: CameraMode[] = [
   'goal-cam',
   'reaction',
   'celebrate',
+  'entrance',
+  'entrance-close',
 ]
 
 /** 좌석 표면 위로 남은 여유(m). 스탠드 밖이면 +Infinity. */

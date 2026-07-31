@@ -8,7 +8,6 @@ import {
   BURST_LIFE,
   FLASH_CONCEDED,
   FLASH_SCORED,
-  TRAIL_SEGMENTS,
   createBall,
   flashQuad,
   goalBurst,
@@ -137,15 +136,13 @@ describe('makeBallCanvas', () => {
 })
 
 describe('createBall — 구조', () => {
-  it('구체 + 컨택트 섀도우 + 트레일을 한 그룹에 담는다', () => {
+  it('구체 + 컨택트 섀도우 **둘만** 한 그룹에 담는다(트레일 없음)', () => {
     const b = createBall(THREE)
     expect(b.group.children).toContain(b.mesh)
     expect(b.group.children).toContain(b.shadow)
-    expect(b.trail.length).toBe(TRAIL_SEGMENTS)
-    for (const t of b.trail) {
-      expect(b.group.children).toContain(t)
-      expect(t.visible).toBe(false) // 시작은 꺼져 있다
-    }
+    // 볼 트레일은 제거됐다(실제 중계에 없고, 균일한 구체 10개가 잔상이 아니라
+    // "잔디에 떨어진 점 10개"로 읽혔다). 자식은 공과 그림자뿐이어야 한다.
+    expect(b.group.children).toHaveLength(2)
     const geo = b.mesh.geometry as THREE.SphereGeometry
     expect(geo.type).toBe('SphereGeometry')
     expect(geo.parameters.radius).toBeCloseTo(BALL_R, 6)
@@ -242,28 +239,12 @@ describe('createBall — update', () => {
     b.dispose()
   })
 
-  it('빠를 때만 트레일이 켜지고 뒤로 갈수록 옅어진다', () => {
+  it('아무리 빨리 움직여도 잔상 메시가 생기지 않는다(트레일 회귀 방지)', () => {
     const b = createBall(THREE)
-    for (let i = 0; i < 20; i++) b.update(pose(i * 0.5, BALL_R, 0), 0.05) // 10 m/s
-    const vis = b.trail.filter((m) => m.visible)
-    expect(vis.length).toBeGreaterThan(4)
-    // 트레일은 공이 지나온 쪽(-X)에 남는다
-    expect(vis[0].position.x).toBeLessThan(b.mesh.position.x + 1e-6)
-    const ops = vis.map((m) => matOf(m).opacity)
-    for (let i = 1; i < ops.length; i++) expect(ops[i]).toBeLessThan(ops[i - 1])
-    expect(ops[0]).toBeLessThan(1) // 반투명
-
-    // 멈추면 꺼진다
-    for (let i = 0; i < 40; i++) b.update(pose(9.5, BALL_R, 0), 0.05)
-    expect(b.trail.some((m) => m.visible)).toBe(false)
-    b.dispose()
-  })
-
-  it('reduced-motion이면 트레일을 아예 만들지 않는다', () => {
-    const b = createBall(THREE, { reducedMotion: true })
-    expect(b.trail.length).toBe(0)
-    for (let i = 0; i < 10; i++) b.update(pose(i * 0.5, BALL_R, 0), 0.05)
-    expect(b.group.children).toContain(b.mesh)
+    for (let i = 0; i < 40; i++) b.update(pose(i * 0.5, BALL_R, 0), 0.05) // 10 m/s
+    // 예전 구현은 여기서 세그먼트 10개를 켰다. 지금은 공·그림자만 남아야 한다.
+    expect(b.group.children).toHaveLength(2)
+    expect(b.group.children.every((c) => c.visible)).toBe(true)
     b.dispose()
   })
 
@@ -274,7 +255,7 @@ describe('createBall — update', () => {
       b.update(pose(1, BALL_R, 1), 0.016)
       const { geos, mats, texes } = collectResources(b.group)
       expect(geos.size).toBeGreaterThan(1)
-      expect(mats.size).toBeGreaterThan(TRAIL_SEGMENTS) // 세그먼트마다 개별 알파
+      expect(mats.size).toBeGreaterThanOrEqual(2) // 공 표면 + 섀도우
       // 섀도우는 정점 알파로 바뀌어 텍스처를 쓰지 않는다 — 남는 건 공 표면 텍스처뿐이다.
       expect(texes.size).toBeGreaterThanOrEqual(1)
       const { expected, fired } = countDisposals(b.group)

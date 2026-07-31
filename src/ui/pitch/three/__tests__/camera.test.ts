@@ -52,6 +52,8 @@ const MODES: CameraMode[] = [
   'celebrate',
   'reaction',
   'set-piece',
+  'entrance',
+  'entrance-close',
 ]
 
 /** applyCamera 검증용 구조적 카메라 스텁(호출 순서까지 기록). */

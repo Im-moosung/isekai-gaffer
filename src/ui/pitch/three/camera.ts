@@ -26,6 +26,8 @@ import { PITCH_H, PITCH_W, type Vec3 } from './types'
  *  - `goal-cam`   골 직후 골대 뒤 로우앵글
  *  - `reaction`   골대 뒤 다음에 끼우는 득점자 리액션 클로즈
  *  - `celebrate`  와이드 세리머니 오빗
+ *  - `entrance`   입장 연출 와이드(터널·워크아웃) — 배역 23명이 한 프레임에 들어온다
+ *  - `entrance-close` 입장 연출 클로즈(정렬·선수 소개) — 줄을 사선으로 훑는다
  */
 export type CameraMode =
   | 'broadcast'
@@ -34,6 +36,8 @@ export type CameraMode =
   | 'celebrate'
   | 'reaction'
   | 'set-piece'
+  | 'entrance'
+  | 'entrance-close'
 
 /** 한 프레임의 카메라 상태(순수 값). */
 export interface CameraShot {
@@ -166,6 +170,59 @@ export const GOAL_CAM_FOV = 38
 /** 골 뒤 카메라의 좌우 이동 한계(m) — 골대 폭 근처를 벗어나지 않는다. */
 const GOAL_CAM_MAX_Z = 9
 
+// ── entrance(입장 연출 전용) ──────────────────────────────────────
+// **왜 broadcast를 쓰면 안 되는가**(실주행에서 발견한 결함):
+// broadcast의 lookAt.z는 `fz * 0.55`다. 인플레이 focus(|z| ≲ 20)에서는 "시선을 피치
+// 중앙 쪽으로 당겨 사이드라인 근처 공도 화면 가운데에 두는" 올바른 보정이지만,
+// 입장 연출의 무대는 터치라인 바로 안쪽(z ≈ -34 ~ -25)이다. 거기서 이 보정은 시선을
+// 배역보다 **15 m 더 먼 곳**에 꽂아 23명 전원을 화면 맨 아래로 밀어낸다.
+// 실측(1600×900, 캔버스 1568×576): 터널 단계 배역의 NDC y가 -0.86 ~ -1.14 —
+// 즉 화면 하단 7 % 띠에 몰리고 절반은 아예 프레임 밖이었다(캡처: 텅 빈 미드필드).
+// 그래서 입장은 **lookAt.z를 보정 없이 그대로 쓰는** 전용 프리셋을 갖는다.
+/** 와이드: 카메라 z(메인스탠드 쪽). 22 m 뒤로 물러나 열·줄 전체를 담는다. */
+export const ENTRANCE_Z = -56
+/**
+ * 와이드 높이(m). {@link clampShot}의 스탠드 침투 규칙상 z=-56(침투 15 m)에 서려면
+ * 좌석 표면(2.4 + 15·tan0.5 = 10.6 m) + {@link STAND_CLEARANCE} = 16.6 m 이상이어야 한다.
+ * 18은 그 위 1.4 m — 클램프에 걸리지 않으면서 부감이 과하지 않은 최저값이다.
+ */
+export const ENTRANCE_Y = 18
+/**
+ * 와이드 화각. 가장 좁은 뷰포트 종횡비(CSS 공칭 105/68 = 1.544)에서도 반수평화각이
+ * atan(tan17°·1.544) = 26.7°라, 배역 반폭 11 m를 24 m 거리(= 23.7°)에서 여유 있게 담는다.
+ * 이보다 좁히면 세로가 아니라 **가로**가 먼저 잘린다(열 꼬리가 +X로 16 m 뻗는다).
+ */
+export const ENTRANCE_FOV = 34
+/** 시선 높이(m) — 선수 가슴. 발밑을 보면 하늘이, 머리를 보면 잔디가 절반을 먹는다. */
+const ENTRANCE_LOOK_Y = 1.3
+/**
+ * 와이드에서 시선을 focus보다 이만큼 **피치 안쪽(+Z)에** 둔다(m).
+ *
+ * 0으로 두면(= 배역을 정확히 화면 중앙에 두면) 카메라가 메인스탠드 슬래브 안(z=-56)에
+ * 있으므로 배역과 카메라 사이의 **가까운 관중석이 화면 아래 절반을 통째로 먹는다**
+ * (실측: 배역이 NDC y≈-0.09, 스탠드 앞단이 -0.51). 8 m 앞을 보면 축이 9°쯤 올라가
+ * 배역이 하단 1/3(NDC y≈-0.5)로 내려앉고 스탠드 앞단은 -1.0 밖으로 빠진다. 그러면
+ * 프레임은 "잔디 + 선수 + 먼 관중석"이 되고, 걸어 나오는 방향(피치 안쪽)이 화면에 남는다.
+ * broadcast의 `fz * 0.55`와 달리 **비례가 아니라 고정 오프셋**인 것이 중요하다 —
+ * 비례 보정은 |fz|가 클수록 커져서 애초에 이 사고를 일으켰다.
+ */
+const ENTRANCE_LOOK_AHEAD = 8
+/** 오퍼레이터 호흡 진폭(m) — broadcast와 같은 취지, 절반 세기. */
+const ENTRANCE_DRIFT = 0.18
+
+/**
+ * 클로즈(정렬·소개): 줄을 **사선으로** 훑는다. 정면에서 보면 22 m짜리 줄이 화면 폭을
+ * 넘지만, 사선이면 원근으로 접혀 여러 명이 들어오면서도 앞줄 선수의 번호가 읽힌다.
+ * 방위각을 focus.x 부호로 뒤집지 않는 것이 핵심이다 — `reaction`을 재사용하던 시절
+ * 소개가 6번째 선수(focus.x가 0을 통과)에서 카메라가 19 m 순간이동했다(같은 모드라
+ * 리그의 0.6 s 전환도 타지 않는다).
+ */
+export const ENTRANCE_CLOSE_DIST = 14
+export const ENTRANCE_CLOSE_Y = 5.2
+export const ENTRANCE_CLOSE_FOV = 31
+/** 고정 사선 방위각(rad) — -π/2가 메인스탠드 정면, +0.55가 줄을 따라 눕히는 각이다. */
+const ENTRANCE_CLOSE_AZ = -Math.PI / 2 + 0.55
+
 // ── celebrate(득점팀 주위 오빗) ───────────────────────────────────
 /**
  * 오빗 반경(m). 22였을 때 코너 근처 득점이면 카메라가 x=80.5·z=60까지 나가
@@ -282,6 +339,10 @@ export function cameraFor(mode: CameraMode, focus: Focus, t: number, seed: numbe
       return clampShot(reactionShot(fx, fz, t, seed))
     case 'set-piece':
       return clampShot(setPieceShot(fx, fz, t, seed))
+    case 'entrance':
+      return clampShot(entranceWideShot(fx, fz, t, seed))
+    case 'entrance-close':
+      return clampShot(entranceCloseShot(fx, fz, t, seed))
     default:
       return clampShot(broadcastShot(fx, fz, t, seed))
   }
@@ -376,6 +437,41 @@ function reactionShot(fx: number, fz: number, t: number, seed: number): CameraSh
     },
     lookAt: { x: fx, y: 1.7, z: fz },
     fov: REACTION_FOV,
+  }
+}
+
+/**
+ * 입장 와이드 — 메인스탠드 정면에서 배역 무게중심을 정통으로 본다.
+ *
+ * 카메라 x가 focus.x를 **1:1로** 따라가는 것이 broadcast(게인 0.62)와 결정적으로 다르다.
+ * 입장 무대는 x로 20 m 넘게 뻗어 있고 열의 중심이 x≈+6, 줄의 중심이 x≈-1로 옮겨 간다.
+ * 게인을 1보다 작게 두면 그 차이만큼 배역이 화면 한쪽으로 쏠려 가로가 잘린다.
+ * 시선 z는 focus.z 그대로다(보정 없음 — 이 프리셋의 존재 이유).
+ */
+function entranceWideShot(fx: number, fz: number, t: number, seed: number): CameraShot {
+  return {
+    pos: {
+      x: fx + ENTRANCE_DRIFT * Math.sin(t * 0.21 + phase(seed, 21)),
+      y: ENTRANCE_Y + 0.2 * Math.sin(t * 0.15 + phase(seed, 22)),
+      z: ENTRANCE_Z,
+    },
+    lookAt: { x: fx, y: ENTRANCE_LOOK_Y, z: fz + ENTRANCE_LOOK_AHEAD },
+    fov: ENTRANCE_FOV,
+  }
+}
+
+/** 입장 클로즈 — 고정 사선(좌우 반전 없음)으로 정렬한 줄을 따라 눕혀 본다. */
+function entranceCloseShot(fx: number, fz: number, t: number, seed: number): CameraShot {
+  const sway = 0.03 * Math.sin(t * 0.33 + phase(seed, 23))
+  const az = ENTRANCE_CLOSE_AZ + sway
+  return {
+    pos: {
+      x: fx + Math.cos(az) * ENTRANCE_CLOSE_DIST,
+      y: ENTRANCE_CLOSE_Y + 0.15 * Math.sin(t * 0.19 + phase(seed, 24)),
+      z: fz + Math.sin(az) * ENTRANCE_CLOSE_DIST,
+    },
+    lookAt: { x: fx, y: ENTRANCE_LOOK_Y + 0.25, z: fz },
+    fov: ENTRANCE_CLOSE_FOV,
   }
 }
 

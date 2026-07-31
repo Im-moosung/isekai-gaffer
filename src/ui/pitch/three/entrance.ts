@@ -16,6 +16,7 @@
 // 선수들은 피치 안쪽(+Z)으로 걸어나온 뒤 몸을 돌려 메인스탠드를 바라본다.
 import type { FormationId, Instructions, MatchState, Position, SideState } from '../../../engine/types'
 import { tacticalCoords } from '../shape'
+import type { CameraMode } from './camera'
 // 보폭 모델은 표시 계층 전체가 **하나**를 공유한다(player3d가 정본).
 // 공유 보폭 모델은 순수 계층(pose.ts)에서 온다 — 리그 빌더(player3d)를 거치지 않는다.
 import { MIN_GAIT_SPEED, strideLength } from './pose'
@@ -79,6 +80,7 @@ export const ENTRANCE_PHASES: readonly PhaseSpan[] = (() => {
 
 const TUNNEL_END = ENTRANCE_PHASES[0].end
 const WALKOUT_END = ENTRANCE_PHASES[1].end
+const LINEUP_START = ENTRANCE_PHASES[2].start
 const LINEUP_END = ENTRANCE_PHASES[2].end
 const INTRO_END = ENTRANCE_PHASES[3].end
 
@@ -245,6 +247,23 @@ export function entrancePhaseWindow(ms: number): EntrancePhaseWindow {
     }
   }
   return { phase: 'done', start: ENTRANCE_TOTAL_MS, end: Infinity, u: 1 }
+}
+
+/**
+ * 단계별 카메라 모드. **연출이 자기 카메라 스크립트를 소유한다** — 예전엔 Match3D의
+ * rAF 루프 안에 삼항 연산자로 박혀 있어서, 무대 배치를 고쳐도 프레이밍이 맞는지
+ * 검증할 방법이 없었다(실제로 터널 단계가 아무도 안 비추는 채로 배포됐다).
+ * 순수 함수로 빼 두면 `__tests__/entrance-framing.test.ts`가 실제 렌더와 **같은**
+ * 모드로 월드→스크린 투영을 돌려 배역이 프레임 안에 있는지 전수 검사할 수 있다.
+ *
+ * 흩어짐만 경기 카메라(broadcast)를 미리 켠다 — 킥오프 휘슬과 동시에 카메라가 또
+ * 움직이면 컷이 두 번 난 것처럼 보인다.
+ */
+export function entranceCameraMode(ms: number): CameraMode {
+  const ph = entrancePhaseAt(ms)
+  if (ph === 'lineup' || ph === 'intro') return 'entrance-close'
+  if (ph === 'disperse' || ph === 'done') return 'broadcast'
+  return 'entrance'
 }
 
 export interface EntranceIntroCard {
@@ -530,34 +549,53 @@ export interface EntranceFrame extends FrameState {
   referee: PlayerPose
 }
 
-function focusAt(cast: EntranceCast, tracks: Track[], ms: number): Pt {
-  const w = entrancePhaseWindow(ms)
-  const mouth: Pt = { x: REF_COL.x, z: (HOME_COL_Z + AWAY_COL_Z) / 2 }
-  const rows: Pt = { x: 0, z: (HOME_ROW_Z + AWAY_ROW_Z) / 2 }
-  switch (w.phase) {
-    case 'tunnel':
-      return mouth
-    case 'walkout': {
-      const u = smoothstep(w.u)
-      return { x: mouth.x + (rows.x - mouth.x) * u, z: mouth.z + (rows.z - mouth.z) * u }
-    }
-    case 'lineup':
-      return rows
-    case 'intro': {
-      const card = introCardAt(cast, ms)
-      if (!card) return rows
-      // 호명 중인 선수 쪽으로 완만히 팬한다(카드와 카메라가 같은 사람을 본다).
-      const tr = tracks.find(x => x.introIndex === card.index)
-      const tx = tr ? tr.l.x : rows.x
-      return { x: tx * 0.8, z: rows.z }
-    }
-    case 'disperse': {
-      const u = smoothstep(w.u)
-      return { x: rows.x * (1 - u), z: rows.z * (1 - u) }
-    }
-    default:
-      return { x: 0, z: 0 }
+/**
+ * 카메라가 볼 지점 = **이 순간 배역의 무게중심**(소개 단계만 호명 선수 쪽으로 당긴다).
+ *
+ * 예전에는 단계마다 무대 좌표(터널 입구·줄 중앙)를 손으로 적어 두고 그 사이를 보간했다.
+ * 그 값들은 무대 배치 상수와 따로 자라서 실제 배역 위치와 어긋났다 — 특히 터널 단계의
+ * `mouth`는 심판 한 명의 좌표(x=-3.8)였는데 열의 실제 중심은 x≈+6이라, 열 꼬리 10 m가
+ * 프레임 밖으로 나갔다. 실제 포즈에서 평균을 내면 무대 배치를 어떻게 바꿔도 카메라가
+ * 따라오고, 흩어짐 끝에서는 킥오프 대형의 중심(≈ 원점)으로 저절로 수렴한다.
+ */
+function focusAt(cast: EntranceCast, tracks: Track[], poses: PlayerPose[], ms: number): Pt {
+  let sx = 0
+  let sz = 0
+  for (const p of poses) {
+    sx += p.x
+    sz += p.z
   }
+  const n = poses.length || 1
+  const c: Pt = { x: sx / n, z: sz / n }
+  const total = cast.home.length
+  if (total <= 0 || ms < LINEUP_START || ms >= INTRO_END) return c
+
+  // ── 정렬·소개: 호명 선수 쪽으로 당긴 팬 ──────────────────────────
+  // 카드와 카메라가 같은 사람을 봐야 한다. 다만 **완전히 연속**이어야 한다:
+  //  · 목표 x를 카드 인덱스에서 계단식으로 읽으면 0.5 s마다 카메라가 1 m씩 튄다
+  //    (실측 0.99 m/20 ms = 49 m/s). 그래서 슬롯 사이를 smoothstep으로 잇고
+  //    반 슬롯 앞서(lead) 움직이기 시작해, 카드가 뜨는 순간 이미 절반쯤 가 있게 한다.
+  //  · 팬은 **정렬(lineup) 단계에서 미리 시작한다**. 소개 첫 슬롯에서 게인을 0부터
+  //    올리면 1번 선수(줄 맨 왼쪽 x=-9)가 호명되는 동안 카메라가 아직 줄 한가운데라
+  //    정작 카드의 주인공이 프레임 밖으로 나간다. 0.9 s의 "정적" 구간을 카메라가
+  //    자리를 잡는 데 쓰면 연속성과 프레이밍을 동시에 얻는다.
+  //  · 끝에서는 게인을 닫지 않는다 — 흩어짐에서 모드가 broadcast로 바뀌므로
+  //    카메라 리그의 0.6 s 이징이 그 전환을 대신 흡수한다.
+  const per = ENTRANCE_INTRO_MS / total
+  const raw = (ms - LINEUP_END) / per
+  const xAt = (i: number): number => {
+    const tr = tracks.find(x => x.introIndex === clamp(i, 0, total - 1))
+    return tr ? tr.l.x : c.x
+  }
+  const lead = clamp(raw - 0.5, 0, total - 1)
+  const i0 = Math.floor(lead)
+  const tx = xAt(i0) + (xAt(i0 + 1) - xAt(i0)) * smoothstep(lead - i0)
+  // 완전히 그 선수에 꽂지 않고 0.55만 당긴다 — 양옆 동료가 프레임에 남아야 "줄"로
+  // 읽힌다. 0.7이면 종횡비 1.544에서 프레임 내 인원이 11명까지 떨어지고, 0.45면
+  // 호명 선수가 화면 중앙에서 너무 멀어져 카드와 눈이 따로 논다(둘 다 실측).
+  const ramp = ENTRANCE_LINEUP_MS / per
+  const gain = 0.55 * smoothstep((raw + ramp) / ramp)
+  return { x: c.x + (tx - c.x) * gain, z: c.z }
 }
 
 /**
@@ -571,9 +609,11 @@ export function entranceFrame(cast: EntranceCast, ms: number): EntranceFrame {
   const t = clamp(ms, 0, ENTRANCE_TOTAL_MS)
   const total = cast.home.length
   const players: PlayerPose[] = []
+  const all: PlayerPose[] = []
   let referee: PlayerPose | null = null
   for (const tr of tracks) {
     const pose = poseFor(tr, t, total)
+    all.push(pose)
     if (tr.id === REFEREE_ID) referee = pose
     else players.push(pose)
   }
@@ -581,7 +621,8 @@ export function entranceFrame(cast: EntranceCast, ms: number): EntranceFrame {
   return {
     players,
     ball,
-    focus: focusAt(cast, tracks, t),
+    // 무게중심은 심판까지 포함한 **배역 전원**에서 낸다(심판도 화면에 있어야 한다).
+    focus: focusAt(cast, tracks, all, t),
     // 심판 트랙은 항상 존재하므로 non-null이지만, 타입 안전을 위해 폴백을 둔다.
     referee: referee ?? poseFor(tracks[0], t, total),
     event: null,

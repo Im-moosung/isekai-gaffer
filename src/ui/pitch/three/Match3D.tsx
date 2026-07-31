@@ -15,7 +15,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { MatchEvent, MatchState } from '../../../engine/types'
 import type { ChoreoStep } from '../choreography'
 import { createCameraRig } from './camera'
-import { entranceFrame, entrancePhaseAt, type EntranceCast } from './entrance'
+import { entranceCameraMode, entranceFrame, type EntranceCast } from './entrance'
 import { FLASH_CONCEDED, FLASH_SCORED, createBall, flashQuad, goalBurst, type GoalBurst } from './fx3d'
 import { bindResize, createRendererHost, webgl2Available } from './host'
 import { computeFrame } from './movement'
@@ -194,7 +194,7 @@ export function Match3D(props: Match3DProps) {
       const scene = bundle.scene
       const camera = bundle.camera
 
-      const ball = createBall(THREE, { reducedMotion: reduced })
+      const ball = createBall(THREE)
       scene.add(ball.group)
       const flash = flashQuad(THREE, 0xffffff, { reducedMotion: reduced })
       flash.attach(camera)
@@ -337,9 +337,9 @@ export function Match3D(props: Match3DProps) {
           ref.root.visible = true
           ref.apply(ef.referee, elapsed)
           ball.update(ef.ball, dt)
-          // 방송 문법: 행진은 와이드 사이드라인 앵글, 정렬·소개는 터치라인 클로즈업.
-          const ph = entrancePhaseAt(ems)
-          camRig.setMode(ph === 'lineup' || ph === 'intro' ? 'reaction' : 'broadcast')
+          // 카메라 스크립트는 연출 모듈이 소유한다(entranceCameraMode) — 프레이밍 검증
+          // 테스트가 렌더와 같은 모드를 쓰게 하기 위해서다.
+          camRig.setMode(entranceCameraMode(ems))
           camRig.update({ focus: ef.focus, t: elapsed, dt, camera })
           post.render(dt)
           // 연출이 끝나면 킥오프 배치부터 새로 시작한다 — 입장 마지막 자세를 prev로

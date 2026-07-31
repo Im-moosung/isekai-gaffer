@@ -22,17 +22,12 @@ const clamp = (v: number, lo: number, hi: number) => (v < lo ? lo : v > hi ? hi 
 // ── 볼 ────────────────────────────────────────────────────────────
 /** 공식 5호구 반지름(m). movement.ts의 BALL_RADIUS와 같은 스케일. */
 export const BALL_R = 0.115
-/** 트레일 세그먼트 수. */
-export const TRAIL_SEGMENTS = 10
-/** 트레일 샘플 간격(m) — dt와 무관하게 공간 균일한 잔상. */
-export const TRAIL_STEP = 0.18
-/** 이 속도(m/s) 이상일 때만 트레일이 보인다(슛·롱패스에서만). */
-export const TRAIL_MIN_SPEED = 6
-/** 트레일 최대 불투명도. */
-const TRAIL_OPACITY = 0.42
-/** 속도 스무딩 시상수(s) — 프레임마다 켜졌다 꺼지는 깜빡임 방지. */
-const SPEED_TAU = 0.12
-/** 이 높이(m)에서 그림자가 최대로 커지고 옅어진다. */
+/**
+ * 이 높이(m)에서 그림자가 최대로 커지고 옅어진다.
+ *
+ * **볼 트레일을 걷어낸 뒤 "공이 떠 있다"를 말하는 유일한 단서**라 값이 중요하다.
+ * 실제 중계에서도 시청자는 잔디에 붙은 그림자와 공 사이의 간격으로 높이를 읽는다.
+ */
 const SHADOW_FADE_H = 6
 
 // ── 골 파티클 ─────────────────────────────────────────────────────
@@ -130,34 +125,43 @@ function pentagon(
 export interface BallOptions {
   /** 공 반지름(m). 기본 {@link BALL_R}. */
   radius?: number
-  /** true면 트레일을 만들지 않는다. */
-  reducedMotion?: boolean
-  /** 트레일 세그먼트 수. 기본 {@link TRAIL_SEGMENTS}. */
-  trail?: number
   /** 가죽 텍스처 가로 픽셀. 기본 256. */
   texSize?: number
 }
 
 export interface Ball3D {
-  /** 씬에 붙일 루트(공 + 그림자 + 트레일). */
+  /** 씬에 붙일 루트(공 + 접지 그림자). */
   group: THREE_NS.Group
   mesh: THREE_NS.Mesh
   shadow: THREE_NS.Mesh
-  /** 최신순 트레일 세그먼트. reduced-motion이면 빈 배열. */
-  trail: readonly THREE_NS.Mesh[]
-  /** 매 프레임 호출 — 위치·구름 회전·그림자·트레일 갱신. */
+  /**
+   * 매 프레임 호출 — 위치·구름 회전·그림자 갱신.
+   * @param dt 프레임 델타(s). 트레일 제거 후 현재 구현은 쓰지 않지만, 볼 연출이 다시
+   *           시간 적분을 필요로 할 때 호출부를 전부 고치지 않도록 계약에 남겨 둔다.
+   */
   update(ball: BallPose, dt: number): void
   dispose(): void
 }
 
 /**
- * 3D 볼. 절차 텍스처 구체 + 이동 방향 기반 구름 회전 + 컨택트 섀도우 + 짧은 트레일.
+ * 3D 볼. 절차 텍스처 구체 + 이동 방향 기반 구름 회전 + 컨택트 섀도우.
+ *
+ * **트레일은 없다(2026-07-31 제거).** 예전에는 0.18 m 간격으로 구체 10개를 뿌려
+ * 잔상을 흉내 냈는데, 실주행에서 "잔디에 떨어진 회색 쓰레기 10개"로 읽혔다. 근거:
+ *  1) 실제 축구 중계에 볼 트레일은 없다. 이 프로젝트의 3D 계층은 카메라 문법·dwell·
+ *     항력 궤적까지 전부 중계 문법에 맞춰 왔다 — 트레일만 게임 UI 어휘였다.
+ *  2) 잔상은 **번짐**으로 읽혀야 하는데, 크기·간격이 균일한 불투명 구체 10개는
+ *     번짐이 아니라 정지한 물체 10개로 보인다. 방송 카메라 거리(20~40 m)에서 공이
+ *     3~5 px이라 세그먼트도 같은 크기의 점이 되고, 속도 비례 축소·페이드를 넣어도
+ *     "점선"이라는 성질은 그대로다.
+ *  3) 높이 단서는 이미 컨택트 섀도우가 물리적으로 정확하게 준다({@link SHADOW_FADE_H}).
+ *     트레일은 그 위에 얹은 중복 신호였고, 오히려 그림자와 겹쳐 지저분했다.
+ *  4) 프레임당 메시 10개 · 머티리얼 10개가 사라진다(리듀스드 모션 분기도 함께).
+ *
  * @param THREE 주입된 three 네임스페이스
  */
 export function createBall(THREE: ThreeAPI, opts: BallOptions = {}): Ball3D {
   const r = opts.radius ?? BALL_R
-  const reduced = opts.reducedMotion === true
-  const segs = reduced ? 0 : Math.max(0, Math.round(opts.trail ?? TRAIL_SEGMENTS))
 
   const group = new THREE.Group()
   group.name = 'ball'
@@ -180,33 +184,12 @@ export function createBall(THREE: ThreeAPI, opts: BallOptions = {}): Ball3D {
   const shadowBase = shadowMat.opacity
   group.add(shadow)
 
-  // 트레일: 지오메트리는 공유, 머티리얼은 세그먼트마다(알파가 각자 달라야 한다).
-  const trailGeo = segs > 0 ? new THREE.SphereGeometry(r * 0.92, 10, 8) : null
-  const trail: THREE_NS.Mesh[] = []
-  for (let i = 0; i < segs; i++) {
-    const tm = new THREE.MeshBasicMaterial({
-      color: 0xdfe8ff,
-      transparent: true,
-      opacity: TRAIL_OPACITY * (1 - i / segs),
-      depthWrite: false,
-      toneMapped: false,
-    })
-    const seg = new THREE.Mesh(trailGeo as THREE_NS.SphereGeometry, tm)
-    seg.name = `ball-trail-${i}`
-    seg.visible = false
-    seg.scale.setScalar(Math.max(0.15, 1 - i * 0.07))
-    trail.push(seg)
-    group.add(seg)
-  }
-
-  const history: Vec3[] = []
   const axis = new THREE.Vector3()
   const spinQ = new THREE.Quaternion()
   let prev: Vec3 | null = null
-  let smoothSpeed = 0
   let disposed = false
 
-  function update(ball: BallPose, dt: number): void {
+  function update(ball: BallPose, _dt: number): void {
     if (disposed) return
     const y = ball.y > r ? ball.y : r
     mesh.position.set(ball.x, y, ball.z)
@@ -221,10 +204,6 @@ export function createBall(THREE: ThreeAPI, opts: BallOptions = {}): Ball3D {
         spinQ.setFromAxisAngle(axis, dist / r)
         mesh.quaternion.premultiply(spinQ)
       }
-      const step = Math.hypot(dx, dz, ball.y - prev.y)
-      const inst = dt > 0 ? step / dt : 0
-      const a = dt > 0 ? 1 - Math.exp(-dt / SPEED_TAU) : 0
-      smoothSpeed += (inst - smoothSpeed) * a
     }
     prev = { x: ball.x, y, z: ball.z }
 
@@ -234,25 +213,6 @@ export function createBall(THREE: ThreeAPI, opts: BallOptions = {}): Ball3D {
     const s = 1 + k * 1.6
     shadow.scale.set(s, 1, s)
     shadowMat.opacity = shadowBase * (1 - k * 0.8)
-
-    // ── 트레일: 공간 균일 샘플 + 빠를 때만 노출 ──
-    if (segs === 0) return
-    const head = history[0]
-    if (!head || Math.hypot(ball.x - head.x, y - head.y, ball.z - head.z) >= TRAIL_STEP) {
-      history.unshift({ x: ball.x, y, z: ball.z })
-      if (history.length > segs + 1) history.pop()
-    }
-    const on = smoothSpeed >= TRAIL_MIN_SPEED
-    for (let i = 0; i < segs; i++) {
-      const h = history[i + 1]
-      const seg = trail[i]
-      if (!on || !h) {
-        seg.visible = false
-        continue
-      }
-      seg.position.set(h.x, h.y, h.z)
-      seg.visible = true
-    }
   }
 
   function dispose(): void {
@@ -260,11 +220,10 @@ export function createBall(THREE: ThreeAPI, opts: BallOptions = {}): Ball3D {
     disposeTree(group)
     group.clear()
     group.removeFromParent()
-    history.length = 0
     prev = null
   }
 
-  return { group, mesh, shadow, trail, update, dispose }
+  return { group, mesh, shadow, update, dispose }
 }
 
 export interface BurstOptions {
