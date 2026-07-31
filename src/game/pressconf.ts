@@ -265,7 +265,9 @@ function titleTemplates(out: Outcome, team: string, opp: string): string[] {
     case 'narrow':
       return [
         `${team}, ${josa(opp, '을', '를')} 힘겹게 넘다`,
-        `진땀승... ${team}, ${opp} 제압`,
+        // '제압'은 완승의 어휘라 진땀승과 충돌한다(실캡처: "진땀승... 대한민국, 체코 제압").
+        // narrow는 한 골 차 신승이므로 버티고 지켜낸 쪽 어휘를 쓴다.
+        `진땀승... ${team}, ${opp} 상대 리드 지켜내다`,
         `${team}, ${opp} 상대 한 골 차 승부 웃다`,
       ]
     case 'win':
