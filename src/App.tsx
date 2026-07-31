@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react'
 // 예외 승인: App.tsx는 캠페인/데모 기본 XI 산정(lineup)을 위해
 // 엔진 모듈 직접 import를 허용한다(조립 최상단 진입점 한정).
 import { pickBestXI } from './engine/lineup'
+import { enforceUnavailable } from './ui/lineup/swap'
 import type { TacticState } from './engine/types'
-import { MatchScreen } from './ui/match/MatchScreen'
+import { MatchScreen, type MatchEndExtra } from './ui/match/MatchScreen'
 import { LandingScreen } from './ui/landing/LandingScreen'
 import { HubScreen } from './ui/campaign/HubScreen'
 import { EndingScreen } from './ui/campaign/EndingScreen'
@@ -109,6 +110,8 @@ interface PostMatch {
   stamina?: Record<string, number>
   /** 경기 종료 시점의 홈 전술 — 다음 경기 초기값으로 이월한다. */
   finalTactics?: TacticState
+  /** 사기 이월 + 이 경기 카드(징계 판정 입력). 데모는 쓰지 않는다. */
+  extra?: MatchEndExtra
 }
 
 type CampaignStep = 'hub' | 'match'
@@ -123,8 +126,17 @@ function CampaignFlow({ onExit }: { onExit(): void }) {
   const [carried, setCarried] = useState<TacticState | null>(null)
 
   const kor = useMemo(() => loadTeam('kor'), [])
+  // 출장정지 명단 — 이월 XI에 정지 선수가 남아 있으면 여기서 갈아끼운다(규정 위반 라인업 방지).
+  const bans = useCampaignStore(s => s.bans)
+  const suspended = useMemo(
+    () => Object.entries(bans).filter(([, n]) => n > 0).map(([id]) => id).sort(),
+    [bans],
+  )
   // MatchScreen 초기화 effect의 deps에 들어가므로 참조가 안정적이어야 한다.
-  const initialTactics = useMemo(() => carried ?? pickBestXI(kor), [carried, kor])
+  const initialTactics = useMemo(
+    () => enforceUnavailable(kor, carried ?? pickBestXI(kor, undefined, suspended), suspended),
+    [carried, kor, suspended],
+  )
 
   // 종료 → 엔딩(부모 store가 stage/ending을 갱신하면 여기로 수렴).
   if (stage === 'ended' || ending) {
@@ -159,8 +171,11 @@ function CampaignMatch({ tactics, onBackToHub }: {
   const currentOpponent = useCampaignStore(s => s.currentOpponent)
   const matchSeed = useCampaignStore(s => s.matchSeed)
   const startingStamina = useCampaignStore(s => s.startingStamina)
+  const startingMorale = useCampaignStore(s => s.startingMorale)
   const recordResult = useCampaignStore(s => s.recordResult)
   const stage = useCampaignStore(s => s.stage)
+  const bans = useCampaignStore(s => s.bans)
+  const cautions = useCampaignStore(s => s.cautions)
 
   const kor = useMemo(() => loadTeam('kor'), [])
   const teamName = kor.name.ko
@@ -180,9 +195,20 @@ function CampaignMatch({ tactics, onBackToHub }: {
   // GROUP_MATCHES에서 남겨 쓰는 것은 realScore 하나 — "참고 · 실제 역사 2-1" 기준선 표시용이다.
   const derived = useMemo(() => {
     const staminaOverride: Record<string, number> = {}
-    for (const p of kor.squad) staminaOverride[p.id] = startingStamina(p.id)
+    const moraleOverride: Record<string, number> = {}
+    for (const p of kor.squad) {
+      staminaOverride[p.id] = startingStamina(p.id)
+      moraleOverride[p.id] = startingMorale(p.id)
+    }
+    // 징계 상태는 킥오프 시점에 고정한다(경기 중 캠페인 스토어가 바뀔 일은 없지만,
+    // MatchScreen의 초기화 deps와 같은 memo에 묶어 참조 안정성을 보장한다).
+    const suspendedIds = Object.entries(bans).filter(([, n]) => n > 0).map(([id]) => id).sort()
+    const cautionByPlayer = { ...cautions }
     const gm: GroupMatch | undefined = isGroup ? GROUP_MATCHES.find(m => m.opponent === oppId) : undefined
-    return { staminaOverride, referenceScore: gm?.realScore, requireWinner: !isGroup }
+    return {
+      staminaOverride, moraleOverride, suspendedIds, cautionByPlayer,
+      referenceScore: gm?.realScore, requireWinner: !isGroup,
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [seed])
 
@@ -195,14 +221,17 @@ function CampaignMatch({ tactics, onBackToHub }: {
         seed={seed}
         initialTactics={tactics}
         staminaOverride={derived.staminaOverride}
+        moraleOverride={derived.moraleOverride}
+        suspendedIds={derived.suspendedIds}
+        cautionByPlayer={derived.cautionByPlayer}
         referenceScore={derived.referenceScore}
         requireWinner={derived.requireWinner}
-        onMatchEnd={(score, stamina, shootout, decisions, finalTactics) => {
+        onMatchEnd={(score, stamina, shootout, decisions, finalTactics, extra) => {
           const record: MatchRecord = {
             stage, opponentId: oppId, score,
             ...(shootout ? { shootout } : {}), decisions,
           }
-          setResult({ record, stamina, finalTactics })
+          setResult({ record, stamina, finalTactics, extra })
         }}
       />
     )
@@ -228,7 +257,7 @@ function CampaignMatch({ tactics, onBackToHub }: {
       teamName={teamName}
       onNext={() => {
         const { score, shootout, decisions } = result.record
-        recordResult(score, result.stamina ?? {}, shootout, decisions)
+        recordResult(score, result.stamina ?? {}, shootout, decisions, result.extra)
         // recordResult가 stage='ended'로 갱신한 경우 부모(CampaignFlow)가 엔딩을 렌더한다.
         onBackToHub(result.finalTactics ?? null)
       }}

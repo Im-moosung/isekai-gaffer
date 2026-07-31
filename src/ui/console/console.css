@@ -214,6 +214,19 @@
   font-size: var(--fs-xs);
   color: var(--t-low);
 }
+/* 상태 칩 줄 — 이름 오른쪽에 끼워 넣지 않고 전폭 한 줄을 준다.
+   카드 최소폭이 150px이라 [번호|이름|포지션|칩3개]를 한 줄에 넣으면 이름이 먼저 잘린다.
+   칩은 "문제 있는 선수"에게만 붙으므로 이 줄이 생기는 것 자체가 신호다 — 목록을 훑을 때
+   줄 수가 다른 카드가 튀어나와 오히려 더 빨리 눈에 든다. */
+.cs-card__sx {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+/* 출장정지 카드는 선택 자체가 막힌다(disabled). 왜 막혔는지 보이도록 테두리로 말한다. */
+.cs-card--susp {
+  border-color: var(--danger-line);
+  background: color-mix(in srgb, var(--danger) 7%, var(--s-2));
+}
 .cs-card__stamina {
   grid-column: 1 / -1;
   height: 5px;

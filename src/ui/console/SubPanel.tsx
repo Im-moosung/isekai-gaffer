@@ -3,6 +3,7 @@ import { useMatchStore } from '../../game/matchStore'
 import { MAX_SUBS, MAX_SUB_WINDOWS } from '../../engine/simulate'
 import type { MatchEvent, Player, SideState } from '../../engine/types'
 import { playerMatchStats, hasPlayerMatchStats, type PlayerMatchStats } from '../../game/playerStats'
+import { StatusChips } from '../common/StatusChips'
 import '../shell/shell.css'
 import './console.css'
 
@@ -25,6 +26,8 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
   const phase = useMatchStore(s => s.phase)
   const engine = useMatchStore(s => s.engine)
   const submitCommand = useMatchStore(s => s.submitCommand)
+  // 캠페인 징계 — 정지 선수는 벤치에 있어도 투입할 수 없고, 누적 경고는 칩으로 보인다.
+  const discipline = useMatchStore(s => s.discipline)
 
   const controlled = !!(onSelectOut && onSelectIn)
   const [outLocal, setOutLocal] = useState<string | null>(null)
@@ -50,9 +53,14 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
     .filter((x): x is { slot: Player['position']; player: Player } => !!x.player)
   const bench = squad.filter(p => !lineupIds.includes(p.id))
 
+  // 상대 벤치에는 우리 징계가 적용되지 않는다(캠페인이 추적하는 것은 우리 팀뿐).
+  const suspended = side === 'home' ? new Set(discipline.suspendedIds) : new Set<string>()
+  const cautionOf = (id: string) => (side === 'home' ? discipline.cautions[id] ?? 0 : 0)
+
   const swap = () => {
     setError(null)
     if (!out || !inSel) { setError('아웃/인 선수를 선택하세요'); return }
+    if (suspended.has(inSel)) { setError('출장정지 선수는 투입할 수 없습니다'); return }
     try {
       submitCommand(side, { type: 'sub', out, in: inSel })
       if (controlled) onConfirmed?.()
@@ -116,6 +124,8 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
             player={player}
             slot={slot}
             stamina={state.staminaByPlayer[player.id] ?? 0}
+            morale={state.moraleByPlayer[player.id]}
+            cautions={cautionOf(player.id)}
             stats={events ? playerMatchStats(events, player.id) : null}
             selected={out === player.id}
             disabled={!open}
@@ -132,9 +142,12 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
             player={player}
             slot={player.position}
             stamina={state.staminaByPlayer[player.id] ?? 0}
+            morale={state.moraleByPlayer[player.id]}
+            cautions={cautionOf(player.id)}
+            suspended={suspended.has(player.id)}
             stats={events ? playerMatchStats(events, player.id) : null}
             selected={inSel === player.id}
-            disabled={!open || !out}
+            disabled={!open || !out || suspended.has(player.id)}
             onSelect={() => pickIn(player.id)}
           />
         ))}
@@ -149,8 +162,14 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
   )
 }
 
-function SubCard({ player, slot, stamina, stats, selected, disabled, onSelect }: {
+function SubCard({ player, slot, stamina, morale, cautions, suspended, stats, selected, disabled, onSelect }: {
   player: Player; slot: Player['position']; stamina: number
+  /** 사기 0~100. 상태 칩이 밴드를 벗어날 때만 표시한다. */
+  morale?: number
+  /** 대회 미소멸 누적 경고(이번 경기 이전). */
+  cautions?: number
+  /** 이번 경기 출장정지 — 벤치에 남아 있어도 투입 불가. */
+  suspended?: boolean
   /** 이 경기 개인 기록. null이면 아직 경기가 진행되지 않은 것(표시 안 함). */
   stats: PlayerMatchStats | null
   selected: boolean; disabled: boolean; onSelect: () => void
@@ -160,7 +179,7 @@ function SubCard({ player, slot, stamina, stats, selected, disabled, onSelect }:
   return (
     <button
       type="button"
-      className={`cs-card${selected ? ' cs-card--sel' : ''}`}
+      className={`cs-card${selected ? ' cs-card--sel' : ''}${suspended ? ' cs-card--susp' : ''}`}
       aria-pressed={selected}
       disabled={disabled}
       onClick={onSelect}
@@ -168,6 +187,17 @@ function SubCard({ player, slot, stamina, stats, selected, disabled, onSelect }:
       <span className="cs-card__num">{player.number}</span>
       <span className="cs-card__name">{player.name.ko}</span>
       <span className="cs-card__slot">{slot}</span>
+      {/* 상태 칩은 체력바 앞에 온다 — 스캔은 왼쪽에서 시작하고, "지금 문제가 있는가"가
+          "체력이 몇 %인가"보다 먼저 읽혀야 한다. */}
+      <StatusChips
+        className="cs-card__sx"
+        input={{
+          suspended, cautions, morale,
+          matchYellows: stats?.yellows ?? 0,
+          sentOff: (stats?.reds ?? 0) > 0,
+          stamina,
+        }}
+      />
       <span className="cs-card__stamina" aria-label={`체력 ${pct}%`}>
         {/* 데이터 바인딩 폭(%)만 인라인 — pitch 기하 예외와 동일 취급. 색은 토큰. */}
         <span className={`cs-card__bar${low ? ' cs-card__bar--low' : ''}`} style={{ width: `${pct}%` }} />

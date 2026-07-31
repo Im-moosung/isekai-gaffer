@@ -151,7 +151,23 @@ export interface StartMatchOpts {
   firstHalfScript?: { events: MatchEvent[]; score: [number, number] }
   /** 체력 이월: 지정된 선수의 홈 시작 스태미나를 100 대신 이 값으로 덮어쓴다. */
   staminaOverride?: Record<string, number>
+  /** 사기 이월: 지정된 선수의 홈 시작 사기를 70 대신 이 값으로 덮어쓴다. */
+  moraleOverride?: Record<string, number>
+  /** 캠페인 징계 상태(경고 누적·출장정지). 데모는 넘기지 않는다 = 징계 없음. */
+  discipline?: Discipline
 }
+
+/** 이 경기에 적용되는 우리 팀 징계 상태.
+ *  워룸·작전판이 프롭 드릴링 없이 읽도록 matchStore가 킥오프 시점 스냅샷으로 들고 있는다
+ *  (진실의 원천은 campaignStore이고, 경기 중에는 바뀌지 않는다). */
+export interface Discipline {
+  /** 이번 경기 출장정지 — 선발·교체 투입 모두 불가. */
+  suspendedIds: string[]
+  /** 대회 미소멸 누적 경고(장). 1장 보유자가 이번 경기에 또 받으면 다음 경기 결장이다. */
+  cautions: Record<string, number>
+}
+
+const NO_DISCIPLINE: Discipline = { suspendedIds: [], cautions: {} }
 
 /** 지시 축 한국어 라벨. attackFocus는 값도 한글로 매핑. */
 const INSTRUCTION_LABEL: Record<keyof Instructions, string> = {
@@ -311,6 +327,8 @@ export interface MatchUIState {
   planDeviation: number
   /** 적응 지연 만료 분(구조 변경 직후). 0이면 지연 없음. */
   adaptUntil: number
+  /** 이 경기 우리 팀 징계 상태(킥오프 시점 스냅샷). 데모·기본값은 빈 상태. */
+  discipline: Discipline
   startMatch(home: Team, away: Team, seed: number, opts?: StartMatchOpts): void
   /** 킥오프 — 'pre'에서 재생 시작('playing'). */
   kickoff(): void
@@ -352,6 +370,7 @@ const initial = {
   matchPlan: null as TacticState | null,
   planDeviation: 0,
   adaptUntil: 0,
+  discipline: NO_DISCIPLINE,
 }
 
 export const useMatchStore = create<MatchUIState>((set, get) => ({
@@ -368,7 +387,13 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
         if (id in engine.home.staminaByPlayer) engine.home.staminaByPlayer[id] = v
       }
     }
-    set({ ...initial, engine, schedule: breakSchedule(seed) })
+    // 사기 이월: createMatch는 전원 70으로 초기화한다. 같은 규약으로 지정 선수만 덮어쓴다.
+    if (opts?.moraleOverride) {
+      for (const [id, v] of Object.entries(opts.moraleOverride)) {
+        if (id in engine.home.moraleByPlayer) engine.home.moraleByPlayer[id] = v
+      }
+    }
+    set({ ...initial, engine, schedule: breakSchedule(seed), discipline: opts?.discipline ?? NO_DISCIPLINE })
   },
   kickoff: () => {
     const { engine, phase } = get()

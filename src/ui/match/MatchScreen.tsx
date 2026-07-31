@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, lazy, Suspense, Component, type R
 import type { Team, TacticState, MatchEvent, DecisionEntry } from '../../engine/types'
 import { useMatchStore } from '../../game/matchStore'
 import type { MomentKind } from '../../game/matchSession'
+import { teamCardTally } from '../../game/playerStats'
 import { commentateAt, commentateTimeline, flowLineAt, type CommentaryCtx } from '../../game/commentary'
 import * as ctts from '../../audio/commentary-tts'
 import { Scorebug } from '../broadcast/Scorebug'
@@ -112,6 +113,12 @@ interface MatchScreenProps {
   firstHalfScript?: { events: MatchEvent[]; score: [number, number] }
   /** 체력 이월: 홈 선수별 시작 스태미나 덮어쓰기(캠페인). */
   staminaOverride?: Record<string, number>
+  /** 사기 이월: 홈 선수별 시작 사기 덮어쓰기(캠페인). */
+  moraleOverride?: Record<string, number>
+  /** 캠페인 출장정지 명단(우리 팀). 워룸·교체 패널이 잠그는 근거. */
+  suspendedIds?: string[]
+  /** 캠페인 미소멸 누적 경고(선수 id → 장수). 1장 보유자 표시의 근거. */
+  cautionByPlayer?: Record<string, number>
   /** 조별 경기 참고 표시용 실제 스코어 [한국, 상대]. */
   referenceScore?: [number, number]
   /** 토너먼트: 무승부 시 승부차기로 승자를 가려야 한다. */
@@ -132,7 +139,17 @@ interface MatchScreenProps {
     shootout: [number, number] | undefined,
     decisionLog: DecisionEntry[],
     finalTactics: TacticState,
+    extra: MatchEndExtra,
   ): void
+}
+
+/** onMatchEnd 6번째 인자 — 캠페인 이월에 필요한 부가 상태.
+ *  위치 인자를 더 늘리지 않으려고 객체 하나로 묶었다. 데모는 무시한다. */
+export interface MatchEndExtra {
+  /** 종료 시점 홈 사기(다음 경기 사기 이월). */
+  moraleByPlayer: Record<string, number>
+  /** 이 경기 홈 선수별 카드(경고 누적·출장정지 판정 입력). */
+  cards: Record<string, { yellows: number; reds: number }>
 }
 
 /** 경기 화면 조립 — ★ 2모드 분리(스펙 §17 Task 4): "시뮬 관전 중인지 작전 지시
@@ -153,7 +170,8 @@ interface MatchScreenProps {
  *  onMatchEnd 유무로 데모/캠페인 동작을 분기(props 하위호환). */
 export function MatchScreen({
   home, away, seed,
-  initialTactics, firstHalfScript, staminaOverride, referenceScore, requireWinner, onMatchEnd,
+  initialTactics, firstHalfScript, staminaOverride, moraleOverride, suspendedIds, cautionByPlayer,
+  referenceScore, requireWinner, onMatchEnd,
   context = 'FIFA 월드컵 2026', demoNote,
 }: MatchScreenProps) {
   const phase = useMatchStore(s => s.phase)
@@ -201,8 +219,13 @@ export function MatchScreen({
       ...(initialTactics ? { homeTactics: initialTactics } : {}),
       ...(firstHalfScript ? { firstHalfScript } : {}),
       ...(staminaOverride ? { staminaOverride } : {}),
+      ...(moraleOverride ? { moraleOverride } : {}),
+      ...(suspendedIds || cautionByPlayer
+        ? { discipline: { suspendedIds: suspendedIds ?? [], cautions: cautionByPlayer ?? {} } }
+        : {}),
     })
-  }, [home, away, seed, startMatch, initialTactics, firstHalfScript, staminaOverride])
+  }, [home, away, seed, startMatch, initialTactics, firstHalfScript, staminaOverride, moraleOverride,
+      suspendedIds, cautionByPlayer])
 
   // 중계 컨텍스트 — 해설위원이 감독의 지시를 알아보는 재료(§3.5).
   // decisionLog는 개입이 있을 때만 참조가 바뀌므로 매 분 재계산되지 않는다.
@@ -426,6 +449,11 @@ export function MatchScreen({
       shootout,
       decisionLog,
       structuredClone(engine.home.tactics),
+      {
+        moraleByPlayer: { ...engine.home.moraleByPlayer },
+        // 우리 팀(home) 카드만 센다 — 상대 징계는 캠페인이 추적하지 않는다.
+        cards: teamCardTally(engine.events, engine.home.team.id),
+      },
     )
   }
 

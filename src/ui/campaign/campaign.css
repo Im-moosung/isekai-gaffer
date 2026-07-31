@@ -627,3 +627,13 @@
   text-align: right;
   font-weight: 800;
 }
+
+/* 허브 히어로의 징계 한 줄 — 워룸에 들어가기 전에 "누가 못 뛰는가"를 먼저 말한다.
+   색은 워룸 상태 칩과 같다(정지=danger, 경고=warn) — 같은 사실은 화면이 달라도 같은 색. */
+.hub-hero__discipline {
+  margin: var(--sp-2) 0 0;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
+}
+.hub-hero__susp { color: var(--danger); font-weight: 700; }
+.hub-hero__booked { color: var(--warn); }

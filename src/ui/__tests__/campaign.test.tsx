@@ -13,6 +13,28 @@ const BANNED = ['최악', '한심', '형편없', '멍청']
 beforeEach(() => store().reset())
 afterEach(() => cleanup())
 
+describe('HubScreen 징계 고지', () => {
+  it('징계가 없으면 줄 자체가 없다', () => {
+    store().startCampaign(7)
+    const { container } = render(<HubScreen onProceed={() => {}} />)
+    expect(container.querySelector('.hub-hero__discipline')).toBeNull()
+  })
+
+  it('출장정지·경고 1장 보유자를 워룸에 들어가기 전에 이름으로 말한다', () => {
+    store().startCampaign(7)
+    // kor 스쿼드 실제 id로 징계를 만든다(이름 매핑까지 확인하기 위해).
+    store().recordResult([1, 0], {}, undefined, [], {
+      cards: { p_kor_04: { yellows: 2, reds: 0 }, p_kor_07: { yellows: 1, reds: 0 } },
+    })
+    const { container } = render(<HubScreen onProceed={() => {}} />)
+    const line = container.querySelector('.hub-hero__discipline')!
+    expect(line.querySelector('.hub-hero__susp')!.textContent).toContain('출장정지')
+    expect(line.querySelector('.hub-hero__booked')!.textContent).toContain('한 장 더')
+    // id가 아니라 한국어 이름으로 나와야 한다.
+    expect(line.textContent).not.toContain('p_kor_')
+  })
+})
+
 describe('HubScreen 스모크', () => {
   it('캠페인 시작 상태에서 cze 히어로 카드·여정 사다리를 렌더하고 CTA가 onProceed를 호출한다', () => {
     store().startCampaign(7)

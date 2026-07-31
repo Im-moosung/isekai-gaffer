@@ -5,6 +5,7 @@ import type { Team, TacticState, FormationId, LineupSlot, Player, Position } fro
 import { slotCoords } from '../pitch/formations'
 import { swapPlayers, substitute, autoFill, fitLevel } from './swap'
 import { PlayerCard } from '../common/PlayerCard'
+import { StatusChips, type StatusInput } from '../common/StatusChips'
 import './lineup.css'
 
 const FORMATIONS: FormationId[] = ['4-3-3', '4-2-3-1', '4-4-2', '3-5-2', '4-1-4-1', '5-4-1']
@@ -43,14 +44,25 @@ function shortName(ko: string): string {
  *
  *  @param embedded 전술 센터 안에 끼워 넣는 모드 — 전체화면 높이·배경을 벗는다.
  *  @param staminaByPlayer 킥오프 전 컨디션(캠페인 이월 체력 포함).
- *  @param moraleByPlayer 사기(선택 카드에만 — 리스트까지 두 줄이면 행이 뭉갠다). */
-export function LineupEditor({ team, tactics, onChange, embedded, staminaByPlayer, moraleByPlayer }: {
+ *  @param moraleByPlayer 사기. 상세 카드에는 게이지로, 목록에는 상태 칩으로 나간다.
+ *  @param unavailableIds 출장정지 등 이번 경기에 쓸 수 없는 선수 — 선택·자동배치에서 잠근다.
+ *  @param cautionByPlayer 대회 미소멸 누적 경고(선수 id → 장수).
+ *
+ *  ★ 상태 칩(StatusChips)에 **체력은 넣지 않는다.** 이 화면에는 이미 MiniStamina가
+ *    같은 3단 눈금(40/70)으로 선발·벤치 전원에 붙어 있어, 칩까지 얹으면 같은 값이 한 행에
+ *    두 번 나온다. 칩은 여기서 "체력만으로는 알 수 없는 것" — 징계·경고·사기 — 만 말한다.
+ *    반대로 작전판 교체 탭(SubPanel)에는 숫자 눈금이 없으므로 거기서는 체력도 칩으로 낸다. */
+export function LineupEditor({
+  team, tactics, onChange, embedded, staminaByPlayer, moraleByPlayer, unavailableIds, cautionByPlayer,
+}: {
   team: Team
   tactics: TacticState
   onChange(next: TacticState): void
   embedded?: boolean
   staminaByPlayer?: Record<string, number>
   moraleByPlayer?: Record<string, number>
+  unavailableIds?: readonly string[]
+  cautionByPlayer?: Record<string, number>
 }) {
   const [selected, setSelected] = useState<string | null>(null)
   // 벤치 상세는 선택(교체)과 별개다 — 행 클릭은 교체 선택, [상세]는 능력치 열람.
@@ -68,16 +80,27 @@ export function LineupEditor({ team, tactics, onChange, embedded, staminaByPlaye
 
   const setLineup = (next: LineupSlot[]) => onChange({ ...tactics, lineup: next })
 
+  const banned = new Set(unavailableIds ?? [])
+  const suspendedBench = bench.filter(p => banned.has(p.id))
+  const chipInput = (id: string) => ({
+    suspended: banned.has(id),
+    cautions: cautionByPlayer?.[id] ?? 0,
+    morale: moraleByPlayer?.[id],
+  })
+
   function changeFormation(f: FormationId) {
     // 라인업 편집기는 킥오프 전에만 열린다 — 벤치 투입이 자유로운 시점이므로 후보는
     // 스쿼드 전체다(기본 scope 'squad'). 현재 선발은 적합도가 같을 때만 유지된다.
-    onChange({ ...tactics, formation: f, lineup: autoFill(team, f, lineup.map(l => l.playerId)) })
+    // 자동 배치도 정지 선수를 세우면 안 된다 — 잠근 자리로 자동으로 들어가면 잠금이 무의미하다.
+    onChange({ ...tactics, formation: f, lineup: autoFill(team, f, lineup.map(l => l.playerId), 'squad', unavailableIds) })
     setSelected(null)
   }
 
   /** 두 선수 id 사이의 이동을 상황(선발/벤치)에 맞는 순수 함수로 분기 적용. */
   function applyMove(aId: string, bId: string) {
     if (aId === bId) return
+    // 정지 선수는 선발로 올라갈 수 없다. 클릭·드래그 양쪽이 여기로 모이므로 한 곳에서 막는다.
+    if (banned.has(aId) || banned.has(bId)) return
     const aStarter = lineupIds.has(aId)
     const bStarter = lineupIds.has(bId)
     if (aStarter && bStarter) setLineup(swapPlayers(lineup, aId, bId))
@@ -138,6 +161,7 @@ export function LineupEditor({ team, tactics, onChange, embedded, staminaByPlaye
                   left={pos.left}
                   top={pos.top}
                   stamina={staminaByPlayer?.[slot.playerId]}
+                  status={chipInput(slot.playerId)}
                   selected={selected === slot.playerId}
                   onClick={() => handleClick(slot.playerId)}
                 />
@@ -166,6 +190,17 @@ export function LineupEditor({ team, tactics, onChange, embedded, staminaByPlaye
                 총원이 몇인지 모르면 스크롤할 이유 자체가 전달되지 않는다. */}
             <span className="lu-bench__count section__meta">
               전체 <span className="num">{bench.length}</span>명 · S1–S{bench.length}
+              {/* 정지자가 있으면 헤더에서 먼저 말한다 — 목록을 끝까지 훑어야 알 수 있으면
+                  "왜 이 선수가 안 골라지지"를 스크롤하다가 발견하게 된다. */}
+              {suspendedBench.length > 0 && (
+                <>
+                  {' · '}
+                  <span className="lu-bench__susp">
+                    출장정지 <span className="num">{suspendedBench.length}</span>명
+                    {' '}({suspendedBench.map(p => p.name.ko).join(', ')})
+                  </span>
+                </>
+              )}
             </span>
           </header>
           <div className="lu-bench__pane scroll-pane">
@@ -176,6 +211,8 @@ export function LineupEditor({ team, tactics, onChange, embedded, staminaByPlaye
                     player={player}
                     slotId={`S${i + 1}`}
                     stamina={staminaByPlayer?.[player.id]}
+                    status={chipInput(player.id)}
+                    suspended={banned.has(player.id)}
                     selected={selected === player.id}
                     expanded={detail === player.id}
                     onClick={() => handleClick(player.id)}
@@ -279,8 +316,9 @@ function MiniStamina({ value, showValue }: { value: number; showValue?: boolean 
   )
 }
 
-function PitchChip({ player, slot, left, top, stamina, selected, onClick }: {
+function PitchChip({ player, slot, left, top, stamina, status, selected, onClick }: {
   player: Player; slot: Position; left: number; top: number; stamina?: number
+  status?: StatusInput
   selected: boolean; onClick(): void
 }) {
   const { setRef, attributes, listeners, isDragging, isOver, dragStyle } = useDragDrop(player.id)
@@ -306,6 +344,7 @@ function PitchChip({ player, slot, left, top, stamina, selected, onClick }: {
       </span>
       <span className="lu-chip__name">{shortName(player.name.ko)}</span>
       {stamina != null && <MiniStamina value={stamina} />}
+      {status && <StatusChips className="lu-chip__sx" input={status} />}
     </button>
   )
 }
@@ -313,8 +352,11 @@ function PitchChip({ player, slot, left, top, stamina, selected, onClick }: {
 /** 벤치 행 — 슬롯 ID(S1…)·번호·이름·포지션·컨디션 한 줄.
  *  행 자체는 교체 선택(드래그·클릭), 오른쪽 [상세]는 능력치 카드 토글이다.
  *  버튼 안에 버튼을 넣을 수 없어 형제로 둔다. */
-function BenchRow({ player, slotId, stamina, selected, expanded, onClick, onToggleDetail }: {
+function BenchRow({ player, slotId, stamina, status, suspended, selected, expanded, onClick, onToggleDetail }: {
   player: Player; slotId: string; stamina?: number; selected: boolean; expanded: boolean
+  status?: StatusInput
+  /** 출장정지 — 행 자체를 비활성화하고 이유를 적는다. [상세]는 계속 열린다. */
+  suspended?: boolean
   onClick(): void; onToggleDetail(): void
 }) {
   const { setRef, attributes, listeners, isDragging, isOver, dragStyle } = useDragDrop(player.id)
@@ -324,12 +366,14 @@ function BenchRow({ player, slotId, stamina, selected, expanded, onClick, onTogg
       <button
         ref={setRef}
         type="button"
-        className={`lu-card${selected ? ' lu-card--sel' : ''}${isOver ? ' lu-card--over' : ''}${isDragging ? ' lu-card--drag' : ''}`}
+        className={`lu-card${selected ? ' lu-card--sel' : ''}${isOver ? ' lu-card--over' : ''}${isDragging ? ' lu-card--drag' : ''}${suspended ? ' lu-card--susp' : ''}`}
         style={dragStyle}
         {...attributes}
         {...listeners}
-        aria-label={`${player.name.ko} ${player.position} 벤치 ${slotId}${staLabel}`}
+        aria-label={`${player.name.ko} ${player.position} 벤치 ${slotId}${staLabel}${suspended ? ' 출장정지' : ''}`}
         aria-pressed={selected}
+        aria-disabled={suspended || undefined}
+        disabled={suspended}
         onClick={onClick}
       >
         <span className="lu-card__slotid num">{slotId}</span>
@@ -337,6 +381,7 @@ function BenchRow({ player, slotId, stamina, selected, expanded, onClick, onTogg
         <span className="lu-card__name">{player.name.ko}</span>
         <span className="lu-card__pos">{player.position}</span>
         {stamina != null && <MiniStamina value={stamina} showValue />}
+        {status && <StatusChips className="lu-card__sx" input={status} />}
       </button>
       <button
         type="button"

@@ -44,6 +44,8 @@ export function HubScreen({ onProceed }: { onProceed(): void }) {
   const groupRank = useCampaignStore(s => s.groupRank)
   const ending = useCampaignStore(s => s.ending)
   const currentOpponent = useCampaignStore(s => s.currentOpponent)
+  const bans = useCampaignStore(s => s.bans)
+  const cautions = useCampaignStore(s => s.cautions)
 
   if (stage === 'ended' || ending) return null
 
@@ -53,6 +55,12 @@ export function HubScreen({ onProceed }: { onProceed(): void }) {
   const styleNotes = (opp.profile as { styleNotes?: string }).styleNotes
   const hist = historyLine(stage)
   const remaining = 8 - records.length
+
+  // 징계는 전술 센터에 들어가기 **전에** 알아야 한다 — 워룸에서 잠긴 카드를 보고 나서야
+  // "왜 못 쓰지"를 알게 되면 이미 계획을 그 선수 위에 세운 뒤다.
+  const nameOf = (id: string) => kor.squad.find(p => p.id === id)?.name.ko ?? id
+  const suspended = Object.entries(bans).filter(([, n]) => n > 0).map(([id]) => nameOf(id)).sort()
+  const booked = Object.entries(cautions).filter(([, n]) => n > 0).map(([id]) => nameOf(id)).sort()
 
   return (
     <AppShell
@@ -111,6 +119,22 @@ export function HubScreen({ onProceed }: { onProceed(): void }) {
           {hist ? <> · {hist}</> : null}
         </p>
         {styleNotes ? <p className="hub-hero__notes">{styleNotes}</p> : null}
+        {(suspended.length > 0 || booked.length > 0) && (
+          <p className="hub-hero__discipline" aria-label="징계 현황">
+            {suspended.length > 0 && (
+              <span className="hub-hero__susp">
+                출장정지 <span className="num">{suspended.length}</span>명 · {suspended.join(', ')}
+              </span>
+            )}
+            {suspended.length > 0 && booked.length > 0 && <span aria-hidden="true"> · </span>}
+            {booked.length > 0 && (
+              <span className="hub-hero__booked">
+                경고 1장 <span className="num">{booked.length}</span>명 · {booked.join(', ')}
+                {' '}— 한 장 더 받으면 다음 경기 결장
+              </span>
+            )}
+          </p>
+        )}
       </article>
 
       <JourneyLadder

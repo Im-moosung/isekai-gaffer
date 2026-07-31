@@ -4,7 +4,7 @@
 // 예외 규정: positionFitness는 "시뮬 실행" 함수가 아니라 (선수, 슬롯)만 받는 순수
 // 적합도 계산 함수이므로 UI 계층에서 import 를 허용한다. 계획 Global Constraints 의
 // "엔진 함수 금지"는 경기 시뮬을 돌리는 실행 함수(simulate/playTo 등)를 가리킨다.
-import type { Team, FormationId, LineupSlot, Player, Position } from '../../engine/types'
+import type { Team, FormationId, LineupSlot, Player, Position, TacticState } from '../../engine/types'
 import { positionFitness } from '../../engine/fitness'
 import { XI_SLOTS } from '../pitch/formations'
 
@@ -72,14 +72,22 @@ export type AutoFillScope = 'squad' | 'starters-only'
  *       미스매치(예: 3-5-2인데 ST가 정말 둘뿐)는 그대로 남고 리스크 카드가 경고한다. */
 export function autoFill(
   team: Team, formation: FormationId, preferIds?: string[], scope: AutoFillScope = 'squad',
+  unavailableIds?: readonly string[],
 ): LineupSlot[] {
   const slots = XI_SLOTS[formation]
   const prefer = preferIds ? new Set(preferIds) : null
   const lock = scope === 'starters-only' && prefer !== null
   const fit = (p: Player, slot: Position) => positionFitness(p, slot)
 
+  // 출장정지 등으로 뛸 수 없는 선수는 후보에서 통째로 뺀다. 11명을 못 채울 만큼
+  // 빠지는 일은 스쿼드(23명 이상) 규모상 없지만, 그런 경우엔 제외를 포기하고
+  // 11명을 채우는 쪽을 택한다 — 라인업이 비면 화면 전체가 무너진다.
+  const banned = unavailableIds && unavailableIds.length > 0 ? new Set(unavailableIds) : null
+  const available = banned ? team.squad.filter(p => !banned.has(p.id)) : team.squad
+  const squad = available.length >= slots.length ? available : team.squad
+
   // 후보 모집단. 경기 중(lock)에는 현재 선발 11인이 전부다.
-  const pool = lock ? team.squad.filter(p => prefer!.has(p.id)) : team.squad
+  const pool = lock ? squad.filter(p => prefer!.has(p.id)) : squad
 
   // (1) 희소 슬롯 우선 그리디.
   const order = slots
@@ -97,7 +105,7 @@ export function autoFill(
       if (d > 0 || (d === 0 && prefer !== null && prefer.has(p.id) && !prefer.has(best.id))) best = p
     }
     // lock인데 선발이 11명 미만이면 pool이 마를 수 있다 — 그때만 스쿼드 전체로 보충한다.
-    if (best === undefined) best = team.squad.find(p => !used.has(p.id))!
+    if (best === undefined) best = squad.find(p => !used.has(p.id)) ?? team.squad.find(p => !used.has(p.id))!
     picked[i] = best
     used.add(best.id)
   }
@@ -121,4 +129,24 @@ export function autoFill(
   }
 
   return slots.map((slot, i) => ({ slot, playerId: xi[i].id }))
+}
+
+/** 출장정지 선수가 선발에 남아 있으면 대체 배치한 전술을 돌려준다(순수).
+ *
+ *  왜 필요한가: 캠페인은 직전 경기의 종료 시점 전술을 다음 경기로 이월한다. 그 XI에
+ *  경고 2장으로 정지된 선수가 그대로 들어 있으면, 화면을 열자마자 규정 위반 라인업이
+ *  된다. 이월·추천·포메이션 변경 등 XI가 생성되는 모든 길목에서 이 함수를 통과시킨다.
+ *
+ *  정지자가 없으면 **원본 참조를 그대로** 돌려준다 — 참조가 바뀌면 MatchScreen의
+ *  초기화 effect가 매 렌더 재실행된다(App.tsx의 useMemo 규약). */
+export function enforceUnavailable(
+  team: Team, tactics: TacticState, unavailableIds: readonly string[],
+): TacticState {
+  if (unavailableIds.length === 0) return tactics
+  const banned = new Set(unavailableIds)
+  if (!tactics.lineup.some(l => banned.has(l.playerId))) return tactics
+  return {
+    ...tactics,
+    lineup: autoFill(team, tactics.formation, tactics.lineup.map(l => l.playerId), 'squad', unavailableIds),
+  }
 }

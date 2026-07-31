@@ -9,12 +9,21 @@ import { XI_SLOTS, mapFormation } from './formations'
  * @param team squad + (선택) profile을 가진 팀. profile이 있으면 미지정 formation을
  *   profile.preferredFormations[0] 매핑값으로 결정한다(AI가 시그니처 포메이션으로 출전).
  * @param formation 명시하면 그대로 사용. 미지정 시 프로필 첫 선호 포메이션 매핑(없으면 4-3-3).
+ * @param unavailableIds 출장정지 등으로 뽑을 수 없는 선수 id. 11명을 못 채울 만큼
+ *   빠지면 제외를 포기하고 스쿼드 전체로 되돌아간다(빈 라인업 방지).
  */
-export function pickBestXI(team: { squad: Player[]; profile?: Team['profile'] }, formation?: FormationId): TacticState {
+export function pickBestXI(
+  team: { squad: Player[]; profile?: Team['profile'] },
+  formation?: FormationId,
+  unavailableIds?: readonly string[],
+): TacticState {
   const f = formation ?? mapFormation(team.profile?.preferredFormations[0] ?? '4-3-3')
+  const banned = unavailableIds && unavailableIds.length > 0 ? new Set(unavailableIds) : null
+  const available = banned ? team.squad.filter(p => !banned.has(p.id)) : team.squad
+  const squad = available.length >= XI_SLOTS[f].length ? available : team.squad
   const used = new Set<string>()
   const lineup = XI_SLOTS[f].map(slot => {
-    const candidate = team.squad
+    const candidate = squad
       .filter(p => !used.has(p.id))
       .sort((a, b) => positionFitness(b, slot) - positionFitness(a, slot))[0]
     used.add(candidate.id)

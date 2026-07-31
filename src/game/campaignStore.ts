@@ -19,6 +19,40 @@ export interface MatchRecord {
   decisions: DecisionEntry[] // 이 경기의 감독 개입 로그(기자회견 근거)
 }
 
+// ── 징계(경고 누적·출장정지) ────────────────────────────────────────
+// 규정 근거는 docs/research/2026-discipline-rules.md의 대응표를 보라.
+// 요지: 대회 중 경고 2장 누적 → 다음 경기 출장정지, 퇴장 → 최소 1경기 정지,
+// 미소멸 경고는 지정 스테이지를 마치면 소멸(정지는 소멸하지 않는다).
+
+/** 경고 누적 임계 — 이 장수에 도달하면 다음 경기 출장정지. */
+export const CAUTION_THRESHOLD = 2
+/** 퇴장의 기본 정지 경기 수. 가중(폭력행위 등)은 사안별이라 모델링하지 않고 최소치만 적용한다. */
+export const RED_SUSPENSION = 1
+/** 미소멸 누적 경고가 소멸하는 시점 — **이 스테이지 경기를 마친 뒤** 전부 지운다.
+ *
+ *  ★ 2026은 소멸이 **두 번**이다. 2022까지는 8강 종료 후 한 번뿐이었는데, FIFA 평의회가
+ *  2026-04-28 밴쿠버 회의에서 규정을 개정해 **조별리그 종료 후에도** 한 번 지우기로 했다
+ *  ("single yellow cards ... will be cancelled after the group stage and then again after
+ *  the quarter-finals"). 2025년 5월판 규정 PDF 원문(Art. 10.3)만 보면 8강 1회로 잘못 읽는다.
+ *  출처·대응표는 docs/research/2026-discipline-rules.md. */
+export const CAUTION_WIPE_AFTER: readonly CampaignStage[] = ['group3', 'qf']
+/** 사기 기준선. 엔진(simulate/strength)이 초기값으로 쓰는 70과 같아야 한다. */
+export const MORALE_BASELINE = 70
+
+/** 한 경기에서 한 선수가 받은 카드 집계(MatchState.events에서 파생). */
+export interface MatchCardTally {
+  yellows: number
+  reds: number
+}
+
+/** recordResult의 선택 부가 입력. 위치 인자를 더 늘리지 않기 위해 객체로 받는다. */
+export interface RecordExtra {
+  /** 이 경기 우리 팀 선수별 카드 집계. 미지정이면 징계 상태가 변하지 않는다(데모·테스트 호환). */
+  cards?: Record<string, MatchCardTally>
+  /** 경기 종료 시점 사기 — 다음 경기 시작 사기 이월용. */
+  moraleByPlayer?: Record<string, number>
+}
+
 export interface CampaignState {
   seed: number
   stage: CampaignStage
@@ -26,6 +60,12 @@ export interface CampaignState {
   groupRank: 1 | 2 | 3 | null // 조별 종료 후 산정
   path: 'first' | 'second' | null
   fatigueCarry: Record<string, number> // 경기 종료 시 스태미나 이월
+  /** 경기 종료 시 사기 이월. 체력과 달리 기준선(70)으로 되돌아가므로 회복이자 냉각이다. */
+  moraleCarry: Record<string, number>
+  /** 미소멸 누적 경고(장). 임계 도달 시 정지로 전환되며 0으로 초기화된다. */
+  cautions: Record<string, number>
+  /** 잔여 출장정지 경기 수. >0이면 다음 경기에 뛸 수 없다. */
+  bans: Record<string, number>
   ending: { reached: CampaignStage; champion: boolean } | null
   /** 지난 경기 하프타임 팀토크 톤(캠페인 저장 — MatchRecord 흐름과 별개 필드).
    *  같은 톤을 연이어 쓰면 팀토크 효과가 반감된다(반복 감쇠). 미사용/첫 경기는 null. */
@@ -38,8 +78,17 @@ export interface CampaignState {
     staminaByPlayer: Record<string, number>,
     shootout?: [number, number],
     decisions?: DecisionEntry[],
+    extra?: RecordExtra,
   ): void
   startingStamina(playerId: number | string): number
+  /** 다음 경기 시작 사기. 기준선 70으로 70% 회귀 — 고양도 침체도 한 경기 뒤엔 옅어진다. */
+  startingMorale(playerId: number | string): number
+  /** 이 선수가 다음 경기에 출장정지인가. */
+  isSuspended(playerId: number | string): boolean
+  /** 이 선수의 미소멸 누적 경고 수(0~). */
+  cautionCount(playerId: number | string): number
+  /** 다음 경기 출장정지 선수 id 전부(결정론 정렬). */
+  suspendedIds(): string[]
   /** 팀토크 톤 기록(경기 종료와 무관하게 하프타임에 즉시 저장). 반복 감쇠 판정 근거. */
   setLastTeamTalkTone(tone: TeamTalkTone): void
   reset(): void
@@ -107,6 +156,58 @@ function computeKorRank(groupRecords: MatchRecord[]): 1 | 2 | 3 {
   return rank <= 1 ? 1 : rank === 2 ? 2 : 3
 }
 
+/**
+ * 한 경기가 끝난 시점의 징계 상태 전이(순수·결정론).
+ *
+ * 순서가 중요하다.
+ *  (1) **먼저 정지를 소화 처리한다.** 정지 중이던 선수는 방금 끝난 이 경기를 결장했으므로
+ *      잔여 경기 수를 1 줄인다. 나중에 줄이면 이번 경기에서 새로 받은 카드와 뒤섞인다.
+ *  (2) 이번 경기 카드를 반영한다. 퇴장자는 정지 +1이고, **2옐로 퇴장을 구성한 경고 2장은
+ *      누적에 합산하지 않는다**(FIFA 규정). 직접 레드는 그 전에 받아 둔 경고를 그대로 누적한다.
+ *  (3) 임계 도달분을 정지로 전환하고 누적을 0으로 되돌린다.
+ *  (4) 소멸 스테이지를 마쳤으면 **미소멸 경고만** 전부 지운다 — 이미 확정된 정지는 남는다.
+ *
+ * @param cards 미지정(데모·기존 테스트)이면 (1)의 소화 처리만 하고 새 징계는 없다.
+ */
+export function applyDiscipline(
+  prevCautions: Record<string, number>,
+  prevBans: Record<string, number>,
+  cards: Record<string, MatchCardTally> | undefined,
+  stage: CampaignStage,
+): { cautions: Record<string, number>; bans: Record<string, number> } {
+  const cautions: Record<string, number> = { ...prevCautions }
+  const bans: Record<string, number> = {}
+
+  // (1) 이번 경기로 소화된 정지 차감.
+  for (const [id, n] of Object.entries(prevBans)) {
+    const left = n - 1
+    if (left > 0) bans[id] = left
+  }
+
+  // (2)(3) 이번 경기 카드 반영.
+  for (const [id, tally] of Object.entries(cards ?? {})) {
+    if (tally.reds > 0) {
+      bans[id] = (bans[id] ?? 0) + RED_SUSPENSION
+      // 2옐로 퇴장이면 그 두 장은 누적에서 뺀다. 직접 레드(경고 0~1장)면 뺄 것이 없다.
+      const pair = tally.yellows >= CAUTION_THRESHOLD ? CAUTION_THRESHOLD : 0
+      cautions[id] = (cautions[id] ?? 0) + (tally.yellows - pair)
+    } else {
+      cautions[id] = (cautions[id] ?? 0) + tally.yellows
+    }
+    if (cautions[id] >= CAUTION_THRESHOLD) {
+      bans[id] = (bans[id] ?? 0) + 1
+      cautions[id] = 0
+    }
+  }
+
+  // (4) 소멸 시점.
+  if (CAUTION_WIPE_AFTER.includes(stage)) {
+    for (const id of Object.keys(cautions)) delete cautions[id]
+  }
+  for (const id of Object.keys(cautions)) if (cautions[id] <= 0) delete cautions[id]
+  return { cautions, bans }
+}
+
 const initial = {
   seed: 0,
   stage: 'group1' as CampaignStage,
@@ -114,6 +215,9 @@ const initial = {
   groupRank: null as 1 | 2 | 3 | null,
   path: null as 'first' | 'second' | null,
   fatigueCarry: {} as Record<string, number>,
+  moraleCarry: {} as Record<string, number>,
+  cautions: {} as Record<string, number>,
+  bans: {} as Record<string, number>,
   ending: null as { reached: CampaignStage; champion: boolean } | null,
   lastTeamTalkTone: null as TeamTalkTone | null,
 }
@@ -140,7 +244,7 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
     return seed * 31 + records.length
   },
 
-  recordResult: (score, staminaByPlayer, shootout, decisions = []) => {
+  recordResult: (score, staminaByPlayer, shootout, decisions = [], extra) => {
     const state = get()
     const { stage } = state
     if (stage === 'ended') throw new Error('이미 종료된 캠페인')
@@ -150,6 +254,9 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
     const records = [...state.records, record]
     // 체력 이월: 이번 경기 종료 스태미나를 저장(다음 경기 시작 시 70% 회복)
     const fatigueCarry = { ...state.fatigueCarry, ...staminaByPlayer }
+    // 사기 이월: 종료 사기를 저장(다음 경기 시작 시 기준선 70으로 70% 회귀)
+    const moraleCarry = { ...state.moraleCarry, ...(extra?.moraleByPlayer ?? {}) }
+    const { cautions, bans } = applyDiscipline(state.cautions, state.bans, extra?.cards, stage)
     // 반복 감쇠용: 이번 경기 하프타임 팀토크 톤을 캠페인에 저장(다음 경기에서 같은 톤이면 반감).
     // 외침도 kind:'teamtalk'이므로 detail.tone(HT 팀토크만 보유)이 있는 항목만 취한다.
     const talk = [...decisions].reverse().find(d => d.kind === 'teamtalk' && typeof d.detail?.tone === 'string')
@@ -157,21 +264,21 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
 
     // --- 조별 스테이지: 무승부 허용, 3경기 후 순위 산정 ---
     if (stage === 'group1') {
-      set({ records, fatigueCarry, lastTeamTalkTone, stage: 'group2' })
+      set({ records, fatigueCarry, moraleCarry, cautions, bans, lastTeamTalkTone, stage: 'group2' })
       return
     }
     if (stage === 'group2') {
-      set({ records, fatigueCarry, lastTeamTalkTone, stage: 'group3' })
+      set({ records, fatigueCarry, moraleCarry, cautions, bans, lastTeamTalkTone, stage: 'group3' })
       return
     }
     if (stage === 'group3') {
       const groupRecords = records.filter(r => r.stage.startsWith('group'))
       const rank = computeKorRank(groupRecords)
       if (rank === 1 || rank === 2) {
-        set({ records, fatigueCarry, lastTeamTalkTone, groupRank: rank, path: rank === 1 ? 'first' : 'second', stage: 'r32' })
+        set({ records, fatigueCarry, moraleCarry, cautions, bans, lastTeamTalkTone, groupRank: rank, path: rank === 1 ? 'first' : 'second', stage: 'r32' })
       } else {
         // 3위 이하 → 즉시 탈락 엔딩
-        set({ records, fatigueCarry, lastTeamTalkTone, groupRank: 3, stage: 'ended', ending: { reached: 'group3', champion: false } })
+        set({ records, fatigueCarry, moraleCarry, cautions, bans, lastTeamTalkTone, groupRank: 3, stage: 'ended', ending: { reached: 'group3', champion: false } })
       }
       return
     }
@@ -187,14 +294,14 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
     }
 
     if (!won) {
-      set({ records, fatigueCarry, lastTeamTalkTone, stage: 'ended', ending: { reached: stage, champion: false } })
+      set({ records, fatigueCarry, moraleCarry, cautions, bans, lastTeamTalkTone, stage: 'ended', ending: { reached: stage, champion: false } })
       return
     }
     if (stage === 'final') {
-      set({ records, fatigueCarry, lastTeamTalkTone, stage: 'ended', ending: { reached: 'final', champion: true } })
+      set({ records, fatigueCarry, moraleCarry, cautions, bans, lastTeamTalkTone, stage: 'ended', ending: { reached: 'final', champion: true } })
       return
     }
-    set({ records, fatigueCarry, lastTeamTalkTone, stage: NEXT_TOURNAMENT[stage as 'r32' | 'r16' | 'qf' | 'sf'] })
+    set({ records, fatigueCarry, moraleCarry, cautions, bans, lastTeamTalkTone, stage: NEXT_TOURNAMENT[stage as 'r32' | 'r16' | 'qf' | 'sf'] })
   },
 
   // 다음 경기 시작 스태미나: 이월값 + (100-이월값)*0.7 (70% 회복). 미기록/첫 경기는 100.
@@ -203,6 +310,24 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
     if (carry === undefined) return 100
     return Math.min(100, carry + (100 - carry) * 0.7)
   },
+
+  // 다음 경기 시작 사기: 기준선 70으로 70% 회귀. 체력은 100(만점)으로 회복하지만 사기는
+  // 만점이 목표가 아니다 — 대승 뒤의 고양도, 대패 뒤의 침체도 한 경기 지나면 대부분 옅어진다.
+  startingMorale: (playerId) => {
+    const carry = get().moraleCarry[String(playerId)]
+    if (carry === undefined) return MORALE_BASELINE
+    return MORALE_BASELINE + (carry - MORALE_BASELINE) * 0.3
+  },
+
+  isSuspended: (playerId) => (get().bans[String(playerId)] ?? 0) > 0,
+
+  cautionCount: (playerId) => get().cautions[String(playerId)] ?? 0,
+
+  suspendedIds: () =>
+    Object.entries(get().bans)
+      .filter(([, n]) => n > 0)
+      .map(([id]) => id)
+      .sort(),
 
   setLastTeamTalkTone: (tone) => set({ lastTeamTalkTone: tone }),
 

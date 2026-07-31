@@ -77,6 +77,8 @@ export function TacticsCenter({ onKickoff, referenceScore }: {
 }) {
   const engine = useMatchStore(s => s.engine)
   const submitCommand = useMatchStore(s => s.submitCommand)
+  // 캠페인 징계 — 워룸이 정지 선수를 잠그고 경고 보유자를 구분하는 근거(데모는 빈 상태).
+  const discipline = useMatchStore(s => s.discipline)
   // 코치진 권고는 적용 후에도 닫기 전까지 남긴다 — 근거를 읽으며 수치를 다듬는 것이
   // 이 화면의 본래 용도이므로, 자동 사라짐(타이머)은 오히려 방해다.
   const [reasons, setReasons] = useState<{ field: string; text: string }[]>([])
@@ -107,9 +109,10 @@ export function TacticsCenter({ onKickoff, referenceScore }: {
       ...home.tactics,
       ...rec.patch,
       instructions: { ...home.tactics.instructions, ...(rec.patch.instructions ?? {}) },
+      // 추천도 정지 선수를 세우면 안 된다 — 자동 경로 전부가 같은 제외 목록을 통과해야 한다.
       lineup: formation === home.tactics.formation
         ? home.tactics.lineup
-        : autoFill(home.team, formation, home.tactics.lineup.map(l => l.playerId)),
+        : autoFill(home.team, formation, home.tactics.lineup.map(l => l.playerId), 'squad', discipline.suspendedIds),
     }
     submitCommand(SIDE, { type: 'formation', tactics: merged })
     setReasons(rec.reasons)
@@ -159,6 +162,8 @@ export function TacticsCenter({ onKickoff, referenceScore }: {
             embedded
             staminaByPlayer={home.staminaByPlayer}
             moraleByPlayer={home.moraleByPlayer}
+            unavailableIds={discipline.suspendedIds}
+            cautionByPlayer={discipline.cautions}
           />
         </Section>
       </div>

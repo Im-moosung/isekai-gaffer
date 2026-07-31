@@ -72,6 +72,26 @@ export function playerMatchStats(events: MatchEvent[], playerId: string): Player
   return s
 }
 
+/**
+ * 한 팀의 선수별 카드 집계 — 캠페인 징계(경고 누적·출장정지)의 입력.
+ * 카드를 한 장도 받지 않은 선수는 키 자체를 만들지 않는다(빈 항목이 이월 상태를 부풀리지 않게).
+ *
+ * ★ teamId로 거르는 이유: events에는 양 팀 카드가 섞여 있고, 선수 id는 팀 간 충돌할 수 있다.
+ */
+export function teamCardTally(
+  events: MatchEvent[], teamId: string,
+): Record<string, { yellows: number; reds: number }> {
+  const out: Record<string, { yellows: number; reds: number }> = {}
+  for (const e of events) {
+    if (e.teamId !== teamId || !e.playerId) continue
+    if (e.type !== 'yellow' && e.type !== 'red') continue
+    const row = (out[e.playerId] ??= { yellows: 0, reds: 0 })
+    if (e.type === 'yellow') row.yellows++
+    else row.reds++
+  }
+  return out
+}
+
 /** 화면에 내보일 만한 기록이 하나라도 있는가(전부 0이면 표시를 접기 위한 판정). */
 export function hasPlayerMatchStats(s: PlayerMatchStats): boolean {
   return s.shots > 0 || s.goals > 0 || s.assists > 0 || s.fouls > 0

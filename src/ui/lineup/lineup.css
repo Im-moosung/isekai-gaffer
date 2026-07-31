@@ -118,6 +118,8 @@
   box-shadow: var(--shadow-1);
 }
 .lu-chip:active { cursor: grabbing; }
+/* 피치 칩은 폭이 좁다(피치의 19%, 54~84px) — 칩 두 개가 나란히 서면 넘친다. 줄바꿈을 허용한다. */
+.lu-chip__sx { max-width: 100%; flex-wrap: wrap; justify-content: center; }
 .lu-chip__line {
   display: flex;
   align-items: center;
@@ -222,7 +224,9 @@
 .lu-card {
   flex: 1 1 auto;
   display: grid;
-  grid-template-columns: 30px 26px minmax(0, 1fr) auto auto;
+  /* 6열: 슬롯ID · 번호 · 이름 · 포지션 · 체력 · 상태칩.
+     칩은 문제 있는 선수에게만 붙고 없으면 StatusChips가 null을 반환하므로 열이 접힌다. */
+  grid-template-columns: 30px 26px minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: var(--sp-2);
   min-height: var(--tap-min);
@@ -266,6 +270,14 @@
 .lu-card--sel { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand) inset; }
 .lu-card--over { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand); }
 .lu-card--drag { opacity: 0.9; }
+/* 출장정지 — 행이 disabled라 클릭·드래그가 통째로 막힌다. 왜 막혔는지 테두리로 말하고,
+   칩('정지')이 사유를 적는다. 흐리게(opacity)만 처리하면 "왜"가 전달되지 않는다. */
+.lu-card--susp {
+  border-color: var(--danger-line);
+  background: color-mix(in srgb, var(--danger) 8%, var(--s-1));
+  cursor: not-allowed;
+}
+.lu-card--susp .lu-card__name { color: var(--t-mid); }
 
 /* 벤치 항목의 능력치 열람 — FM26이 이걸 막아 "CM 96/97에도 있던 기능"이라고
    비판받았다. 행 안에 두면 교체 선택과 충돌하므로 형제 버튼으로 뺀다. */
@@ -314,8 +326,11 @@
   .lu-chip--ok .lu-chip__line { border-color: var(--warn-line); }
   .lu-chip--bad .lu-chip__line { border-color: var(--danger-line); }
   .lu-chip--sel .lu-chip__line { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand); }
-  .lu-card { grid-template-columns: 28px 24px minmax(0, 1fr) auto auto; }
+  .lu-card { grid-template-columns: 28px 24px minmax(0, 1fr) auto auto auto; }
   /* 바는 접고 수치만 남긴다 — 좁은 폭에서 4px 바는 읽히지 않는데 자리는 먹는다. */
   .lu-card .lu-sta { width: auto; }
   .lu-card .lu-sta__track { display: none; }
 }
+
+/* 벤치 헤더의 출장정지 고지 — 목록 안 칩과 같은 색을 쓴다(같은 사실은 같은 색으로). */
+.lu-bench__susp { color: var(--danger); font-weight: 700; }
