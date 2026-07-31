@@ -7,6 +7,8 @@ interface ScorebugProps {
   score: [number, number]
   minute: number
   live: boolean
+  /** 일시정지 — LIVE 자리를 정지 표식이 대신 쓴다(같은 슬롯, 반대 상태). */
+  paused?: boolean
   /** 무사건 분 빨리감기 연출 — 분 숫자에 빠른 틱 펄스를 준다. */
   fastForward?: boolean
   /** 득점 순간 스코어 펄스(골 드라마 연동). */
@@ -30,7 +32,7 @@ interface ScorebugProps {
  * ★ 스코어 숫자 자체는 애니메이션하지 않는다(펄스는 컨테이너에만).
  */
 export function Scorebug({
-  home, away, score, minute, live, fastForward, pulse, context = 'FIFA 월드컵 2026',
+  home, away, score, minute, live, paused, fastForward, pulse, context = 'FIFA 월드컵 2026',
 }: ScorebugProps) {
   return (
     <div className="bc-scorebug" role="status" aria-label="스코어">
@@ -47,12 +49,20 @@ export function Scorebug({
       </div>
 
       <div className="bc-scorebug__meta">
-        {live && (
+        {/* LIVE와 일시정지는 **같은 슬롯을 나눠 쓴다** — 서로 반대 상태라 동시에 뜰 일이
+            없고, 시선이 이미 "지금 진행 중인가"를 여기서 읽는다. 새 자리를 만들면
+            제어 pod와 겹치거나 화면 어딘가에 부유 요소가 하나 더 생긴다. */}
+        {paused ? (
+          <span className="bc-scorebug__paused">
+            <span className="bc-scorebug__paused-mark" aria-hidden="true" />
+            일시정지
+          </span>
+        ) : live ? (
           <span className="bc-scorebug__live">
             <span className="live-dot bc-scorebug__live-dot" aria-hidden="true" />
             LIVE
           </span>
-        )}
+        ) : null}
         <span className={`bc-scorebug__clock num${fastForward ? ' bc-scorebug__clock--ff' : ''}`}>
           {minute}&apos;
         </span>

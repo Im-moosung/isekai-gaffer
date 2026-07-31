@@ -609,6 +609,25 @@ export interface CameraLike {
   fov: number
   lookAt(x: number, y: number, z: number): void
   updateProjectionMatrix(): void
+  /** 뷰포트 종횡비(w/h). three PerspectiveCamera가 가진 값 그대로.
+   *  주어지면 {@link fovForAspect}가 **가로 화각을 보존**하도록 fov를 보정한다. */
+  aspect?: number
+}
+
+/**
+ * 좁은 화면에서 **가로 화각을 지키는** 세로 fov 보정(Hor+ 프레이밍).
+ *
+ * 왜 필요한가: three의 fov는 **세로** 화각이다. 캔버스가 {@link FRAME_ASPECT}보다
+ * 좁아지면(세로로 긴 폰) 세로 화각은 그대로인데 가로만 잘린다 — 모든 샷 프리셋과
+ * 프레이밍 계산이 FRAME_ASPECT 기준으로 캘리브레이션되어 있으므로, 390px 세로
+ * 화면에서는 "슈터가 프레임 밖으로 밀리는" 그 결함이 그대로 재발한다.
+ * 그래서 좁아진 비율만큼 세로 fov를 넓혀 **가로로 담기는 폭을 일정하게** 유지한다.
+ * 넓은 화면(aspect ≥ FRAME_ASPECT)에서는 아무것도 하지 않는다 — 여유는 그냥 여유다.
+ */
+export function fovForAspect(fov: number, aspect?: number): number {
+  if (!aspect || !(aspect > 0) || aspect >= FRAME_ASPECT) return fov
+  const halfTan = Math.tan((fov * Math.PI) / 360) * (FRAME_ASPECT / aspect)
+  return clamp((360 / Math.PI) * Math.atan(halfTan), 18, 70)
 }
 
 /**
@@ -617,8 +636,9 @@ export interface CameraLike {
  */
 export function applyCamera(camera: CameraLike, shot: CameraShot): void {
   camera.position.set(shot.pos.x, shot.pos.y, shot.pos.z)
-  if (camera.fov !== shot.fov) {
-    camera.fov = shot.fov
+  const fov = fovForAspect(shot.fov, camera.aspect)
+  if (camera.fov !== fov) {
+    camera.fov = fov
     camera.updateProjectionMatrix()
   }
   camera.lookAt(shot.lookAt.x, shot.lookAt.y, shot.lookAt.z)

@@ -34,6 +34,8 @@ interface Match3DProps {
   dwellMs?: number
   /** 시퀀스 재생(공격) 팀. */
   sequenceSide?: 'home' | 'away'
+  /** 일시정지 — 시뮬 시계를 전진시키지 않고 렌더도 건너뛴다(마지막 프레임 정지). */
+  paused?: boolean
   /**
    * 이 시퀀스의 근거 이벤트. 하이라이트가 아닌 분에는 **null**을 넘겨야 한다 —
    * 미지정이면 movement가 state.events에서 그 분의 이벤트를 역추적하는데, 그러면
@@ -312,13 +314,26 @@ export function Match3D(props: Match3DProps) {
       let bloomDropped = false
       /** localStorage에 기록한 스케일(같은 값을 반복해서 쓰지 않기 위한 캐시). */
       let storedScale = scaler.scale
+      /**
+       * 일시정지 동안 흘려보낸 실시간(s). **시뮬 시계에서 통째로 뺀다** —
+       * 정지 중에도 timer는 계속 돌아야(getDelta가 다음 프레임에 폭주하지 않게) 하지만,
+       * 카메라 드리프트·안무·세리머니는 전부 elapsed의 함수라 그대로 두면 재개 순간
+       * 정지한 시간만큼 화면이 점프한다. 여기서 빼면 재개는 "이어서"가 된다.
+       */
+      let frozenS = 0
 
       const tick = (now: number): void => {
         raf = requestAnimationFrame(tick)
         const p = propsRef.current
         timer.update(now)
         const rawDt = timer.getDelta()
-        const elapsed = timer.getElapsed()
+        if (p.paused) {
+          // 정지 프레임: 아무것도 갱신하지 않고 렌더도 건너뛴다.
+          // 캔버스는 마지막으로 그린 프레임을 그대로 들고 있으므로 화면이 얼어붙는다.
+          frozenS += rawDt
+          return
+        }
+        const elapsed = timer.getElapsed() - frozenS
         const dt = clamp(rawDt, 0, 0.1)
 
         // ── 성능 가드: 기능이 아니라 **해상도**를 거래한다 ────────

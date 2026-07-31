@@ -1,5 +1,8 @@
 import { chromium } from 'playwright-core';
-import fs from 'node:fs';
+import fs from 'node:fs'
+
+/** 개발 서버 주소. 전/후 비교를 위해 별도 워크트리의 서버를 가리킬 수 있어야 한다. */
+const BASE = process.env.BASE || 'http://localhost:5173';
 
 const SHOTS = '/Users/moo/Projects/daker/MH_Soccer-Manager/docs/audit/shots';
 const OUT = '/Users/moo/Projects/daker/MH_Soccer-Manager/docs/audit';
@@ -113,7 +116,7 @@ for (const [w, h] of VIEWPORTS) {
     console.log(`  shot ${tag}-${name}`);
   };
 
-  await page.goto('http://localhost:5173/', { waitUntil: 'networkidle' });
+  await page.goto(BASE + '/', { waitUntil: 'networkidle' });
   await page.waitForTimeout(2500);
   await snap('01-landing');
 

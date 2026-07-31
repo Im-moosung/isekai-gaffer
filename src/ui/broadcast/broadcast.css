@@ -115,6 +115,27 @@
   animation: bc-live-pulse 1.4s ease-in-out infinite;
 }
 
+/* 일시정지 — LIVE의 반대 상태라 같은 슬롯을 쓴다. 색은 중립(--t-mid)이다:
+   라임(--live)은 "지금 진행 중" 전용이고, 빨강은 카드·실점 전용이다. */
+.bc-scorebug__paused {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--t-mid);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  letter-spacing: var(--ls-caps);
+}
+/* 정지 픽토그램(‖) — 이모지 대신 순수 도형. OS 폰트에 흔들리지 않는다.
+   색은 currentcolor여야 한다(대비 실측 스크립트가 텍스트를 지울 때 함께 사라져야
+   배경 휘도를 정직하게 잰다 — 흰 막대가 남으면 그 자신이 최악 배경이 된다). */
+.bc-scorebug__paused-mark {
+  width: 8px;
+  height: 10px;
+  border-left: 3px solid currentcolor;
+  border-right: 3px solid currentcolor;
+}
+
 @keyframes bc-live-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.35; }

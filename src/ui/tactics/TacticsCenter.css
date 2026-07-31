@@ -22,7 +22,10 @@
    하위 선택자만으로는 못 잡고 :has()로 "지금이 pre인가"를 루트에서 판정한다. */
 .ms-root:has(.ms-stage--pre) .ms-pitch-wrap,
 .ms-root:has(.ms-stage--pre) .bc-scorebug,
-.ms-root:has(.ms-stage--pre) .bc-ticker {
+.ms-root:has(.ms-stage--pre) .bc-ticker,
+/* 스코어버그를 감춘 상단 바에는 이제 아무것도 남지 않는다(제어 그룹은 스테이지 안으로
+   내려갔다). 빈 바가 테두리 한 줄과 여백만 남기고 서 있을 이유가 없다. */
+.ms-root:has(.ms-stage--pre) .ms-topbar {
   display: none;
 }
 /* 스테이지가 잘라내던 것을 문서 스크롤에 돌려준다. */

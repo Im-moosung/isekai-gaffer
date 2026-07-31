@@ -19,7 +19,7 @@ const RING_C = 2 * Math.PI * RING_R
  * ★ 연타 방지가 필수다(FM26 실제 버그: 같은 외침을 두 번 연속 고르면 UI가 멈춘다).
  *   버튼 disabled + 같은 분 재진입 차단 두 겹으로 막는다.
  */
-export function ShoutBar() {
+export function ShoutBar({ frozen = false }: { frozen?: boolean }) {
   const engine = useMatchStore(s => s.engine)
   const phase = useMatchStore(s => s.phase)
   const lastShoutMinute = useMatchStore(s => s.lastShoutMinute)
@@ -36,7 +36,10 @@ export function ShoutBar() {
   const left = Math.max(0, Math.min(1, remaining / SHOUT_COOLDOWN))
 
   function fire(t: ShoutType) {
-    if (onCooldown || firedMinuteRef.current === minute) return
+    // ★ 일시정지는 **아무 개입 권한도 주지 않는다**. 외침은 개입이므로 여기서 막는다 —
+    //   막지 않으면 "멈춰 놓고 천천히 고른 뒤 외친다"가 되어, 정지 시점이 곧 자원이라는
+    //   개입 등급 설계(matchStore.interventionLevel)에 구멍이 난다.
+    if (frozen || onCooldown || firedMinuteRef.current === minute) return
     firedMinuteRef.current = minute
     shout(t)
   }
@@ -48,7 +51,7 @@ export function ShoutBar() {
           key={t}
           type="button"
           className="btn btn--secondary btn--sm sb-btn"
-          disabled={onCooldown}
+          disabled={frozen || onCooldown}
           onClick={() => fire(t)}
         >
           {onCooldown && (
@@ -66,7 +69,9 @@ export function ShoutBar() {
           {SHOUT_LABEL[t]}
         </button>
       ))}
-      {onCooldown && (
+      {/* 왜 버튼이 죽었는지 말해 준다 — 이유 없는 disabled는 고장으로 읽힌다. */}
+      {frozen && <span className="sb-cool">일시정지 중</span>}
+      {!frozen && onCooldown && (
         <span
           className="sb-cool num"
           role="progressbar"

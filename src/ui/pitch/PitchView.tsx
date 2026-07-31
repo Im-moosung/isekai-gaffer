@@ -57,6 +57,8 @@ interface PitchViewProps {
   dwellMs?: number
   /** 시퀀스를 재생하는 공격 팀(공·무버 색). 미지정 시 'home'. */
   sequenceSide?: 'home' | 'away'
+  /** 일시정지 — 안무 스텝 전진과 라이브 무브먼트 클럭을 멈춘다. */
+  paused?: boolean
   /** 전술 시각화 레이어(수비 라인·압박 존·패스 레인) + 라이브 무브먼트 — 2D 작전판 전용. */
   analysis?: boolean
   /** 블록 지표(길이·폭 m) 콜백 — 작전판 칩이 실시간 수치를 띄운다. */
@@ -108,17 +110,31 @@ function useSmoothSeparation(raw: Coord[], t: number, on: boolean): Coord[] {
 
 /** 안무 스텝 인덱스 — 이전에 ChoreoLayer 안에 있었지만, 공 위치가 **도트 배치(블록 이동)**
  *  에도 필요해져 PitchView로 끌어올렸다. */
-function useChoreoStep(sequence: ChoreoStep[] | undefined, dwellMs: number): number {
+function useChoreoStep(sequence: ChoreoStep[] | undefined, dwellMs: number, paused = false): number {
   const [target, setTarget] = useState(0)
+  /** 지금 재생 중인 스텝. 정지 후 재개할 때 **여기서부터** 다시 예약한다. */
+  const curRef = useRef(0)
+  /** 직전 시퀀스 참조. 시퀀스 교체(=분 전환)와 정지 재개를 구분하는 유일한 근거다 —
+   *  둘을 구분하지 못하면 재개할 때마다 안무가 처음으로 되감긴다. */
+  const seqRef = useRef<ChoreoStep[] | undefined>(undefined)
   useEffect(() => {
-    setTarget(0)
-    if (!sequence) return
+    if (seqRef.current !== sequence) {
+      seqRef.current = sequence
+      curRef.current = 0
+      setTarget(0)
+    }
+    if (!sequence || paused) return
+    const cur = curRef.current
+    const base = cur > 0 ? sequence[cur - 1].t : 0
     const timers: ReturnType<typeof setTimeout>[] = []
-    for (let k = 1; k < sequence.length; k++) {
-      timers.push(setTimeout(() => setTarget(k), sequence[k - 1].t * dwellMs))
+    // 남은 스텝만 이어서 예약한다. 정지 중 흐른 시간은 세지 않으므로 재개하면
+    // 현재 스텝의 잔여 시간이 처음부터 다시 흐른다 — SVG 폴백에서 허용하는 근사다
+    // (3D·Pixi는 진행도 기준점을 밀어 정확히 이어 붙인다).
+    for (let k = cur + 1; k < sequence.length; k++) {
+      timers.push(setTimeout(() => { curRef.current = k; setTarget(k) }, (sequence[k - 1].t - base) * dwellMs))
     }
     return () => timers.forEach(clearTimeout)
-  }, [sequence, dwellMs])
+  }, [sequence, dwellMs, paused])
   return target
 }
 
@@ -129,14 +145,16 @@ function useChoreoStep(sequence: ChoreoStep[] | undefined, dwellMs: number): num
  * 공 위치는 안무 스텝 경계에서 계단식으로 바뀌므로 지수 평활을 걸어 넘긴다 —
  * 블록 전체가 한 프레임에 4m 순간이동하면 시각화가 아니라 글리치로 읽힌다.
  */
-function useLiveClock(on: boolean, ball: Coord | null, possess: number): LiveState {
+function useLiveClock(on: boolean, ball: Coord | null, possess: number, paused = false): LiveState {
   const targetRef = useRef<LiveTarget>({ ball, possess })
   targetRef.current = { ball, possess }
   const [live, setLive] = useState<LiveState>({ t: 0, ball, possess })
   const reduced = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
     && window.matchMedia('(prefers-reduced-motion: reduce)').matches
   useEffect(() => {
-    if (!on || reduced || typeof requestAnimationFrame !== 'function') return
+    // ★ 정지에서는 루프만 멈추고 **반환값은 그대로 live**를 쓴다(아래 return 참조).
+    //   on을 내려 버리면 평활 이전의 raw 좌표로 되돌아가 블록이 한 프레임에 튄다.
+    if (!on || paused || reduced || typeof requestAnimationFrame !== 'function') return
     // ★ setInterval이 아니라 rAF다. 이 컴포넌트는 경기 내내 마운트되어 있어서 타이머를
     //   물고 있으면 재생 체인의 "다음 타이머"를 매번 가로챈다(MatchScreen 재생 루프가
     //   advanceTimersToNextTimer로 1분씩 넘어간다). rAF는 그 큐에 끼지 않는다.
@@ -161,8 +179,9 @@ function useLiveClock(on: boolean, ball: Coord | null, possess: number): LiveSta
     }
     id = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(id)
-  }, [on, reduced])
+  }, [on, paused, reduced])
   // 정지 모드(reduced/off)에서는 목표값을 그대로 쓴다 — 움직이지 않되 위치는 맞는다.
+  // 일시정지는 여기 해당하지 않는다 — 마지막으로 평활된 위치에서 얼어붙어야 한다.
   return on && !reduced ? live : { t: 0, ball, possess }
 }
 
@@ -173,11 +192,11 @@ function useLiveClock(on: boolean, ball: Coord | null, possess: number): LiveSta
  *
  *  ★ analysis=true(2D 작전판)에서는 선수가 **미세하게 계속 움직인다**(shape.liveTeamCoords):
  *    선수별 ±1m 재정렬 + 공·점유에 따른 블록 슬라이드. 공만 왔다갔다 하던 화면을 고친다. */
-export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels = false, highlightId, ghost, onDotClick, sequence, dwellMs, sequenceSide = 'home', analysis = false, onMetrics }: PitchViewProps) {
+export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels = false, highlightId, ghost, onDotClick, sequence, dwellMs, sequenceSide = 'home', analysis = false, paused = false, onMetrics }: PitchViewProps) {
   const playing = !!sequence && sequence.length > 0
-  const stepIdx = Math.min(useChoreoStep(sequence, dwellMs ?? 3000), (sequence?.length ?? 1) - 1)
+  const stepIdx = Math.min(useChoreoStep(sequence, dwellMs ?? 3000, paused), (sequence?.length ?? 1) - 1)
   const stepBall = playing ? sequence![stepIdx].ball : null
-  const clock = useLiveClock(analysis, stepBall, playing ? (sequenceSide === 'home' ? 1 : -1) : 0)
+  const clock = useLiveClock(analysis, stepBall, playing ? (sequenceSide === 'home' ? 1 : -1) : 0, paused)
 
   const live: LiveInput | undefined = analysis
     ? { t: clock.t, ball: clock.ball ?? undefined, possess: clock.possess }

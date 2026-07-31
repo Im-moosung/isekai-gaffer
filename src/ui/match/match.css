@@ -16,6 +16,7 @@
    ========================================================================== */
 
 .ms-root {
+  position: relative; /* 풀블리드 모드의 furniture(스코어버그·하단 바) 기준 */
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
@@ -124,6 +125,158 @@
 /* 킥오프 전에는 설계가 주인공이다 — 피치를 배경 띠로 줄이고 워룸에 자리를 준다. */
 .ms-stage--pre .ms-pitch-wrap {
   max-height: 30vh;
+}
+
+/* ============================================================================
+   풀블리드 방송 스테이지 (.ms-root--live) — 입장 연출 · 재생 · 정지
+   ----------------------------------------------------------------------------
+   진단(실측, tools/match-layout/live.mjs --tag before):
+     3456×2234  캔버스 1728×1119 = 화면의 25.0%   위 빈 띠 221px
+     1920×1080  캔버스 1728×691  = 화면의 57.6%   위 빈 띠 182px
+     1440×900   캔버스 1408×576  = 화면의 62.6%   위 빈 띠 174px
+     390×844    캔버스 366×237   = 화면의 26.4%   위 빈 띠 330px
+   상단 furniture가 **흐름 요소**라 스코어버그·컨트롤이 캔버스를 그만큼 아래로
+   밀어냈고, 좌우로도 `--w-wide` + padding 만큼 여백이 남았다.
+
+   해법은 중계 방송의 문법 그대로다 — **화면 전체가 경기장이고 그 위에 그래픽을 얹는다.**
+    1. 스테이지가 뷰포트를 통째로 쓴다(max-width·padding 없음).
+    2. 스코어버그·제어 pod·스탯 HUD·하단 바는 전부 **오버레이**다.
+    3. 오버레이는 각자 스크림(--s-scrim-strong)을 깐다. 캔버스 위 텍스트는 배경을
+       DOM으로 알 수 없으므로 대비를 **구조로** 보장해야 한다(픽셀 실측으로 검증).
+    4. 데스크톱(≥720)에서는 문서 높이를 잠근다 — 관전 화면에 스크롤할 것이 없다.
+       390에서는 잠그지 않는다: 컨트롤 7개가 접히면 잠근 높이 안에서 하드클립이 된다.
+   ========================================================================== */
+.ms-root--live .ms-stage {
+  max-width: none;
+  padding: 0;
+  gap: 0;
+}
+.ms-root--live .ms-pitch-wrap {
+  width: 100%;
+  max-height: none;
+}
+/* 렌더러 3단 모두 상자를 꽉 채운다. 세 파일이 각자 105/68 aspect-ratio를 갖고 있는데,
+   aspect-ratio는 **폭에서 높이를 정할 뿐** 남는 높이를 채우지 않는다(그래서 그냥 두면
+   풀블리드 상자 안에서 위쪽에만 붙는다). SVG는 viewBox가 레터박스를 알아서 잡는다. */
+.ms-root--live .ms-pitch-wrap > .pv-root,
+.ms-root--live .m3d-host,
+.ms-root--live .pixi-pitch {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  aspect-ratio: auto;
+}
+
+/* 상단 — 스코어버그 하나. 바 자체는 배경 없는 투명 레이어다(각 조각이
+   자기 스크림을 갖는다). 읽기 전용이라 포인터 이벤트를 통과시킨다. */
+.ms-root--live .ms-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: var(--sp-4);
+  background: none;
+  border-bottom: none;
+  backdrop-filter: none;
+  pointer-events: none;
+}
+/* 입장 연출의 대진 스트립은 좌측에 붙인다 — 우상단은 [건너뛰기]의 자리다
+   (가운데 정렬로 두면 390에서 스트립 꼬리가 건너뛰기 버튼 밑으로 들어간다). */
+.ms-root--live .ms-topbar--prematch {
+  justify-content: flex-start;
+}
+.ms-root--live .ms-topbar--prematch .ms-prematch {
+  flex-wrap: wrap;
+  max-width: calc(100% - 140px);
+  padding: var(--sp-2) var(--sp-5);
+  border-radius: var(--r-pill);
+  background: var(--s-scrim-strong);
+  backdrop-filter: blur(10px);
+}
+
+/* 제어 pod — 우상단. 스코어버그와 대각으로 갈라 두면 좁아져도 서로 만나지 않는다. */
+.ms-root--live .ms-controls {
+  position: absolute;
+  top: var(--sp-4);
+  right: var(--sp-4);
+  z-index: var(--z-furniture);
+  max-width: min(64vw, 940px);
+  padding: var(--sp-2);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+  background: var(--s-scrim-strong);
+  backdrop-filter: blur(14px);
+}
+
+/* 스탯 HUD — 좌하단. 하단 바 위로 올려 겹치지 않게 띄운다. */
+.ms-root--live .ms-hud {
+  bottom: calc(var(--h-bottombar) + var(--sp-4));
+  background: var(--s-scrim-strong);
+}
+
+/* 방송 배너 — 스코어버그 아래 가운데. 피치를 밀어내지 않고 얹힌다
+   (밀어내면 배너가 뜰 때마다 WebGL 캔버스가 리사이즈된다 — 매번 히치다). */
+.ms-root--live .ms-banner {
+  position: absolute;
+  top: 168px; /* 스코어버그 3단 데크(약 148px) + 여백 */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-furniture);
+  width: max-content;
+  max-width: min(640px, calc(100% - 2 * var(--sp-4)));
+  background: var(--s-scrim-strong);
+  backdrop-filter: blur(14px);
+}
+.ms-root--live .ms-banner--moment {
+  background: color-mix(in srgb, var(--brand) 10%, var(--s-scrim-strong));
+}
+
+/* 하단 바 — 오버레이. 외침·티커가 캔버스를 잘라먹지 않는다. */
+.ms-root--live .ms-bottombar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--s-scrim-strong);
+  backdrop-filter: blur(14px);
+}
+
+/* 득점자 배너는 하단 바 위로 올린다(원래 자리는 이제 티커가 쓴다). */
+.ms-root--live .ms-scorer {
+  bottom: calc(var(--h-bottombar) + var(--sp-5));
+}
+
+/* ── 2D 작전판의 세이프 에어리어 ─────────────────────────────────────
+   3D 캔버스에는 텍스트가 없어서 furniture를 아무 데나 얹어도 되지만, 2D 작전판은
+   **자기도 텍스트를 그린다**(선수 이름·등번호·라인 태그·범례·캡션). 풀블리드로
+   늘리자마자 범례가 외침 버튼 밑으로, 라인 태그가 스코어버그 밑으로 들어갔다
+   (감사 하니스 실측: 1440·1920·3456에서 겹침 11~12건, 390에서 2건).
+   그래서 보드는 furniture가 쓰는 띠를 비우고 그 안쪽에만 그린다 —
+   위는 스코어버그 + 배너 슬롯, 아래는 하단 바. SVG는 viewBox가 알아서 레터박스한다. */
+.ms-root--live .ab-root {
+  padding: 160px var(--sp-4) calc(var(--h-bottombar) + var(--sp-4));
+}
+/* 배너가 실제로 떠 있을 때만 그만큼 더 물러난다 — 상시로 비워 두면 보드가
+   화면 아래쪽에 처박힌다(SVG라 리사이즈 비용이 없어 그때그때 양보해도 된다). */
+.ms-root--live .ms-stage--banner .ab-root {
+  padding-top: 240px;
+}
+
+@media (min-width: 720px) {
+  /* 관전 화면에는 스크롤할 것이 없다 — 화면에 정확히 맞춘다.
+     (콘텐츠가 넘치지 않으므로 overflow:hidden이 무언가를 잘라내지 않는다.) */
+  .ms-root--live {
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .ms-root--live .ms-stage {
+    min-height: 0;
+  }
+  .ms-root--live .ms-pitch-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    aspect-ratio: auto;
+  }
 }
 
 /* ── 라이브 스탯 HUD — 좌하단 game assist 슬롯 ───────────────────────
@@ -469,6 +622,69 @@
   .sb-root {
     flex-wrap: wrap;
   }
+
+  /* ── 390 풀블리드: 스코어버그만 얹고, 조작은 피치 **아래**로 ──────────
+     왜 여기만 다른가: 세로 화면에서 컨트롤 7개를 피치 위에 얹으면 경기가 안 보인다.
+     읽기 전용(스코어버그)만 올리고 조작은 내리면, 캔버스는 화면 폭을 다 쓰면서도
+     엄지로 닿는 자리에 버튼이 남는다. 문서 높이도 잠그지 않는다 — 컨트롤이 한 줄
+     더 접히는 순간 잠긴 높이 안에서 하드클립이 되고, 그게 390을 죽이던 원래 결함이다. */
+  .ms-root--live .ms-stage {
+    gap: var(--sp-3);
+    padding: 0 0 var(--sp-3);
+  }
+  /* 세로 화면에서 캔버스를 뷰포트 높이까지 늘리면 종횡비가 0.5 아래로 내려가
+     가로로 담기는 폭이 반토막 난다. 정사각까지만 키우고(가로 화각 보정은
+     camera.fovForAspect가 받는다) 남는 높이는 조작·스탯이 쓴다. */
+  .ms-root--live .ms-pitch-wrap {
+    /* aspect-ratio가 **하한**을 준다(정사각). 조작·스탯을 앉히고 남는 세로가 있으면
+       flex-grow가 그만큼 더 가져간다 — 390×844에서 실측 390×390 → 390×453.
+       상한을 두는 이유: 여기서 더 늘리면 종횡비가 0.8 아래로 내려가 화면의 절반이
+       하늘과 잔디가 된다(가로 화각은 camera.fovForAspect가 지켜 주지만 그림이 는다). */
+    flex: 1 1 auto;
+    aspect-ratio: 1 / 1;
+    min-height: 240px;
+    max-height: 62vh;
+  }
+  .ms-root--live .ms-topbar {
+    flex-direction: row;
+    align-items: flex-start;
+    padding: var(--sp-2);
+  }
+  /* 좁은 화면에서 스코어버그를 전폭으로 키우면 피치 상단을 통째로 덮는다. */
+  .ms-root--live .bc-scorebug {
+    width: auto;
+  }
+  /* 대회명은 이미 아는 정보다 — 세 줄 중 가장 조용한 층을 접는다. */
+  .ms-root--live .bc-scorebug__ctx {
+    display: none;
+  }
+  /* 흐름으로 내려온 오버레이들은 좌우 여백을 스스로 챙긴다(스테이지 padding 0). */
+  .ms-root--live .ms-controls,
+  .ms-root--live .ms-hud {
+    position: static;
+    width: auto;
+    max-width: none;
+    margin-inline: var(--sp-3);
+    transform: none;
+  }
+  /* 배너만은 390에서도 **피치 위에 남는다**. 흐름으로 내리면 조작·스탯 아래로 밀려
+     스티키 하단 바에 가려지고(실측: 배너 y 729~812 vs 바 765~844), 감독의 결정을
+     요구하는 프롬프트가 스크롤해야 보이는 자리로 간다. 스코어버그 바로 아래가 맞다. */
+  .ms-root--live .ms-banner {
+    top: 112px; /* 스코어버그(컨텍스트 스트립 접은 2단, 약 93px) + 여백 */
+    width: auto;
+    max-width: calc(100% - 2 * var(--sp-3));
+  }
+  .ms-root--live .ms-hud {
+    background: var(--s-1);
+  }
+  .ms-root--live .ms-bottombar {
+    position: sticky;
+  }
+  /* 390에서는 스코어버그(컨텍스트 스트립을 접어 2단)만 보드 위에 있다. */
+  .ms-root--live .ab-root {
+    padding: 104px var(--sp-2) var(--sp-2);
+  }
 }
 
 /* ============================================================================
@@ -760,12 +976,19 @@
   padding: var(--sp-2);
   background: var(--pitch-bg);
   opacity: 0;
+  /* ★ opacity만으로 숨기면 **박스는 그대로 살아 있다**. 풀블리드로 늘린 뒤 이 사실이
+     드러났다 — 안 보이는 보드의 정보 바가 라이브 스탯 HUD 위에 겹쳐 감사 하니스에
+     겹침 8건으로 잡혔다(둘은 실제로 동시에 보이지 않는데도). visibility까지 끄면
+     레이아웃 계산에서도, 스크린리더에서도, 포커스 순서에서도 함께 사라진다. */
+  visibility: hidden;
   pointer-events: none;
-  transition: opacity 0s; /* 분석 → 라이브: 컷 */
+  transition: opacity 0s, visibility 0s; /* 분석 → 라이브: 컷 */
 }
 .ab-root--on {
   opacity: 1;
-  transition: opacity 0.26s var(--ease-out); /* 라이브 → 분석: 디졸브 */
+  visibility: visible;
+  /* 라이브 → 분석: 디졸브. visibility는 즉시 켜야 페이드가 보인다. */
+  transition: opacity 0.26s var(--ease-out), visibility 0s;
 }
 /* 보드는 남는 공간에 **완전히 fit**한다(레터박스 허용, 크롭 금지).
    aspect-ratio로 크기를 강제하면 좁은 화면에서 상하가 잘리거나(예전 결함) 반대로

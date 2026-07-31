@@ -28,6 +28,8 @@ interface PixiPitchProps {
   dwellMs?: number
   /** 시퀀스 재생(공격) 팀 — 공·무버·골 파티클 색. */
   sequenceSide?: 'home' | 'away'
+  /** 일시정지 — 안무 진행도를 고정하고 그리기를 건너뛴다(마지막 프레임 정지). */
+  paused?: boolean
 }
 
 const HOME_FALLBACK = 0xe63946
@@ -243,6 +245,16 @@ export function PixiPitch(props: PixiPitchProps) {
         const dt = Math.min(0.05, ticker.deltaMS / 1000) // 큰 프레임 점프 클램프
         const now = performance.now()
         const p = propsRef.current
+        if (p.paused) {
+          // 일시정지: 진행도(now - seqStart)의 **기준점을 프레임만큼 뒤로 민다**.
+          // 시계를 멈출 수 없으니 원점을 함께 끌고 가는 것이다 — 재개하면 정지한
+          // 그 지점에서 이어진다. 그리기는 건너뛰므로 마지막 프레임이 그대로 남는다.
+          const shift = ticker.deltaMS
+          seqStart += shift
+          if (flashStart >= 0) flashStart += shift
+          if (shakeStart >= 0) shakeStart += shift
+          return
+        }
         const reduced = reducedMql.matches
         const sw = application.screen.width
         const sh = application.screen.height
@@ -455,6 +467,7 @@ export function PixiPitch(props: PixiPitchProps) {
         sequence={props.sequence}
         dwellMs={props.dwellMs}
         sequenceSide={props.sequenceSide}
+        paused={props.paused}
       />
     )
   }

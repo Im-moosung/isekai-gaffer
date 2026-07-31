@@ -9,6 +9,9 @@
 import { chromium } from 'playwright-core'
 import fs from 'node:fs'
 
+/** 개발 서버 주소. 전/후 비교를 위해 별도 워크트리의 서버를 가리킬 수 있어야 한다. */
+const BASE = process.env.BASE || 'http://localhost:5173'
+
 const SHOTS = new URL('./shots/', import.meta.url).pathname
 fs.mkdirSync(SHOTS, { recursive: true })
 
@@ -63,7 +66,7 @@ const measure = sel => page.evaluate(s => {
   return { w: Math.round(r.width), h: Math.round(r.height), clientH: el.clientHeight, scrollH: el.scrollHeight }
 }, sel)
 
-await page.goto('http://localhost:5173/', { waitUntil: 'networkidle' })
+await page.goto(BASE + '/', { waitUntil: 'networkidle' })
 await page.waitForTimeout(2000)
 await page.screenshot({ path: `${SHOTS}/390-play-01-landing.png` })
 

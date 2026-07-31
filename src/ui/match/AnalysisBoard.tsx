@@ -27,6 +27,8 @@ interface AnalysisBoardProps {
   caption: string
   /** 보이는 상태인가(전환 연출은 CSS가 담당, 마운트는 유지한다). */
   visible: boolean
+  /** 일시정지 — 보드의 안무·라이브 무브먼트도 함께 멈춘다. */
+  paused?: boolean
 }
 
 /**
@@ -34,7 +36,7 @@ interface AnalysisBoardProps {
  * 마운트를 유지하는 이유: 3D(three)를 매 하이라이트마다 언마운트하면 WebGL 컨텍스트가
  * 재생성되어 히치가 난다. 보이지 않을 때는 pointer-events도 끈다.
  */
-export function AnalysisBoard({ state, sequence, dwellMs, sequenceSide, caption, visible }: AnalysisBoardProps) {
+export function AnalysisBoard({ state, sequence, dwellMs, sequenceSide, caption, visible, paused }: AnalysisBoardProps) {
   const t = state.home.tactics
   const ins = t.instructions
   const pattern: AttackPattern = t.attackPattern ?? 'balanced'
@@ -57,6 +59,7 @@ export function AnalysisBoard({ state, sequence, dwellMs, sequenceSide, caption,
         sequence={sequence}
         dwellMs={dwellMs}
         sequenceSide={sequenceSide}
+        paused={paused}
         onMetrics={setBlock}
       />
       {/* 정보 바는 피치 아래 — 위쪽은 스코어버그·플랜 배지가 이미 차지한다. */}

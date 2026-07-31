@@ -80,6 +80,9 @@ class PitchBoundary extends Component<{ fallback: ReactNode; children: ReactNode
  *  예전과 같은 빈도(상위권 찬스)로 발동한다. */
 const DANGER_XG = 0.12
 
+/** 일시정지 중 관중 게인. 0(무음)이 아니라 낮은 웅성거림 — 경기장은 그대로 있다. */
+const CROWD_FROZEN = 0.1
+
 // 방송 모드↔작전판 모드 전환 연출 지속(ms). 작전판 이탈 시 역연출을 위해
 // 이 시간만큼 마운트를 유지한다(CSS transition/animation 길이와 일치).
 const MODE_TRANSITION_MS = 600
@@ -197,6 +200,23 @@ export function MatchScreen({
   const [muted, setMutedUi] = useState(() => sfx.isMuted())
   // 한국어 TTS 해설 토글(음소거와 별개, localStorage 기억) — 상단 제어 그룹의 [해설 끄기].
   const [ttsOn, setTtsOnUi] = useState(() => ctts.isTtsEnabled())
+  /**
+   * **일시정지**(감독 타임과 다르다). 시계만 멈춘다 — 개입 권한은 0이다.
+   *
+   * 왜 store phase가 아니라 UI 상태인가: matchStore의 정지 phase(`paused-*`)는 전부
+   * 개입 등급을 발급한다(`interventionLevel`). "정지 시점이 곧 자원"이라는 설계라,
+   * 자유롭게 누를 수 있는 일시정지에 phase를 하나 더 만들면 그 설계가 무너진다.
+   * 그래서 phase는 'playing' 그대로 두고 **재생 체인·TTS·렌더 루프만** 얼린다.
+   * 유일한 누수 경로였던 터치라인 외침은 ShoutBar에 frozen을 넘겨 막는다.
+   */
+  const [frozen, setFrozen] = useState(false)
+  /** 정지로 인해 재생 체인이 끊긴 경우의 **남은 dwell**(ms). 재개는 이 값부터 이어 간다 —
+   *  전체 dwell을 다시 세면 그 분이 두 번 재생된 만큼 늘어나 안무·발화와 어긋난다. */
+  const resumeMsRef = useRef<number | undefined>(undefined)
+  /** 재생 체인 정리(cleanup)가 **정지 때문인지**를 구분하는 미러. 속도 변경 등 다른
+   *  재실행에서 남은 시간을 물려받으면 새 속도가 다음 분부터야 반영된다. */
+  const frozenRef = useRef(false)
+  frozenRef.current = frozen
   const [crowdSwell, setCrowdSwell] = useState(false)
   const swellTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const firedGoalMinuteRef = useRef(-1)
@@ -246,10 +266,13 @@ export function MatchScreen({
   // confirmTactics/kickoff로 phase가 'playing'이 되면 effect가 재실행되어 재개.
   // speed 변경 시에도 재실행되어 즉시 반영. 언마운트/전환 시 타이머 정리.
   useEffect(() => {
-    if (phase !== 'playing') return
+    if (phase !== 'playing' || frozen) return
     let timer: ReturnType<typeof setTimeout>
     let cancelled = false
-    const schedule = () => {
+    // 이번에 예약한 dwell과 그 시작 시각 — 정지로 끊길 때 **남은 시간**을 계산한다.
+    let pendingMs = 0
+    let startedAt = 0
+    const schedule = (overrideMs?: number) => {
       const st = useMatchStore.getState()
       const eng = st.engine
       if (cancelled || !eng || st.phase !== 'playing') return
@@ -261,21 +284,31 @@ export function MatchScreen({
       // 해설이 들리는 상태면 주인공 이벤트 발화 길이를 dwell 하한으로 쓴다(말 잘림 방지).
       // 화자가 둘이 되면 한 분의 총 발화가 길어진다 — allEvents·seed·ctx를 넘겨야
       // 실제로 발화될 문장(캐스터 + 해설)과 같은 기준으로 체류 하한이 잡힌다.
-      const dwell = minuteDwellWithSpeech(
+      const dwell = overrideMs ?? minuteDwellWithSpeech(
         m, eventsAtMinute, home, away, speed, clutch, diff, ctts.willSpeak(),
         eng.events.filter(e => e.minute <= m), seed,
         { decisions: st.decisionLog, managedTeamId: home.id },
       )
+      pendingMs = dwell
+      startedAt = performance.now()
       timer = setTimeout(() => {
         if (cancelled) return
         advanceMinute()
         schedule()
       }, dwell)
     }
-    schedule()
-    return () => { cancelled = true; clearTimeout(timer) }
+    // 정지에서 돌아온 첫 예약만 남은 시간으로 건다(그 뒤로는 정상 계산).
+    schedule(resumeMsRef.current)
+    resumeMsRef.current = undefined
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+      // 정지로 끊긴 경우에만 남은 시간을 남긴다. 속도 변경으로 인한 재실행에서
+      // 이어 붙이면 새 배속이 다음 분에야 반영된다(즉시 반영 계약 위반).
+      if (frozenRef.current) resumeMsRef.current = Math.max(0, pendingMs - (performance.now() - startedAt))
+    }
     // ttsOn: 해설 토글이 dwell 하한(발화 길이 보정)을 켜고 끄므로 의존에 포함한다.
-  }, [phase, speed, advanceMinute, home, away, seed, ttsOn])
+  }, [phase, speed, advanceMinute, home, away, seed, ttsOn, frozen])
 
   // ── 모드 전환 연출: 작전판 마운트/이탈 ──────────────────────────────
   // tacticsMode 진입 시 즉시 마운트(entrance 애니메이션은 CSS가 담당),
@@ -380,13 +413,28 @@ export function MatchScreen({
     if (tacticsMode) ctts.stopAll()
   }, [tacticsMode])
 
+  // 일시정지: 발화를 **취소가 아니라 정지**한다 — 재개하면 끊긴 자리에서 이어 말한다.
+  // 문장 중간에 잘라 버리면 재개 후 그 분의 해설이 영영 사라진다(분당 1회 발화).
+  useEffect(() => {
+    if (frozen) ctts.pauseSpeech()
+    else ctts.resumeSpeech()
+  }, [frozen])
+
+  // 작전판으로 들어가면(감독 타임·하이드레이션·하프타임) 일시정지는 자동 해제한다.
+  // 둘은 다른 조작이고, 겹쳐 두면 작전판을 닫았을 때 왜 안 굴러가는지 알 수 없다.
+  useEffect(() => {
+    if (tacticsMode) setFrozen(false)
+  }, [tacticsMode])
+
   // 관중 함성 강도: 기본 0.3, 클러치(80분+·1골차 이내) 0.5, 골 직후 스웰 0.8. crowdLoop('start')는 게인만 갱신(멱등).
+  // 일시정지 중에는 낮은 웅성거림으로 **덕킹**한다 — 끊으면 재개 때 클릭이 나고
+  // (teardownCrowd는 페이드가 없다) 그대로 두면 정지 화면에 함성만 남아 어색하다.
   useEffect(() => {
     if (phase !== 'playing' || !engine) return
     const m = engine.minute
     const clutch = m >= 80 && Math.abs(engine.score[0] - engine.score[1]) <= 1
-    sfx.crowdLoop('start', crowdSwell ? 0.8 : clutch ? 0.5 : 0.3)
-  }, [phase, engine, crowdSwell])
+    sfx.crowdLoop('start', frozen ? CROWD_FROZEN : crowdSwell ? 0.8 : clutch ? 0.5 : 0.3)
+  }, [phase, engine, crowdSwell, frozen])
 
   // 언마운트: 스웰 타이머 정리 + 관중 루프 정지(다음 화면으로 함성이 새지 않게).
   useEffect(() => () => {
@@ -425,6 +473,33 @@ export function MatchScreen({
   function toggleTts() {
     setTtsOnUi(ctts.toggleTts())
   }
+
+  // ── 일시정지 토글 + 스페이스 단축키 ──────────────────────────────
+  // 재생 중이거나 이미 정지 상태일 때만 의미가 있다. 작전판·입장 연출·종료에서는 무의미.
+  const canFreeze = phase === 'playing' && !tacticsMode && !entranceCast
+  function toggleFreeze() {
+    if (!canFreeze) return
+    setFrozen(f => !f)
+  }
+
+  // 스페이스 = 재생/일시정지. 영상 플레이어의 보편 관습이라 학습 비용이 0이다.
+  // ★ 폼 컨트롤에 포커스가 있으면 넘긴다 — 버튼에 포커스를 두고 스페이스를 누르면
+  //   브라우저가 그 버튼을 눌러 주는데, 여기서 또 처리하면 두 조작이 동시에 일어난다.
+  useEffect(() => {
+    if (!canFreeze) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' && e.key !== ' ') return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const el = e.target as HTMLElement | null
+      const tag = el?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON' ||
+          el?.isContentEditable || el?.getAttribute('role') === 'button') return
+      e.preventDefault() // 스페이스의 기본 동작(문서 스크롤)을 막는다
+      setFrozen(f => !f)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [canFreeze])
 
   // 2D/3D 렌더러 선택 — localStorage에 기억한다(저사양·심사 환경 배려).
   // ★ 토글이 아니라 **세그먼트**다. 예전 단일 버튼은 표시 텍스트가 현재 모드,
@@ -538,6 +613,8 @@ export function MatchScreen({
     sequence: playSequence ? activeSeq : undefined,
     dwellMs: seqDwell,
     sequenceSide: activeSide,
+    // 일시정지는 렌더러 3단 전부에 같은 계약으로 내려간다(3D·Pixi·SVG).
+    paused: frozen,
   }
   const pitchSvg = <PitchView {...pitchProps} />
   const pitch2d = (
@@ -562,12 +639,22 @@ export function MatchScreen({
   // 되감을 경기도, 바꿀 배속도, 전환할 렌더러도 아직 없다. 남아 있으면
   // "이미 경기가 돌아가고 있다"는 잘못된 신호를 준다(감사 W-12).
   const preDesign = phase === 'pre' && !entranceCast
+  /**
+   * **풀블리드 방송 스테이지**(입장 연출 · 재생 · 정지). 킥오프 전 워룸과 종료
+   * 리포트는 읽는 화면이라 예전처럼 문서 흐름을 쓴다.
+   *
+   * 왜 바꿨나(실측): 상단 furniture가 흐름 요소라 1920에서 캔버스 위 182px, 390에서
+   * 330px이 빈 띠였고, 캔버스가 화면의 26~63%밖에 되지 않았다. 실제 중계는 화면 전체가
+   * 경기장이고 스코어버그·시계·티커가 그 위에 얹힌다 — 그 문법을 그대로 따른다.
+   */
+  const liveStage = !preDesign && !finished
 
   return (
-    <div className={`ms-root${overlayOpen ? ' ms-root--overlay' : ''}`}>
-      {/* ── 상단 방송 furniture — 스코어버그 + 제어 그룹 하나.
-          예전엔 음소거·TTS·2D/3D·속도·감독 타임·플랜 배지가 컨테이너 없이
-          여섯 군데에 떠 있었다. 부유 요소를 한 줄로 모으면 노치도 겹침도 생기지 않는다. ── */}
+    <div className={`ms-root${overlayOpen ? ' ms-root--overlay' : ''}${liveStage ? ' ms-root--live' : ''}`}>
+      {/* ── 상단 방송 furniture — 스코어버그만. 풀블리드 스테이지 위에 **얹힌다**.
+          제어 그룹은 스테이지 안(.ms-controls)으로 내려갔다: 데스크톱에서는 우상단에
+          같이 떠 있지만, 390에서는 피치 아래 흐름 요소가 되어야 하기 때문이다
+          (좁은 화면에서 7개 컨트롤을 피치 위에 얹으면 경기가 안 보인다). ── */}
       {chromeOn && (
         <header className="ms-topbar">
           <Scorebug
@@ -575,69 +662,12 @@ export function MatchScreen({
             away={away}
             score={shownScore}
             minute={displayMinute}
-            live={replaying}
-            fastForward={fastForward}
+            live={replaying && !frozen}
+            paused={frozen}
+            fastForward={fastForward && !frozen}
             pulse={goalDrama}
             context={context}
           />
-          <div className="ms-controls">
-            {demoNote && <span className="badge">{demoNote}</span>}
-            {/* 2차 정보(플랜 상태)는 스코어버그 본체에 얹지 않고 별도 슬롯으로 둔다.
-                종료 후에는 조정할 전술이 없으므로 사라진다. */}
-            {!finished && !preDesign && (
-              <span className="ms-plan-slot">
-                <PlanBadge />
-              </span>
-            )}
-            {!finished && !preDesign && (
-              <div className="seg" role="group" aria-label="화면 렌더러">
-                <button
-                  type="button"
-                  className="seg__item"
-                  aria-pressed={!render3d}
-                  onClick={() => selectRenderer(false)}
-                >
-                  2D
-                </button>
-                <button
-                  type="button"
-                  className="seg__item"
-                  aria-pressed={render3d}
-                  onClick={() => selectRenderer(true)}
-                >
-                  3D
-                </button>
-              </div>
-            )}
-            {!finished && !preDesign && <SpeedToggle speed={speed} onChange={setSpeed} />}
-            {/* 아이콘 대신 평문 한글 — 이모지는 OS마다 모양·크기가 달라 톤이 무너진다.
-                방송도 레드카드 픽토그램 대신 "DOWN TO 10 PLAYERS" 평문 배너를 쓴다. */}
-            <button
-              type="button"
-              className="btn btn--secondary btn--sm"
-              aria-label={muted ? '소리 켜기' : '음소거'}
-              aria-pressed={muted}
-              onClick={toggleMute}
-            >
-              {muted ? '소리 켜기' : '음소거'}
-            </button>
-            {!preDesign && (
-            <button
-              type="button"
-              className="btn btn--secondary btn--sm"
-              aria-label={ttsOn ? '해설 음성 끄기' : '해설 음성 켜기'}
-              aria-pressed={ttsOn}
-              onClick={toggleTts}
-            >
-              {ttsOn ? '해설 끄기' : '해설 켜기'}
-            </button>
-            )}
-            {replaying && (
-              <button type="button" className="btn btn--primary btn--sm" onClick={pauseByUser}>
-                감독 타임
-              </button>
-            )}
-          </div>
         </header>
       )}
 
@@ -651,23 +681,13 @@ export function MatchScreen({
         </header>
       )}
 
-      <main className={`ms-stage${phase === 'pre' && !entranceCast ? ' ms-stage--pre' : ''}`}>
-        {/* ── 방송 배너(피치 위, in-flow) — 피치를 밀어낼 뿐 덮지 않는다. ── */}
-        {bannerText && !finished && (
-          <div
-            className={`ms-banner${momentBanner ? ' ms-banner--moment' : ' ms-banner--opp'}`}
-            role="status"
-          >
-            <span className="ms-banner__text">{bannerText}</span>
-            {replaying && momentPrompt && (
-              <span className="ms-banner__actions">
-                <button type="button" className="btn btn--primary btn--sm" onClick={acceptMoment}>사용</button>
-                <button type="button" className="btn btn--ghost btn--sm" onClick={dismissMoment}>흘려보낸다</button>
-              </span>
-            )}
-          </div>
-        )}
-
+      <main
+        className={
+          `ms-stage${phase === 'pre' && !entranceCast ? ' ms-stage--pre' : ''}` +
+          // 배너가 떠 있는 동안만 2D 작전판이 그만큼 아래로 물러난다(match.css).
+          `${bannerText && !finished ? ' ms-stage--banner' : ''}`
+        }
+      >
         {/* ── 피치 — 관전 중 언제나 보인다(가리는 오버레이 없음).
             렌더러 체인: Match3D(three) → PixiPitch(pixi) → PitchView(SVG).
             각 단계는 청크 로드 실패를 PitchBoundary가, 런타임 미지원(WebGL 불가·
@@ -708,6 +728,7 @@ export function MatchScreen({
                 sequenceSide={activeSide}
                 caption={analysisCaption}
                 visible={analysisOn}
+                paused={frozen}
               />
             )}
             {/* 입장 연출 오버레이 — 자막·선수 소개 카드·건너뛰기. */}
@@ -741,6 +762,106 @@ export function MatchScreen({
             )}
             {/* ── 위험 순간: 비네팅(가장자리 어두워짐) 0.5s ── */}
             {dangerMoment && <span key={`vig-${displayMinute}`} className="ms-vignette" aria-hidden="true" />}
+          </div>
+        )}
+
+        {/* ── 방송 배너(순간 제안 · 상대 감독 통보) ──
+            풀블리드 모드에서는 스코어버그 아래 가운데에 **얹힌다**(match.css).
+            흐름 요소로 두면 배너가 뜰 때마다 피치가 밀려 WebGL 캔버스가 리사이즈된다 —
+            하필 결정을 요구하는 순간에 히치가 나는 셈이다. 390에서는 흐름으로 돌아간다. ── */}
+        {bannerText && !finished && (
+          <div
+            className={`ms-banner${momentBanner ? ' ms-banner--moment' : ' ms-banner--opp'}`}
+            role="status"
+          >
+            <span className="ms-banner__text">{bannerText}</span>
+            {replaying && momentPrompt && (
+              <span className="ms-banner__actions">
+                <button type="button" className="btn btn--primary btn--sm" onClick={acceptMoment}>사용</button>
+                <button type="button" className="btn btn--ghost btn--sm" onClick={dismissMoment}>흘려보낸다</button>
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* ── 제어 그룹 — 데스크톱: 피치 우상단에 떠 있는 pod / 390: 피치 **아래** 흐름.
+            왜 스코어버그와 갈라놨나: 좁은 화면에서 컨트롤 7개를 피치 위에 얹으면
+            경기가 안 보인다. 스코어버그(읽기 전용·작다)만 위로 올리고 조작은 내린다.
+            pod가 자체 스크림을 까는 이유: `.btn--secondary`는 배경이 투명이라 잔디
+            위에 그냥 얹으면 흰 글자가 묻는다(랜딩 감사의 1.08:1 결함과 같은 구조).
+            ★ 종료 후에는 통째로 내린다 — 그 시점엔 관중 루프도 해설도 이미 멈춰 있어
+            음소거·해설 토글이 아무것도 하지 않는다. 빈 조작 줄이 리포트 위에 남을 뿐이다. ── */}
+        {chromeOn && !finished && (
+          <div className="ms-controls">
+            {demoNote && <span className="badge">{demoNote}</span>}
+            {/* 2차 정보(플랜 상태)는 스코어버그 본체에 얹지 않고 별도 슬롯으로 둔다. */}
+            {!preDesign && (
+              <span className="ms-plan-slot">
+                <PlanBadge />
+              </span>
+            )}
+            {!preDesign && (
+              <div className="seg" role="group" aria-label="화면 렌더러">
+                <button
+                  type="button"
+                  className="seg__item"
+                  aria-pressed={!render3d}
+                  onClick={() => selectRenderer(false)}
+                >
+                  2D
+                </button>
+                <button
+                  type="button"
+                  className="seg__item"
+                  aria-pressed={render3d}
+                  onClick={() => selectRenderer(true)}
+                >
+                  3D
+                </button>
+              </div>
+            )}
+            {!preDesign && <SpeedToggle speed={speed} onChange={setSpeed} />}
+            {/* 아이콘 대신 평문 한글 — 이모지는 OS마다 모양·크기가 달라 톤이 무너진다.
+                방송도 레드카드 픽토그램 대신 "DOWN TO 10 PLAYERS" 평문 배너를 쓴다. */}
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              aria-label={muted ? '소리 켜기' : '음소거'}
+              aria-pressed={muted}
+              onClick={toggleMute}
+            >
+              {muted ? '소리 켜기' : '음소거'}
+            </button>
+            {!preDesign && (
+            <button
+              type="button"
+              className="btn btn--secondary btn--sm"
+              aria-label={ttsOn ? '해설 음성 끄기' : '해설 음성 켜기'}
+              aria-pressed={ttsOn}
+              onClick={toggleTts}
+            >
+              {ttsOn ? '해설 끄기' : '해설 켜기'}
+            </button>
+            )}
+            {/* 일시정지 — **감독 타임과 다른 조작이다**. 시계만 멈추고 개입 권한은
+                주지 않는다. 그래서 primary(감독의 결정)가 아니라 secondary다. */}
+            {canFreeze && (
+              <button
+                type="button"
+                className="btn btn--secondary btn--sm"
+                aria-pressed={frozen}
+                aria-keyshortcuts="Space"
+                title="스페이스"
+                onClick={toggleFreeze}
+              >
+                {frozen ? '재생' : '일시정지'}
+              </button>
+            )}
+            {replaying && (
+              <button type="button" className="btn btn--primary btn--sm" onClick={pauseByUser}>
+                감독 타임
+              </button>
+            )}
           </div>
         )}
 
@@ -823,7 +944,7 @@ export function MatchScreen({
           티커를 별도 절대배치 레이어로 띄우면 오버레이·득점자 배너와 겹쳐 쌓인다. ── */}
       {chromeOn && !finished && (
         <footer className="ms-bottombar">
-          {replaying && <ShoutBar />}
+          {replaying && <ShoutBar frozen={frozen} />}
           <Ticker lines={tickerLines} emphasis={dangerMoment} />
         </footer>
       )}

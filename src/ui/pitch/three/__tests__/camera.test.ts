@@ -36,6 +36,7 @@ import {
   clampShot,
   createCameraRig,
   danger,
+  fovForAspect,
   easeInOutCubic,
   lerpShot,
   shake,
@@ -622,5 +623,36 @@ describe('createCameraRig', () => {
     for (let i = 0; i < 20; i++) rig.update({ focus, t: 10, dt: 999 })
     const s = rig.update({ focus, t: 10, dt: 999 })
     expect(s).toEqual(cameraFor('celebrate', focus, 10, 4))
+  })
+  it('좁은 화면에서는 가로 화각을 지키려고 세로 fov를 넓힌다(Hor+ 보정)', () => {
+    // 왜: three의 fov는 세로다. 390px 세로 화면(캔버스 1:1)에서 그대로 두면
+    // 모든 프리셋이 기준으로 삼는 가로 폭(FRAME_ASPECT=1.5)이 1/1.5로 잘린다.
+    expect(fovForAspect(30, 1.5)).toBe(30) // 기준과 같으면 그대로
+    expect(fovForAspect(30, 2.4)).toBe(30) // 넓으면 여유는 그냥 여유다
+    expect(fovForAspect(30, undefined)).toBe(30)
+
+    const widened = fovForAspect(30, 1.0)
+    expect(widened).toBeGreaterThan(30)
+    // 가로로 담기는 폭이 실제로 같아졌는가 — tan(fovH/2) = tan(fovV/2) * aspect
+    const halfW = (fov: number, aspect: number) => Math.tan((fov * Math.PI) / 360) * aspect
+    expect(halfW(widened, 1.0)).toBeCloseTo(halfW(30, 1.5), 6)
+    // 상한(70°)에서 포화한다 — 아무리 좁아도 화면이 어안이 되지는 않는다
+    expect(fovForAspect(60, 0.2)).toBe(70)
+  })
+
+  it('applyCamera는 카메라의 aspect를 읽어 보정한 fov를 넣는다', () => {
+    const wide = stubCamera(0)
+    wide.aspect = 1.78
+    applyCamera(wide, { pos: { x: 1, y: 2, z: 3 }, lookAt: { x: 0, y: 0, z: 0 }, fov: 32 })
+    expect(wide.fov).toBe(32)
+
+    const narrow = stubCamera(0)
+    narrow.aspect = 1.0
+    applyCamera(narrow, { pos: { x: 1, y: 2, z: 3 }, lookAt: { x: 0, y: 0, z: 0 }, fov: 32 })
+    expect(narrow.fov).toBe(fovForAspect(32, 1.0))
+    // 같은 샷을 다시 적용해도 투영행렬을 또 만들지 않는다(보정값 기준으로 비교한다).
+    const before = narrow.projUpdates
+    applyCamera(narrow, { pos: { x: 1, y: 2, z: 3 }, lookAt: { x: 0, y: 0, z: 0 }, fov: 32 })
+    expect(narrow.projUpdates).toBe(before)
   })
 })

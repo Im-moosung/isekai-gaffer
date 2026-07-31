@@ -211,6 +211,36 @@ export function stopAll(): void {
   }
 }
 
+/**
+ * 발화를 **문장 중간에서 얼려 둔다**(일시정지). cancel과 다르다 —
+ * 재개하면 끊긴 자리에서 이어 말한다.
+ *
+ * 왜 cancel이 아닌가: 일시정지는 "지금 이 순간을 붙잡아 본다"는 조작이지 해설을
+ * 버리는 조작이 아니다. cancel하면 재개할 때 그 분의 해설이 통째로 사라지고
+ * (분당 1회 발화라 다시 부르지 않는다) 화면과 소리가 어긋난다.
+ * 작전판 진입(감독 타임)은 반대로 {@link stopAll}이 맞다 — 그때는 관전을 떠난다.
+ */
+export function pauseSpeech(): void {
+  const synth = getSynth()
+  if (!synth) return
+  try {
+    synth.pause()
+  } catch {
+    /* no-op */
+  }
+}
+
+/** {@link pauseSpeech}로 얼린 발화를 이어서 재생한다. 미지원이면 no-op. */
+export function resumeSpeech(): void {
+  const synth = getSynth()
+  if (!synth) return
+  try {
+    synth.resume()
+  } catch {
+    /* no-op */
+  }
+}
+
 // ── 토글(localStorage 기억) ───────────────────────────────────
 /** localStorage에서 TTS 활성 여부를 읽는다. 기본 ON — '0'만 OFF, 부재·오류 시 ON. */
 export function readStoredTts(): boolean {

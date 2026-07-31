@@ -39,7 +39,7 @@ const clickAny = async (page, candidates, nth = 0) => {
 
 const minute = () => page.evaluate(() => (document.querySelector('.bc-scorebug__clock')||{}).textContent || document.body.innerText.match(/\d+'/)?.[0] || '?');
 
-await page.goto('http://localhost:5173/', { waitUntil: 'networkidle' });
+await page.goto((process.env.BASE||'http://localhost:5173') + '/', { waitUntil: 'networkidle' });
 await page.waitForTimeout(1500);
 console.log(await clickText(page, '캠페인 시작'));
 console.log(await clickAny(page, ['준비하기', '경기 준비', '준비']));
