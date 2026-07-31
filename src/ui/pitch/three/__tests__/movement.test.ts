@@ -14,10 +14,10 @@ import {
   kickEvents, kickAt, kickFacingAt, KICK_YAW_LEAD_MS, KICK_FOLLOW_MS, dragProgress,
   goalNetRest, GOAL_NET_MS, GOAL_NET_REST_M, diveScheduleAt, gkDiveAnchor, gkHandWorld,
   GK_DIVE_MS, GK_REACTION_MS, KICK_IMPACT_T, KICK_BACKSWING_MS,
-  GK_DIVE_REACH, GK_HAND_HEIGHT, GK_BEATEN_LATE_MS, DIVE_LAY_U, A_SEPARATE,
+  GK_DIVE_REACH, GK_HAND_HEIGHT, GK_BEATEN_LATE_MS, DIVE_LAY_U, A_SEPARATE, HEADER_MIN_Y,
   type FrameInput,
 } from '../movement'
-import { buildScene } from '../../scenes'
+import { buildScene, HEADER_BALL_Y, SCENE_DWELL_MS } from '../../scenes'
 import { buildFlowSequence } from '../../flow'
 import { createCameraRig, type CameraShot } from '../camera'
 
@@ -468,8 +468,22 @@ describe('볼 높이(Y) — 이벤트 타입별 아크', () => {
     }
     // 정점은 구간 내부(u≈0.5~0.59)라 dwell을 100등분한 표본이 정확히 밟지 못한다 —
     // 소수 둘째 자리까지만 본다.
+    // ★ 2026-08-01: 기대값을 **그 장면이 실제로 저술한 아크**에서 뽑는다. attackPattern이
+    //   계열을 고정하지 않게 되면서(scenes.BUILDUP_WEIGHTS) 같은 'goal'이라도 측면 크로스
+    //   배달이 섞여, "골 = 항상 shot 피크"라는 예전 전제가 성립하지 않는다.
+    const authoredPeak = (type: MatchEvent['type']) => {
+      const seq = buildSequence(ev(type), base.home, base.away)
+      let m = BALL_RADIUS
+      for (let k = 0; k + 1 < seq.length; k++) {
+        const a = seq[k].arc ?? 'pass'
+        const endY = seq[k + 1].endY
+        const startY = seq[k].endY
+        for (let u = 0; u <= 100; u++) m = Math.max(m, ballHeight(a, u / 100, endY, startY))
+      }
+      return m
+    }
     expect(maxY('corner')).toBeCloseTo(BALL_PEAK.cross, 3)
-    expect(maxY('goal')).toBeCloseTo(BALL_PEAK.shot, 3)
+    expect(maxY('goal')).toBeCloseTo(authoredPeak('goal'), 2)
     expect(maxY('foul')).toBeCloseTo(BALL_RADIUS, 6)
   })
 
@@ -550,11 +564,65 @@ describe('액션 판정', () => {
     expect(after.players.some(p => p.action === 'celebrate')).toBe(false)
   })
 
+  // ── 득점 루트 5종(2026-08-01 5라운드 피드백 ③) ────────────────────────
+  // 사용자 지적: "마무리가 전부 발로 차는 슛이다. 헤딩도 드리블 돌파도 없다."
+  it('헤더 루트는 임팩트 순간 공이 머리 높이에 있고 포즈가 header다', () => {
+    // 마무리 변형 d = 크로스 → 헤더. save만 발 마무리로 폴백한다(scenes.ts 주석 참조).
+    const scene = buildScene('cross', 'goal', 0, { finish: 3 })
+    const shotStep = scene.points.findIndex(p => p.arc === 'shot')
+    expect(shotStep, '슛 스텝이 있어야 한다').toBeGreaterThan(0)
+    // 저술: 슛이 출발하는 스텝의 도착 높이 = 머리 높이.
+    expect(scene.points[shotStep].endY).toBe(HEADER_BALL_Y)
+    expect(HEADER_BALL_Y).toBeGreaterThanOrEqual(HEADER_MIN_Y)
+    // 배달은 반드시 크로스 — 머리 높이로 올라오지 않는 공은 헤딩할 수 없다.
+    expect(scene.points[shotStep - 1].arc).toBe('cross')
+
+    // 실제 프레임: 임팩트 시각에 슈터 포즈가 header이고 공이 그 높이에 있다.
+    const e = ev('goal', { playerId: homeId(9) })
+    const seq: ChoreoStep[] = scene.points.map(p => ({
+      t: p.t,
+      ball: { x: p.ball[0], y: p.ball[1] },
+      movers: p.movers.map((m, i) => ({ playerId: base.home.tactics.lineup[9 - i].playerId, x: m[0], y: m[1] })),
+      ...(p.arc ? { arc: p.arc } : {}),
+      ...(p.carrier != null ? { carrier: base.home.tactics.lineup[9 - p.carrier].playerId } : {}),
+      ...(p.endY != null ? { endY: p.endY } : {}),
+    }))
+    const tImpact = seq[shotStep].t
+    const dwellMs = SCENE_DWELL_MS.goal
+    // 컷 프레임으로 배역을 저술 위치에 앉힌 뒤 임팩트 프레임을 본다.
+    let prev = computeFrame(input({ sequence: seq, sequenceSide: 'home', t: tImpact, event: e, dwellMs, cut: true }))
+    prev = computeFrame(input({ sequence: seq, sequenceSide: 'home', t: tImpact, event: e, dwellMs, prev, dt: 1 / 60 }))
+    const shooter = prev.players.find(p => p.id === base.home.tactics.lineup[9].playerId)!
+    expect(shooter.action).toBe('header')
+    expect(prev.ball.y).toBeGreaterThan(HEADER_MIN_Y)
+  })
+
+  it('드리블 돌파 루트는 슈터가 연속 스텝에서 공을 소유한다(= 드리블)', () => {
+    const scene = buildScene('balanced', 'goal', 0, { finish: 4 })
+    // 슬롯 0(슈터)이 캐리어인 스텝이 둘 이상 이어진다 — 받아서 몰고 들어간다.
+    let run = 0
+    let best = 0
+    for (const p of scene.points) {
+      run = p.carrier === 0 ? run + 1 : 0
+      best = Math.max(best, run)
+    }
+    expect(best, '슈터가 연속으로 공을 가진 스텝 수').toBeGreaterThanOrEqual(3)
+    // 드리블 구간은 뜨지 않는다(볼이 발밑에 붙어 굴러간다).
+    const carry = scene.points.filter((p, i) => p.carrier === 0 && i + 1 < scene.points.length && scene.points[i + 1].carrier === 0)
+    for (const c of carry) expect(c.arc ?? 'ground').toBe('ground')
+  })
+
   it('save 이벤트에서 **막은 팀의** GK가 dive한다', () => {
     // save의 teamId는 막은 팀이다 → 홈이 막았으면 몸을 던지는 것도 홈 GK다.
     const e = ev('save', { teamId: base.home.team.id, playerId: homeId(0) })
     const seq = buildSequence(e, base.home, base.away)
-    const f = computeFrame(input({ sequence: seq, sequenceSide: 'away', t: seq[seq.length - 1].t - 0.01, event: e }))
+    // ★ dwell은 **그 장면의 정본**(scenes.SCENE_DWELL_MS)을 준다. 시퀀스의 t는 그 값으로
+    //   역산된 것이라, 기본 3000 ms를 주면 슛 → 접촉 구간이 GK 반응 지연(200 ms)보다
+    //   짧아져 다이브 창이 아예 열리지 않는다(장면 시간표가 아니라 테스트 전제의 문제다).
+    const f = computeFrame(input({
+      sequence: seq, sequenceSide: 'away', t: seq[seq.length - 1].t - 0.01, event: e,
+      dwellMs: SCENE_DWELL_MS.save,
+    }))
     expect(find(f, homeId(0)).action).toBe('dive')
     expect(find(f, awayId(0)).action).not.toBe('dive')
     expect(f.event).toBe('save')

@@ -490,6 +490,62 @@ export function kickAngles(t: number): KickAngles {
   }
 }
 
+// ── 헤딩 ────────────────────────────────────────────────────────────────────
+// 왜 별도 클립인가: 킥 클립은 "차는 다리 + 디딤 다리"의 시상면 운동이라, 그 자세로 공을
+// 머리 높이에 두면 발은 지면에 있는데 공은 2 m 위에 뜬 그림이 된다. 헤딩은 **도약 →
+// 상체 신전(젖힘) → 목 스냅**이 임팩트를 만드는 전혀 다른 동작이다.
+//
+// 시간 규약은 킥과 같다: movement.KICK_IMPACT_T(0.45)가 접촉 프레임이고, 그 앞이
+// 준비·도약, 뒤가 착지다. 그래야 킥 스케줄러(역방향 스케줄링)를 그대로 재사용할 수 있다.
+
+/** 헤딩 한 프레임. 값은 rad, `lift`만 m. */
+export interface HeaderAngles {
+  /** 도약 높이(m) — 골반을 이만큼 들어 올린다. 0이면 접지. */
+  lift: number
+  /** 상체 피치(양수 = 앞으로 숙임). 임팩트 직전 음수(젖힘) → 임팩트에서 양수(내리꽂음). */
+  torsoPitch: number
+  /** 목(머리) 피치 — 상체보다 크고 빠르게 움직인다. 실제 헤딩의 힘은 목 스냅에서 나온다. */
+  headPitch: number
+  /** 두 팔을 벌려 균형을 잡는 정도 0~1. */
+  armSpread: number
+  /** 공중에서 다리를 접는 정도 0~1(0 = 뻗음). */
+  tuck: number
+}
+
+/** 도약 최고점 = 임팩트 시각. 킥의 접촉 진행도(movement.KICK_IMPACT_T)와 같은 값이다. */
+const HEADER_IMPACT_T = 0.45
+/**
+ * 도약 높이(m). 0.34는 세리머니 점프({@link CELEBRATE_JUMP})와 같은 값이다 — 같은 몸으로
+ * 뛰는 동작이라 다르게 둘 이유가 없고, scenes.HEADER_BALL_Y(1.95 m)는 머리 중심 1.74 m에
+ * 이 도약의 절반쯤을 더한 높이다(즉 정점 부근에서 이마에 맞는다).
+ */
+const HEADER_JUMP = 0.34
+
+/**
+ * 준비·도약(0~0.45) → 임팩트(0.45) → 착지·회복(0.45~1).
+ * t는 0~1로 클램프되며 양끝이 중립이라 러닝 사이클로 자연스럽게 되돌아간다.
+ */
+export function headerAngles(t: number): HeaderAngles {
+  const u = clamp01(t)
+  // 도약은 반쪽 사인 두 개를 이어 붙인다 — 정점(임팩트)까지 빠르게 오르고 천천히 내려온다.
+  const rise = u <= HEADER_IMPACT_T
+    ? smoothstep(u / HEADER_IMPACT_T)
+    : 1 - smoothstep((u - HEADER_IMPACT_T) / (1 - HEADER_IMPACT_T))
+  const lift = HEADER_JUMP * rise
+  // 상체·목: 임팩트 직전까지 젖히고(음수) 임팩트에서 앞으로 꺾는다.
+  const wind = u <= HEADER_IMPACT_T ? smoothstep(u / HEADER_IMPACT_T) : 1
+  const snap = u <= HEADER_IMPACT_T ? 0 : smoothstep((u - HEADER_IMPACT_T) / 0.35)
+  const torsoPitch = -0.34 * wind + 0.62 * snap
+  const headPitch = -0.46 * wind + 0.92 * snap
+  return {
+    lift,
+    torsoPitch,
+    headPitch,
+    armSpread: rise,
+    tuck: rise,
+  }
+}
+
 // ── 세리머니 ─────────────────────────────────────────────────────────────────
 
 /** 세리머니 점프 주기(초). */

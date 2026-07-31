@@ -201,6 +201,9 @@ export const BALL_PEAK: Record<BallArcKind, number> = {
  */
 export const OVER_BAR_RISE = 0.6
 
+/** 공중에서 출발하는 구간(헤더 슛)의 최소 상승분(m) — 0이면 포물선이 풀리지 않는다. */
+export const HEAD_DIP_RISE = 0.15
+
 export const BALL_END: Record<BallArcKind, number> = {
   ground: BALL_RADIUS,
   pass: BALL_RADIUS,
@@ -341,18 +344,36 @@ export function arcKindFor(type: MatchEventType | undefined, segIndex: number, s
  * 뒤로 밀리고 **도착 높이가 1.05 m**가 된다 — 예전 `sin(πu/2)`가 만들던
  * "모든 골이 정확히 2.50 m로 통과"(크로스바 2.44 m 초과)를 이것이 없앤다.
  */
-export function ballHeight(kind: BallArcKind, u: number, endY?: number): number {
+export function ballHeight(kind: BallArcKind, u: number, endY?: number, startY?: number): number {
   const p = clamp(u, 0, 1)
   const end = endY != null ? Math.max(BALL_RADIUS, endY) : BALL_END[kind]
-  // 도착 높이가 지정되면 정점도 함께 올린다 — 정점이 도착보다 낮으면 포물선이 풀리지 않는다
-  // (크로스바를 넘기는 슛은 골라인 통과 시점에 아직 상승 중이거나 정점 근처다).
-  const peak = endY != null ? Math.max(BALL_PEAK[kind], end + OVER_BAR_RISE) : BALL_PEAK[kind]
-  const P = peak - BALL_RADIUS
-  if (P <= 1e-9) return BALL_RADIUS
-  const D = end - BALL_RADIUS
+  /**
+   * 출발 높이 — 기본은 지면(공 반지름)이다.
+   *
+   * ★ 2026-08-01 신설. 헤더 마무리가 생기면서 **공중에서 출발하는 구간**이 필요해졌다:
+   *   크로스가 머리 높이(scenes.HEADER_BALL_Y)로 도착하고, 그 다음 슛 구간은 그 높이에서
+   *   시작해 골문으로 내려온다. 출발을 항상 지면으로 두면 헤더 임팩트 직후 공이 한 프레임에
+   *   1.95 m를 뚝 떨어진다.
+   */
+  const start = startY != null ? Math.max(BALL_RADIUS, startY) : BALL_RADIUS
+  /**
+   * 정점은 출발·도착보다 반드시 높아야 포물선이 풀린다.
+   *  · `end + OVER_BAR_RISE` — 크로스바를 넘기는 슛은 골라인 통과 시점에 아직 상승 중이다.
+   *  · `start + HEAD_DIP_RISE` — 머리 높이에서 출발해 골문으로 **내리꽂는** 헤더는 거의
+   *    상승하지 않는다. 0.15 m만 띄워 하강 포물선을 만든다(0이면 궤적이 풀리지 않는다).
+   * 저술이 둘 다 비운 평범한 구간에서는 두 항이 모두 BALL_PEAK보다 작아 예전과 같다.
+   */
+  const peak = Math.max(
+    BALL_PEAK[kind],
+    endY != null ? end + OVER_BAR_RISE : end,
+    startY != null ? start + HEAD_DIP_RISE : start,
+  )
+  const P = peak - start
+  if (P <= 1e-9) return start
+  const D = end - start
   const b = 2 * P + 2 * Math.sqrt(Math.max(0, P * (P - D)))
   const c = D - b
-  return BALL_RADIUS + b * p + c * p * p
+  return start + b * p + c * p * p
 }
 
 /**
@@ -640,6 +661,15 @@ export const KICK_BACKSWING_MS = 260
 export const KICK_FOLLOW_MS = 340
 /** 이 거리(m) 미만은 킥이 아니다 — 컨트롤 정지 구간(볼 좌표 동일)을 걸러낸다. */
 const KICK_MIN_DISTANCE = 1
+
+/**
+ * 임팩트 순간 공이 이 높이(m) 이상이면 **발이 아니라 머리**다.
+ *
+ * 근거: 이 선수 모델의 골반은 0.94 m, 어깨 1.44 m, 머리 중심 약 1.74 m다(pose.ts).
+ * 발로 닿을 수 있는 상한(하이킥)이 대략 허리~가슴이므로 1.5 m를 경계로 둔다. 저술은
+ * 헤더 임팩트를 1.95 m로 쓴다(scenes.HEADER_BALL_Y) — 경계에서 0.45 m 여유다.
+ */
+export const HEADER_MIN_Y = 1.5
 
 /** 한 번의 킥 — 누가, 언제(dwell 상대 t) 공을 찬다. */
 export interface KickEvent {
@@ -1394,9 +1424,15 @@ export function computeFrame(input: FrameInput): FrameState {
     // 구간 끝점을 **직전 프레임의 실제 발**에 맨다(장면 전환 첫 프레임은 저술 그대로 —
     // prev의 좌표는 아직 이전 장면의 것이라 앵커로 쓰면 공이 지난 장면에 붙는다).
     const w = input.cut ? toWorld(sample.ball.x, sample.ball.y) : anchoredBallXZ(seq, sample, prevById)
-    // 마지막 구간의 도착 높이는 **장면이 저술할 수 있다**(크로스바 위로 뜨는 미스).
+    // 도착 높이는 **장면이 저술할 수 있다**(크로스바 위로 뜨는 미스, 머리 높이로 오는 크로스).
+    // ★ 2026-08-01: 마지막 구간 전용이던 것을 **구간별**로 일반화했다. 스텝 k의 `endY`는
+    //   "공이 그 스텝에 도달하는 높이"이므로, 구간 [k, k+1]의 출발 높이는 seq[k].endY이고
+    //   도착 높이는 seq[k+1].endY다. 헤더는 이 두 값이 모두 필요하다(1.95 m에서 출발해
+    //   골문 1.05 m로 내려온다). 저술이 비워 두면 예전과 똑같이 지면에서 출발한다.
     const endY = seq[seq.length - 1].endY
-    const useEndY = sample.finished || sample.segIndex === seq.length - 2 ? endY : undefined
+    const segI = Math.min(sample.segIndex, seq.length - 2)
+    const segStartY = seq[segI].endY
+    const segEndY = seq[segI + 1].endY
     const saved = saveKind && contactWorld && t >= tContact
     if (saved && saveKind === 'catch') {
       // ★ 잡는 세이브 — 공이 **손에 붙어** 그대로 따라 내려온다. GK가 정착(diveT 0.55→1)
@@ -1414,7 +1450,7 @@ export function computeFrame(input: FrameInput): FrameState {
     } else if (sample.finished && event?.type === 'goal') {
       // ★ 골은 골라인에서 멈추지 않는다 — 골망 안으로 들어가야 "골"로 읽힌다.
       const rest = Math.max(1e-6, (1 - seq[seq.length - 1].t) * dwellMs)
-      ballPos = goalNetRest(w, seqSide, sample.after, rest, ballHeight(arc, 1, endY))
+      ballPos = goalNetRest(w, seqSide, sample.after, rest, ballHeight(arc, 1, segEndY, segStartY))
     } else if (sample.finished && endY != null && endY > BALL_RADIUS + 0.5) {
       // ★ 크로스바를 넘긴 공은 **그 자리에 내려앉지 않는다.** 마지막 키프레임은 골라인
       //   1 m 앞이라, 여운 동안 높이만 0으로 줄이면 4.5 m 상공의 공이 골문 안으로
@@ -1423,8 +1459,8 @@ export function computeFrame(input: FrameInput): FrameState {
       ballPos = ballisticAfter(seq, sample, dwellMs, endY, arc)
     } else {
       const y = sample.finished
-        ? lerp(ballHeight(arc, 1, useEndY), BALL_RADIUS, sample.after) // 여운 구간엔 지면으로 안착
-        : ballHeight(arc, sample.u, useEndY)
+        ? lerp(ballHeight(arc, 1, segEndY, segStartY), BALL_RADIUS, sample.after) // 여운 구간엔 지면으로 안착
+        : ballHeight(arc, sample.u, segEndY, segStartY)
       ballPos = { x: w.x, y, z: w.z }
     }
   } else {
@@ -1502,6 +1538,11 @@ export function computeFrame(input: FrameInput): FrameState {
   // 정확히 일치하도록 백스윙 260 ms를 앞당겨 창을 연다(역방향 스케줄링).
   // KICK_REACH 밖이면 취소한다 — 속도 클램프로 뒤처졌다면 "허공 슛"이 되기 때문이다.
   const kickNow = seq ? kickAt(kicks, t, dwellMs) : null
+  /**
+   * 이 임팩트는 헤딩인가 — **저술이 그 스텝에 쓴 도착 높이**로 판정한다.
+   * 화면의 실제 볼 높이와 같은 값에서 나오므로 포즈와 공이 어긋날 수 없다.
+   */
+  const kickIsHeader = !!(kickNow && seq && (seq[kickNow.kick.stepIndex].endY ?? 0) >= HEADER_MIN_Y)
   let kickerId: string | null = null
   let kickT = 0
   if (kickNow && seq) {
@@ -1609,7 +1650,7 @@ export function computeFrame(input: FrameInput): FrameState {
     let actionT = moving ? gaitPhase : (pp?.actionT ?? 0)
     let actionDir = 0
     if (kickerId === p.id) {
-      action = 'kick'
+      action = kickIsHeader ? 'header' : 'kick'
       actionT = kickT
     }
     if (downId === p.id) {

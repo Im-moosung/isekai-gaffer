@@ -20,9 +20,11 @@ import {
   LANE_COUNT,
   buildScene,
   type BallArc,
+  type OffsideLimit,
   type SceneFinish,
   type SceneVariants,
 } from './scenes'
+import { backlineIndices, tacticalCoords } from './shape'
 
 export type { BallArc } from './scenes'
 
@@ -115,6 +117,62 @@ export function attackingSideOf(event: MatchEvent, homeTeamId: string): 'home' |
 }
 
 /**
+ * 라인 마커·도트가 흔들리는 폭(0~100 프레임)에 대한 안전 여유.
+ *
+ * 수비 라인의 **정본**은 정적 `tacticalCoords`지만, 화면 도트는 그 위에 미세 진동
+ * (shape.LIVE_AMP.def.x = ±0.9)과 블록 슬라이드를 얹는다. 진동만큼은 빼 두어야 어떤
+ * 프레임에서도 마무리 배역이 최종 2번째 수비 앞으로 나오지 않는다. 1.5 ≈ 1.6 m.
+ */
+const ONSIDE_MARGIN = 1.5
+
+/**
+ * 이 수비 팀의 **뒤에서 두 번째 수비수** x — 공격 팀의 진행 프레임(0=자기 골문, 100=상대
+ * 골문)으로 환산해서 돌려준다. 오프사이드 상한의 정본이다.
+ *
+ * 왜 `tacticalCoords`인가: 수비 라인은 유저가 만지는 `lineHeight` 슬라이더에서 파생하고
+ * (shape.lineDepth), 2D 작전판의 라인 마커도 같은 숫자에서 나온다. 즉 **유저가 라인을
+ * 올리면 이 값이 따라 올라가고**, 하이라이트의 마무리 지점도 함께 밀려난다.
+ *
+ * GK를 빼지 않는 이유: 규칙이 말하는 "뒤에서 두 번째"에는 GK가 포함된다(보통 GK가 첫
+ * 번째다). 정렬해서 두 번째를 고르면 GK가 나와 있는 특수한 배치까지 자동으로 맞는다.
+ */
+export function offsideLineFor(defending: SideState, attackingIsHome: boolean): number {
+  const { formation, lineup, instructions } = defending.tactics
+  const sentOff = new Set(defending.sentOff)
+  const side: 'home' | 'away' = attackingIsHome ? 'away' : 'home'
+  /** 공격 진행 방향 기준 x(0=공격 팀 골문, 100=수비 팀 골문). */
+  const ax = (i: number) => {
+    const c = tacticalCoords(formation, i, side, instructions)
+    return attackingIsHome ? c.x : 100 - c.x
+  }
+  const xs: number[] = []
+  for (let i = 0; i < lineup.length; i++) {
+    if (sentOff.has(lineup[i].playerId)) continue
+    xs.push(ax(i))
+  }
+  // 내림차순 = 자기 골문에 가까운 순. [1]이 곧 "뒤에서 두 번째"(보통 [0]은 GK).
+  xs.sort((a, b) => b - a)
+  const secondLast = xs.length >= 2 ? xs[1] : (xs[0] ?? 100)
+
+  /**
+   * 화면에 **그려지는** 수비 라인 마커와도 어긋나면 안 된다.
+   *
+   * 작전판(PitchView → AnalysisLayer)은 백라인 그룹의 **평균 x**에 선을 긋는다
+   * (shape.ts의 마커-도트 일치 계약). 규칙이 말하는 "뒤에서 두 번째"는 보통 그 평균보다
+   * 조금 깊으므로, 규칙만 따르면 유저 눈에는 "그려진 선 앞에서 공을 받는" 그림이 된다.
+   * 둘 중 **더 보수적인 쪽**을 상한으로 삼아 규칙과 그림을 동시에 만족시킨다.
+   */
+  const back = backlineIndices(formation).filter(i => !sentOff.has(lineup[i]?.playerId ?? ''))
+  const mean = back.length > 0 ? back.reduce((sum, i) => sum + ax(i), 0) / back.length : secondLast
+  return Math.min(secondLast, mean) - ONSIDE_MARGIN
+}
+
+/** 이벤트 안무에 걸 오프사이드 상한. 세트피스·반칙은 오프사이드가 없으므로 호출하지 않는다. */
+function offsideFor(defending: SideState, attackingIsHome: boolean): OffsideLimit {
+  return { secondLastX: offsideLineFor(defending, attackingIsHome) }
+}
+
+/**
  * 역할 슬롯(원형 좌표)에 가장 잘 맞는 실제 선수를 뽑는다.
  * GK(슬롯 0)는 제외 — 필드 장면의 무버는 GK가 아니다. 이미 뽑힌 선수는 건너뛴다.
  * 같은 거리면 슬롯 인덱스가 큰 쪽(더 공격적)을 택해 결정론을 유지한다.
@@ -164,7 +222,10 @@ export function buildSequence(event: MatchEvent, homeState: SideState, awayState
   const isHome = attackingSideOf(event, homeState.team.id) === 'home'
   const attacking = isHome ? homeState : awayState
   const pattern: AttackPattern = attacking.tactics.attackPattern ?? 'balanced'
-  const scene = buildScene(pattern, finish, laneFor(event), variantsFor(event))
+  const defending = isHome ? awayState : homeState
+  // 세트피스(코너)·반칙은 오프사이드 규칙이 적용되지 않는다 — 상한을 걸지 않는다.
+  const off = finish === 'corner' || finish === 'foul' ? undefined : offsideFor(defending, isHome)
+  const scene = buildScene(pattern, finish, laneFor(event), variantsFor(event), off)
   // ★ 주인공을 슬롯 0에 꽂는 것은 그 선수가 **공격 팀의 필드 플레이어**일 때만이다.
   //   save의 playerId는 막은 팀의 GK다 — 넘기면 골키퍼가 슈터로 배정된다(실측).
   const ids = pickByRole(attacking, scene.roles, primaryOf(event, attacking))
@@ -221,6 +282,9 @@ function laneFor(event: MatchEvent): number {
 function variantsFor(event: MatchEvent): SceneVariants {
   const core = `${event.minute}:${event.type}:${event.playerId ?? ''}`
   return {
+    // 계열 추첨값 0~99 — scenes.BUILDUP_WEIGHTS가 이 값을 계열로 바꾼다. 전술이 분포를
+    // 기울이므로 같은 전술에서도 장면마다 다른 계열이 나온다(5라운드 피드백 ③).
+    family: hash(`fam|${core}`) % 100,
     buildup: hash(`bv|${core}`) % BUILDUP_VARIANT_COUNT,
     finish: hash(`fv|${core}`) % FINISH_VARIANT_COUNT,
   }
@@ -236,5 +300,7 @@ export function sceneKeyFor(event: MatchEvent, homeState: SideState, awayState: 
   const isHome = attackingSideOf(event, homeState.team.id) === 'home'
   const attacking = isHome ? homeState : awayState
   const pattern: AttackPattern = attacking.tactics.attackPattern ?? 'balanced'
-  return `${isHome ? 'H' : 'A'}/${buildScene(pattern, finish, laneFor(event), variantsFor(event)).key}`
+  const defending = isHome ? awayState : homeState
+  const off = finish === 'corner' || finish === 'foul' ? undefined : offsideFor(defending, isHome)
+  return `${isHome ? 'H' : 'A'}/${buildScene(pattern, finish, laneFor(event), variantsFor(event), off).key}`
 }

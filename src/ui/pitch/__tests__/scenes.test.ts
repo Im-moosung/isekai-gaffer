@@ -5,6 +5,7 @@ import { makeTestTeam } from '../../../engine/fixtures/testTeams'
 import { createMatch } from '../../../engine/simulate'
 import {
   buildScene, sceneLibrarySize, LANE_COUNT, buildupLabel, BUILDUP_BY_PATTERN,
+  pickBuildup, FINISH_ROUTE_LABELS,
   BUILDUP_VARIANT_COUNT, FINISH_VARIANT_COUNT, SCENE_DWELL_MS, SEGMENT_SPEED,
   CARRIER_RUN_SPEED, SUPPORT_RUN_SPEED, FOOT_OFFSET_M, TOUCH_MS,
   MAX_SHOT_DIST_M,
@@ -16,7 +17,9 @@ import { PITCH_H, PITCH_W } from '../geometry'
 const GOAL_HALF_M = 3.66
 /** 크로스바 높이(m). */
 const CROSSBAR_M = 2.44
-import { buildSequence, sceneKeyFor } from '../choreography'
+import { buildSequence, offsideLineFor, sceneKeyFor } from '../choreography'
+import { XI_SLOTS } from '../formations'
+import type { FormationId } from '../../../engine/types'
 
 /** 0~100 좌표 두 점의 실제 거리(m). */
 const metres = (a: readonly number[], b: readonly number[]) =>
@@ -52,24 +55,51 @@ function ev(type: MatchEventType, over: Partial<MatchEvent> = {}): MatchEvent {
 }
 
 describe('장면 라이브러리 규모', () => {
-  it('(빌드업 4계열 × 실행 2) × (마무리 5 × 변형 3) × 레인 6 = 720 + 세트피스 4', () => {
+  it('(빌드업 4계열 × 실행 2) × (마무리 5 × 득점루트 5) × 레인 6 = 1200 + 세트피스 4', () => {
     expect(LANE_COUNT).toBe(6)
     expect(BUILDUP_VARIANT_COUNT).toBe(2)
-    expect(FINISH_VARIANT_COUNT).toBe(3)
-    expect(sceneLibrarySize()).toEqual({ open: 720, setPiece: 4, total: 724, reachablePerMatch: 216 })
+    // ★ 2026-08-01: 득점 루트를 3 → 5로 늘렸다(크로스 헤더·드리블 돌파 추가).
+    expect(FINISH_VARIANT_COUNT).toBe(5)
+    expect(sceneLibrarySize()).toEqual({ open: 1200, setPiece: 4, total: 1204, reachablePerMatch: 1440 })
   })
 
-  // ★ total(724)은 라이브러리 크기지 한 경기 체감이 아니다. 경기 안에서는 attackPattern이
-  //   계열을 고정하고 하이라이트 결과도 3종뿐이라 실제 칸은 216이다 — 반복 게이트가
-  //   기준으로 삼아야 할 수는 이쪽이다.
-  it('한 경기 도달 가능 조합은 216이다 — 이 수가 반복 게이트의 분모다', () => {
-    expect(sceneLibrarySize().reachablePerMatch).toBe(216)
+  // ★ 2026-08-01: attackPattern이 계열을 **고정하지 않고 기울이기만** 하게 되면서
+  //   한 경기에서 4계열 전부가 도달 가능해졌다(예전 216 → 1440).
+  it('한 경기 도달 가능 조합은 1440이다 — 이 수가 반복 게이트의 분모다', () => {
+    expect(sceneLibrarySize().reachablePerMatch).toBe(1440)
   })
 
-  it('빌드업 계열은 attackPattern 4택과 1:1이고 서로 다르다', () => {
+  it('attackPattern의 최빈 계열은 4택과 1:1이고 서로 다르다', () => {
     const ids = PATTERNS.map(p => BUILDUP_BY_PATTERN[p])
     expect(new Set(ids).size).toBe(4)
     for (const p of PATTERNS) expect(buildupLabel(p).length).toBeGreaterThan(0)
+  })
+
+  // ★ 5라운드 피드백 ③ — 전술은 분포를 기울일 뿐 고정하지 않는다.
+  it('attackPattern은 계열 분포를 기울인다 — 4계열 전부가 나오되 고른 쪽이 최빈이다', () => {
+    for (const p of PATTERNS) {
+      const count: Record<string, number> = {}
+      for (let u = 0; u < 100; u++) {
+        const id = pickBuildup(p, u)
+        count[id] = (count[id] ?? 0) + 1
+      }
+      // 4계열 전부 등장하고, 어느 것도 0이 아니다.
+      expect(Object.keys(count).length, p).toBe(4)
+      for (const id of Object.keys(count)) expect(count[id], `${p}/${id}`).toBeGreaterThanOrEqual(10)
+      // 고른 전술의 계열이 최빈이고, 두 번째보다 확실히 크다(화면에서 전술이 보인다).
+      const sorted = Object.entries(count).sort((a, b) => b[1] - a[1])
+      expect(sorted[0][0], p).toBe(BUILDUP_BY_PATTERN[p])
+      expect(sorted[0][1] - sorted[1][1], p).toBeGreaterThanOrEqual(5)
+      // 기본(balanced)은 고르게 — 최빈이 3분의 1을 넘지 않는다.
+      if (p === 'balanced') expect(sorted[0][1]).toBeLessThanOrEqual(33)
+    }
+  })
+
+  it('득점 루트는 5종이고 라벨이 서로 다르다 — 헤더·드리블 돌파 포함', () => {
+    expect(FINISH_ROUTE_LABELS.length).toBe(5)
+    expect(new Set(FINISH_ROUTE_LABELS).size).toBe(5)
+    expect(FINISH_ROUTE_LABELS.some(l => l.includes('헤더'))).toBe(true)
+    expect(FINISH_ROUTE_LABELS.some(l => l.includes('드리블'))).toBe(true)
   })
 
   it('실행 변형은 계열 라벨을 바꾸지 않는다 — 유저가 고른 전술 이름은 하나다', () => {
@@ -91,7 +121,7 @@ describe('변형 축 — 같은 결과를 다른 그림으로', () => {
     }
   })
 
-  it('마무리 변형 3종은 슈팅 지점과 결과 지점이 모두 다르다', () => {
+  it('마무리 변형 5종은 슈팅 지점과 결과 지점이 모두 다르다', () => {
     const shots = new Set<string>()
     const ends = new Set<string>()
     for (let f = 0; f < FINISH_VARIANT_COUNT; f++) {
@@ -99,8 +129,8 @@ describe('변형 축 — 같은 결과를 다른 그림으로', () => {
       shots.add(shotOf(pts)!.ball.join(','))
       ends.add(endOf(pts).ball.join(','))
     }
-    expect(shots.size).toBe(FINISH_VARIANT_COUNT)
-    expect(ends.size).toBe(FINISH_VARIANT_COUNT)
+    expect(shots.size, '슈팅 지점').toBe(FINISH_VARIANT_COUNT)
+    expect(ends.size, '결과 지점').toBe(FINISH_VARIANT_COUNT)
   })
 
   it('★ 변형이 결과를 바꾸지 않는다 — 골은 항상 네트, 세이브는 GK 앞, 미스는 골문 밖', () => {
@@ -170,9 +200,28 @@ describe('변형 축 — 같은 결과를 다른 그림으로', () => {
 })
 
 describe('★ attackPattern이 화면을 바꾼다', () => {
-  it('같은 결과(goal)라도 패턴마다 빌드업 궤적이 다르다', () => {
-    const paths = PATTERNS.map(p => JSON.stringify(buildSequence(ev('goal'), withPattern(p).home, base.away).slice(0, 3)))
-    expect(new Set(paths).size).toBe(4)
+  // ★ 2026-08-01 재작성. 전술이 계열을 **고정**하던 시절에는 같은 이벤트 하나로도 패턴마다
+  //   궤적이 갈렸다. 지금은 분포를 기울일 뿐이라 이벤트 한 건은 우연히 같은 계열을 뽑을 수
+  //   있다 — 대신 **한 경기 분량의 이벤트 집합**에서 분포가 뚜렷이 갈리는지를 본다.
+  it('한 경기 분량에서 패턴마다 계열 분포가 다르고, 고른 계열이 최빈이다', () => {
+    const famOf = (p: AttackPattern, minute: number) =>
+      sceneKeyFor(ev('goal', { minute, playerId: `x${minute}` }), withPattern(p).home, base.away)!
+        .split('/')[1].split('.')[0]
+    const dist: Record<string, Record<string, number>> = {}
+    for (const p of PATTERNS) {
+      const c: Record<string, number> = {}
+      for (let m = 1; m <= 90; m++) { const f = famOf(p, m); c[f] = (c[f] ?? 0) + 1 }
+      dist[p] = c
+    }
+    for (const p of PATTERNS) {
+      // 한 경기(90건)에 여러 계열이 보인다 — 사용자가 "하나만 보인다"고 한 것의 반대.
+      expect(Object.keys(dist[p]).length, p).toBeGreaterThanOrEqual(3)
+      // 고른 전술의 계열이 최빈이다(전술이 화면에 보인다).
+      const top = Object.entries(dist[p]).sort((a, b) => b[1] - a[1])[0][0]
+      expect(top, p).toBe(BUILDUP_BY_PATTERN[p])
+    }
+    // 패턴 넷의 분포가 서로 다르다.
+    expect(new Set(PATTERNS.map(p => JSON.stringify(dist[p]))).size).toBe(4)
   })
 
   it('크로스는 측면 끝(터치라인)까지 나가고, 중거리는 박스 밖에서 마무리한다', () => {
@@ -265,7 +314,7 @@ describe('결정론', () => {
   })
   it('장면 키에 빌드업·마무리·레인·공수 주체가 들어간다', () => {
     const k = sceneKeyFor(ev('goal'), withPattern('cross').home, base.away)!
-    expect(k).toMatch(/^H\/wing\.[ab]\/goal\.[abc]\/L[0-5]$/)
+    expect(k).toMatch(/^H\/(central|wing|through|outside)\.[ab]\/goal\.[abcde]\/L[0-5]$/)
   })
   it('안무 없는 타입은 키도 없다', () => {
     for (const t of ['kickoff', 'sub', 'halftime', 'fulltime'] as MatchEventType[]) {
@@ -288,10 +337,17 @@ describe('역할 배정 — 배역은 엔진이 준다', () => {
     const ids = s[0].movers.map(m => m.playerId)
     expect(new Set(ids).size).toBe(ids.length)
   })
-  it('빌드업이 다르면 뽑히는 역할(선수)도 달라질 수 있다', () => {
-    const a = buildSequence(ev('goal'), withPattern('cross').home, base.away)[0].movers.map(m => m.playerId)
-    const b = buildSequence(ev('goal'), withPattern('longshot').home, base.away)[0].movers.map(m => m.playerId)
-    expect(a).not.toEqual(b)
+  // ★ 계열이 이벤트 해시로 뽑히게 되면서 같은 이벤트의 두 패턴이 우연히 같은 계열을 쓸 수
+  //   있다 — 그래서 **계열을 직접 지정**해 역할 원형이 실제로 다른지를 본다.
+  it('빌드업 계열이 다르면 역할 원형(뽑히는 선수)도 다르다', () => {
+    const rolesOf = (id: string) => {
+      for (let u = 0; u < 100; u++) {
+        if (pickBuildup('balanced', u) === id) return JSON.stringify(buildScene('balanced', 'goal', 0, { family: u }).roles)
+      }
+      throw new Error(`no u for ${id}`)
+    }
+    const all = ['central', 'wing', 'through', 'outside'].map(rolesOf)
+    expect(new Set(all).size).toBe(4)
   })
 })
 
@@ -548,5 +604,73 @@ describe('★ 골 종점 — 골라인 위, 기둥 안쪽, 크로스바 아래',
         }
       }
     }
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ★ 오프사이드 (2026-08-01 5라운드 피드백 ②)
+// 사용자 캡처: 공격수가 박스 안에서 공을 받는데 최종 수비는 하프라인 근처였다.
+// 규칙(경기 규칙 11조): 패스가 **출발하는 순간** 공격수가 뒤에서 두 번째 수비수보다
+// 앞서면 안 된다. 단 공보다 뒤에 있거나 자기 진영이면 언제나 온사이드다.
+// ─────────────────────────────────────────────────────────────────────────────
+describe('오프사이드 — 마무리 배역은 최종 2번째 수비 뒤에 선다', () => {
+  const FORMATIONS = Object.keys(XI_SLOTS) as FormationId[]
+
+  /** 수비 팀(어웨이) 라인 높이를 바꾼 상태를 만든다. */
+  function withDefLine(formation: FormationId, lineHeight: number) {
+    const s = structuredClone(base)
+    s.away.tactics.formation = formation
+    s.away.tactics.instructions = { ...s.away.tactics.instructions, lineHeight }
+    return s
+  }
+
+  it('라인 10~90 전 구간 × 포메이션 전종 × 패턴 4종에서 위반 0', () => {
+    let checked = 0
+    let worst = -Infinity
+    let worstTag = ''
+    for (const formation of FORMATIONS) {
+      for (let lh = 10; lh <= 90; lh += 10) {
+        const st = withDefLine(formation, lh)
+        // 규칙상의 상한(마진 없이) — 저술이 이 값을 넘으면 오프사이드다.
+        const line = offsideLineFor(st.away, true)
+        for (const pattern of PATTERNS) {
+          st.home.tactics.attackPattern = pattern
+          for (const minute of [3, 17, 34, 58, 77]) {
+            for (const type of ['goal', 'save', 'miss', 'shot', 'chance'] as MatchEventType[]) {
+              const shooter = st.home.tactics.lineup[9].playerId
+              const seq = buildSequence(ev(type, { minute, playerId: shooter }), st.home, st.away)
+              for (let k = 0; k + 1 < seq.length; k++) {
+                const p = seq[k]
+                // 공을 가진 본인은 오프사이드가 될 수 없다.
+                if (!p.carrier || p.carrier === shooter) continue
+                const m = p.movers.find(mv => mv.playerId === shooter)
+                if (!m) continue
+                // 상한 = max(뒤에서 두 번째 수비, 공, 하프라인).
+                const cap = Math.max(line, p.ball.x, 50)
+                checked++
+                const gap = m.x - cap
+                if (gap > worst) { worst = gap; worstTag = `${formation}/lh${lh}/${pattern}/${minute}:${type}/k${k}` }
+              }
+            }
+          }
+        }
+      }
+    }
+    expect(checked, '검사 프레임 수').toBeGreaterThan(5000)
+    expect(worst, `최악: ${worstTag}`).toBeLessThanOrEqual(0)
+  })
+
+  it('상한은 라인 슬라이더를 따라 움직인다 — 고정 상수가 아니다', () => {
+    const low = offsideLineFor(withDefLine('4-3-3', 10).away, true)
+    const high = offsideLineFor(withDefLine('4-3-3', 90).away, true)
+    // 라인을 올리면(90) 수비가 앞으로 나오므로 상한이 **작아진다**.
+    expect(high).toBeLessThan(low - 20)
+    // 그리고 그 차이가 실제 마무리 지점에도 나타난다.
+    const shotX = (lh: number) => {
+      const st = withDefLine('4-3-3', lh)
+      const seq = buildSequence(ev('goal', { minute: 12, playerId: st.home.tactics.lineup[9].playerId }), st.home, st.away)
+      return seq[seq.length - 2].ball.x
+    }
+    expect(shotX(90)).toBeLessThan(shotX(10))
   })
 })

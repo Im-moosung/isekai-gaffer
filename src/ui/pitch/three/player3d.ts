@@ -34,7 +34,7 @@ import {
   DIVE_TORSO_PITCH, DIVE_TORSO_TWIST, FOREARM, HIP_Y, LEG_Z, SHIN_LEN, SHOULDER_Y,
   SPRINT_SPEED, STAND_DROP, TAU, THIGH_LEN, UPPER_ARM,
   advancePhase, celebrateOffset, clamp, clamp01, deepKit, diveAngles, gaitAngles,
-  hash01, kickAngles, kitInk, luminance, mixColor, solveLeg,
+  hash01, headerAngles, kickAngles, kitInk, luminance, mixColor, solveLeg,
 } from './pose'
 
 export * from './pose'
@@ -923,6 +923,38 @@ export function createPlayer(three: ThreeNS, opts: PlayerOptions): PlayerRig {
         pose.headPitch = 0.16
         pose.headYaw = 0
         pose.shadowScale = 1
+        break
+      }
+      case 'header': {
+        // 헤딩 — 도약해서 상체를 젖혔다가 목 스냅으로 내리꽂는다.
+        // 팔·다리 기본값은 러닝에서 가져오되(공중에서도 팔이 죽지 않게) 그 위를 덮는다.
+        applyGait(smoothSpeed * 0.5)
+        const hd = headerAngles(at)
+        const air = hd.lift / 0.34
+        // 착지 순간(air=0)에는 두 발이 지면에 붙고, 뜰수록 접는다 — 세리머니와 같은 처방.
+        const hl = plantLeg(0.08, 0)
+        const hr = plantLeg(-0.08, 0)
+        pose.bodyY = hd.lift
+        pose.bodyRoll = 0
+        pose.torsoRoll = 0
+        pose.torsoPitch = hd.torsoPitch
+        pose.torsoTwist = 0
+        pose.hipL = hl.hip + 0.42 * hd.tuck
+        pose.hipR = hr.hip + 0.18 * hd.tuck
+        pose.kneeL = hl.knee - 0.85 * hd.tuck
+        pose.kneeR = hr.knee - 0.35 * hd.tuck
+        pose.ankleL = hl.ankle * (1 - air)
+        pose.ankleR = hr.ankle * (1 - air)
+        // 두 팔을 옆·위로 벌려 균형을 잡는다(실제 헤딩의 특징적인 실루엣).
+        pose.shoulderL = 0.9 * hd.armSpread
+        pose.shoulderR = 0.9 * hd.armSpread
+        pose.armOutL = 0.15 + 0.75 * hd.armSpread
+        pose.armOutR = 0.15 + 0.75 * hd.armSpread
+        pose.elbowL = 0.55
+        pose.elbowR = 0.55
+        pose.headPitch = hd.headPitch
+        pose.headYaw = 0
+        pose.shadowScale = clamp(1 - 1.2 * air, 0.4, 1)
         break
       }
       case 'celebrate': {
