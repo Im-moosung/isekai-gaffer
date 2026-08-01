@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Korean football commentary voice comparison samples",
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign",
+  "device": "mps",
+  "dtype": "float16",
+  "selection": {
+    "caster": {
+      "id": "C3",
+      "alias": "정석",
+      "speed": "1.2x",
+      "status": "trial"
+    },
+    "analyst": {
+      "id": "A3",
+      "alias": "열정",
+      "speed": "1.5x",
+      "status": "trial"
+    }
+  },
+  "options": [
+    {
+      "id": "C1",
+      "alias": "불꽃",
+      "role": "caster",
+      "description": "하이라이트에서 크게 고조되는 열정형",
+      "file": "caster-C1-불꽃.wav"
+    },
+    {
+      "id": "C2",
+      "alias": "질주",
+      "role": "caster",
+      "description": "빠르고 날카로운 속도형",
+      "file": "caster-C2-질주.wav"
+    },
+    {
+      "id": "C3",
+      "alias": "정석",
+      "role": "caster",
+      "description": "깊고 안정적인 정통형",
+      "file": "caster-C3-정석.wav",
+      "speedVariants": ["caster-C3-정석-1.2x.wav"]
+    },
+    {
+      "id": "A1",
+      "alias": "전술판",
+      "role": "analyst",
+      "description": "논리적이고 전문적인 전술 분석형",
+      "file": "analyst-A1-전술판.wav"
+    },
+    {
+      "id": "A2",
+      "alias": "침착",
+      "role": "analyst",
+      "description": "부드럽고 편안한 복기형",
+      "file": "analyst-A2-침착.wav"
+    },
+    {
+      "id": "A3",
+      "alias": "열정",
+      "role": "analyst",
+      "description": "감탄과 현장감이 살아 있는 컬러 해설형",
+      "file": "analyst-A3-열정.wav",
+      "speedVariants": ["analyst-A3-열정-1.5x.wav"]
+    }
+  ]
+}

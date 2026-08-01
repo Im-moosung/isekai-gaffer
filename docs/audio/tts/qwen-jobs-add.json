@@ -1,0 +1,108 @@
+{
+ "schemaVersion": 1,
+ "purpose": "추가분 — 9992bca(squad 배열 재정렬)로 선발 XI가 바뀌어 새로 필요해진 이름 조각",
+ "voices": {
+  "caster": {
+   "id": "C3",
+   "alias": "정석",
+   "speed": 1.2,
+   "ko": "캐스터"
+  },
+  "analyst": {
+   "id": "A3",
+   "alias": "열정",
+   "speed": 1.5,
+   "ko": "해설위원"
+  }
+ },
+ "audio": {
+  "format": "wav",
+  "note": "모노 권장. 라우드니스·속도 후처리는 저장소 쪽에서 한다."
+ },
+ "jobs": [
+  {
+   "key": "n/631e3b59e6",
+   "text": "라디슬라프 크레이치입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/8107cb3d6b",
+   "text": "라울 랑헬입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/9df986a45f",
+   "text": "로빈 흐라나치,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/660a81dc50",
+   "text": "로웬 윌리엄스입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/55af1781da",
+   "text": "마테이 코바르시입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/efaea52c04",
+   "text": "미할 사딜레크,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/fac741a822",
+   "text": "아담 흘로제크입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/d0bfc29fbc",
+   "text": "오베드 바르가스입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/2457591024",
+   "text": "은코시나티 시비시,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/639f0e302b",
+   "text": "음베케젤리 음보카지,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/f963e6f449",
+   "text": "타펠로 마세코입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/5ca2fde234",
+   "text": "토마시 소우체크,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/c0d8155311",
+   "text": "파트리크 시크,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/78757d7738",
+   "text": "헤수스 가야르도,",
+   "role": "caster",
+   "kind": "name"
+  }
+ ]
+}

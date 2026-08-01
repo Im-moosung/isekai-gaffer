@@ -7,6 +7,7 @@ import type { MomentKind } from '../../game/matchSession'
 import { teamCardTally } from '../../game/playerStats'
 import { commentateAt, commentateTimeline, flowLineAt, type CommentaryCtx } from '../../game/commentary'
 import * as ctts from '../../audio/commentary-tts'
+import * as mp3 from '../../audio/commentary-mp3'
 import { Scorebug } from '../broadcast/Scorebug'
 import { Ticker } from '../broadcast/Ticker'
 import { PitchView } from '../pitch/PitchView'
@@ -306,6 +307,20 @@ export function MatchScreen({
   // 폴백(Pixi/SVG)에서 3D가 없어도 자막·소개 카드는 그대로 돌아간다.
   const [entranceScr, setEntranceScr] = useState<EntranceScript | null>(null)
   const entranceClock = useRef(0)
+
+  /**
+   * 해설 클립 조회표(`public/tts/index.json`)를 **마운트에서** 읽는다.
+   *
+   * ★ 킥오프에서 읽으면 늦는다 — `ctts.initVoice()`가 부르는 `loadClipIndex()`는
+   *   비동기 fetch인데 `beginScript`는 바로 다음 줄에서 **동기로** 판정한다. 조회표가
+   *   아직 null이라 `canSpeakAll`이 항상 false를 내고, 클립이 다 있어도 브라우저
+   *   음성으로 폴백했다(실측: `/tts/` 요청이 index.json 하나뿐이고 발화는 speechSynthesis).
+   *
+   *   조회표는 12KB 정적 JSON이라 오디오 컨텍스트도 유저 제스처도 필요 없다.
+   *   여기서 미리 읽어 두면 킥오프 시점에는 이미 준비돼 있다.
+   *   ★ 보이스 탐색(`initVoice`)은 여전히 킥오프에서 한다 — 그쪽은 제스처가 필요하다.
+   */
+  useEffect(() => { mp3.loadClipIndex() }, [])
 
   // 경기 초기화(마운트/픽스처 변경 시). 엔진은 pre 상태로 준비.
   // initialTactics/firstHalfScript/staminaOverride는 매치별로 안정 참조(App에서 memo).
@@ -643,7 +658,23 @@ export function MatchScreen({
     // entrance.defaultEntranceMode 주석. 언제든 "선수 소개 보기"로 되돌릴 수 있다.
     const scr = entranceScript(buildEntranceCast(engine), defaultEntranceMode())
     setEntranceScr(scr)
+    beginEntranceScript(scr)
     startEntranceMusic(scr)
+  }
+
+  /**
+   * 입장 소개 대본을 mp3 경로로 넘긴다 — 덮이지 않으면 조용히 브라우저 음성으로 남는다.
+   *
+   * ★ **전부 아니면 전무**가 계약이다(ctts.beginScript). 대본 한 줄이라도 클립이 없으면
+   *   대본 전체를 speechSynthesis로 낸다 — 반쯤 mp3인 라인업 소개는 줄마다 목소리가
+   *   바뀌어 통째로 브라우저 음성인 것보다 나쁘다.
+   *
+   * 지금 클립은 12개국 전부를 덮지만(public/tts/index.json), 팀 데이터나 XI 선정이
+   * 바뀌면 이름이 어긋나 false로 떨어질 수 있다 — 실제로 `9992bca`(squad 배열 재정렬)가
+   * 선발을 바꿔 14명이 누락된 적이 있다. 그때도 화면은 조용히 폴백할 뿐 깨지지 않는다.
+   */
+  function beginEntranceScript(scr: EntranceScript) {
+    ctts.beginScript(scr.beats.map(b => b.speech))
   }
 
   /**
@@ -684,7 +715,8 @@ export function MatchScreen({
     entranceClock.current = 0
     const scr = entranceScript(buildEntranceCast(eng), mode)
     setEntranceScr(scr)
-    // 대본이 통째로 갈리므로 팡파르도 새 길이에 맞춰 다시 건다.
+    // 대본이 통째로 갈리므로 mp3 판정도 팡파르도 새 대본 기준으로 다시 건다.
+    beginEntranceScript(scr)
     bgm.stopSting(120)
     startEntranceMusic(scr)
   }
@@ -706,6 +738,8 @@ export function MatchScreen({
     // 전체 연출을 한 번 봤으면 다음 경기부터는 짧은 판이 기본이다.
     if (entranceScr?.mode === 'full') markEntranceSeen()
     ctts.stopAll()
+    // 대본 종료 — 경기 중 중계는 아직 mp3가 없으므로 여기서 반드시 꺼야 한다.
+    ctts.endScript()
     setEntranceScr(null)
     // 자연 종료면 팡파르는 방금 해소됐고, 건너뛰기면 여기서 300ms에 걷힌다.
     bgm.stopSting()

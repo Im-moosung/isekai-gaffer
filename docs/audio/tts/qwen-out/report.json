@@ -1,0 +1,2215 @@
+{
+  "schemaVersion": 4,
+  "model": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
+  "sourceManifest": "docs/audio/tts-samples/qwen3tts-voice-options/manifest.json",
+  "sourceJobs": "docs/audio/tts/qwen-jobs.json",
+  "selection": {
+    "caster": {
+      "id": "C3",
+      "alias": "정석",
+      "speed": 1.2,
+      "referenceAudio": "docs/audio/tts-samples/qwen3tts-voice-options/caster-C3-정석.wav",
+      "referenceText": "자, 경기 시작됐습니다! 오른쪽 측면을 빠르게 돌파합니다. 크로스 올라갑니다! 슈팅! 골입니다! 홈 팬들이 열광합니다!"
+    },
+    "analyst": {
+      "id": "A3",
+      "alias": "열정",
+      "speed": 1.5,
+      "referenceAudio": "docs/audio/tts-samples/qwen3tts-voice-options/analyst-A3-열정.wav",
+      "referenceText": "이 장면은 오른쪽 풀백의 오버래핑이 핵심이었습니다. 수비 라인을 바깥으로 끌어낸 뒤, 중앙에 공간을 만들었고, 공격수가 그 틈을 정확히 파고들었습니다."
+    }
+  },
+  "generation": {
+    "method": "base-voice-clone-icl",
+    "xVectorOnlyMode": false,
+    "refTextUsed": true,
+    "voiceClonePromptReuse": true,
+    "casterPromptCount": 1,
+    "analystPromptCount": 1,
+    "textArrayGeneration": true,
+    "seed": 20260806,
+    "nameMethod": "carrier for all name clips",
+    "nameMethodReason": "모든 kind=name 클립을 캐리어로 통일해 생성 방식 편차를 제거했습니다.",
+    "batching": {
+      "casterDirectMax": 24,
+      "casterNameCarrierMax": 16,
+      "analystDirectMax": 16
+    },
+    "note": "3차의 역할별 참조 WAV·전문 ref_text·ICL prompt 재사용 설정을 그대로 사용했으며, 기존 8개도 이번 전체 생성에서 다시 만들었습니다."
+  },
+  "audio": {
+    "format": "wav",
+    "sampleRate": 24000,
+    "channels": 1,
+    "encoding": "pcm_s16le",
+    "loudnessNormalization": false,
+    "pitchShift": false,
+    "speedApplied": true,
+    "leadingTrailingSilenceTrimmed": true
+  },
+  "counts": {
+    "jobs": 219,
+    "clips": 219,
+    "caster": 213,
+    "analyst": 6,
+    "names": 184
+  },
+  "clips": [
+    {
+      "key": "t/fa710f7599",
+      "text": "네 명의 수비가 출전합니다.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 1.312917,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/d8dc6845f0",
+      "text": "중앙에는 다섯 명이 섭니다.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 1.311375,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/44f923954a",
+      "text": "최전방은 한 명입니다.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 1.224958,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/2d11498d02",
+      "text": "최전방은 두 명입니다.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 1.207625,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/695aabda05",
+      "text": "중앙에는 세 명이 섭니다.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 1.516375,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/e8a8159830",
+      "text": "최전방은 세 명입니다.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 1.182917,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/0ffbee7475",
+      "text": "중앙에는 네 명이 섭니다.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 1.181125,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/cda7598a3f",
+      "text": "스리백입니다.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 0.89425,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/99b1741af8",
+      "text": "대한민국 선발 라인업입니다. 사 삼 삼 대형.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 3.491125,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/7ee5453059",
+      "text": "대한민국 선발 라인업입니다. 사 이 삼 일 대형.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 3.086042,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/7abc43e6a0",
+      "text": "대한민국 선발 라인업입니다. 사 사 이 대형.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 3.26675,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/faf1fce724",
+      "text": "대한민국 선발 라인업입니다. 삼 오 이 대형.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 2.651292,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/573d9094f0",
+      "text": "대한민국 선발 라인업입니다. 사 일 사 일 대형.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 2.997792,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/11069b8d35",
+      "text": "대한민국 선발 라인업입니다. 오 사 일 대형.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 3.220417,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/e2048a8a3d",
+      "text": "뒤를 다섯으로 채웁니다.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 1.23,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/40c6419e8f",
+      "text": "체코 선발 라인업입니다. 삼 오 이 대형.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 2.642833,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/1cb1af7127",
+      "text": "멕시코 선발 라인업입니다. 사 삼 삼 대형.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 2.695208,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/4721935634",
+      "text": "남아프리카공화국 선발 라인업입니다. 사 이 삼 일 대형.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 3.689833,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/e69d948de6",
+      "text": "에콰도르 선발 라인업입니다. 사 사 이 대형.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 2.925542,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/ccf09a76a6",
+      "text": "잉글랜드 선발 라인업입니다. 사 이 삼 일 대형.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 4.088708,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/755eaaf05f",
+      "text": "노르웨이 선발 라인업입니다. 사 일 사 일 대형.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 2.727958,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/26041598cf",
+      "text": "아르헨티나 선발 라인업입니다. 사 사 이 대형.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 3.0745,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/694ca53b91",
+      "text": "스페인 선발 라인업입니다. 사 이 삼 일 대형.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 3.702167,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/3da6dbe388",
+      "text": "캐나다 선발 라인업입니다. 사 이 삼 일 대형.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 3.315125,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/f0380b3e6e",
+      "text": "모로코 선발 라인업입니다. 사 삼 삼 대형.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 3.172833,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/f4b0f52b5f",
+      "text": "프랑스 선발 라인업입니다. 사 삼 삼 대형.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 3.142542,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/fb224cdc6c",
+      "text": "골키퍼,",
+      "role": "caster",
+      "kind": "frag",
+      "speed": 1.2,
+      "durationSeconds": 0.434167,
+      "method": "direct-array"
+    },
+    {
+      "key": "n/931ab35365",
+      "text": "김승규,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.644,
+      "method": "carrier-array-head",
+      "carrierText": "김승규 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/6714d1cbe5",
+      "text": "김승규입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.687833,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 김승규입니다."
+    },
+    {
+      "key": "n/a4d4c1012e",
+      "text": "이한범,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.503875,
+      "method": "carrier-array-head",
+      "carrierText": "이한범 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/43400b0108",
+      "text": "이한범입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.744833,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 이한범입니다."
+    },
+    {
+      "key": "n/c7ae3e4d58",
+      "text": "이기혁,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.446292,
+      "method": "carrier-array-head",
+      "carrierText": "이기혁 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/f4fb6857af",
+      "text": "이기혁입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.70225,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 이기혁입니다."
+    },
+    {
+      "key": "n/d6a8c2bd4d",
+      "text": "김민재,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.528125,
+      "method": "carrier-array-head",
+      "carrierText": "김민재 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/e9a7cdc1e9",
+      "text": "김민재입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.695708,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 김민재입니다."
+    },
+    {
+      "key": "n/6d9183795b",
+      "text": "김태현,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.399125,
+      "method": "carrier-array-head",
+      "carrierText": "김태현 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/aa84319b78",
+      "text": "김태현입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.698042,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 김태현입니다."
+    },
+    {
+      "key": "n/0c2cf0f960",
+      "text": "황인범,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.456792,
+      "method": "carrier-array-head",
+      "carrierText": "황인범 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/015e84b292",
+      "text": "황인범입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.776875,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 황인범입니다."
+    },
+    {
+      "key": "n/7ca3c488fd",
+      "text": "손흥민,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.629375,
+      "method": "carrier-array-head",
+      "carrierText": "손흥민 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/ab39065ecd",
+      "text": "손흥민입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.0515,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 손흥민입니다."
+    },
+    {
+      "key": "n/2947b7e623",
+      "text": "백승호,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.510458,
+      "method": "carrier-array-head",
+      "carrierText": "백승호 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/bc2d1d92cc",
+      "text": "백승호입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.629625,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 백승호입니다."
+    },
+    {
+      "key": "n/5a420be0be",
+      "text": "조규성,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.579667,
+      "method": "carrier-array-head",
+      "carrierText": "조규성 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/5a6ee4e5e2",
+      "text": "조규성입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.737875,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 조규성입니다."
+    },
+    {
+      "key": "n/fb0246aeb9",
+      "text": "이재성,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.594958,
+      "method": "carrier-array-head",
+      "carrierText": "이재성 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/2739ef0896",
+      "text": "이재성입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.954458,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 이재성입니다."
+    },
+    {
+      "key": "n/a96bbf1a98",
+      "text": "황희찬,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.4915,
+      "method": "carrier-array-head",
+      "carrierText": "황희찬 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/7b5c4dbd4d",
+      "text": "황희찬입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.739167,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 황희찬입니다."
+    },
+    {
+      "key": "n/ff117704f5",
+      "text": "송범근,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.51025,
+      "method": "carrier-array-head",
+      "carrierText": "송범근 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/9b02129c35",
+      "text": "송범근입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.874375,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 송범근입니다."
+    },
+    {
+      "key": "n/80852f0ab1",
+      "text": "이태석,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.497167,
+      "method": "carrier-array-head",
+      "carrierText": "이태석 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/87bc4a4613",
+      "text": "이태석입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.696083,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 이태석입니다."
+    },
+    {
+      "key": "n/9688245e72",
+      "text": "조위제,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.529625,
+      "method": "carrier-array-head",
+      "carrierText": "조위제 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/6f735d89ee",
+      "text": "조위제입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.808625,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 조위제입니다."
+    },
+    {
+      "key": "n/d4b105eea7",
+      "text": "김문환,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.447292,
+      "method": "carrier-array-head",
+      "carrierText": "김문환 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/1cd43742c0",
+      "text": "김문환입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.647167,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 김문환입니다."
+    },
+    {
+      "key": "n/5a1947e0eb",
+      "text": "박진섭,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.486583,
+      "method": "carrier-array-head",
+      "carrierText": "박진섭 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/60045e1624",
+      "text": "박진섭입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.85425,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 박진섭입니다."
+    },
+    {
+      "key": "n/fc081aef5b",
+      "text": "배준호,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.486375,
+      "method": "carrier-array-head",
+      "carrierText": "배준호 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/d9c110b560",
+      "text": "배준호입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.794083,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 배준호입니다."
+    },
+    {
+      "key": "n/155efa364e",
+      "text": "오현규,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.678625,
+      "method": "carrier-array-head",
+      "carrierText": "오현규 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/2e9fd8813a",
+      "text": "오현규입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.809167,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 오현규입니다."
+    },
+    {
+      "key": "n/398db10106",
+      "text": "이강인,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.528375,
+      "method": "carrier-array-head",
+      "carrierText": "이강인 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/da382ace6d",
+      "text": "이강인입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.540333,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 이강인입니다."
+    },
+    {
+      "key": "n/865caf328d",
+      "text": "양현준,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.535292,
+      "method": "carrier-array-head",
+      "carrierText": "양현준 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/b463d2b4cc",
+      "text": "양현준입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.82875,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 양현준입니다."
+    },
+    {
+      "key": "n/a5b38117a5",
+      "text": "조현우,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.612083,
+      "method": "carrier-array-head",
+      "carrierText": "조현우 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/88fde696a7",
+      "text": "조현우입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.698083,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 조현우입니다."
+    },
+    {
+      "key": "n/2042dd2dcb",
+      "text": "설영우,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.683042,
+      "method": "carrier-array-head",
+      "carrierText": "설영우 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/57c2ac38b6",
+      "text": "설영우입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.758833,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 설영우입니다."
+    },
+    {
+      "key": "n/584c70053b",
+      "text": "옌스 카스트로프,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.008375,
+      "method": "carrier-array-head",
+      "carrierText": "옌스 카스트로프 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/f81f5c7c02",
+      "text": "옌스 카스트로프입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.225458,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 옌스 카스트로프입니다."
+    },
+    {
+      "key": "n/1de1f9979c",
+      "text": "김진규,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.65275,
+      "method": "carrier-array-head",
+      "carrierText": "김진규 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/e69538dbfa",
+      "text": "김진규입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.772417,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 김진규입니다."
+    },
+    {
+      "key": "n/abf16046cc",
+      "text": "엄지성,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.512,
+      "method": "carrier-array-head",
+      "carrierText": "엄지성 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/a887e06a7e",
+      "text": "엄지성입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.865167,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 엄지성입니다."
+    },
+    {
+      "key": "n/a69f2092ba",
+      "text": "이동경,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.431333,
+      "method": "carrier-array-head",
+      "carrierText": "이동경 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/ce159e5ea1",
+      "text": "이동경입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.764625,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 이동경입니다."
+    },
+    {
+      "key": "n/c5f6419daa",
+      "text": "다비트 지마,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.735833,
+      "method": "carrier-array-head",
+      "carrierText": "다비트 지마 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/f3dd4c8729",
+      "text": "토마시 홀레시,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.969292,
+      "method": "carrier-array-head",
+      "carrierText": "토마시 홀레시 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/2e0f9fd767",
+      "text": "로빈 흐라나치입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.151542,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 로빈 흐라나치입니다."
+    },
+    {
+      "key": "n/68774e4c53",
+      "text": "루카시 프로보트,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.027708,
+      "method": "carrier-array-head",
+      "carrierText": "루카시 프로보트 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/c73eaca59b",
+      "text": "라디슬라프 크레이치,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.178167,
+      "method": "carrier-array-head",
+      "carrierText": "라디슬라프 크레이치 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/b01ff45f66",
+      "text": "블라디미르 다리다,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.86875,
+      "method": "carrier-array-head",
+      "carrierText": "블라디미르 다리다 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/0dff76fa49",
+      "text": "루카시 체르프,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.054917,
+      "method": "carrier-array-head",
+      "carrierText": "루카시 체르프 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/93e4f98ab7",
+      "text": "데니스 비신스키입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.11275,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 데니스 비신스키입니다."
+    },
+    {
+      "key": "n/b0346d6fe9",
+      "text": "아담 흘로제크,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.746625,
+      "method": "carrier-array-head",
+      "carrierText": "아담 흘로제크 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/6724436cbe",
+      "text": "파트리크 시크입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.065208,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 파트리크 시크입니다."
+    },
+    {
+      "key": "n/755321e905",
+      "text": "세사르 몬테스,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.78625,
+      "method": "carrier-array-head",
+      "carrierText": "세사르 몬테스 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/a8a3d1162c",
+      "text": "요한 바스케스,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.870333,
+      "method": "carrier-array-head",
+      "carrierText": "요한 바스케스 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/ea43ff3dfc",
+      "text": "마테오 차베스,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.97375,
+      "method": "carrier-array-head",
+      "carrierText": "마테오 차베스 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/61a40e770c",
+      "text": "호르헤 산체스입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.098125,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 호르헤 산체스입니다."
+    },
+    {
+      "key": "n/9164fcc365",
+      "text": "에드손 알바레스,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.890375,
+      "method": "carrier-array-head",
+      "carrierText": "에드손 알바레스 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/b773c28a85",
+      "text": "루이스 로모,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.785083,
+      "method": "carrier-array-head",
+      "carrierText": "루이스 로모 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/cb2003798e",
+      "text": "알바로 피달고입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.038875,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 알바로 피달고입니다."
+    },
+    {
+      "key": "n/2dbce5c378",
+      "text": "알렉시스 베가,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.837625,
+      "method": "carrier-array-head",
+      "carrierText": "알렉시스 베가 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/1e51f630a4",
+      "text": "훌리안 키뇨네스,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.174667,
+      "method": "carrier-array-head",
+      "carrierText": "훌리안 키뇨네스 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/8aca6f68e7",
+      "text": "라울 히메네스입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.079333,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 라울 히메네스입니다."
+    },
+    {
+      "key": "n/a63ee66acb",
+      "text": "타방 마툴루디,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.713083,
+      "method": "carrier-array-head",
+      "carrierText": "타방 마툴루디 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/3eab3a63fb",
+      "text": "쿨루마니 은다마네,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.969292,
+      "method": "carrier-array-head",
+      "carrierText": "쿨루마니 은다마네 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/509aef2e8e",
+      "text": "오브리 모디바,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.999583,
+      "method": "carrier-array-head",
+      "carrierText": "오브리 모디바 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/53013b5b39",
+      "text": "쿨리소 무다우입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.107375,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 쿨리소 무다우입니다."
+    },
+    {
+      "key": "n/784ea9375e",
+      "text": "탈렌테 음바타,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.905625,
+      "method": "carrier-array-head",
+      "carrierText": "탈렌테 음바타 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/9a24e316c9",
+      "text": "스페펠로 시톨레,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.976083,
+      "method": "carrier-array-head",
+      "carrierText": "스페펠로 시톨레 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/9de8b9b778",
+      "text": "체팡 모레미,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.924,
+      "method": "carrier-array-head",
+      "carrierText": "체팡 모레미 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/8852233ff6",
+      "text": "렐레보힐레 모포켕,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.161083,
+      "method": "carrier-array-head",
+      "carrierText": "렐레보힐레 모포켕 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/1c17f01526",
+      "text": "오스윈 아폴리스입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.99975,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 오스윈 아폴리스입니다."
+    },
+    {
+      "key": "n/0dde4ca570",
+      "text": "라일 포스터입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.845917,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 라일 포스터입니다."
+    },
+    {
+      "key": "t/e4e230d35c",
+      "text": "포백 라인이 균형을 잡습니다.",
+      "role": "analyst",
+      "kind": "plain",
+      "speed": 1.5,
+      "durationSeconds": 1.268417,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/506c2cebc9",
+      "text": "포백입니다. 좌우 풀백이 얼마나 올라오느냐를 보시죠.",
+      "role": "analyst",
+      "kind": "plain",
+      "speed": 1.5,
+      "durationSeconds": 3.062708,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/8547f6250d",
+      "text": "기본에 충실한 포백, 간격 유지가 열쇠입니다.",
+      "role": "analyst",
+      "kind": "plain",
+      "speed": 1.5,
+      "durationSeconds": 2.35875,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/133462ced8",
+      "text": "뒤를 셋으로 두고 중앙을 좁게 쓰겠다는 뜻이죠.",
+      "role": "analyst",
+      "kind": "plain",
+      "speed": 1.5,
+      "durationSeconds": 2.254208,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/0cf90da01a",
+      "text": "백 파이브, 일단 뒤를 잠그고 시작합니다.",
+      "role": "analyst",
+      "kind": "plain",
+      "speed": 1.5,
+      "durationSeconds": 2.006292,
+      "method": "direct-array"
+    },
+    {
+      "key": "t/e591948d1e",
+      "text": "백 스리, 좌우 윙백의 활동량이 관건입니다.",
+      "role": "analyst",
+      "kind": "plain",
+      "speed": 1.5,
+      "durationSeconds": 2.15975,
+      "method": "direct-array"
+    },
+    {
+      "key": "n/631e3b59e6",
+      "text": "라디슬라프 크레이치입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.484125,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 라디슬라프 크레이치입니다."
+    },
+    {
+      "key": "n/8107cb3d6b",
+      "text": "라울 랑헬입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.894625,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 라울 랑헬입니다."
+    },
+    {
+      "key": "n/9df986a45f",
+      "text": "로빈 흐라나치,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.856583,
+      "method": "carrier-array-head",
+      "carrierText": "로빈 흐라나치 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/660a81dc50",
+      "text": "로웬 윌리엄스입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.1015,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 로웬 윌리엄스입니다."
+    },
+    {
+      "key": "n/55af1781da",
+      "text": "마테이 코바르시입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.169958,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 마테이 코바르시입니다."
+    },
+    {
+      "key": "n/efaea52c04",
+      "text": "미할 사딜레크,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.797458,
+      "method": "carrier-array-head",
+      "carrierText": "미할 사딜레크 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/fac741a822",
+      "text": "아담 흘로제크입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.115333,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 아담 흘로제크입니다."
+    },
+    {
+      "key": "n/d0bfc29fbc",
+      "text": "오베드 바르가스입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.117542,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 오베드 바르가스입니다."
+    },
+    {
+      "key": "n/2457591024",
+      "text": "은코시나티 시비시,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.058708,
+      "method": "carrier-array-head",
+      "carrierText": "은코시나티 시비시 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/639f0e302b",
+      "text": "음베케젤리 음보카지,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.1215,
+      "method": "carrier-array-head",
+      "carrierText": "음베케젤리 음보카지 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/f963e6f449",
+      "text": "타펠로 마세코입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.102,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 타펠로 마세코입니다."
+    },
+    {
+      "key": "n/5ca2fde234",
+      "text": "토마시 소우체크,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.038083,
+      "method": "carrier-array-head",
+      "carrierText": "토마시 소우체크 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/c0d8155311",
+      "text": "파트리크 시크,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.856083,
+      "method": "carrier-array-head",
+      "carrierText": "파트리크 시크 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/78757d7738",
+      "text": "헤수스 가야르도,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.007208,
+      "method": "carrier-array-head",
+      "carrierText": "헤수스 가야르도 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/15c65a4896",
+      "text": "곤살로 플라타입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.094833,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 곤살로 플라타입니다."
+    },
+    {
+      "key": "n/4532793f1e",
+      "text": "나우엘 몰리나입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.040083,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 나우엘 몰리나입니다."
+    },
+    {
+      "key": "n/e8ae110de9",
+      "text": "네일 엘 아이나위입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.353833,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 네일 엘 아이나위입니다."
+    },
+    {
+      "key": "n/eed0a93a2a",
+      "text": "니코 오라일리,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.85175,
+      "method": "carrier-array-head",
+      "carrierText": "니코 오라일리 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/d13ed2babf",
+      "text": "니코 윌리엄스,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.950792,
+      "method": "carrier-array-head",
+      "carrierText": "니코 윌리엄스 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/53dec3176a",
+      "text": "니콜라스 곤살레스,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.98,
+      "method": "carrier-array-head",
+      "carrierText": "니콜라스 곤살레스 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/5579953c1a",
+      "text": "니콜라스 타글리아피코,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.085625,
+      "method": "carrier-array-head",
+      "carrierText": "니콜라스 타글리아피코 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/476e72e5a2",
+      "text": "닐손 앙굴로,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.886542,
+      "method": "carrier-array-head",
+      "carrierText": "닐손 앙굴로 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/e65db7caec",
+      "text": "다니 올모,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.633958,
+      "method": "carrier-array-head",
+      "carrierText": "다니 올모 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/a0f069d75f",
+      "text": "다비드 묄레르 볼페,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.000833,
+      "method": "carrier-array-head",
+      "carrierText": "다비드 묄레르 볼페 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/92efa09a3a",
+      "text": "다요 우파메카노,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.932208,
+      "method": "carrier-array-head",
+      "carrierText": "다요 우파메카노 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/58ff3c8934",
+      "text": "데릭 코넬리우스,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.938958,
+      "method": "carrier-array-head",
+      "carrierText": "데릭 코넬리우스 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/1fa5a5ee66",
+      "text": "데인 세인트클레어입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.137333,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 데인 세인트클레어입니다."
+    },
+    {
+      "key": "n/0d25c534ba",
+      "text": "데클란 라이스,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.88,
+      "method": "carrier-array-head",
+      "carrierText": "데클란 라이스 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/43719fa582",
+      "text": "라민 야말입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.96525,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 라민 야말입니다."
+    },
+    {
+      "key": "n/293d9910e4",
+      "text": "레안드로 파레데스,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.109208,
+      "method": "carrier-array-head",
+      "carrierText": "레안드로 파레데스 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/3e7a79a90f",
+      "text": "레오 외스티고르,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.904792,
+      "method": "carrier-array-head",
+      "carrierText": "레오 외스티고르 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/6bd66791a3",
+      "text": "로드리,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.510375,
+      "method": "carrier-array-head",
+      "carrierText": "로드리 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/927999dcf7",
+      "text": "리산드로 마르티네스,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.11725,
+      "method": "carrier-array-head",
+      "carrierText": "리산드로 마르티네스 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/90d87b3f94",
+      "text": "리스 제임스입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.990208,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 리스 제임스입니다."
+    },
+    {
+      "key": "n/d51de62472",
+      "text": "리오넬 메시,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.878917,
+      "method": "carrier-array-head",
+      "carrierText": "리오넬 메시 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/ae2e7513bc",
+      "text": "마르코스 요렌테입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.242833,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 마르코스 요렌테입니다."
+    },
+    {
+      "key": "n/0d67ae32fb",
+      "text": "마르크 쿠쿠레야,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.956417,
+      "method": "carrier-array-head",
+      "carrierText": "마르크 쿠쿠레야 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/8a19af2053",
+      "text": "마르틴 수비멘디,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.9675,
+      "method": "carrier-array-head",
+      "carrierText": "마르틴 수비멘디 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/a5436a9cb2",
+      "text": "마이크 메냥입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.122417,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 마이크 메냥입니다."
+    },
+    {
+      "key": "n/be990d6662",
+      "text": "마커스 래시퍼드,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.960542,
+      "method": "carrier-array-head",
+      "carrierText": "마커스 래시퍼드 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/1db80ee07d",
+      "text": "마크 게이,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.692917,
+      "method": "carrier-array-head",
+      "carrierText": "마크 게이 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/bb2885b644",
+      "text": "모이세스 카이세도,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.970917,
+      "method": "carrier-array-head",
+      "carrierText": "모이세스 카이세도 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/c7a0175486",
+      "text": "모이즈 봄비토,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.945042,
+      "method": "carrier-array-head",
+      "carrierText": "모이즈 봄비토 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/a0762ea2c0",
+      "text": "미켈 오야르사발입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.081792,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 미켈 오야르사발입니다."
+    },
+    {
+      "key": "n/911fffeef2",
+      "text": "바랑 자이르에메리입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.235583,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 바랑 자이르에메리입니다."
+    },
+    {
+      "key": "n/5895527ee1",
+      "text": "부카요 사카입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.126792,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 부카요 사카입니다."
+    },
+    {
+      "key": "n/b43c10a42c",
+      "text": "브래들리 바르콜라,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.874583,
+      "method": "carrier-array-head",
+      "carrierText": "브래들리 바르콜라 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/fcbd95e3cb",
+      "text": "산데르 베르게,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.890417,
+      "method": "carrier-array-head",
+      "carrierText": "산데르 베르게 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/f0495a7154",
+      "text": "샤디 리아드,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.8055,
+      "method": "carrier-array-head",
+      "carrierText": "샤디 리아드 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/a4b8d8ee13",
+      "text": "셈스딘 탈비,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.871208,
+      "method": "carrier-array-head",
+      "carrierText": "셈스딘 탈비 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/770d1cef4b",
+      "text": "소피안 암라바트,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.910083,
+      "method": "carrier-array-head",
+      "carrierText": "소피안 암라바트 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/5d7f886858",
+      "text": "수피안 라히미입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.022167,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 수피안 라히미입니다."
+    },
+    {
+      "key": "n/28928f498d",
+      "text": "스티븐 에우스타키우,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.959667,
+      "method": "carrier-array-head",
+      "carrierText": "스티븐 에우스타키우 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/05eb7a3fe3",
+      "text": "아나스 살라흐에딘,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.108583,
+      "method": "carrier-array-head",
+      "carrierText": "아나스 살라흐에딘 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/bf31a10bd8",
+      "text": "아드리앵 라비오,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.984292,
+      "method": "carrier-array-head",
+      "carrierText": "아드리앵 라비오 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/02bf69b0cc",
+      "text": "아르헨티나 선발 라인업입니다. 사 삼 삼 대형.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 3.027417,
+      "method": "direct-array"
+    },
+    {
+      "key": "n/1c7639e6fa",
+      "text": "아민 스바이,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.574208,
+      "method": "carrier-array-head",
+      "carrierText": "아민 스바이 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/61532620f3",
+      "text": "아슈라프 하키미입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.128875,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 아슈라프 하키미입니다."
+    },
+    {
+      "key": "n/25e8184cff",
+      "text": "아이메릭 라포르트,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.103792,
+      "method": "carrier-array-head",
+      "carrierText": "아이메릭 라포르트 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/21b19cf363",
+      "text": "아제딘 우나히,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.794167,
+      "method": "carrier-array-head",
+      "carrierText": "아제딘 우나히 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/bf96c1ff14",
+      "text": "안토니오 누사,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.743875,
+      "method": "carrier-array-head",
+      "carrierText": "안토니오 누사 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/fcd5bc6cb1",
+      "text": "알렉시스 맥 알리스터,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.098917,
+      "method": "carrier-array-head",
+      "carrierText": "알렉시스 맥 알리스터 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/fa81ab9731",
+      "text": "알폰소 데이비스,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.974042,
+      "method": "carrier-array-head",
+      "carrierText": "알폰소 데이비스 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/3b2575afcb",
+      "text": "앙헬로 프레시아도입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.244167,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 앙헬로 프레시아도입니다."
+    },
+    {
+      "key": "n/d349dc2b86",
+      "text": "앨리스테어 존스턴입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.209833,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 앨리스테어 존스턴입니다."
+    },
+    {
+      "key": "n/09fc10dad0",
+      "text": "야신 부누입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.865542,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 야신 부누입니다."
+    },
+    {
+      "key": "n/37bd81b1e4",
+      "text": "에네르 발렌시아입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.261667,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 에네르 발렌시아입니다."
+    },
+    {
+      "key": "n/a5c7271803",
+      "text": "에르난 갈린데스입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.152417,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 에르난 갈린데스입니다."
+    },
+    {
+      "key": "n/9f8e7cba0e",
+      "text": "에밀리아노 마르티네스입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.367042,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 에밀리아노 마르티네스입니다."
+    },
+    {
+      "key": "n/46dce79383",
+      "text": "에콰도르 선발 라인업입니다. 사 이 삼 일 대형.",
+      "role": "caster",
+      "kind": "plain",
+      "speed": 1.2,
+      "durationSeconds": 2.957083,
+      "method": "direct-array"
+    },
+    {
+      "key": "n/f0848157c6",
+      "text": "엔소 페르난데스입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.106208,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 엔소 페르난데스입니다."
+    },
+    {
+      "key": "n/1a8a551543",
+      "text": "엘리엇 앤더슨,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.76425,
+      "method": "carrier-array-head",
+      "carrierText": "엘리엇 앤더슨 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/7cf797ea7d",
+      "text": "엘링 홀란입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.956833,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 엘링 홀란입니다."
+    },
+    {
+      "key": "n/4545238e10",
+      "text": "오렐리앵 추아메니,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.057917,
+      "method": "carrier-array-head",
+      "carrierText": "오렐리앵 추아메니 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/a04eb0707d",
+      "text": "오스카르 보브입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.987167,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 오스카르 보브입니다."
+    },
+    {
+      "key": "n/71e99abd9c",
+      "text": "외르얀 뉠란입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.921583,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 외르얀 뉠란입니다."
+    },
+    {
+      "key": "n/24e7fc358c",
+      "text": "우나이 시몬입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.810875,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 우나이 시몬입니다."
+    },
+    {
+      "key": "n/96897c3f7b",
+      "text": "우스만 뎀벨레,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.813333,
+      "method": "carrier-array-head",
+      "carrierText": "우스만 뎀벨레 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/0d675bf34d",
+      "text": "윌리안 파초,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.863708,
+      "method": "carrier-array-head",
+      "carrierText": "윌리안 파초 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/49dc6a9ff8",
+      "text": "윌리앙 살리바,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.866042,
+      "method": "carrier-array-head",
+      "carrierText": "윌리앙 살리바 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/e5b7924e3c",
+      "text": "율리안 뤼에르손입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.292292,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 율리안 뤼에르손입니다."
+    },
+    {
+      "key": "n/4ab9d0493b",
+      "text": "이사 디오프,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.639167,
+      "method": "carrier-array-head",
+      "carrierText": "이사 디오프 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/cd615d7c43",
+      "text": "이스마엘 코네,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.90075,
+      "method": "carrier-array-head",
+      "carrierText": "이스마엘 코네 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/f9095f6927",
+      "text": "제이컵 섀펠버그,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.000208,
+      "method": "carrier-array-head",
+      "carrierText": "제이컵 섀펠버그 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/ec22b6fbcc",
+      "text": "조너선 데이비드입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.1195,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 조너선 데이비드입니다."
+    },
+    {
+      "key": "n/a8bc7d4330",
+      "text": "조너선 오소리오,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.977458,
+      "method": "carrier-array-head",
+      "carrierText": "조너선 오소리오 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/e1355ca78e",
+      "text": "조던 픽포드입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.96175,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 조던 픽포드입니다."
+    },
+    {
+      "key": "n/b0dd9ad0b0",
+      "text": "조르디 알시바르,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.950875,
+      "method": "carrier-array-head",
+      "carrierText": "조르디 알시바르 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/8ed937b1b8",
+      "text": "존 스톤스,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.616042,
+      "method": "carrier-array-head",
+      "carrierText": "존 스톤스 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/09fb7c0efd",
+      "text": "주드 벨링엄,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.852333,
+      "method": "carrier-array-head",
+      "carrierText": "주드 벨링엄 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/1e54148af6",
+      "text": "쥘 쿤데입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.860042,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 쥘 쿤데입니다."
+    },
+    {
+      "key": "n/389a78b83d",
+      "text": "켄드리 파에스,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.107292,
+      "method": "carrier-array-head",
+      "carrierText": "켄드리 파에스 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/c3f456f265",
+      "text": "크리스토페르 아예르,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.897125,
+      "method": "carrier-array-head",
+      "carrierText": "크리스토페르 아예르 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/8a7f219614",
+      "text": "크리스티안 로메로,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.84625,
+      "method": "carrier-array-head",
+      "carrierText": "크리스티안 로메로 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/60cfad8dea",
+      "text": "킬리안 음바페입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.045833,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 킬리안 음바페입니다."
+    },
+    {
+      "key": "n/b253f36dc0",
+      "text": "타종 뷰캐넌입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.983708,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 타종 뷰캐넌입니다."
+    },
+    {
+      "key": "n/aa5a0a03d4",
+      "text": "테오 에르난데스,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.934917,
+      "method": "carrier-array-head",
+      "carrierText": "테오 에르난데스 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/7d55f27c33",
+      "text": "파우 쿠바르시,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.966417,
+      "method": "carrier-array-head",
+      "carrierText": "파우 쿠바르시 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/c368a2b75a",
+      "text": "파트리크 베르그,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.803125,
+      "method": "carrier-array-head",
+      "carrierText": "파트리크 베르그 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/bff6d40a92",
+      "text": "페르비스 에스투피냔,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.145125,
+      "method": "carrier-array-head",
+      "carrierText": "페르비스 에스투피냔 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/b003a2da33",
+      "text": "프레드리크 아우르스네스,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.306417,
+      "method": "carrier-array-head",
+      "carrierText": "프레드리크 아우르스네스 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/3909df9fa9",
+      "text": "피에로 인카피에,",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.063917,
+      "method": "carrier-array-head",
+      "carrierText": "피에로 인카피에 …… 지금 좋습니다."
+    },
+    {
+      "key": "n/5bbf609f77",
+      "text": "해리 케인입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 0.746667,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 해리 케인입니다."
+    },
+    {
+      "key": "n/3c544c3b04",
+      "text": "훌리안 알바레스입니다.",
+      "role": "caster",
+      "kind": "name",
+      "speed": 1.2,
+      "durationSeconds": 1.200333,
+      "method": "carrier-array-tail",
+      "carrierText": "이 선수는 …… 훌리안 알바레스입니다."
+    }
+  ],
+  "failures": []
+}

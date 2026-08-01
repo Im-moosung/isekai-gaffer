@@ -1,0 +1,714 @@
+{
+ "schemaVersion": 1,
+ "purpose": "이세계 감독 — 한국어 중계 TTS 클립. Qwen3-TTS 1.7B VoiceDesign으로 생성.",
+ "voices": {
+  "caster": {
+   "id": "C3",
+   "alias": "정석",
+   "speed": 1.2,
+   "ko": "캐스터"
+  },
+  "analyst": {
+   "id": "A3",
+   "alias": "열정",
+   "speed": 1.5,
+   "ko": "해설위원"
+  }
+ },
+ "audio": {
+  "format": "wav",
+  "note": "모노 권장. 라우드니스·속도 후처리는 저장소 쪽에서 한다."
+ },
+ "jobs": [
+  {
+   "key": "t/fa710f7599",
+   "text": "네 명의 수비가 출전합니다.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/d8dc6845f0",
+   "text": "중앙에는 다섯 명이 섭니다.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/44f923954a",
+   "text": "최전방은 한 명입니다.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/2d11498d02",
+   "text": "최전방은 두 명입니다.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/695aabda05",
+   "text": "중앙에는 세 명이 섭니다.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/e8a8159830",
+   "text": "최전방은 세 명입니다.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/0ffbee7475",
+   "text": "중앙에는 네 명이 섭니다.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/cda7598a3f",
+   "text": "스리백입니다.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/99b1741af8",
+   "text": "대한민국 선발 라인업입니다. 사 삼 삼 대형.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/7ee5453059",
+   "text": "대한민국 선발 라인업입니다. 사 이 삼 일 대형.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/7abc43e6a0",
+   "text": "대한민국 선발 라인업입니다. 사 사 이 대형.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/faf1fce724",
+   "text": "대한민국 선발 라인업입니다. 삼 오 이 대형.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/573d9094f0",
+   "text": "대한민국 선발 라인업입니다. 사 일 사 일 대형.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/11069b8d35",
+   "text": "대한민국 선발 라인업입니다. 오 사 일 대형.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/e2048a8a3d",
+   "text": "뒤를 다섯으로 채웁니다.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/40c6419e8f",
+   "text": "체코 선발 라인업입니다. 삼 오 이 대형.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/1cb1af7127",
+   "text": "멕시코 선발 라인업입니다. 사 삼 삼 대형.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/4721935634",
+   "text": "남아프리카공화국 선발 라인업입니다. 사 이 삼 일 대형.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/e69d948de6",
+   "text": "에콰도르 선발 라인업입니다. 사 사 이 대형.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/ccf09a76a6",
+   "text": "잉글랜드 선발 라인업입니다. 사 이 삼 일 대형.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/755eaaf05f",
+   "text": "노르웨이 선발 라인업입니다. 사 일 사 일 대형.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/26041598cf",
+   "text": "아르헨티나 선발 라인업입니다. 사 사 이 대형.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/694ca53b91",
+   "text": "스페인 선발 라인업입니다. 사 이 삼 일 대형.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/3da6dbe388",
+   "text": "캐나다 선발 라인업입니다. 사 이 삼 일 대형.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/f0380b3e6e",
+   "text": "모로코 선발 라인업입니다. 사 삼 삼 대형.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/f4b0f52b5f",
+   "text": "프랑스 선발 라인업입니다. 사 삼 삼 대형.",
+   "role": "caster",
+   "kind": "plain"
+  },
+  {
+   "key": "t/fb224cdc6c",
+   "text": "골키퍼,",
+   "role": "caster",
+   "kind": "frag"
+  },
+  {
+   "key": "n/931ab35365",
+   "text": "김승규,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/6714d1cbe5",
+   "text": "김승규입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/a4d4c1012e",
+   "text": "이한범,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/43400b0108",
+   "text": "이한범입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/c7ae3e4d58",
+   "text": "이기혁,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/f4fb6857af",
+   "text": "이기혁입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/d6a8c2bd4d",
+   "text": "김민재,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/e9a7cdc1e9",
+   "text": "김민재입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/6d9183795b",
+   "text": "김태현,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/aa84319b78",
+   "text": "김태현입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/0c2cf0f960",
+   "text": "황인범,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/015e84b292",
+   "text": "황인범입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/7ca3c488fd",
+   "text": "손흥민,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/ab39065ecd",
+   "text": "손흥민입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/2947b7e623",
+   "text": "백승호,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/bc2d1d92cc",
+   "text": "백승호입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/5a420be0be",
+   "text": "조규성,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/5a6ee4e5e2",
+   "text": "조규성입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/fb0246aeb9",
+   "text": "이재성,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/2739ef0896",
+   "text": "이재성입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/a96bbf1a98",
+   "text": "황희찬,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/7b5c4dbd4d",
+   "text": "황희찬입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/ff117704f5",
+   "text": "송범근,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/9b02129c35",
+   "text": "송범근입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/80852f0ab1",
+   "text": "이태석,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/87bc4a4613",
+   "text": "이태석입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/9688245e72",
+   "text": "조위제,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/6f735d89ee",
+   "text": "조위제입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/d4b105eea7",
+   "text": "김문환,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/1cd43742c0",
+   "text": "김문환입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/5a1947e0eb",
+   "text": "박진섭,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/60045e1624",
+   "text": "박진섭입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/fc081aef5b",
+   "text": "배준호,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/d9c110b560",
+   "text": "배준호입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/155efa364e",
+   "text": "오현규,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/2e9fd8813a",
+   "text": "오현규입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/398db10106",
+   "text": "이강인,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/da382ace6d",
+   "text": "이강인입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/865caf328d",
+   "text": "양현준,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/b463d2b4cc",
+   "text": "양현준입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/a5b38117a5",
+   "text": "조현우,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/88fde696a7",
+   "text": "조현우입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/2042dd2dcb",
+   "text": "설영우,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/57c2ac38b6",
+   "text": "설영우입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/584c70053b",
+   "text": "옌스 카스트로프,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/f81f5c7c02",
+   "text": "옌스 카스트로프입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/1de1f9979c",
+   "text": "김진규,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/e69538dbfa",
+   "text": "김진규입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/abf16046cc",
+   "text": "엄지성,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/a887e06a7e",
+   "text": "엄지성입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/a69f2092ba",
+   "text": "이동경,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/ce159e5ea1",
+   "text": "이동경입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/c5f6419daa",
+   "text": "다비트 지마,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/f3dd4c8729",
+   "text": "토마시 홀레시,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/2e0f9fd767",
+   "text": "로빈 흐라나치입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/68774e4c53",
+   "text": "루카시 프로보트,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/c73eaca59b",
+   "text": "라디슬라프 크레이치,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/b01ff45f66",
+   "text": "블라디미르 다리다,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/0dff76fa49",
+   "text": "루카시 체르프,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/93e4f98ab7",
+   "text": "데니스 비신스키입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/b0346d6fe9",
+   "text": "아담 흘로제크,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/6724436cbe",
+   "text": "파트리크 시크입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/755321e905",
+   "text": "세사르 몬테스,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/a8a3d1162c",
+   "text": "요한 바스케스,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/ea43ff3dfc",
+   "text": "마테오 차베스,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/61a40e770c",
+   "text": "호르헤 산체스입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/9164fcc365",
+   "text": "에드손 알바레스,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/b773c28a85",
+   "text": "루이스 로모,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/cb2003798e",
+   "text": "알바로 피달고입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/2dbce5c378",
+   "text": "알렉시스 베가,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/1e51f630a4",
+   "text": "훌리안 키뇨네스,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/8aca6f68e7",
+   "text": "라울 히메네스입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/a63ee66acb",
+   "text": "타방 마툴루디,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/3eab3a63fb",
+   "text": "쿨루마니 은다마네,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/509aef2e8e",
+   "text": "오브리 모디바,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/53013b5b39",
+   "text": "쿨리소 무다우입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/784ea9375e",
+   "text": "탈렌테 음바타,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/9a24e316c9",
+   "text": "스페펠로 시톨레,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/9de8b9b778",
+   "text": "체팡 모레미,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/8852233ff6",
+   "text": "렐레보힐레 모포켕,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/1c17f01526",
+   "text": "오스윈 아폴리스입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/0dde4ca570",
+   "text": "라일 포스터입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "t/e4e230d35c",
+   "text": "포백 라인이 균형을 잡습니다.",
+   "role": "analyst",
+   "kind": "plain"
+  },
+  {
+   "key": "t/506c2cebc9",
+   "text": "포백입니다. 좌우 풀백이 얼마나 올라오느냐를 보시죠.",
+   "role": "analyst",
+   "kind": "plain"
+  },
+  {
+   "key": "t/8547f6250d",
+   "text": "기본에 충실한 포백, 간격 유지가 열쇠입니다.",
+   "role": "analyst",
+   "kind": "plain"
+  },
+  {
+   "key": "t/133462ced8",
+   "text": "뒤를 셋으로 두고 중앙을 좁게 쓰겠다는 뜻이죠.",
+   "role": "analyst",
+   "kind": "plain"
+  },
+  {
+   "key": "t/0cf90da01a",
+   "text": "백 파이브, 일단 뒤를 잠그고 시작합니다.",
+   "role": "analyst",
+   "kind": "plain"
+  },
+  {
+   "key": "t/e591948d1e",
+   "text": "백 스리, 좌우 윙백의 활동량이 관건입니다.",
+   "role": "analyst",
+   "kind": "plain"
+  }
+ ]
+}

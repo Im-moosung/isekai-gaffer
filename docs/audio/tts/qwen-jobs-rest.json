@@ -1,0 +1,564 @@
+{
+ "schemaVersion": 1,
+ "purpose": "토너먼트 8팀 이름 조각 — Qwen은 로컬이라 한도가 없으므로 캠페인 전 경기를 덮는다",
+ "voices": {
+  "caster": {
+   "id": "C3",
+   "alias": "정석",
+   "speed": 1.2,
+   "ko": "캐스터"
+  },
+  "analyst": {
+   "id": "A3",
+   "alias": "열정",
+   "speed": 1.5,
+   "ko": "해설위원"
+  }
+ },
+ "audio": {
+  "format": "wav",
+  "note": "모노 권장. 라우드니스·속도 후처리는 저장소 쪽에서 한다."
+ },
+ "jobs": [
+  {
+   "key": "n/15c65a4896",
+   "text": "곤살로 플라타입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/4532793f1e",
+   "text": "나우엘 몰리나입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/e8ae110de9",
+   "text": "네일 엘 아이나위입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/eed0a93a2a",
+   "text": "니코 오라일리,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/d13ed2babf",
+   "text": "니코 윌리엄스,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/53dec3176a",
+   "text": "니콜라스 곤살레스,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/5579953c1a",
+   "text": "니콜라스 타글리아피코,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/476e72e5a2",
+   "text": "닐손 앙굴로,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/e65db7caec",
+   "text": "다니 올모,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/a0f069d75f",
+   "text": "다비드 묄레르 볼페,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/92efa09a3a",
+   "text": "다요 우파메카노,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/58ff3c8934",
+   "text": "데릭 코넬리우스,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/1fa5a5ee66",
+   "text": "데인 세인트클레어입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/0d25c534ba",
+   "text": "데클란 라이스,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/43719fa582",
+   "text": "라민 야말입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/293d9910e4",
+   "text": "레안드로 파레데스,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/3e7a79a90f",
+   "text": "레오 외스티고르,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/6bd66791a3",
+   "text": "로드리,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/927999dcf7",
+   "text": "리산드로 마르티네스,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/90d87b3f94",
+   "text": "리스 제임스입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/d51de62472",
+   "text": "리오넬 메시,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/ae2e7513bc",
+   "text": "마르코스 요렌테입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/0d67ae32fb",
+   "text": "마르크 쿠쿠레야,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/8a19af2053",
+   "text": "마르틴 수비멘디,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/a5436a9cb2",
+   "text": "마이크 메냥입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/be990d6662",
+   "text": "마커스 래시퍼드,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/1db80ee07d",
+   "text": "마크 게이,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/bb2885b644",
+   "text": "모이세스 카이세도,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/c7a0175486",
+   "text": "모이즈 봄비토,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/a0762ea2c0",
+   "text": "미켈 오야르사발입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/911fffeef2",
+   "text": "바랑 자이르에메리입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/5895527ee1",
+   "text": "부카요 사카입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/b43c10a42c",
+   "text": "브래들리 바르콜라,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/fcbd95e3cb",
+   "text": "산데르 베르게,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/f0495a7154",
+   "text": "샤디 리아드,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/a4b8d8ee13",
+   "text": "셈스딘 탈비,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/770d1cef4b",
+   "text": "소피안 암라바트,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/5d7f886858",
+   "text": "수피안 라히미입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/28928f498d",
+   "text": "스티븐 에우스타키우,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/05eb7a3fe3",
+   "text": "아나스 살라흐에딘,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/bf31a10bd8",
+   "text": "아드리앵 라비오,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/02bf69b0cc",
+   "text": "아르헨티나 선발 라인업입니다. 사 삼 삼 대형.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/1c7639e6fa",
+   "text": "아민 스바이,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/61532620f3",
+   "text": "아슈라프 하키미입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/25e8184cff",
+   "text": "아이메릭 라포르트,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/21b19cf363",
+   "text": "아제딘 우나히,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/bf96c1ff14",
+   "text": "안토니오 누사,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/fcd5bc6cb1",
+   "text": "알렉시스 맥 알리스터,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/fa81ab9731",
+   "text": "알폰소 데이비스,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/3b2575afcb",
+   "text": "앙헬로 프레시아도입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/d349dc2b86",
+   "text": "앨리스테어 존스턴입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/09fc10dad0",
+   "text": "야신 부누입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/37bd81b1e4",
+   "text": "에네르 발렌시아입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/a5c7271803",
+   "text": "에르난 갈린데스입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/9f8e7cba0e",
+   "text": "에밀리아노 마르티네스입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/46dce79383",
+   "text": "에콰도르 선발 라인업입니다. 사 이 삼 일 대형.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/f0848157c6",
+   "text": "엔소 페르난데스입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/1a8a551543",
+   "text": "엘리엇 앤더슨,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/7cf797ea7d",
+   "text": "엘링 홀란입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/4545238e10",
+   "text": "오렐리앵 추아메니,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/a04eb0707d",
+   "text": "오스카르 보브입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/71e99abd9c",
+   "text": "외르얀 뉠란입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/24e7fc358c",
+   "text": "우나이 시몬입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/96897c3f7b",
+   "text": "우스만 뎀벨레,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/0d675bf34d",
+   "text": "윌리안 파초,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/49dc6a9ff8",
+   "text": "윌리앙 살리바,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/e5b7924e3c",
+   "text": "율리안 뤼에르손입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/4ab9d0493b",
+   "text": "이사 디오프,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/cd615d7c43",
+   "text": "이스마엘 코네,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/f9095f6927",
+   "text": "제이컵 섀펠버그,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/ec22b6fbcc",
+   "text": "조너선 데이비드입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/a8bc7d4330",
+   "text": "조너선 오소리오,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/e1355ca78e",
+   "text": "조던 픽포드입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/b0dd9ad0b0",
+   "text": "조르디 알시바르,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/8ed937b1b8",
+   "text": "존 스톤스,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/09fb7c0efd",
+   "text": "주드 벨링엄,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/1e54148af6",
+   "text": "쥘 쿤데입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/389a78b83d",
+   "text": "켄드리 파에스,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/c3f456f265",
+   "text": "크리스토페르 아예르,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/8a7f219614",
+   "text": "크리스티안 로메로,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/60cfad8dea",
+   "text": "킬리안 음바페입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/b253f36dc0",
+   "text": "타종 뷰캐넌입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/aa5a0a03d4",
+   "text": "테오 에르난데스,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/7d55f27c33",
+   "text": "파우 쿠바르시,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/c368a2b75a",
+   "text": "파트리크 베르그,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/bff6d40a92",
+   "text": "페르비스 에스투피냔,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/b003a2da33",
+   "text": "프레드리크 아우르스네스,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/3909df9fa9",
+   "text": "피에로 인카피에,",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/5bbf609f77",
+   "text": "해리 케인입니다.",
+   "role": "caster",
+   "kind": "name"
+  },
+  {
+   "key": "n/3c544c3b04",
+   "text": "훌리안 알바레스입니다.",
+   "role": "caster",
+   "kind": "name"
+  }
+ ]
+}

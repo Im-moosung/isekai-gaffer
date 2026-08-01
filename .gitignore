@@ -16,3 +16,8 @@ out/
 # 파이썬 도구 캐시
 __pycache__/
 *.pyc
+
+# Qwen3-TTS 원본 wav — public/tts의 mp3가 산출물이고, 원본은 재생성 가능하다(12MB+5MB).
+docs/audio/tts/qwen-out/*.wav
+docs/audio/tts/qwen-out/*/*.wav
+docs/audio/tts-samples/qwen3tts-voice-options/*.wav
