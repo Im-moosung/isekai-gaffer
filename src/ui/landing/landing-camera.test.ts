@@ -118,9 +118,26 @@ describe('랜딩 배경 카메라 궤적', () => {
   it('t=0은 호의 중심 — 정지 컷이 가장 좋은 구도다', () => {
     const p = landingCameraAt(0)
     // 달리·보브 항은 sin(0)=0이라 기준 반경·높이 그대로여야 한다(하네스 LANDING과 동기화 조건).
-    expect(Math.hypot(p.x, p.z)).toBeCloseTo(110, 6)
+    expect(Math.hypot(p.x, p.z)).toBeCloseTo(126, 6)
     expect(p.y).toBeCloseTo(50, 6)
     expect(azimuth(p)).toBeCloseTo(LANDING_CAMERA.arcCenter, 6)
+  })
+
+  /**
+   * [2026-08-01 명암 배분] 반경과 시선 높이도 계약이다. 이 둘이 **명암 배분을 만드는
+   * 구도 값**이기 때문이다 — 126m/23.5m에서 잔디 상단 경계가 화면 60%에 서고 좌우
+   * 근경 스탠드가 90m 뒤로 밀려 포그(backdrop-tone.ts: 84~300m)에 잠긴다.
+   * 110m로 되돌리면 밝은 잔디가 다시 하단 절반을 먹고 관중 V자가 시선을 뺏는다.
+   * 상한(140m)이 따로 있는 이유는 프러스텀 여유다 — 150m면 21:9에서 가까운 마스트가
+   * 화면에 들어온다(camera.ts 헤더의 계산). 아래 프러스텀 테스트가 실제로 그것을 막지만,
+   * 왜 더 못 물리는지를 여기에 수치로 남긴다.
+   */
+  it('명암 배분 구도 — 반경 126m ±14, 시선 높이 23.5m 이상', () => {
+    expect(LANDING_CAMERA.radius).toBeGreaterThanOrEqual(112)
+    expect(LANDING_CAMERA.radius).toBeLessThanOrEqual(140)
+    expect(LANDING_CAMERA.radius).toBeCloseTo(126, 6)
+    expect(LANDING_CAMERA.lookAt.y).toBeCloseTo(23.5, 6)
+    expect(LANDING_CAMERA.height).toBeCloseTo(50, 6)
   })
 
   /**

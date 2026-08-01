@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from 'react'
 import { bindResize, createRendererHost, webgl2Available } from '../pitch/three/host'
 import { createPostFX } from '../pitch/three/postfx'
 import { EMISSIVE_BOOST, buildScene, type ThreeAPI } from '../pitch/three/scene'
+import { tuneLandingBackdrop } from './backdrop-tone'
 import { FOV, LOOK_AT_Y, landingCameraAt } from './camera'
 
 /**
@@ -93,6 +94,12 @@ export function StadiumBackdrop() {
 
       const post = await createPostFX(THREE, renderer, scene, camera, { reducedMotion: reduced })
       if (post.active) bundle.setEmissiveBoost(EMISSIVE_BOOST)
+
+      // 랜딩 전용 명암 배분(backdrop-tone.ts). 경기 화면과 **같은 씬 자산**을 쓰되 톤은
+      // 소유자가 잡는다 — 여기서 주인공은 잔디가 아니라 타이틀이다.
+      // **setEmissiveBoost 뒤여야 한다**: 그 세터가 발광체 color를 원본 값으로 다시 써서
+      // 먼저 걸어 둔 halo 감쇠를 지운다(먼저 부르면 조용히 무효가 된다). 첫 렌더 전에 한 번만.
+      tuneLandingBackdrop(bundle)
 
       const resize = (): void => {
         const w = host.clientWidth
