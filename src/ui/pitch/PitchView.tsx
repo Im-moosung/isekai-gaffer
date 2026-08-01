@@ -3,7 +3,7 @@ import type { MatchState, MatchEvent, SideState } from '../../engine/types'
 import { backlineIndices, blockMetrics, liveTeamCoords, separateDots, tacticalCoords, type LiveInput } from './shape'
 import type { Coord } from './formations'
 import type { ChoreoStep } from './choreography'
-import { sequenceOwner } from './cast'
+import { onPitchMask, sequenceOwner } from './cast'
 import { AnalysisLayer, analysisLabels, TAG_FS, type AnalysisGeom, type AnalysisHighlight } from './AnalysisLayer'
 import { DOT_BLOCK_R, layoutLabels, textWidth, type Box, type LabelReq, type PlacedLabel } from './labels'
 import { PITCH_W, PITCH_H, CENTER_CIRCLE_R, PENALTY_BOX_D, GOAL_AREA_D } from './geometry'
@@ -84,13 +84,13 @@ const SEP_SNAP = 2.0
  * (실측). 오프셋 자체는 최대 1.8유닛으로 작으니 **오프셋에만** 속도 제한을 걸면
  * 전술 위치(raw)의 반응성은 그대로 두고 튐만 없앨 수 있다.
  */
-function useSmoothSeparation(raw: Coord[], t: number, on: boolean): Coord[] {
+function useSmoothSeparation(raw: Coord[], t: number, on: boolean, active: readonly boolean[]): Coord[] {
   const ref = useRef<{ t: number; off: Coord[]; raw: Coord[] } | null>(null)
   if (!on) {
     ref.current = null
     return raw
   }
-  const target = separateDots(raw)
+  const target = separateDots(raw, active)
   const aim = target.map((c, i) => ({ x: c.x - raw[i].x, y: c.y - raw[i].y }))
   const prev = ref.current
   let off = aim
@@ -261,16 +261,23 @@ export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels 
   // ★ 가독성 분리 — 도트가 완전히 포개져 한 명이 사라지는 것만 막는다(팀 내·팀 간 모두).
   //   작전판은 20 Hz로 계속 움직이므로 오프셋에 속도 제한을 걸고(useSmoothSeparation),
   //   그 밖(전술판·하이라이트)은 순수 함수 그대로 쓴다 — 좌표가 스텝 단위로만 바뀐다.
+  // ── 퇴장 반영 ────────────────────────────────────────────────────
+  // 엔진은 이미 10명으로 돌지만(choreography·flow가 sentOff를 거른다) 이 보드만 라인업을
+  // 그대로 그려 **퇴장 선수 도트가 남아 있었다**(사용자 실플레이 제보). 인덱스는 좌표·무버의
+  // 공통 키라 배열에서 빼지 않고 마스크로 끈다 — 도트·이름표·분리·지표가 전부 이 마스크를 본다.
+  const homeOn = useMemo(() => onPitchMask(state.home), [state.home])
+  const awayOn = useMemo(() => onPitchMask(state.away), [state.away])
   const merged = useMemo(() => [...ovHome, ...ovAway], [ovHome, ovAway])
-  const smoothed = useSmoothSeparation(merged, clock.t, analysis)
-  const sep = analysis ? smoothed : separateDots(merged)
+  const activeMask = useMemo(() => [...homeOn, ...awayOn], [homeOn, awayOn])
+  const smoothed = useSmoothSeparation(merged, clock.t, analysis, activeMask)
+  const sep = analysis ? smoothed : separateDots(merged, activeMask)
   const homeC = sep.slice(0, ovHome.length)
   const awayC = sep.slice(ovHome.length)
 
   // 수비 라인 마커는 **도트 배열의 백라인 평균**에서 뽑는다 — 마커-도트 일치 계약(shape.ts).
   const geom: AnalysisGeom = {
-    homeLineX: meanBackline(state.home, homeC),
-    awayLineX: meanBackline(state.away, awayC),
+    homeLineX: meanBackline(state.home, homeC, homeOn),
+    awayLineX: meanBackline(state.away, awayC, awayOn),
   }
 
   /**
@@ -289,7 +296,8 @@ export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels 
     ? { homeLineX: 100 - geom.homeLineX, awayLineX: 100 - geom.awayLineX }
     : geom
 
-  const metrics = blockMetrics(homeC)
+  // 블록 길이·폭도 **화면에 있는 도트**에서만 잰다(퇴장 선수를 세면 지표가 거짓말을 한다).
+  const metrics = blockMetrics(homeC, homeOn)
   const mRef = useRef(onMetrics)
   mRef.current = onMetrics
   useEffect(() => {
@@ -304,7 +312,8 @@ export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels 
     const nameById = new Map(state.home.team.squad.map(p => [p.id, p.name.ko]))
     state.home.tactics.lineup.forEach((slot, i) => {
       const name = nameById.get(slot.playerId)
-      if (!name || !homeD[i]) return
+      // 퇴장 선수는 도트가 없다 → 이름표도 없다(도트 없는 이름이 잔디에 떠 있으면 안 된다).
+      if (!name || !homeD[i] || !homeOn[i]) return
       const cx = sx(homeD[i].x)
       const cy = sy(homeD[i].y)
       reqs.push({
@@ -326,13 +335,14 @@ export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels 
   if (playing) {
     const attacking = sequenceSide === 'home' ? state.home : state.away
     const coords = sequenceSide === 'home' ? homeD : awayD
+    const attOn = sequenceSide === 'home' ? homeOn : awayOn
     const nameById = new Map(attacking.team.squad.map(p => [p.id, p.name.ko]))
     const already = new Set(reqs.map(r => r.id))
     const step = sequence![stepIdx]
     const cast = new Set<string>(step.movers.map(m => m.playerId))
     if (step.carrier) cast.add(step.carrier)
     attacking.tactics.lineup.forEach((slot, i) => {
-      if (!cast.has(slot.playerId) || already.has(`nm-${slot.playerId}`)) return
+      if (!cast.has(slot.playerId) || already.has(`nm-${slot.playerId}`) || !attOn[i]) return
       const name = nameById.get(slot.playerId)
       if (!name || !coords[i]) return
       reqs.push({
@@ -348,7 +358,9 @@ export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels 
   }
   // 도트·배지는 텍스트가 아니지만 글자에 덮이면 안 된다 → 고정 장애물로 넘긴다.
   const blockers: Box[] = []
-  for (const c of [...homeD, ...awayD]) {
+  for (const [k, c] of [...homeD, ...awayD].entries()) {
+    // 퇴장 선수 자리는 빈 잔디다 — 장애물로 넘기면 라벨이 아무것도 없는 곳을 피해 간다.
+    if (!activeMask[k]) continue
     blockers.push({ x: sx(c.x) - DOT_BLOCK_R, y: sy(c.y) - DOT_BLOCK_R, w: DOT_BLOCK_R * 2, h: DOT_BLOCK_R * 2 })
   }
   const layout = layoutLabels(reqs, { x: 0.6, y: 0.6, w: W - 1.2, h: H - 1.2 }, blockers, stickyRef.current)
@@ -369,20 +381,23 @@ export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels 
     : -1
   const ballRaw = playing ? interpBall(sequence!, stepIdx, ballEase, ballOffset) : null
   const ballPos = ballRaw && swapped ? rot(ballRaw) : ballRaw
+  // ★ 인덱스 조회(carrierIdx)는 **라인업 정렬** 배열을 써야 하고, 근사 조회(nearestDot)는
+  //   퇴장 선수를 빼야 한다 — 유령 도트가 제일 가까우면 터치 링이 빈 잔디에 걸린다.
+  const attackOn = sequenceSide === 'home' ? homeOn : awayOn
   const carrier = !playing
     ? null
-    : carrierIdx >= 0 && attackC[carrierIdx]
+    : carrierIdx >= 0 && attackC[carrierIdx] && attackOn[carrierIdx]
       ? attackC[carrierIdx]
-      : nearestDot(ballPos!, attackC)
+      : nearestDot(ballPos!, attackC.filter((_, i) => attackOn[i]))
 
   // z순서 — 이름표가 붙는 쪽(장면의 주어)이 위에 온다. 예전에는 방송 2D에서 어웨이를
   // 마지막에 그려 **우리 도트가 상대 도트에 통째로 가렸고 이름표만 남아** 상대 등번호에
   // 붙어 읽혔다(감사 ⑨). 재생 중이면 공격 팀, 아니면 언제나 우리 팀이 위다.
   const homeOnTop = !playing || sequenceSide === 'home'
   const homeDots = (
-    <SideDots side={state.home} which="home" coords={homeD} highlightId={highlightId} onDotClick={onDotClick} />
+    <SideDots side={state.home} which="home" coords={homeD} on={homeOn} highlightId={highlightId} onDotClick={onDotClick} />
   )
-  const awayDots = <SideDots side={state.away} which="away" coords={awayD} />
+  const awayDots = <SideDots side={state.away} which="away" coords={awayD} on={awayOn} />
 
   return (
     <svg
@@ -457,10 +472,14 @@ function teamCoords(side: SideState, which: 'home' | 'away', live: LiveInput | u
 }
 
 /** 백라인 평균 x — 수비 라인 마커의 정본. **실제 도트 좌표**에서 뽑으므로
- *  마커와 도트가 어긋날 수 없다(shape.ts의 마커-도트 일치 계약). */
-function meanBackline(side: SideState, coords: Coord[]): number {
-  const idx = backlineIndices(side.tactics.formation)
-  return idx.reduce((s, i) => s + coords[i].x, 0) / idx.length
+ *  마커와 도트가 어긋날 수 없다(shape.ts의 마커-도트 일치 계약).
+ *  퇴장 선수는 뺀다 — 화면에 없는 도트가 마커를 끌면 마커-도트 일치가 다시 깨진다.
+ *  백라인이 통째로 퇴장한 극단(전원 false)에서는 마스크를 무시하고 원래 평균으로 돌아간다. */
+function meanBackline(side: SideState, coords: Coord[], on: readonly boolean[]): number {
+  const all = backlineIndices(side.tactics.formation)
+  const idx = all.filter(i => on[i] !== false)
+  const use = idx.length > 0 ? idx : all
+  return use.reduce((s, i) => s + coords[i].x, 0) / use.length
 }
 
 const ZERO = { x: 0, y: 0 }
@@ -595,8 +614,10 @@ function PitchMarkings() {
   )
 }
 
-function SideDots({ side, which, coords, highlightId, onDotClick }: {
+function SideDots({ side, which, coords, on, highlightId, onDotClick }: {
   side: SideState; which: 'home' | 'away'; coords: Coord[]
+  /** 슬롯별 "피치 위에 있는가"(cast.onPitchMask). false면 도트를 아예 그리지 않는다. */
+  on: readonly boolean[]
   highlightId?: string | null; onDotClick?: (playerId: string) => void
 }) {
   // ★ 도트 좌표는 포메이션 원형이 아니라 **전술 변환 + (작전판에선) 라이브 무브먼트**를
@@ -607,7 +628,11 @@ function SideDots({ side, which, coords, highlightId, onDotClick }: {
     <g>
       {side.tactics.lineup.map((slot, i) => {
         const c = coords[i]
-        if (!c) return null
+        // ★ 퇴장 선수는 **지운다**(회색으로 남기지 않는다). 이 보드의 첫 번째 일은 "지금
+        //   몇 대 몇인가"를 셀 수 있게 하는 것이고, 회색이든 무슨 색이든 원이 하나 더
+        //   있으면 11로 세인다. 누가 빠졌는지는 중계·이벤트 피드·교체 패널의 '퇴장' 칩이
+        //   말한다(StatusChips). 실제 중계 그래픽도 같은 선택을 한다.
+        if (!c || on[i] === false) return null
         const cx = sx(c.x)
         const cy = sy(c.y)
         const num = numberById.get(slot.playerId)

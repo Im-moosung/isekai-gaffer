@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Application, Container, Graphics, Text } from 'pixi.js'
 import type { MatchState, MatchEvent } from '../../../engine/types'
 import { type ChoreoStep } from '../choreography'
-import { sequenceOwner } from '../cast'
+import { onPitchMask, sequenceOwner } from '../cast'
 import { PitchView } from '../PitchView'
 import { separateDots, tacticalCoords } from '../shape'
 import { endsSwapped } from '../ends'
@@ -389,8 +389,14 @@ export function PixiPitch(props: PixiPitchProps) {
         }
         const normHome = normOf('home')
         const normAway = normOf('away')
+        // ── 퇴장 반영 ─────────────────────────────────────────
+        // SVG 작전판과 **같은 정본**(cast.onPitchMask)을 쓴다. 라인업 인덱스는 도트 풀
+        // 인덱스이기도 하므로 배열에서 빼지 않고 마스크로 끈다.
+        const onHome = onPitchMask(p.state.home)
+        const onAway = onPitchMask(p.state.away)
+        const onOf = (which: 'home' | 'away', i: number) => (which === 'home' ? onHome : onAway)[i] !== false
         // 팀 **간**에도 건다 — 우리 도트가 상대 도트에 통째로 가려지던 문제(감사 ⑨).
-        const sepNorm = separateDots([...normHome, ...normAway])
+        const sepNorm = separateDots([...normHome, ...normAway], [...onHome, ...onAway])
         const sepOf = (which: 'home' | 'away', i: number) =>
           which === 'home' ? sepNorm[i] : sepNorm[normHome.length + i]
 
@@ -416,7 +422,9 @@ export function PixiPitch(props: PixiPitchProps) {
           for (let i = 0; i < pool.length; i++) {
             const dv = pool[i]
             const slot = lineup[i]
-            if (!slot || i >= lineup.length) {
+            // 라인업에 없는 풀 슬롯 + **퇴장 선수**는 도트·번호·배지·이름표를 전부 끈다.
+            // 회색으로 남기지 않는다 — 근거는 PitchView.SideDots의 같은 판단.
+            if (!slot || i >= lineup.length || !onOf(which, i)) {
               dv.label.visible = false; dv.mood.visible = false; dv.name.visible = false
               continue
             }

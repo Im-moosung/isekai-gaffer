@@ -54,6 +54,19 @@ export const DUCK_RATIO = 0.1
 /** 덕킹 유지 시간(ms). 관중 스웰(4s)보다 짧게 잡아 함성이 걷히기 전에 음악이 돌아온다. */
 export const DUCK_HOLD_MS = 2600
 
+/**
+ * 스팅 덕킹이 풀리는 데 걸리는 시간(ms) — `playSting({ duckUntilMs })` 전용.
+ *
+ * 왜 램프인가(= 왜 완전 무음이 아닌가): 이 계약의 유일한 손님인 M06은 "11초쯤 정점 →
+ * 13.8초에 해소"로 만들어진 팡파르다. 소개 구간을 게인 0으로 막았다가 풀면, 곡의 **가장
+ * 큰 소절**이 예고 없이 튀어나온다 — 스펙 §배선의 "하드 컷 금지"를 정면으로 어긴다.
+ * DUCK_RATIO로 깔아 두면 캐스터의 마지막 이름들 밑에 팡파르가 이미 스며 있다가 소개가
+ * 끝나는 순간 부풀어 오른다(실제 중계가 명단 낭독 꼬리에서 하는 바로 그 동작).
+ * 900ms는 한 소절(≈2초)보다 짧아 "지금 커졌다"가 들리면서, 400ms(CROSSFADE_MS)처럼
+ * 스위치를 켠 것으로는 들리지 않는 값이다.
+ */
+export const STING_UNDUCK_MS = 900
+
 /** 장면을 null로 내릴 때의 유예(ms). setScene 주석 참조 — 화면 전환의 언마운트/마운트
  *  틈에서 음악이 끊기지 않게 하는 값이라, 크로스페이드(400ms)보다 짧아야 한다. */
 const NULL_GRACE_MS = 250
@@ -99,7 +112,7 @@ const fading: Voice[] = []
 /** 원하는 장면(제스처 전에도 기억해 둔다 — 컨텍스트가 열리면 그때 시작한다). */
 let wantedScene: BgmScene | null = null
 /** 원하는 스팅(로드 대기·제스처 대기 중인 1회 재생 요청). */
-let wantedSting: { track: BgmTrack; alignEndAtMs?: number; requestedAt: number } | null = null
+let wantedSting: { track: BgmTrack; alignEndAtMs?: number; duckUntilMs?: number; requestedAt: number } | null = null
 /** 스팅이 끝나는 ctx 시각(초). 그때까지 루프 시작을 미룬다 — 겹치면 둘 다 죽는다. */
 let stingEndsAt = 0
 let stingTimer: ReturnType<typeof setTimeout> | undefined
@@ -393,12 +406,22 @@ function scheduleAfterSting(ctx: AudioContext): void {
  *   입장 연출 M06 전용 계약이다 — 곡이 킥오프 휘슬 직전에 해소되게 만들어졌으므로
  *   길이가 어긋나면 앞을 자르거나 시작을 늦춰서 **끝을 맞춘다**(entrance.entranceScript의
  *   totalMs가 길이의 정본이고, 이 모듈은 그 값을 받기만 한다).
+ *
+ * @param opts.duckUntilMs 이 시각(요청 시점 기준 ms)까지 스팅을 {@link DUCK_RATIO} 배로
+ *   눌러 두었다가 {@link STING_UNDUCK_MS}에 걸쳐 제 음량으로 올린다. **말이 주인인 구간**을
+ *   위한 것이다 — 입장 연출 full 모드에서 M06은 끝 맞추기 때문에 캐스터가 22명을 호명하는
+ *   소개 구간 위로 11.6초 겹쳐 드는데, 그 위를 제 음량으로 밟으면 안 된다. 시각의 정본은
+ *   entrance.entranceIntroEndMs이고 이 모듈은 그 값을 받기만 한다.
+ *   `alignEndAtMs`와 독립이다 — 곡이 **언제 시작하느냐**는 앞이 정하고, **언제 커지느냐**는
+ *   이쪽이 정한다. 곡이 시작하기도 전에 덕킹이 풀리는 순서(duckUntil < 시작 시각)라면
+ *   덕킹은 아무 일도 하지 않는다(처음부터 제 음량).
  */
-export function playSting(track: BgmTrack, opts: { alignEndAtMs?: number } = {}): void {
+export function playSting(track: BgmTrack, opts: { alignEndAtMs?: number; duckUntilMs?: number } = {}): void {
   hookFirstGesture()
   wantedSting = {
     track,
     ...(opts.alignEndAtMs != null ? { alignEndAtMs: opts.alignEndAtMs } : {}),
+    ...(opts.duckUntilMs != null ? { duckUntilMs: opts.duckUntilMs } : {}),
     requestedAt: now(),
   }
   startSting(track)
@@ -439,10 +462,23 @@ function startSting(track: BgmTrack): void {
     const delaySec = Math.max(0, leftMs - durMs) / 1000
     const offset = Math.max(0, Math.min(buf.duration - 0.05, (durMs - leftMs) / 1000))
 
+    const full = targetGain(track)
     const gain = ctx.createGain()
-    gain.gain.value = targetGain(track)
+    gain.gain.value = full
     gain.connect(g.bus)
     const startAt = ctx.currentTime + delaySec
+    // ── 말이 주인인 구간의 덕킹(duckUntilMs) ──────────────────
+    // 스팅 **자체의** 게인 노드에 건다. 공용 duckNode를 쓰면 골 덕킹과 서로를 덮어쓴다.
+    // 스케줄은 AudioParam이 잡으므로 rAF·타이머가 죽어도(백그라운드 탭) 곡선이 그대로 간다.
+    const duckLeftSec = req.duckUntilMs != null
+      ? (req.duckUntilMs - (now() - req.requestedAt)) / 1000
+      : -1
+    const unduckAt = ctx.currentTime + duckLeftSec
+    if (duckLeftSec > 0 && unduckAt > startAt) {
+      gain.gain.setValueAtTime(full * DUCK_RATIO, ctx.currentTime)
+      gain.gain.setValueAtTime(full * DUCK_RATIO, unduckAt)
+      gain.gain.linearRampToValueAtTime(full, unduckAt + STING_UNDUCK_MS / 1000)
+    }
     const src = ctx.createBufferSource()
     src.buffer = buf
     src.connect(gain)
@@ -509,6 +545,10 @@ export function duck(holdMs = DUCK_HOLD_MS): void {
  * 일시정지 중에는 음악도 **멈춘다**(관중음이 낮은 웅성거림으로 남는 것과 다르다 —
  * 관중은 경기장에 그대로 있지만 음악은 연출이라, 화면이 얼어 있는데 곡만 흘러가면
  * 재개 시점의 소절이 어긋난다). 재개하면 끊긴 자리에서 이어 붙는다.
+ *
+ * ⚠ 재개는 게인을 targetGain으로 되돌리므로 `duckUntilMs` 스케줄이 지워진다. 입장 연출은
+ *   일시정지 대상이 아니라(MatchScreen.canFreeze가 entranceScr를 제외한다) 지금은 도달하지
+ *   않는 경로다. 입장 중 일시정지를 열게 되면 여기서 덕킹 잔여 시간을 다시 걸어야 한다.
  */
 export function setPaused(next: boolean): void {
   if (paused === next) return

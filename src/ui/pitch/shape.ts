@@ -247,10 +247,15 @@ const VB_Y = 0.68
  * 도트가 서로를 완전히 가리지 않도록 최소 간격까지만 벌린다(결정론).
  *
  * @param coords 절대 프레임 좌표 배열(홈 11 + 어웨이 11을 이어붙여 넘긴다)
- * @returns 새 배열. 입력은 건드리지 않는다.
+ * @param active 그려지는 도트만 true. **퇴장 선수 자리**처럼 화면에 없는 슬롯은 false로
+ *   넘긴다 — 안 그러면 보이지 않는 유령이 진짜 도트를 밀어낸다("도트가 이유 없이 밀린다").
+ *   인덱스 정렬은 유지해야 하므로(라인업 슬롯 = 무버·캐리어 인덱스의 정본) 배열에서
+ *   빼는 대신 마스크로 끈다. 생략하면 전부 활성.
+ * @returns 새 배열. 입력은 건드리지 않는다. 비활성 항목은 입력 좌표 그대로 돌아온다.
  */
-export function separateDots(coords: Coord[]): Coord[] {
+export function separateDots(coords: Coord[], active?: readonly boolean[]): Coord[] {
   const n = coords.length
+  const on = (i: number): boolean => active?.[i] ?? true
   const out = coords.map(c => ({ x: c.x, y: c.y }))
   // ★ 야코비(동시 갱신)다. 가우스-자이델(제자리 갱신)로 짰더니 **인덱스 순서**가 결과를
   //   갈라, 도트가 서로를 스쳐 지나갈 때 한 프레임에 2유닛(≈2m) 튀었다(실측). 같은 입력에서
@@ -261,7 +266,9 @@ export function separateDots(coords: Coord[]): Coord[] {
     px.fill(0)
     py.fill(0)
     for (let i = 0; i < n; i++) {
+      if (!on(i)) continue
       for (let j = i + 1; j < n; j++) {
+        if (!on(j)) continue
         const dx = (out[j].x - out[i].x) * VB_X
         const dy = (out[j].y - out[i].y) * VB_Y
         const d = Math.hypot(dx, dy)
@@ -293,6 +300,7 @@ export function separateDots(coords: Coord[]): Coord[] {
   // 상한 적용 + 피치 안으로. 상한을 매 반복이 아니라 마지막에 한 번 거는 이유:
   // 중간 단계를 자르면 반복이 수렴하지 않고 진동한다.
   for (let i = 0; i < n; i++) {
+    if (!on(i)) { out[i].x = coords[i].x; out[i].y = coords[i].y; continue }
     const dx = (out[i].x - coords[i].x) * VB_X
     const dy = (out[i].y - coords[i].y) * VB_Y
     const d = Math.hypot(dx, dy)
@@ -317,9 +325,11 @@ export function dotOverlapRatio(a: Coord, b: Coord, r = DOT_R_VB): number {
   return area / (Math.PI * r * r)
 }
 
-/** 블록 길이·폭(m). GK를 뺀 10명의 x·y 스팬 — "우리가 얼마나 컴팩트한가"의 실측 지표. */
-export function blockMetrics(coords: Coord[]): { lengthM: number; widthM: number } {
-  const f = coords.slice(1)
+/** 블록 길이·폭(m). GK를 뺀 10명의 x·y 스팬 — "우리가 얼마나 컴팩트한가"의 실측 지표.
+ *  `active`를 주면 false인 슬롯(퇴장)은 빼고 잰다. GK가 퇴장해도 슬롯 0은 언제나 GK이므로
+ *  **마스크로 걸러야 한다** — 배열에서 미리 빼면 slice(1)이 필드 플레이어를 잘라 낸다. */
+export function blockMetrics(coords: Coord[], active?: readonly boolean[]): { lengthM: number; widthM: number } {
+  const f = coords.slice(1).filter((_, i) => active?.[i + 1] ?? true)
   if (f.length === 0) return { lengthM: 0, widthM: 0 }
   const xs = f.map(c => c.x)
   const ys = f.map(c => c.y)

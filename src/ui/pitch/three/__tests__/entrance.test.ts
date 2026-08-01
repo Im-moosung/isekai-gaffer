@@ -13,10 +13,13 @@ import {
   entranceCameraMode,
   entranceFrame,
   entranceHighlightAt,
+  entranceIntroEndMs,
   entranceIntroSide,
   entrancePhaseAt,
   entranceScript,
   entranceSubtitle,
+  defaultEntranceMode,
+  markEntranceSeen,
   positionLabelKo,
   type EntrancePhase,
 } from '../entrance'
@@ -103,6 +106,33 @@ describe('스크립트 · 타임라인', () => {
     // 그렇다고 2분짜리 실제 의식을 그대로 옮기지는 않는다.
     expect(full.totalMs).toBeGreaterThan(30_000)
     expect(full.totalMs).toBeLessThan(75_000)
+  })
+
+  // ── 소개를 기본으로, 대가는 음악 처리로 ──────────────────────────────
+  // 사용자 실플레이 제보(2026-08-01): "선수 소개 보기를 눌러야만 해설이 나온다."
+  // 소개는 이 연출의 본체다. 길이의 대가는 모드가 아니라 M06 덕킹으로 치른다.
+  it('기본 모드는 언제나 full — 소개는 버튼 뒤에 숨지 않는다', () => {
+    expect(defaultEntranceMode()).toBe('full')
+    markEntranceSeen()
+    expect(defaultEntranceMode()).toBe('full') // 본 적이 있어도 짧아지지 않는다
+  })
+
+  it('entranceIntroEndMs가 M06 덕킹 해제 시각의 정본이다', () => {
+    // full: 소개 마지막 컷(away-intro)이 끝나는 시각 = disperse 시작.
+    expect(entranceIntroEndMs(full)).toBe(span(full, 'away-intro').end)
+    expect(entranceIntroEndMs(full)).toBe(span(full, 'disperse').start)
+    // short: 소개가 없다 → 누를 것도 없다.
+    expect(entranceIntroEndMs(short)).toBeNull()
+  })
+
+  it('M06(13.80s)은 끝 맞추기 때문에 소개 위로 겹친다 — 덕킹이 필요한 이유', () => {
+    const M06_MS = 13_800
+    const startsAt = full.totalMs - M06_MS
+    const overlap = entranceIntroEndMs(full)! - startsAt
+    // 겹치는 구간이 실제로 존재해야 이 계약에 의미가 있다(실측 11.6초).
+    expect(overlap).toBeGreaterThan(5_000)
+    // 그리고 곡의 해소(마지막 2.2초 = disperse)는 덕킹 밖에 남아야 한다.
+    expect(full.totalMs - entranceIntroEndMs(full)!).toBeGreaterThan(1_000)
   })
 
   it('경계 시각의 단계가 정확하다', () => {

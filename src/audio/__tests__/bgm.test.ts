@@ -307,6 +307,41 @@ describe('bgm 스팅', () => {
     expect(short.started!.when - ctx.currentTime).toBeCloseTo(0, 2)
     expect(short.started!.offset).toBeCloseTo(0.8, 1)
   })
+
+  // full 모드에서 M06은 끝 맞추기 때문에 48.94s에 시작해 **소개 구간 위로 11.6초** 겹쳐 든다.
+  // 그 구간은 캐스터가 22명을 호명하는 시간이라 음악이 제 음량으로 밟으면 안 된다.
+  it('duckUntilMs — 말이 주인인 구간에서는 스팅 자신의 게인을 DUCK_RATIO로 눌러 둔다', async () => {
+    DECODE_DURATION = 13.8
+    const { sfx, bgm, ctx } = await setup()
+    sfx.init()
+
+    bgm.playSting('M06', { alignEndAtMs: 62735, duckUntilMs: 60535 })
+    await flush()
+    const g = ctx.gains[ctx.gains.length - 1] // 이 스팅을 위해 마지막으로 만든 게인
+    const FULL = 0.8 // TRACK_GAIN 기본값
+
+    // 눌린 값은 곡 게인 × 0.1 — 골 덕킹과 같은 배율이고, 공용 duckNode는 건드리지 않는다.
+    expect(g.gain.value).toBeCloseTo(FULL * bgm.DUCK_RATIO, 4)
+    expect(bgm.bgmState().duck).toBe(1)
+
+    // 소개가 끝나는 60.535s에 해제가 시작되어 STING_UNDUCK_MS에 걸쳐 제 음량으로 오른다.
+    const rise = g.gain.ramps[g.gain.ramps.length - 1]
+    expect(rise.v).toBeCloseTo(FULL, 4)
+    expect(rise.t - ctx.currentTime).toBeCloseTo((60535 + bgm.STING_UNDUCK_MS) / 1000, 1)
+    // 해소(62.735s)는 제 음량으로 들려야 한다 — 램프가 그 전에 끝난다.
+    expect(rise.t - ctx.currentTime).toBeLessThan(62.735)
+  })
+
+  it('소개가 없으면(short) 덕킹하지 않는다 — 처음부터 제 음량', async () => {
+    DECODE_DURATION = 13.8
+    const { sfx, bgm, ctx } = await setup()
+    sfx.init()
+    bgm.playSting('M06', { alignEndAtMs: 13000 })
+    await flush()
+    const g = ctx.gains[ctx.gains.length - 1]
+    expect(g.gain.value).toBeCloseTo(0.8, 4)
+    expect(g.gain.ramps).toHaveLength(0)
+  })
 })
 
 describe('bgm 덕킹 · 일시정지 · 음소거', () => {

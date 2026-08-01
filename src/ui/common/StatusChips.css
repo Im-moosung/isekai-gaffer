@@ -39,11 +39,20 @@
 }
 
 /* 카드: 세로 직사각형(실제 축구 카드 비율 ≈ 2:3) */
-.sx__chip--card .sx__mark {
+.sx__chip--card .sx__mark,
+.sx__chip--card-stack .sx__mark,
+.sx__chip--card-slash .sx__mark {
   width: 7px;
   height: 10px;
   border-radius: 1px;
 }
+
+/* card-stack / card-slash의 틈은 **투명**이어야 한다.
+   처음에는 틈을 칩 배경색(--warn-weak 등)으로 칠했는데, weak 토큰이 반투명이라 아래의
+   마크 색이 그대로 비쳐 두 도형이 한 덩어리로 뭉쳤다(실측 캡처 r8-chips 1차).
+   투명으로 뚫으면 칩 배경이 그대로 보이므로 어느 표면 위에서도 틈이 남는다.
+   실제 그리기는 톤 규칙 뒤(아래 "복합 실루엣")에서 한다 — background 단축 속성이
+   background-image를 지우기 때문이다. */
 
 /* 체력: 가로 막대(배터리) */
 .sx__chip--bar .sx__mark {
@@ -73,7 +82,9 @@
 .sx__chip--tri-up .sx__mark { border-bottom: 8px solid currentColor; }
 .sx__chip--tri-down .sx__mark { border-top: 8px solid currentColor; }
 
-/* ── 톤 ──────────────────────────────────────────────────────────── */
+/* ── 톤 ──────────────────────────────────────────────────────────────
+   카드 계열에서는 축구의 색 문법을 그대로 쓴다(StatusChips.tsx 주석 2-1):
+     노란 카드 = 경고가 쌓였다(아직 뛴다) / 빨간 카드 = 뛰지 않는다(퇴장·정지) */
 .sx__chip--warn {
   color: var(--warn);
   background: var(--warn-weak);
@@ -103,6 +114,37 @@
   border-color: var(--s-line-strong);
 }
 .sx__chip--mute .sx__mark { background: none; }
+
+/* ── 복합 실루엣(톤 뒤에 온다) ────────────────────────────────────────
+   톤 규칙이 `background` **단축 속성**으로 background-image를 지우므로, 이미지가 필요한
+   마크는 반드시 톤 뒤에서 배경을 통째로 다시 깔아야 한다. 색은 currentColor(=톤 색)를
+   그대로 쓰고, 나머지는 transparent로 뚫는다. */
+
+/* 카드 2장 겹침 = "다음 경기를 못 뛴다"(경고 임계 도달 · 출장정지).
+   앞 카드는 오른쪽 아래, 뒤 카드는 왼쪽 위로 조금 작게 — 겹쳐 든 두 장으로 읽힌다.
+   1px 투명 틈이 둘을 갈라 색을 못 읽어도 "2장"이 보인다. */
+.sx__chip--card-stack .sx__mark {
+  width: 11px;
+  background: none;
+  background-image:
+    linear-gradient(currentColor, currentColor),
+    linear-gradient(currentColor, currentColor);
+  background-size: 7px 10px, 3px 8px;
+  background-position: right bottom, left top;
+  background-repeat: no-repeat;
+}
+
+/* 퇴장: 카드에 대각선 컷. "카드를 받았다"가 아니라 "이 선수가 지워졌다"를 말한다.
+   컷은 투명이라 칩 배경이 비쳐 나온다 — 색을 못 읽어도 카드가 두 조각으로 갈라져 보인다. */
+.sx__chip--card-slash .sx__mark {
+  background: none;
+  background-image: linear-gradient(
+    to top right,
+    currentColor 0 42%,
+    transparent 42% 58%,
+    currentColor 58% 100%
+  );
+}
 
 /* 삼각형 마크는 background가 아니라 border로 그린다 — 위에서 깐 background를 지운다. */
 .sx__chip--tri-up .sx__mark,

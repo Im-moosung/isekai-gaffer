@@ -10,11 +10,25 @@
 // 1. **나쁠 때만 뜬다.** 체력 100·사기 정상인 선수에겐 아무것도 붙지 않는다. 전원에게
 //    칩을 달면 정보량이 0이 되고(벤치 15명 전원 풀바 문제의 반복), 눈에 띄어야 할
 //    소수가 묻힌다. 아무것도 없는 행 = "이상 없음"이 그 자체로 신호다.
-// 2. **형태 + 색.** 색만으로 구분하지 않는다(색각 접근성). 세 실루엣이 서로 다르다.
-//      · 카드/징계 = 세로 직사각형(실제 축구 카드)
-//      · 체력      = 가로 막대
-//      · 사기      = 삼각형(▲/▼)
+// 2. **형태 + 색.** 색만으로 구분하지 않는다(색각 접근성). 실루엣이 서로 다르다.
+//      · 경고 누적   = 카드 1장(세로 직사각형)
+//      · 출장정지    = 카드 2장 겹침(누적 경고가 임계에 닿은 순간부터 같은 실루엣)
+//      · 퇴장        = 카드 1장에 **대각선 컷**
+//      · 체력        = 가로 막대
+//      · 사기        = 삼각형(▲/▼)
+//      · 교체 아웃   = 빈 원(링)
 //    수치를 항상 옆에 적어 색을 못 읽어도 값이 전달된다.
+//
+// ── 2-1. 왜 누적 경고를 빨강으로 올리지 않는가 ──────────────────
+// 예전에는 임계 도달(2장) 시 톤을 danger로 올렸다. 그래서 **빨간 카드 모양 칩에 숫자 2**가
+// 찍혔고, 사용자가 실제로 물었다: "이게 지금 퇴장 표시인 거야?" (2026-08-01 제보)
+// aria-label에는 "누적 경고 2장 · 다음 경기 출장정지 확정"이 이미 들어 있었으니, 문제는
+// 정보가 아니라 **그림이 축구의 색 문법을 어겼다**는 것이다. 축구에서 노랑은 경고,
+// 빨강은 퇴장·결장이다. 그래서 **카드 계열 안에서** 규칙을 하나로 못박는다:
+//   · 노란 카드 = 경고가 쌓였다(아직 뛴다)   · 빨간 카드 = 이 선수는 뛰지 않는다(퇴장·정지)
+// (체력 막대의 빨강은 카드가 아니므로 이 규칙과 충돌하지 않는다 — 실루엣이 다르다.)
+// 임계 도달의 무게는 색이 아니라 **실루엣**이 진다 — 카드가 두 장이 되고, 그 두 장은
+// 다음 경기에 '정지' 칩으로 그대로 이어진다(같은 도형 = 같은 결과).
 // 3. **최대 3개.** 정지자에게는 다른 칩을 붙이지 않는다 — 뛰지 않는 선수의 체력·사기는
 //    잡음이다. 그래서 실제로 겹치는 최대치는 카드+체력+사기 = 3개이고, 390px에서도
 //    한 줄에 들어간다.
@@ -31,8 +45,12 @@ const MOOD_HIGH = 85
 
 /** 'mute'는 상태가 아니라 **자격 소멸**을 말한다 — 잘못한 것이 없으므로 경고색을 쓰지 않는다. */
 export type ChipTone = 'warn' | 'danger' | 'good' | 'mute'
-/** 'out'(원)은 카드(직사각)·체력(막대)·사기(삼각) 어느 것과도 겹치지 않는 네 번째 실루엣이다. */
-export type ChipShape = 'card' | 'bar' | 'tri-up' | 'tri-down' | 'out'
+/**
+ * 'out'(원)은 카드(직사각)·체력(막대)·사기(삼각) 어느 것과도 겹치지 않는 네 번째 실루엣이다.
+ * 'card-stack'(카드 2장)·'card-slash'(대각선 컷 카드)는 카드 계열 안에서 **결과가 다른 셋**을
+ * 갈라 놓는다: 경고 누적(card) / 결장 확정·정지(card-stack) / 이번 경기 퇴장(card-slash).
+ */
+export type ChipShape = 'card' | 'card-stack' | 'card-slash' | 'bar' | 'tri-up' | 'tri-down' | 'out'
 
 export interface StatusChip {
   /** React key·테스트 훅. */
@@ -89,26 +107,28 @@ export function statusChips(input: StatusInput): StatusChip[] {
 
   // 출장정지는 단독 표시. 뛰지 않는 선수의 컨디션은 판단 재료가 아니다.
   if (suspended) {
-    return [{ kind: 'susp', shape: 'card', tone: 'danger', text: '정지', label: '출장정지 — 이번 경기 출전 불가' }]
+    return [{ kind: 'susp', shape: 'card-stack', tone: 'danger', text: '정지', label: '출장정지 — 이번 경기 출전 불가' }]
   }
 
   const chips: StatusChip[] = []
 
   if (sentOff) {
-    chips.push({ kind: 'sent', shape: 'card', tone: 'danger', text: '퇴장', label: '퇴장 — 다음 경기 출장정지' })
+    // 대각선 컷 = "이 선수는 지금 경기에서 지워졌다". 숫자 칩과 실루엣부터 다르므로
+    // 색을 못 읽어도(그리고 색을 읽어도) 누적 경고와 헷갈리지 않는다.
+    chips.push({ kind: 'sent', shape: 'card-slash', tone: 'danger', text: '퇴장', label: '퇴장 — 이번 경기에서 제외 · 다음 경기 출장정지' })
   } else {
     const total = cautions + matchYellows
     if (total > 0) {
-      // 임계에 도달하면 다음 경기 결장이 **확정**이다. 같은 노란 카드라도 의미가 다르므로
-      // 톤을 danger로 올린다 — "한 장 더 받으면 위험"과 "이미 못 뛴다"를 섞으면 안 된다.
+      // 임계에 도달하면 다음 경기 결장이 **확정**이다. 그 무게는 색이 아니라 실루엣이 진다
+      // (카드 2장 = 정지 칩과 같은 도형). 톤은 언제나 warn — 상단 주석 2-1 참조.
       const reached = total >= CAUTION_THRESHOLD
       const parts = [`누적 경고 ${total}장`]
       if (matchYellows > 0) parts.push(`이 경기 ${matchYellows}장`)
       parts.push(reached ? '다음 경기 출장정지 확정' : `${CAUTION_THRESHOLD - total}장 더 받으면 다음 경기 결장`)
       chips.push({
         kind: 'caution',
-        shape: 'card',
-        tone: reached ? 'danger' : 'warn',
+        shape: reached ? 'card-stack' : 'card',
+        tone: 'warn',
         text: String(total),
         label: parts.join(' · '),
       })

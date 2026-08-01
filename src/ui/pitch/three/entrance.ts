@@ -425,11 +425,32 @@ export function entranceScript(cast: EntranceCast, mode: EntranceMode = 'full'):
   return script
 }
 
+/**
+ * 소개(캐스터 낭독)가 끝나는 시각(ms). 소개가 없는 short 모드면 null.
+ *
+ * M06 팡파르를 **어디까지 눌러 둘지**의 정본이다 — 상수를 다시 쓰지 마라. 곡은
+ * `alignEndAtMs = totalMs`로 끝이 킥오프 휘슬에 맞춰져 있으므로(길이 13.80s) full 모드에서
+ * 곡의 앞 11.6초가 away-intro 위로 겹쳐 든다. 그 구간은 캐스터가 22명을 호명하는 시간이고,
+ * 인플레이에 음악을 깔지 않는 것과 같은 이유로 **말이 주인**이어야 한다.
+ */
+export function entranceIntroEndMs(script: EntranceScript): number | null {
+  let end: number | null = null
+  for (const span of script.phases) {
+    if (span.phase !== 'home-intro' && span.phase !== 'away-intro') continue
+    if (span.end > span.start) end = span.end
+  }
+  return end
+}
+
 // ── 모드 기억(캠페인 8경기 정책) ────────────────────────────────────────────
-// 근거: 전체 연출은 22명을 이름으로 부르는 실제 방송 낭독이라 1분 가까이 걸린다.
-// 첫 경기에는 그 자체가 볼거리지만, 8경기 내내 매번 반복하면 "건너뛰기를 누르는 의식"이
-// 된다. 그래서 **본 적이 있으면 짧은 판**을 기본으로 하고, 언제든 전체로 되돌릴 수 있게
-// 한다(오버레이의 "선수 소개 보기"). localStorage는 진실원이 아니라 기본값 힌트일 뿐이다.
+// ★ 2026-08-01 정책 변경 — 기본을 **전체 연출**로 되돌렸다(사용자 지시).
+//   예전 근거는 "8경기 내내 1분을 붙잡으면 건너뛰기를 누르는 의식이 된다"였고, 그래서
+//   본 적이 있으면 short를 기본으로 삼았다. 그런데 실제로 플레이한 사용자는 반대로 말했다:
+//   *"선수 소개 보기를 눌러야만 해설이 나온다"* — 소개는 이 연출의 **본체**이고, 버튼 뒤에
+//   숨겨 두면 대부분의 경기에서 영영 안 들린다. 길이의 대가는 모드가 아니라 **음악 처리**로
+//   치른다(entranceIntroEndMs → bgm.playSting duckUntilMs). 건너뛰기는 그대로 남는다.
+//   seen 플래그는 계속 기록한다 — 모드를 고르지는 않지만 "이 유저가 전체 컷을 본 적이
+//   있는가"는 다른 연출 판단에 쓸 수 있는 사실이다.
 const ENTRANCE_SEEN_KEY = 'rematch-entrance-seen'
 
 /** 전체 연출을 이미 본 적이 있는가. 저장소 미지원·오류는 '아직'으로 본다. */
@@ -450,9 +471,9 @@ export function markEntranceSeen(): void {
   }
 }
 
-/** 이번 경기의 기본 모드. */
+/** 이번 경기의 기본 모드 — 언제나 전체 연출. 근거는 위 ENTRANCE_SEEN_KEY 주석. */
 export function defaultEntranceMode(): EntranceMode {
-  return readEntranceSeen() ? 'short' : 'full'
+  return 'full'
 }
 
 // ── 타임라인 조회 ───────────────────────────────────────────────────────────
