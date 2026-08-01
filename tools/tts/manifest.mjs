@@ -27,11 +27,30 @@ import { dirname, resolve } from 'node:path'
 import { createHash } from 'node:crypto'
 
 const arg = (n, d) => { const i = process.argv.indexOf(`--${n}`); return i >= 0 ? process.argv[i + 1] : d }
-const BATCH = Number(arg('batch', 16))
+const has = n => process.argv.includes(`--${n}`)
+/** plain(완결 문장) 배치 크기. 문장끼리는 각자 완결된 발화라 음역 흩어짐에 덜 민감하다. */
+const PLAIN_BATCH = Number(arg('plain-batch', 16))
+/**
+ * carrier(이름·조각) 배치 크기. **여기가 위험한 축이다.**
+ * 프로토 실측: 2~4개는 템플릿과 2반음 이내, 16개는 3.2~13.2반음으로 흩어져
+ * `--match-register`(±5반음)로도 12/16이 구제 불가였다. 5~15는 미측정 구간이다.
+ */
+const CARRIER_BATCH = Number(arg('carrier-batch', arg('batch', 12)))
+/** 미측정 구간을 재는 모드 — 첫 두 캐리어 배치를 8개·12개로 고정한다.
+ *  ★ 탐침도 **실제 우선순위 앞쪽**을 굽는다. 버리는 요청이 하나도 없게. */
+const PROBE = has('probe')
 const SCOPE = arg('scope', 'group')
 const JSON_OUT = arg('json', 'docs/audio/tts/manifest.json')
-/** 모델별 일일 요청 한도(RPD). 예산이 맞는지 이 값으로 판정한다. */
+/** 모델별 일일 요청 한도(RPD). */
 const RPD = 10
+/**
+ * 마감까지 쓸 수 있는 **총** 캐스터 요청 수.
+ * 한도 창이 둘이다(실측 2026-08-01 00:45 PDT — 자정을 넘겨 이미 리셋됐다):
+ *   · PDT 08-01 (지금 ~ KST 08-02 16:00)  10회
+ *   · PDT 08-02 (KST 08-02 16:00 ~ 마감)  10회
+ * 마감 KST 08-03 10:00 = PDT 08-02 17:00이라 두 창 다 마감 전이다.
+ */
+const BUDGET = Number(arg('budget', 20))
 
 const roster = JSON.parse(readFileSync('docs/audio/tts/roster.json', 'utf8'))
 const entrance = JSON.parse(readFileSync('docs/audio/tts/entrance-lines.json', 'utf8'))
@@ -79,20 +98,34 @@ const ORDER = SCOPE === 'group'
   : ['kor', 'cze', 'mex', 'rsa', 'ecu', 'can', 'eng', 'mar', 'nor', 'fra', 'arg', 'esp']
 const TIER = { kor: 2, cze: 3, mex: 3, rsa: 3 }
 
+// ★ **실제로 발화되는 문자열만** 굽는다. `entrance-lines.json.nameLines`는 런타임이
+//   부르는 `lineupIntroBeats`에서 그대로 뽑은 집합이라 어긋날 수 없다.
+//   AI 팀은 XI가 결정론이라 `{이름}입니다.`가 4명(골키퍼 + 세 그룹의 마지막)에만
+//   필요하다 — 전원에게 두 형태를 구우면 팀당 22개, 실측대로면 **11개**다.
+//   한국만 26명 × 2형태다(유저가 슬롯을 통째로 바꾼다 — 여기만 상한이다).
+// 순서는 roster의 스쿼드 순서를 따른다. **이미 구워 둔 배치의 구성이 바뀌면 안 되므로**
+// 정렬 규칙을 함부로 바꾸지 마라(원본 wav와 배치 정의가 어긋나 엉뚱한 이름이 나간다).
 for (const tid of ORDER) {
+  const spoken = new Set(entrance.nameLines?.[tid] ?? [])
   const list = roster.clipTargets[tid] ?? []
   const tier = TIER[tid] ?? 4
   for (const p of list) {
-    carriers.push({
-      key: keyOf('n', `${p.ko},`), speaker: 'caster', text: `${p.ko},`,
-      kind: 'name', cut: 'head', carrier: carrierHead(p.ko),
-      tier, why: `${tid} 이름(중간 호명)`,
-    })
-    carriers.push({
-      key: keyOf('n', `${p.ko}입니다.`), speaker: 'caster', text: `${p.ko}입니다.`,
-      kind: 'name', cut: 'tail', carrier: carrierTail(`${p.ko}입니다.`),
-      tier, why: `${tid} 이름(마지막 호명·골키퍼)`,
-    })
+    const mid = `${p.ko},`
+    const fin = `${p.ko}입니다.`
+    if (spoken.has(mid)) {
+      carriers.push({
+        key: keyOf('n', mid), speaker: 'caster', text: mid,
+        kind: 'name', cut: 'head', carrier: carrierHead(p.ko),
+        tier, why: `${tid} 이름(중간 호명)`,
+      })
+    }
+    if (spoken.has(fin)) {
+      carriers.push({
+        key: keyOf('n', fin), speaker: 'caster', text: fin,
+        kind: 'name', cut: 'tail', carrier: carrierTail(fin),
+        tier, why: `${tid} 이름(마지막 호명·골키퍼)`,
+      })
+    }
   }
 }
 
@@ -105,10 +138,20 @@ const chunk = (arr, n) => {
   return out
 }
 
-const PLAIN_STYLE = '월드컵 중계 방송 톤으로, 또렷하고 차분하게'
-const CARRIER_STYLE = '월드컵 중계 방송 톤으로, 또렷하고 차분하게'
-/** 말줄임표 쉼 지시 — 실측에서 쉼표(0.34초)는 안 먹고 말줄임표는 0.40~2.59초 쉬었다. */
-const CARRIER_INSTR = '말줄임표(……)에서는 반드시 1초 이상 완전히 멈춰라.'
+// ★ 스타일 문구는 **프로토가 실제로 200을 받은 것을 그대로** 쓴다(tools/tts/proto.py).
+//   손으로 다시 쓰면 안 된다 — 처음에 "말줄임표에서 1초 이상 멈춰라"로만 줄였다가
+//   HTTP 400 `Model tried to generate text, but it should only be used for TTS`로
+//   요청 하나를 태웠다. `……`를 **소리 내어 읽지 말라**는 말이 빠지면 모델이 그 자리를
+//   "채워 넣으라는 지시"로 읽는다.
+const PLAIN_STYLE = { caster: '축구 중계 캐스터처럼 생생하게 읽어라.', analyst: '축구 중계 해설위원처럼 차분하게 짚어 읽어라.' }
+const CARRIER_STYLE = {
+  caster: '축구 중계 캐스터의 목소리로 읽어라. 말줄임표(……)는 소리 내어 읽지 말고 '
+    + '그 자리에서 1초 이상 완전히 쉬어라. 말줄임표 앞뒤는 한 문장이니, '
+    + '말줄임표 앞에서 어조를 내리지 말고 뒤도 새 문장처럼 높여 시작하지 마라.',
+  analyst: '축구 중계 해설위원의 차분한 목소리로 읽어라. 말줄임표(……)는 소리 내어 읽지 말고 '
+    + '그 자리에서 1초 이상 완전히 쉬어라. 말줄임표 앞뒤는 한 문장이니, '
+    + '말줄임표 앞에서 어조를 내리지 말고 뒤도 새 문장처럼 높여 시작하지 마라.',
+}
 
 let n = 0
 const push = (speaker, kind, items) => {
@@ -118,24 +161,35 @@ const push = (speaker, kind, items) => {
     speaker, model: SPEAKERS[speaker].model, voice: SPEAKERS[speaker].voice,
     kind,
     pieces: kind === 'plain' ? 1 : 2,
-    style: kind === 'plain' ? PLAIN_STYLE : CARRIER_STYLE,
-    extra: kind === 'plain' ? '' : CARRIER_INSTR,
+    style: (kind === 'plain' ? PLAIN_STYLE : CARRIER_STYLE)[speaker],
+    extra: '',
     tier: Math.min(...items.map(i => i.tier)),
     lines: items.map(i => (kind === 'plain' ? i.text : i.carrier)),
     items: items.map(i => ({ key: i.key, text: i.text, kind: i.kind, cut: i.cut ?? null, why: i.why })),
   })
 }
 
+/** 캐리어를 앞에서부터 잘라 낸다. probe면 첫 두 덩이를 8·12로 고정한다. */
+function carrierChunks(list) {
+  if (!PROBE) return chunk(list, CARRIER_BATCH)
+  const out = [list.slice(0, 8), list.slice(8, 20)]
+  return [...out.filter(c => c.length > 0), ...chunk(list.slice(20), CARRIER_BATCH)]
+}
+
 // 캐스터: 템플릿(plain) → 이름·조각(carrier) 순. 앞이 없으면 뒤가 쓸모없다.
-for (const c of chunk(plains.caster, BATCH)) push('caster', 'plain', c)
-for (const c of chunk(carriers.filter(x => x.speaker === 'caster'), BATCH)) push('caster', 'carrier', c)
-for (const c of chunk(plains.analyst, BATCH)) push('analyst', 'plain', c)
+// ★ 이 순서가 곧 우선순위다. 한도가 끊겨 뒤가 잘려도 앞은 그대로 쓸 수 있다.
+for (const c of chunk(plains.caster, PLAIN_BATCH)) push('caster', 'plain', c)
+for (const c of carrierChunks(carriers.filter(x => x.speaker === 'caster'))) push('caster', 'carrier', c)
+for (const c of chunk(plains.analyst, PLAIN_BATCH)) push('analyst', 'plain', c)
 
 const manifest = {
   version: 1,
-  batchSize: BATCH,
+  plainBatch: PLAIN_BATCH,
+  carrierBatch: CARRIER_BATCH,
+  probe: PROBE,
   scope: SCOPE,
   rpd: RPD,
+  budget: BUDGET,
   speakers: SPEAKERS,
   gapMs: 90,
   atempo: 1.15,
@@ -147,7 +201,7 @@ const manifest = {
 const byS = s => batches.filter(b => b.speaker === s)
 const clips = batches.reduce((a, b) => a + b.items.length, 0)
 
-console.log(`\n# TTS 생성 매니페스트 — scope=${SCOPE}, 배치 ${BATCH}\n`)
+console.log(`\n# TTS 생성 매니페스트 — scope=${SCOPE}, plain ${PLAIN_BATCH} / carrier ${CARRIER_BATCH}${PROBE ? " (probe 8·12 선행)" : ""}\n`)
 console.log('| 배치 | 화자 | 종류 | 문장 | 클립 | 티어 | 내용 |')
 console.log('|---|---|---|---:|---:|---:|---|')
 for (const b of batches) {
@@ -172,8 +226,10 @@ console.log(`\n총 클립 ${clips}개 / 요청 ${batches.length}회`)
 console.log(`추정 배포 용량 ${(bytes / 1024 / 1024).toFixed(2)} MB (mp3 64k · 24kHz 모노, public/tts/**)`)
 for (const s of ['caster', 'analyst']) {
   const bs = byS(s)
-  const days = Math.ceil(bs.length / RPD)
-  console.log(`  ${SPEAKERS[s].ko.padEnd(5)} ${SPEAKERS[s].model.padEnd(32)} 요청 ${String(bs.length).padStart(2)}회 / RPD ${RPD} → **${days}일** ${bs.length <= RPD ? '(하루에 들어간다)' : '(초과)'}`)
+  const windows = Math.ceil(bs.length / RPD)
+  const fits = bs.length <= BUDGET
+  console.log(`  ${SPEAKERS[s].ko.padEnd(5)} ${SPEAKERS[s].model.padEnd(32)} 요청 ${String(bs.length).padStart(2)}회 `
+    + `/ 창 ${windows}개(RPD ${RPD}) / 예산 ${BUDGET} → ${fits ? `**들어간다** (여유 ${BUDGET - bs.length})` : '**초과**'}`)
 }
 
 const out = resolve(JSON_OUT)

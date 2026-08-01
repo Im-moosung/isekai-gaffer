@@ -29,6 +29,15 @@ const ALL_FORMATIONS = Object.keys(XI_SLOTS)
 const tplLines = new Map()   // speech → { speaker, from:Set }
 const formations = new Set()
 const teamsKo = []
+/**
+ * 팀별로 **이름 비트가 실제로 내는 발화 문자열 전집합**.
+ * ★ 이게 왜 중요한가: `{이름},`(중간 호명)과 `{이름}입니다.`(그룹 마지막·골키퍼)는
+ *   별개의 클립인데, **AI 팀은 XI가 결정론**이라 마지막 자리에 서는 선수가 정해져 있다.
+ *   전원에게 두 형태를 다 구우면 요청을 두 배로 태운다. 여기서 실제로 나오는 문자열만
+ *   뽑으면 AI 팀은 11 + 4(골키퍼 + 세 그룹의 마지막) = 15개로 끝난다.
+ *   런타임이 부르는 함수와 **같은 함수**에서 뽑으므로 어긋날 수 없다.
+ */
+const nameLines = {}
 
 const add = (speech, speaker, from) => {
   const e = tplLines.get(speech) ?? { speaker, from: new Set() }
@@ -39,6 +48,7 @@ const add = (speech, speaker, from) => {
 for (const id of IDS) {
   const team = loadTeam(id)
   teamsKo.push({ id, ko: team.name.ko })
+  const names = new Set()
   // 그 팀이 실제로 설 수 있는 포메이션: AI는 pickBestXI 기본값 하나, 한국은 전부.
   const fs = id === 'kor' ? ALL_FORMATIONS : [pickBestXI(team).formation]
   for (const f of fs) {
@@ -49,10 +59,16 @@ for (const id of IDS) {
       return { id: p.id, number: p.number, nameKo: p.name.ko, position: p.position }
     })
     for (const b of lineupIntroBeats(team.name.ko, f, members)) {
-      if (b.kind === 'name') continue
+      if (b.kind === 'name') { names.add(b.speech); continue }
       add(b.speech, b.speaker, `${id}/${f}`)
     }
+    // ★ 한국은 유저가 라인업을 통째로 바꾼다 — 26명 누구나 어느 슬롯에도 설 수 있으므로
+    //   **스쿼드 전원 × 두 형태**를 후보로 잡는다. 여기만 실측이 아니라 상한이다.
+    if (id === 'kor') {
+      for (const p of team.squad) { names.add(`${p.name.ko},`); names.add(`${p.name.ko}입니다.`) }
+    }
   }
+  nameLines[id] = [...names]
 }
 
 const rows = [...tplLines.entries()].map(([speech, v]) => ({
@@ -68,9 +84,21 @@ const byS = s => rows.filter(r => r.speaker === s).length
 console.log(`\n캐스터 ${byS('caster')}문장 / 해설위원 ${byS('analyst')}문장`)
 console.log(`포메이션 ${formations.size}종: ${[...formations].join(', ')}`)
 
+console.log(`\n## 이름 비트가 실제로 내는 발화 — 팀별 클립 수\n`)
+console.log('| 팀 | 이름 클립 | 내역 |')
+console.log('|---|---:|---|')
+let nTot = 0
+for (const { id, ko } of teamsKo) {
+  const ls = nameLines[id]
+  nTot += ls.length
+  const fin = ls.filter(l => l.endsWith('입니다.')).length
+  console.log(`| ${ko} (${id}) | ${ls.length} | 중간 호명 ${ls.length - fin} + 마지막·골키퍼 ${fin} |`)
+}
+console.log(`| **합계** | **${nTot}** | |`)
+
 const out = resolve(JSON_OUT)
 mkdirSync(dirname(out), { recursive: true })
-writeFileSync(out, JSON.stringify({ teams: teamsKo, formations: [...formations], lines: rows }, null, 1) + '\n')
+writeFileSync(out, JSON.stringify({ teams: teamsKo, formations: [...formations], lines: rows, nameLines }, null, 1) + '\n')
 console.log(`\n${JSON_OUT} 기록.`)
 
 await server.close()
