@@ -55,15 +55,26 @@
   font-family: var(--f-ui);
 }
 
-/* ── 헤더: 대진 + 국면 ─────────────────────────────────────── */
+/* ── 헤더: 대진 + 국면 + 주 CTA ────────────────────────────────
+   ★ sticky다(2026-08-01). [킥오프]가 이 줄로 올라왔고, 워룸은 문서 스크롤로 자라는
+   화면이라 스크롤 위치와 무관하게 보여야 한다 — 6라운드 감사가 "1600×900 첫 화면에
+   킥오프 버튼이 없다"고 적은 자리다. 작전판(.tb-head)과 같은 문법이다. */
 .tc-head {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-furniture);
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: var(--sp-2) var(--sp-4);
-  padding-bottom: var(--sp-3);
+  padding: var(--sp-3) 0;
   border-bottom: 1px solid var(--s-line);
+  background: var(--s-0);
 }
+/* 참고 스코어가 margin-left:auto를 이미 쓰고 있으므로 CTA는 그 뒤에 붙기만 하면 된다.
+   참고 스코어가 없는 경기(조별 외)에서는 CTA가 auto를 가져간다. */
+.tc-head__go { flex: 0 0 auto; margin-left: auto; }
+.tc-head__ref + .tc-head__go { margin-left: 0; }
 .tc-head__match {
   display: flex;
   align-items: stretch;
@@ -126,20 +137,43 @@
   color: var(--t-mid);
 }
 
-/* ── 팀 전술 ───────────────────────────────────────────────
-   "라인을 내리면서 수비적으로 간다"는 하나의 결정이다. 슬라이더(ConsolePanel)와
-   멘탈리티·그룹·패턴(TacticsExtras)을 나란히 두어 동시에 판단하게 한다. */
+/* ── 팀 전술: 작전판 + 작업대 ─────────────────────────────────
+   사용자 지시(2026-08-01): "전술은 탭을 변경해도 항상 포메이션 작전판이 같이 나오게."
+   경기 중 작전판(.tb-main)과 **같은 비율**을 쓴다 — 두 화면의 눈이 같아야 한다.
+   컨트롤 레일은 300px을 밑돌면 세그먼트 버튼이 줄바꿈으로 무너지므로 하한을 건다. */
 .tc-team {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 7fr) minmax(320px, 3fr);
   gap: var(--sp-4);
+  align-items: start;
   min-width: 0;
 }
-@media (min-width: 900px) {
-  .tc-team {
-    grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.15fr);
-    align-items: start;
-  }
+/* 보드 면은 작전판(.tb-board__pitch)과 같은 값이다 — 한 앱에 피치가 여러 시각 언어로
+   있던 것이 감사 W-5의 지적이었다. 캡션(.tb-cap)이 절대 배치되므로 relative가 필요하다. */
+.tc-team__board {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-2);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-lg);
+  background: var(--pitch-bg);
+  box-sizing: border-box;
+}
+.tc-team__board > .pv-root {
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  aspect-ratio: 105 / 68;
+  /* 작전판(.tb-board__pitch)과 같은 상한 — 두 화면의 보드가 같은 크기로 읽혀야 한다. */
+  max-height: 52vh;
+}
+/* 좁으면 2열이 불가능하다. 위아래로 쌓되 **보드를 위에** 둔다 — 조작하는 손이 결과를
+   가리지 않고, 탭을 연 순간 "지금 무엇을 세웠나"가 먼저 보인다. */
+@media (max-width: 1099px) {
+  .tc-team { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* ── 검토 요약(탭 밖 고정 밴드) ────────────────────────────
@@ -224,6 +258,9 @@
   .tc-root { gap: var(--sp-4); }
   .tc-head__teams { font-size: var(--fs-h2); }
   .tc-head__ref { margin-left: 0; }
+  /* 390px에서는 CTA가 헤더의 한 줄을 통째로 갖는다 — 대진명 옆에 끼면 44px 타깃이 깨진다. */
+  .tc-head__go,
+  .tc-head__ref + .tc-head__go { flex: 1 1 100%; margin-left: 0; }
 
   /* 390px에서는 탭이 아코디언을 대체한다 — 아코디언은 열 때마다 문서가 늘어나
      "지금 무엇이 열려 있나"를 스크롤로 확인해야 했다. 탭은 항상 한 화면이다. */
@@ -234,7 +271,5 @@
     flex-wrap: wrap;
     padding: var(--sp-2) var(--sp-3);
   }
-  /* 좁은 폭에서 주 동작이 줄바꿈에 밀려 화면 밖으로 나가지 않게 한다. */
-  .tc-actions .btn--primary { flex: 1 1 100%; order: -1; }
   .tc-actions__status { flex: 1 1 100%; white-space: normal; }
 }

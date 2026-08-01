@@ -33,7 +33,11 @@ describe('matchupHint (formationEdge 부호·크기)', () => {
   })
   it('큰 우위/열세는 강한 문구', () => {
     expect(matchupHint(0.05).text).toContain('우위')
-    expect(matchupHint(-0.05).text).toContain('주의')
+    // 원인 힌트("측면·뒷공간 주의")는 걷어냈다 — 상성표가 순환 구조가 되면서 어느 축에서
+    // 지는지가 상대마다 달라져 고정 문구가 사실이 아니게 됐다. 부호·크기만 적는다.
+    expect(matchupHint(-0.05).text).toContain('열세')
+    expect(matchupHint(-0.05).text).toContain('-0.05')
+    expect(matchupHint(0.05).text).not.toMatch(/주의|예상/)
   })
 })
 

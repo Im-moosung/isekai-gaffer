@@ -26,6 +26,16 @@ function mountAt(phase: 'paused-user' | 'paused-break' | 'halftime') {
   return render(<TacticsBoard />)
 }
 
+/** 전술 탭 안의 서브탭 전환(지시 / 태세 / 세트피스·대형).
+ *  비활성 서브탭은 `hidden`이라 접근성 트리에서 빠진다 — 그게 이 설계의 요점이므로
+ *  (스크린리더·탭 이동이 숨은 컨트롤에 닿지 않는다) 테스트도 사람과 같은 경로로 연다. */
+function openSubtab(container: HTMLElement, label: '지시' | '태세' | '세트피스') {
+  const tab = Array.from(container.querySelectorAll('.tw-tab'))
+    .find(el => el.textContent!.includes(label))
+  if (!tab) throw new Error(`서브탭 없음: ${label}`)
+  fireEvent.click(tab)
+}
+
 beforeEach(() => { store().reset() })
 afterEach(() => { cleanup() })
 
@@ -60,14 +70,16 @@ describe('TacticsBoard — 실시간 보드 반영(포메이션 변경)', () => 
 
 describe('TacticsBoard — 확장 전술 지시(Task 5)', () => {
   it('멘탈리티 5버튼 + 클릭 시 엔진 tactics.mentality 갱신', () => {
-    const { getByRole } = mountAt('paused-break')
+    const { getByRole, container } = mountAt('paused-break')
+    openSubtab(container, '태세')
     expect(store().engine!.home.tactics.mentality ?? 'balanced').toBe('balanced')
     fireEvent.click(getByRole('button', { name: '공격적', pressed: false }))
     expect(store().engine!.home.tactics.mentality).toBe('attacking')
   })
 
   it('그룹 적극성: 공격 라인 [적극] → groupIntensity.attack=1', () => {
-    const { getByRole } = mountAt('paused-break')
+    const { getByRole, container } = mountAt('paused-break')
+    openSubtab(container, '태세')
     const grp = getByRole('group', { name: '공격 적극성' })
     fireEvent.click(within(grp).getByRole('button', { name: '적극' }))
     expect(store().engine!.home.tactics.groupIntensity!.attack).toBe(1)
@@ -75,20 +87,23 @@ describe('TacticsBoard — 확장 전술 지시(Task 5)', () => {
   })
 
   it('공격 패턴 4택: [중거리] 선택 → attackPattern=longshot', () => {
-    const { getByRole } = mountAt('paused-break')
+    const { getByRole, container } = mountAt('paused-break')
+    openSubtab(container, '태세')
     fireEvent.click(getByRole('button', { name: '중거리' }))
     expect(store().engine!.home.tactics.attackPattern).toBe('longshot')
   })
 
   it('GK 파워플레이: 조건 미충족(1분·비지는중)엔 잠금+사유', () => {
-    const { getByRole, getByText } = mountAt('paused-break')
+    const { getByRole, getByText, container } = mountAt('paused-break')
+    openSubtab(container, '태세')
     const btn = getByRole('button', { name: 'GK 전진' }) as HTMLButtonElement
     expect(btn.disabled).toBe(true)
     expect(getByText(/85' 이후에만 효과가 있습니다/)).toBeTruthy()
   })
 
   it('GK 파워플레이: 85\'+ & 지는 중이면 해제 → 토글 반영', () => {
-    const { getByRole } = mountAt('paused-break')
+    const { getByRole, container } = mountAt('paused-break')
+    openSubtab(container, '태세')
     act(() => {
       const eng = structuredClone(store().engine!)
       eng.minute = 87; eng.score = [0, 1] // 홈 지는 중
@@ -106,6 +121,7 @@ describe('TacticsBoard — 확장 전술 지시(Task 5)', () => {
   it("GK 파워플레이: 85'+·지는 중이어도 개입 창 밖이면 그 사실을 화면이 말한다", () => {
     const { getByRole, container } = mountAt('paused-user')
     fireEvent.click(getByRole('tab', { name: /전술/ }))
+    openSubtab(container, '태세')
     act(() => {
       const eng = structuredClone(store().engine!)
       eng.minute = 87; eng.score = [0, 1]
@@ -121,7 +137,8 @@ describe('TacticsBoard — 확장 전술 지시(Task 5)', () => {
   })
 
   it('GK 파워플레이: 켜 둔 상태는 조건이 사라져도 끌 수 있다', () => {
-    const { getByRole } = mountAt('paused-break')
+    const { getByRole, container } = mountAt('paused-break')
+    openSubtab(container, '태세')
     act(() => {
       const eng = structuredClone(store().engine!)
       eng.minute = 87; eng.score = [0, 1]
@@ -137,7 +154,8 @@ describe('TacticsBoard — 확장 전술 지시(Task 5)', () => {
   // 네이티브 <select>는 폐지했다(OS 기본 스타일이 그대로 나오고, 7개짜리 배타 선택은
   // 열지 않고도 후보를 보이는 편이 낫다). 세그먼트 버튼으로 같은 계약을 검증한다.
   it('페이즈 포메이션: 공격 시 3-5-2 선택 → phaseFormations.attack', () => {
-    const { getByRole } = mountAt('paused-break')
+    const { getByRole, container } = mountAt('paused-break')
+    openSubtab(container, '세트피스')
     fireEvent.click(getByRole('button', { name: '공격 시 3-5-2' }))
     expect(store().engine!.home.tactics.phaseFormations!.attack).toBe('3-5-2')
     // 되돌리기: [기본 유지]는 undefined로 지운다.
@@ -340,14 +358,15 @@ describe('TacticsBoard — 하프타임 팀토크 + 사유', () => {
     const { getByRole, container } = mountAt('halftime')
     expect(container.querySelector('.tt-root')).toBeTruthy()
     expect(getByRole('button', { name: '후반 시작' })).toBeTruthy()
-    expect(container.querySelector('.tb-foot__reason')!.textContent).toContain('전반 종료')
+    // 사유는 헤더에 한 번만 적는다 — 푸터의 중복 표기와 함께 있던 주 CTA를 헤더로 올렸다.
+    expect(container.querySelector('.tb-head__reason')!.textContent).toContain('전반 종료')
   })
 
   it('정지(감독 타임)엔 팀토크 없음 + [전술 확정] 라벨', () => {
     const { getByRole, container } = mountAt('paused-user')
     expect(container.querySelector('.tt-root')).toBeNull()
     expect(getByRole('button', { name: '전술 확정' })).toBeTruthy()
-    expect(container.querySelector('.tb-foot__reason')!.textContent).toContain('감독 타임')
+    expect(container.querySelector('.tb-head__reason')!.textContent).toContain('감독 타임')
   })
 })
 
@@ -409,7 +428,11 @@ describe('TacticsBoard — 개입 권한 2등급', () => {
   it('감독 타임: 멘탈리티는 한 칸 옆까지 열리고 두 칸은 잠긴다(±1단계)', () => {
     const { getByRole, container } = mountAt('paused-user')
     fireEvent.click(getByRole('tab', { name: /전술/ }))
-    expect(container.querySelector('.tb-locked')!.textContent).toContain('포메이션')
+    // 터치라인 안내는 화면에 **한 번만** 있다(상단 배너). 예전에는 전술 탭 안에 같은
+    // 문장을 한 번 더 적었고, 보드와 패널이 나란히 서면서 둘이 동시에 보였다.
+    expect(container.querySelector('.tb-touchline')!.textContent).toContain('포메이션')
+    expect(container.querySelector('.tb-locked')).toBeNull()
+    openSubtab(container, '태세')
     // 기준은 현재값(균형). 공격적/수비적은 한 칸이라 열리고, 매우 공격적은 두 칸이라 잠긴다.
     expect((getByRole('button', { name: '공격적' }) as HTMLButtonElement).disabled).toBe(false)
     expect((getByRole('button', { name: '수비적' }) as HTMLButtonElement).disabled).toBe(false)
@@ -421,6 +444,9 @@ describe('TacticsBoard — 개입 권한 2등급', () => {
   it('감독 타임: 페이즈 포메이션만 잠기고, 왜·언제 풀리는지가 화면에 있다', () => {
     const { getByRole, container } = mountAt('paused-user')
     fireEvent.click(getByRole('tab', { name: /전술/ }))
+    // 잠긴 축이 어느 서브탭에 있는지는 열기 전에 탭 라벨이 말한다.
+    expect(container.querySelector('.tw-tab__lock')!.textContent).toContain('대형 잠김')
+    openSubtab(container, '세트피스')
     expect((getByRole('button', { name: '공격 시 3-5-2' }) as HTMLButtonElement).disabled).toBe(true)
     const grp = container.querySelector('[aria-label="페이즈 포메이션"]')!
     expect(grp.textContent).toContain('잠김')
@@ -432,6 +458,9 @@ describe('TacticsBoard — 개입 권한 2등급', () => {
     const { container, getByRole } = mountAt('paused-break')
     expect(container.querySelector('.tb-touchline')).toBeNull()
     expect((getByRole('button', { name: '5-4-1' }) as HTMLButtonElement).disabled).toBe(false)
+    // 전원 소집이면 서브탭에 잠금 표시가 없다.
+    expect(container.querySelector('.tw-tab__lock')).toBeNull()
+    openSubtab(container, '태세')
     expect((getByRole('button', { name: '매우 공격적' }) as HTMLButtonElement).disabled).toBe(false)
   })
 })
@@ -480,7 +509,8 @@ describe('TacticsBoard — 전술 시각화 즉시 반영(사용자 지시 ②)'
 
 describe('TacticsBoard — 세트피스 UI(결함 ④)', () => {
   it('코너 루트·박스 인원·수비 마킹 3축이 있고 즉시 반영된다', () => {
-    const { getByRole } = mountAt('paused-break')
+    const { getByRole, container } = mountAt('paused-break')
+    openSubtab(container, '세트피스')
     expect(store().engine!.home.tactics.setPiece).toBeUndefined()
     fireEvent.click(getByRole('button', { name: '코너 루트 니어' }))
     expect(store().engine!.home.tactics.setPiece!.route).toBe('near')
@@ -492,20 +522,33 @@ describe('TacticsBoard — 세트피스 UI(결함 ④)', () => {
     expect(store().engine!.home.tactics.setPiece!.route).toBe('near')
   })
 
-  it('추천의 근거(상대 GK 제공권·역습 위험 지수)를 화면에 적는다', () => {
+  // ★ 2026-08-01: "추천" 배지·단정 문구를 걷어내고 **선택지별 배수**로 바꿨다.
+  //   원칙은 "사실과 수치는 보여주고 결론은 유저가 낸다"다 — 어느 값이 낫다고 화면이
+  //   말하는 대신, 엔진이 실제로 쓰는 숫자를 셋 다 펴 놓는다.
+  it('판별자와 선택지별 배수를 적고, 어느 값을 고르라고는 하지 않는다', () => {
     const { container } = mountAt('paused-break')
+    openSubtab(container, '세트피스')
     const grp = container.querySelector('[aria-label="세트피스"]')!
     expect(grp.textContent).toContain('상대 GK 제공권')
     expect(grp.textContent).toContain('역습 위험 지수')
-    expect(grp.querySelector('.tx-btn__rec')).toBeTruthy()
+    // 선택지 셋의 전환 배수가 전부 적혀 있다.
+    const readouts = Array.from(grp.querySelectorAll('.tx-hint--readout')).map(e => e.textContent!)
+    expect(readouts.length).toBe(2)
+    for (const ko of ['니어', '파', '짧게']) expect(readouts[0]).toContain(ko)
+    for (const ko of ['적게', '표준', '많이']) expect(readouts[1]).toContain(ko)
+    expect(readouts[0]).toMatch(/\d\.\d\d/)
+    // 판정은 없다.
+    expect(grp.querySelector('.tx-btn__rec')).toBeNull()
+    expect(grp.textContent).not.toContain('추천')
   })
 
   // 등급 재판정(2026-08-01 확장 개방): 훈련장에서 약속하는 것은 **루틴 자체**이고,
   // 코너 앞에서 감독이 하는 일은 이미 약속된 것 중 하나를 고르는 것이다(손짓 하나).
   // 대형 재배치가 아니므로 터치라인에서 연다.
   it('터치라인 등급에서도 세트피스는 열린다(약속된 루틴 중 하나를 고르는 일)', () => {
-    const { getByRole } = mountAt('paused-user')
+    const { getByRole, container } = mountAt('paused-user')
     fireEvent.click(getByRole('tab', { name: /전술/ }))
+    openSubtab(container, '세트피스')
     const btn = getByRole('button', { name: '코너 루트 니어' }) as HTMLButtonElement
     expect(btn.disabled).toBe(false)
     fireEvent.click(btn)
@@ -589,5 +632,111 @@ describe('TacticsBoard — 터치라인 지시 개방(사용자 지시 ③)', ()
     const { getByRole, getByLabelText } = mountAt('paused-break')
     expect((getByLabelText('라인') as HTMLInputElement).disabled).toBe(false)
     expect(getByRole('button', { name: '지시 적용' })).toBeTruthy()
+  })
+})
+
+// ── 작전판 재설계(사용자 지시 2026-08-01) ───────────────────────────────
+// 두 가지를 고정한다. (1) 주 CTA는 헤더 우측에 있고 푸터에는 없다 — 900px 높이에서
+// 접힌 아래로 가지 않는 유일한 방법이 sticky 헤더다. (2) 전술 탭은 서브탭 3장으로
+// 나뉘되 서브탭 전환이 유저 입력을 잃지 않는다.
+describe('TacticsBoard — 주 CTA는 헤더 우측(스크롤과 무관)', () => {
+  it('[후반 시작]이 헤더 안에 있고 푸터는 없다', () => {
+    const { container } = mountAt('halftime')
+    const go = container.querySelector('.tb-head__go') as HTMLButtonElement
+    expect(go).toBeTruthy()
+    expect(go.textContent).toContain('후반 시작')
+    // 헤더의 자손이어야 한다 — 문서 아래에 또 하나 두면 "어느 쪽이 진짜냐"가 된다.
+    expect(container.querySelector('.tb-head')!.contains(go)).toBe(true)
+    expect(container.querySelector('.tb-foot')).toBeNull()
+    expect(container.querySelectorAll('.tb-head__go').length).toBe(1)
+  })
+
+  it('스코어를 밀어내지 않는다 — 스코어가 남아 있고 CTA는 그 오른쪽이다', () => {
+    const { container } = mountAt('paused-break')
+    const score = container.querySelector('.tb-head__score')!
+    const go = container.querySelector('.tb-head__go')!
+    expect(score).toBeTruthy()
+    // 문서 순서가 곧 시각 순서다(둘 다 .tb-head__right의 형제).
+    expect(score.compareDocumentPosition(go) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('CTA를 누르면 재개된다(푸터에 있던 계약 그대로)', () => {
+    const { getByRole } = mountAt('halftime')
+    fireEvent.click(getByRole('button', { name: '후반 시작' }))
+    expect(store().phase).not.toBe('halftime')
+  })
+})
+
+describe('TacticsBoard — 전술 탭 서브탭(지시 / 태세 / 세트피스·대형)', () => {
+  it('서브탭 3장이 뜨고 기본은 지시다', () => {
+    const { container } = mountAt('paused-break')
+    const labels = Array.from(container.querySelectorAll('.tw-tab')).map(e => e.textContent)
+    expect(labels.length).toBe(3)
+    expect(labels[0]).toContain('지시')
+    expect(labels[1]).toContain('태세')
+    expect(labels[2]).toContain('세트피스')
+    expect(container.querySelector('.tw-tab--active')!.textContent).toContain('지시')
+  })
+
+  it('서브탭을 옮겼다 돌아와도 만지던 슬라이더 값이 남는다(입력 보존)', () => {
+    const { container, getByLabelText } = mountAt('paused-break')
+    const cur = store().engine!.home.tactics.instructions.pressing
+    fireEvent.change(getByLabelText('압박'), { target: { value: String(cur + 20) } })
+    expect(Number((getByLabelText('압박') as HTMLInputElement).value)).toBe(cur + 20)
+    // 태세 → 세트피스 → 지시로 한 바퀴 돌고 온다.
+    openSubtab(container, '태세')
+    openSubtab(container, '세트피스')
+    openSubtab(container, '지시')
+    expect(Number((getByLabelText('압박') as HTMLInputElement).value)).toBe(cur + 20)
+    // 엔진은 여전히 그대로다 — 반영은 [지시 적용]에서만.
+    expect(store().engine!.home.tactics.instructions.pressing).toBe(cur)
+  })
+
+  it('미적용 변경이 있으면 지시 탭에 표시가 붙고, 다른 탭에서는 한 줄로 알린다', () => {
+    const { container, getByLabelText, getByRole } = mountAt('paused-break')
+    expect(container.querySelector('.tw-tab__mark')).toBeNull()
+    expect(container.querySelector('.tw-dirty')).toBeNull()
+
+    const cur = store().engine!.home.tactics.instructions.tempo
+    fireEvent.change(getByLabelText('템포'), { target: { value: String(cur + 10) } })
+    // 지시 탭에 "미적용" 평문 배지(이모지·색점이 아니다).
+    const mark = container.querySelector('.tw-tab__mark')!
+    expect(mark.textContent).toBe('미적용')
+    expect(mark.closest('.tw-tab')!.textContent).toContain('지시')
+    // 지시 탭에 있는 동안에는 안내를 겹쳐 적지 않는다 — [지시 적용] 버튼이 이미 말한다.
+    expect(container.querySelector('.tw-dirty')).toBeNull()
+
+    openSubtab(container, '태세')
+    expect(container.querySelector('.tw-dirty')!.textContent).toContain('적용하지 않은 변경')
+
+    // 적용하면 표시가 사라진다.
+    openSubtab(container, '지시')
+    fireEvent.click(getByRole('button', { name: '지시 적용' }))
+    expect(store().engine!.home.tactics.instructions.tempo).toBe(cur + 10)
+    expect(container.querySelector('.tw-tab__mark')).toBeNull()
+  })
+
+  it('태세·세트피스는 즉시 반영이므로 미적용 표시를 만들지 않는다', () => {
+    const { container, getByRole } = mountAt('paused-break')
+    openSubtab(container, '태세')
+    fireEvent.click(getByRole('button', { name: '크로스' }))
+    expect(store().engine!.home.tactics.attackPattern).toBe('cross')
+    expect(container.querySelector('.tw-tab__mark')).toBeNull()
+    expect(container.querySelector('.tw-dirty')).toBeNull()
+  })
+
+  it('감독 타임: 잠긴 축이 열기 전에 탭 라벨에 표시되고, 열면 이유가 있다', () => {
+    const { container } = mountAt('paused-user')
+    const lock = container.querySelector('.tw-tab__lock')!
+    expect(lock.textContent).toContain('대형 잠김')
+    expect(lock.closest('.tw-tab')!.textContent).toContain('세트피스')
+    openSubtab(container, '세트피스')
+    // 탭 전체가 죽은 것이 아니다 — 세트피스 3축은 열려 있다.
+    const sp = container.querySelector('[aria-label="세트피스"]')!
+    expect(Array.from(sp.querySelectorAll('button')).every(b => (b as HTMLButtonElement).disabled)).toBe(false)
+    // 잠긴 축에는 이유와 해제 시점이 붙어 있다.
+    const pf = container.querySelector('[aria-label="페이즈 포메이션"]')!
+    expect(pf.textContent).toContain('잠김')
+    expect(pf.textContent).toContain(`${store().schedule!.firstHydration}분`)
   })
 })

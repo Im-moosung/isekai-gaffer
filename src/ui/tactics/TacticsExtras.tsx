@@ -2,10 +2,9 @@ import {
   interventionLevel, nextBreakMinute, useMatchStore,
   INTERVENTION_COOLDOWN, TOUCHLINE_RANK_STEP,
 } from '../../game/matchStore'
-import { MENTALITIES, ATTACK_PATTERNS, BOX_LOADS, SET_PIECE_ROUTES } from '../../engine/tactics'
+import { MENTALITIES, ATTACK_PATTERNS, BOX_LOADS, SET_PIECE_ROUTES, setPieceEffects } from '../../engine/tactics'
 import { counterRiskScale } from '../../engine/simulate'
 import { zoneStrength } from '../../engine/strength'
-import { setPieceScore } from '../../game/scouting'
 import type {
   AttackPattern, BoxLoad, FormationId, GroupIntensity, Mentality, SetPieceMarking,
   SetPiecePlan, SetPieceRoute, SideState, TacticState,
@@ -68,7 +67,20 @@ function oppGkAerialOf(opp: SideState): number {
  *   **대형**(페이즈 포메이션)뿐이다 — 판정 정본은 store의 touchlineTacticsError다.
  *   서열 축(멘탈리티·그룹 적극성)에는 한 번에 ±1단계 제한이 붙고, 기준점은 **개입이
  *   시작된 시점의 스냅샷**(touchlineWindow)이다. 그래서 버튼도 그 기준으로 잠근다. */
-export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
+/** 이 패널이 그리는 묶음. 전술 작업대(TacticsWorkbench)의 서브탭이 쪼개 쓴다.
+ *   'stance'   — 멘탈리티 · 그룹 적극성 · 공격 패턴 · GK 파워플레이
+ *   'setpiece' — 세트피스 3축 · 페이즈 포메이션
+ *   'all'      — 둘 다(서브탭을 쓰지 않는 호출자용 기본값) */
+export type TacticsExtrasPart = 'all' | 'stance' | 'setpiece'
+
+const PART_LABEL: Record<TacticsExtrasPart, string> = {
+  all: '확장 전술 지시', stance: '태세 지시', setpiece: '세트피스와 대형',
+}
+
+export function TacticsExtras({ side, part = 'all' }: {
+  side: 'home' | 'away'
+  part?: TacticsExtrasPart
+}) {
   const phase = useMatchStore(s => s.phase)
   const pauseReason = useMatchStore(s => s.pauseReason)
   const engine = useMatchStore(s => s.engine)
@@ -143,23 +155,49 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
   const oppState = engine![side === 'home' ? 'away' : 'home']
   const gkAerial = oppGkAerialOf(oppState)
   const risk = counterRiskScale(zoneStrength(state), zoneStrength(oppState))
-  let bestRoute: SetPieceRoute = 'far', bestLoad: BoxLoad = 'normal', bestScore = 0
-  for (const r of SET_PIECE_ROUTES) for (const b of BOX_LOADS) {
-    const s = setPieceScore(r, b, gkAerial, risk)
-    if (s > bestScore) { bestScore = s; bestRoute = r; bestLoad = b }
-  }
+  // ★ 2026-08-01: **추천(단정)을 걷어내고 수치를 그대로 편다.**
+  //   예전에는 setPieceScore로 최적 조합을 골라 "추천 니어 · 박스 많이"라고 적고 버튼에
+  //   "추천" 배지를 달았다. 그건 판정이다 — 화면이 감독 대신 결론을 내린 것이다.
+  //   근거를 보이고 유저가 뒤집게 한다는 이 UI의 목적(fd437b6)은 **선택지마다 엔진이
+  //   쓰는 배수를 그대로 적으면** 오히려 더 잘 달성된다. 어느 쪽이 나은지는 감독이
+  //   정하고, 화면은 "니어는 전환 1.08, 파는 1.00"이라는 사실만 말한다.
+  //   판별자(상대 GK 제공권·역습 위험 지수)는 그 배수가 어디서 나왔는지의 근거라 남긴다.
+  const spCtx = { oppGkAerial: gkAerial, risk }
+  const fx = (route: SetPieceRoute, boxLoad: BoxLoad) =>
+    setPieceEffects({ setPiece: { route, boxLoad }, mentality, groupIntensity: gi }, spCtx)
+  // 루트는 전환 배수만 가른다(역습 배수는 박스 인원이 정한다) — 각 축을 그 축이 실제로
+  // 움직이는 숫자로만 적는다. 섞어 적으면 어느 조작이 무엇을 바꾸는지 흐려진다.
+  const routeReadout = SET_PIECE_ROUTES
+    .map(r => `${ROUTE_KO[r]} ${fx(r, sp.boxLoad).conversion.toFixed(2)}`).join(' · ')
+  const loadReadout = BOX_LOADS.map(b => {
+    const f = fx(sp.route, b)
+    return `${LOAD_KO[b]} ${f.conversion.toFixed(2)}÷${f.counterRisk.toFixed(2)}`
+  }).join(' · ')
+
+  // 묶음별 렌더. 서브탭이 열려 있는 쪽만 그린다 — 안내 문구도 그 묶음에 대해서만 말한다
+  // ("세트피스는 열려 있다"를 태세 탭에서 읽으면 무엇을 가리키는지 알 수 없다).
+  const showStance = part !== 'setpiece'
+  const showSetPiece = part !== 'stance'
+  const openTail = part === 'setpiece'
+    ? '세트피스는 이미 약속된 루틴 중 하나를 고르는 일이라 경기 중에도 열립니다.'
+    : part === 'stance'
+      ? `경기 중에도 태세·적극성·패턴을 소리쳐 전달합니다 — 서열 축은 한 번에 ±${TOUCHLINE_RANK_STEP}단계.`
+      : `경기 중에도 태세·적극성·패턴·세트피스를 소리쳐 전달합니다 — 서열 축은 한 번에 ±${TOUCHLINE_RANK_STEP}단계.`
 
   return (
-    <section className="tx-panel" aria-label="확장 전술 지시">
+    <section className="tx-panel" aria-label={PART_LABEL[part]}>
       {/* 터치라인에서 지금 무엇이 열려 있고 무엇이 제한되는지 — 화면이 먼저 말한다. */}
       {touchline && (
         <p className="tx-hint" role="status">
           {onCooldown
             ? `터치라인 지시 쿨다운 — ${cooldownLeft}분 뒤에 다시 외칠 수 있습니다(외침·감독 타임과 같은 시계).`
-            : `경기 중에도 태세·적극성·패턴·세트피스를 소리쳐 전달합니다 — 서열 축은 한 번에 ±${TOUCHLINE_RANK_STEP}단계. 대형(페이즈 포메이션)만 ${breakTail} 바꿀 수 있습니다.`}
+            : showSetPiece
+              ? `${openTail} 대형(페이즈 포메이션)만 ${breakTail} 바꿀 수 있습니다.`
+              : openTail}
         </p>
       )}
 
+      {showStance && <>
       {/* 멘탈리티 5버튼 */}
       <div className="tx-group" role="group" aria-label="멘탈리티">
         <h4 className="tx-group__title">멘탈리티</h4>
@@ -252,7 +290,9 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
             : '세트피스 찬스 퀄 +40% · 역습 시 빈 골문 실점 위험 3배'}
         </p>
       </div>
+      </>}
 
+      {showSetPiece && <>
       {/* 세트피스 3축 — 코너 루트 · 박스 인원 · 우리 박스 마킹.
           앞의 둘은 **우리가 공격할 때**, 마킹은 **상대가 찰 때** 쓰는 지시다. 한 묶음에
           두되 소제목으로 방향을 갈라 준다 — 섞이면 "왜 마킹이 전환에 영향이 없지"가 된다. */}
@@ -263,14 +303,13 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
         <p className="tx-hint">
           상대 GK 제공권 <span className="num">{gkAerial}</span>
           {' · '}역습 위험 지수 <span className="num">{risk.toFixed(2)}</span>
-          {' — '}추천 {ROUTE_KO[bestRoute]} · 박스 {LOAD_KO[bestLoad]}
         </p>
         <SetPieceRow
           label="코너 루트"
           values={SET_PIECE_ROUTES}
           ko={ROUTE_KO}
           value={sp.route}
-          recommended={bestRoute}
+          readout={`전환 배수 — ${routeReadout}`}
           disabled={!liveOpen}
           onPick={v => patch({ setPiece: { ...sp, route: v } })}
         />
@@ -279,7 +318,7 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
           values={BOX_LOADS}
           ko={LOAD_KO}
           value={sp.boxLoad}
-          recommended={bestLoad}
+          readout={`전환÷역습 배수 — ${loadReadout}`}
           disabled={!liveOpen}
           onPick={v => patch({ setPiece: { ...sp, boxLoad: v } })}
         />
@@ -292,7 +331,9 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
           onPick={v => patch({ setPiece: { ...sp, marking: v } })}
         />
         <p className="tx-hint">
-          {sp.route === 'near' ? '니어 혼전 — 전환 ↑, 클리어가 짧게 떨어져 역습 노출 ↑. 상대 GK가 니어를 지배하면 손해입니다.'
+          {/* 조건부 기전 서술이다 — "이 값을 고르면 무엇이 어떻게 움직이는가"를 말할 뿐
+              무엇을 고르라고 하지 않는다. 판정("손해입니다")만 기전으로 바꿨다. */}
+          {sp.route === 'near' ? '니어 혼전 — 전환 ↑, 클리어가 짧게 떨어져 역습 노출 ↑. 상대 GK 제공권이 높을수록 니어의 전환 배수는 내려갑니다.'
             : sp.route === 'short' ? '짧게 빼기 — 전환은 낮지만 점유를 지켜 역습을 내주지 않습니다.'
             : '파포스트 — 키퍼의 손이 닿지 않는 곳. 기준값(전 배수 1.0)입니다.'}
           {' '}
@@ -336,24 +377,27 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
           </p>
         )}
       </div>
+      </>}
     </section>
   )
 }
 
-/** 세트피스 한 줄 — 라벨 + 배타 선택 세그먼트. 추천 값에는 "추천" 태그를 붙인다.
- *  ★ 추천은 **표시**지 자동 적용이 아니다. 유저가 뒤집을 수 있어야 상대별 정답이
- *    검증 가능한 주장이 된다(추천을 조용히 적용하던 것이 원래 결함이었다). */
-function SetPieceRow<T extends string>({ label, values, ko, value, recommended, disabled, onPick }: {
+/** 세트피스 한 줄 — 라벨 + 배타 선택 세그먼트 + **선택지별 배수 판독**.
+ *  ★ 어느 값이 "추천"인지는 적지 않는다. 화면은 엔진이 실제로 쓰는 숫자를 선택지마다
+ *    그대로 펴 놓고, 무엇을 고를지는 감독이 정한다. 추천 배지는 근거처럼 보이지만
+ *    실은 결론이었다 — 그 결론을 지우고 그 자리에 근거를 넣은 것이다. */
+function SetPieceRow<T extends string>({ label, values, ko, value, readout, disabled, onPick }: {
   label: string
   values: readonly T[]
   ko: Record<T, string>
   value: T
-  recommended?: T
+  /** 선택지별 수치 한 줄(있을 때만). 판정이 아니라 사실이다. */
+  readout?: string
   disabled: boolean
   onPick(v: T): void
 }) {
   return (
-    <div className="tx-line">
+    <div className="tx-line tx-line--sp">
       <span className="tx-line__label">{label}</span>
       <div className="tx-btnrow" role="group" aria-label={label}>
         {values.map(v => (
@@ -363,16 +407,16 @@ function SetPieceRow<T extends string>({ label, values, ko, value, recommended, 
             aria-pressed={v === value}
             disabled={disabled}
             className="tx-btn tx-btn--sm"
-            // 같은 화면에 "니어"가 두 번 나오지는 않지만, 추천 태그가 접근성 이름에
-            // 섞이면 테스트·스크린리더가 라벨을 특정하지 못한다 — 이름은 순수하게 값이다.
+            // 접근성 이름은 순수하게 값이다 — 수치를 이름에 섞으면 테스트·스크린리더가
+            // 라벨을 특정하지 못한다. 수치는 아래 판독 줄이 말한다.
             aria-label={`${label} ${ko[v]}`}
             onClick={() => onPick(v)}
           >
             {ko[v]}
-            {recommended === v && <span className="tx-btn__rec" aria-hidden="true">추천</span>}
           </button>
         ))}
       </div>
+      {readout && <p className="tx-hint tx-hint--readout num">{readout}</p>}
     </div>
   )
 }

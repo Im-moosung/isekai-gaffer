@@ -27,6 +27,15 @@ function toTab(container: HTMLElement, label: string) {
   fireEvent.click(tab)
 }
 
+/** 팀 전술 탭 안의 서브탭 전환 — 작전판과 **같은 작업대**(TacticsWorkbench)다.
+ *  비활성 서브탭은 hidden이라 접근성 트리에서 빠지므로 사람과 같은 경로로 연다. */
+function toSub(container: HTMLElement, label: '지시' | '태세' | '세트피스') {
+  const tab = Array.from(container.querySelectorAll('.tw-tab'))
+    .find(el => el.textContent!.includes(label))
+  if (!tab) throw new Error(`서브탭 없음: ${label}`)
+  fireEvent.click(tab)
+}
+
 beforeEach(() => { store().reset() })
 afterEach(() => { cleanup() })
 
@@ -94,6 +103,7 @@ describe('TacticsCenter — 킥오프 전 워룸', () => {
   it('멘탈리티·공격 패턴이 활성이고 요약이 즉시 갱신된다', () => {
     const { getByRole, container } = mountPre()
     toTab(container, '팀 전술')
+    toSub(container, '태세')
 
     const attacking = getByRole('button', { name: '공격적' }) as HTMLButtonElement
     expect(attacking.disabled).toBe(false)
@@ -118,6 +128,7 @@ describe('TacticsCenter — 킥오프 전 워룸', () => {
   it('페이즈 포메이션(공격 시) 선택이 요약에 반영된다', () => {
     const { getByRole, container } = mountPre()
     toTab(container, '팀 전술')
+    toSub(container, '세트피스')
     // 슬롯 이름이 겹치지 않도록 접근성 이름으로 구분한다.
     fireEvent.click(getByRole('button', { name: '공격 시 3-5-2' }))
     expect(store().engine!.home.tactics.phaseFormations?.attack).toBe('3-5-2')
@@ -127,7 +138,10 @@ describe('TacticsCenter — 킥오프 전 워룸', () => {
   it('킥오프 전 설정이 킥오프 이후에도 그대로 유지된다(리셋 없음)', () => {
     const { getByRole, container } = mountPre()
     toTab(container, '팀 전술')
+    toSub(container, '태세')
     fireEvent.click(getByRole('button', { name: '매우 수비적' }))
+    // 슬라이더는 다른 서브탭에 있다 — 돌아가도 값이 살아 있어야 한다(입력 보존).
+    toSub(container, '지시')
     fireEvent.change(getByRole('slider', { name: '라인' }) as HTMLInputElement, { target: { value: '20' } })
 
     store().kickoff()
@@ -166,8 +180,10 @@ describe('TacticsCenter — 킥오프 전 워룸', () => {
     //   목적이 "슬라이더가 실제로 그 값으로 움직였는가"라 정확값을 유지한다.
     store().reset()
     store().startMatch(loadTeam('kor'), loadTeam('esp'), 20260724)
-    const { getByRole } = render(<TacticsCenter onKickoff={() => {}} />)
+    const { getByRole, container } = render(<TacticsCenter onKickoff={() => {}} />)
     fireEvent.click(getByRole('button', { name: /추천 적용/ }))
+    // [추천 적용]은 **탭을 옮기지 않는다**(보던 것을 뺏지 않는다) — 직접 열어 확인한다.
+    toTab(container, '팀 전술')
     expect((getByRole('slider', { name: '라인' }) as HTMLInputElement).value).toBe('24')
     expect(store().engine!.home.tactics.instructions.lineHeight).toBe(24)
     // 압박도 함께 내려간다 — 기존엔 우리 프로필(62) 그대로라 상대 무관이었다.
@@ -209,6 +225,15 @@ describe('TacticsCenter — 킥오프 전 워룸', () => {
     expect(container.querySelector('.tc-risk--warn')!.textContent).toContain('역습')
   })
 
+  it('[추천 적용]은 보고 있던 탭을 뺏지 않는다', () => {
+    const { getByRole, container } = mountPre()
+    expect(container.querySelector('.lu-root')).toBeTruthy() // 선발 탭
+    fireEvent.click(getByRole('button', { name: /추천 적용/ }))
+    // 화면은 그대로 선발 탭이고, 결과는 요약·권고·라인업 보드가 말한다.
+    expect(container.querySelector('.lu-root')).toBeTruthy()
+    expect(container.querySelector('.tc-reasons')).toBeTruthy()
+  })
+
   it('킥오프 버튼이 onKickoff를 호출한다', () => {
     const onKickoff = vi.fn()
     store().reset()
@@ -216,5 +241,61 @@ describe('TacticsCenter — 킥오프 전 워룸', () => {
     const { getByRole } = render(<TacticsCenter onKickoff={onKickoff} />)
     fireEvent.click(getByRole('button', { name: '킥오프' }))
     expect(onKickoff).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ── 워룸 재설계(사용자 지시 2026-08-01) ─────────────────────────────────
+// 작전판과 **같은 문법**이어야 한다: 주 CTA는 헤더 우측, 팀 전술은 서브탭 3장.
+describe('TacticsCenter — 주 CTA와 서브탭이 작전판과 같은 문법이다', () => {
+  it('[킥오프]가 헤더 안에 있고 하단 바에는 없다', () => {
+    const { container } = mountPre()
+    const go = container.querySelector('.tc-head__go') as HTMLButtonElement
+    expect(go).toBeTruthy()
+    expect(container.querySelector('.tc-head')!.contains(go)).toBe(true)
+    // 하단 바에는 설계 보조만 남는다(되돌리는 동작과 되돌릴 수 없는 동작을 붙여 두지 않는다).
+    expect(container.querySelector('.tc-actions .btn--primary')).toBeNull()
+    expect(container.querySelectorAll('[aria-label="킥오프"]').length).toBe(1)
+  })
+
+  it('팀 전술 탭이 작전판과 같은 서브탭 3장으로 열린다', () => {
+    const { container } = mountPre()
+    toTab(container, '팀 전술')
+    const labels = Array.from(container.querySelectorAll('.tw-tab')).map(e => e.textContent)
+    expect(labels.length).toBe(3)
+    expect(labels[0]).toContain('지시')
+    expect(labels[1]).toContain('태세')
+    expect(labels[2]).toContain('세트피스')
+  })
+
+  it('킥오프 전에는 전원 소집이라 잠긴 축이 없다 — 탭에 잠금 표시도 없다', () => {
+    const { container } = mountPre()
+    toTab(container, '팀 전술')
+    expect(container.querySelector('.tw-tab__lock')).toBeNull()
+    toSub(container, '세트피스')
+    expect((container.querySelector('[aria-label="공격 시 포메이션"] button') as HTMLButtonElement).disabled).toBe(false)
+  })
+})
+
+// 사용자 지시(2026-08-01): "전술은 탭을 변경해도 항상 포메이션 작전판이 같이 나오게."
+describe('TacticsCenter — 팀 전술 탭에 작전판이 함께 선다', () => {
+  it('서브탭을 어디로 옮겨도 보드가 남는다', () => {
+    const { container } = mountPre()
+    toTab(container, '팀 전술')
+    for (const sub of ['지시', '태세', '세트피스'] as const) {
+      toSub(container, sub)
+      expect(container.querySelector('.tc-team__board .pv-root')).toBeTruthy()
+      // 전술 시각화 레이어(수비 라인·압박 존·패스 레인)가 켜져 있어야 변경이 보인다.
+      expect(container.querySelector('.an-team--home .an-line')).toBeTruthy()
+    }
+  })
+
+  it('슬라이더를 만지면 보드 도형이 그 자리에서 움직인다', () => {
+    const { container, getByLabelText } = mountPre()
+    toTab(container, '팀 전술')
+    const press = () => (container.querySelector('.an-team--home .an-press') as SVGRectElement).getAttribute('width')
+    const before = press()
+    const cur = store().engine!.home.tactics.instructions.pressing
+    fireEvent.change(getByLabelText('압박'), { target: { value: String(cur + 25) } })
+    expect(press()).not.toBe(before)
   })
 })

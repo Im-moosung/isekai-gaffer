@@ -40,14 +40,23 @@ export function briefingRoster(
   return { starters, bench }
 }
 
-/** 포메이션 상성(내 포메이션 vs 상대) → 한 줄 매치업 힌트.
- *  edge>0이면 홈(유저) 우위. 부호·크기로 톤·문구를 결정(결정론). */
+/** 포메이션 상성(내 포메이션 vs 상대) → 한 줄 매치업 표기.
+ *  edge>0이면 홈(유저) 우위. 부호·크기로 톤·문구를 결정(결정론).
+ *
+ *  ★ 2026-08-01: **고정 원인 힌트를 걷어냈다.**
+ *  예전에는 우위에 "중원 수적 우위 예상", 열세에 "측면·뒷공간 주의"를 붙였다. 그런데
+ *  `e3811a3`이 상성표를 순환 구조로 바꾸면서 **어느 축에서 이기고 지는지가 상대마다
+ *  달라졌다** — 4-3-3이 4-4-2를 이기는 이유와 3-5-2가 4-3-3을 이기는 이유가 같지 않다.
+ *  그래서 그 두 문장은 이제 사실이 아니다. 부호와 크기는 사실이므로 **수치로 적고**,
+ *  "그래서 어디를 조심할 것인가"는 감독이 판단한다(원칙: 사실과 수치는 보여주고
+ *  결론은 유저가 낸다). 원인을 말할 자격이 있는 것은 화자가 있는 코치 조언 쪽이다. */
 export function matchupHint(edge: number): MatchupHint {
-  if (edge >= 0.04) return { tone: 'up', text: '상성 우위 — 중원 수적 우위 예상' }
-  if (edge > 0) return { tone: 'up', text: '근소한 상성 우위' }
-  if (edge === 0) return { tone: 'even', text: '포메이션 상성 대등' }
-  if (edge <= -0.04) return { tone: 'down', text: '상성 열세 — 측면·뒷공간 주의' }
-  return { tone: 'down', text: '근소한 상성 열세' }
+  const n = `${edge > 0 ? '+' : ''}${edge.toFixed(2)}`
+  if (edge >= 0.04) return { tone: 'up', text: `포메이션 상성 우위 ${n}` }
+  if (edge > 0) return { tone: 'up', text: `포메이션 상성 근소 우위 ${n}` }
+  if (edge === 0) return { tone: 'even', text: '포메이션 상성 대등 0.00' }
+  if (edge <= -0.04) return { tone: 'down', text: `포메이션 상성 열세 ${n}` }
+  return { tone: 'down', text: `포메이션 상성 근소 열세 ${n}` }
 }
 
 /** 상대 분석 탭(작전판 내) — 상대 포메이션·미니 보드 + 선발 11 리스트(클릭 시 PlayerCard) +

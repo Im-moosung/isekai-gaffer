@@ -5,9 +5,11 @@ import { planRisks, recommendPlan } from '../../game/scouting'
 import { formationEdge } from '../../engine/tactics'
 import { LineupEditor } from '../lineup/LineupScreen'
 import { autoFill } from '../lineup/swap'
-import { ConsolePanel } from '../console/ConsolePanel'
-import { TacticsExtras } from './TacticsExtras'
+import { TacticsWorkbench } from './TacticsWorkbench'
+import { useAxisHighlight, useChangeCaption } from './boardFeedback'
+import { PitchView } from '../pitch/PitchView'
 import { OppPanel, matchupHint } from './OppPanel'
+import './tactics.css'
 import './TacticsCenter.css'
 
 // 유저는 홈팀 감독 — 전술 센터는 home 고정(작전판과 동일 규약).
@@ -69,6 +71,19 @@ export function TacticsCenter({ onKickoff, referenceScore }: {
   const baseline = useRef<TacticState | null>(null)
   if (engine && !baseline.current) baseline.current = engine[SIDE].tactics
 
+  // 보드 피드백은 작전판과 **같은 훅**이다(boardFeedback.ts) — 두 화면이 다른 규율로
+  // 움직이면 같은 조작에서 다른 피드백을 받게 된다. 킥오프 전에는 지시가 즉시 반영이라
+  // 미리보기 채널이 없고, 엔진 값 자체가 곧 보드가 그리는 값이다.
+  const ins = engine?.[SIDE].tactics.instructions
+  const highlight = useAxisHighlight({
+    lineHeight: ins?.lineHeight ?? 50,
+    pressing: ins?.pressing ?? 50,
+    tempo: ins?.tempo ?? 50,
+    attackFocus: ins?.attackFocus ?? 'balanced',
+    attackPattern: engine?.[SIDE].tactics.attackPattern ?? 'balanced',
+  })
+  const caption = useChangeCaption(engine?.[SIDE].tactics)
+
   if (!engine) return null
   const home = engine[SIDE]
   const away = engine.away
@@ -95,10 +110,12 @@ export function TacticsCenter({ onKickoff, referenceScore }: {
     }
     submitCommand(SIDE, { type: 'formation', tactics: merged })
     setReasons(rec.reasons)
-    // 권고가 실제로 움직인 컨트롤을 보여 준다 — 결과가 보이지 않으면 "눌렀는데 아무
-    // 일도 안 일어났다"로 읽힌다. 고정 요약이 값 변화를 이미 말하므로 탭 전환은
-    // "직접 확인하고 싶을 때"를 위한 것이고, 그래서 팀 전술로 보낸다.
-    setTab('team')
+    // ★ 2026-08-01: **탭을 강제로 옮기지 않는다.** 예전에는 여기서 setTab('team')으로
+    //   화면을 팀 전술로 끌고 갔다. 추천을 받아들이는 것과 화면이 멋대로 움직이는 것은
+    //   다른 일이다 — 라인업을 보던 감독은 자기가 보던 것을 잃는다. 결과가 보이지
+    //   않는다는 원래 걱정은 이제 성립하지 않는다: 고정 검토 요약이 형태·태도·루트를
+    //   즉시 갱신하고, 코치진 권고 카드가 무엇을 왜 바꿨는지 그 자리에 남으며,
+    //   선발 탭이라면 라인업 보드가 바로 재배치된다.
   }
 
   const resetPlan = () => {
@@ -126,6 +143,18 @@ export function TacticsCenter({ onKickoff, referenceScore }: {
         {referenceScore && (
           <span className="tc-head__ref num">참고 · 실제 역사 {referenceScore[0]}-{referenceScore[1]}</span>
         )}
+        {/* 주 CTA는 헤더 우측이다(작전판과 같은 문법). 예전에는 하단 sticky 액션 바에
+            있었는데, 1600×900 첫 화면에 [킥오프]가 없다는 것이 6라운드 감사의 지적이었다
+            (r6-1600x900-03-warroom.png). 헤더도 sticky라 어느 탭·어느 스크롤 위치에서도
+            보인다. 화살표는 장식이므로 접근성 이름은 "킥오프"로 고정한다. */}
+        <button
+          type="button"
+          className="btn btn--primary btn--lg tc-head__go"
+          aria-label="킥오프"
+          onClick={onKickoff}
+        >
+          킥오프 <span aria-hidden="true">▶</span>
+        </button>
       </header>
 
       {/* ── 탭 밖 고정: 지금 플랜이 무엇인가 ───────────────────
@@ -196,17 +225,35 @@ export function TacticsCenter({ onKickoff, referenceScore }: {
             cautionByPlayer={discipline.cautions}
           />
         )}
+        {/* 팀 전술 = **작전판 + 작업대** 2열. 사용자 지시(2026-08-01): "전술은 탭을
+            변경해도 항상 포메이션 작전판이 같이 나오게." 예전에는 이 탭이 컨트롤만
+            보여줘서 슬라이더를 만져도 무엇이 어떻게 달라지는지 볼 데가 없었다 —
+            검토 요약의 숫자만 바뀌었다.
+            ★ 390에서는 2열이 불가능하다. 위아래로 쌓되 **보드를 위에** 둔다: 컨트롤이
+              위면 조작하는 손이 결과를 가리고, 무엇보다 보드는 "지금 무엇을 세웠나"라
+              화면에 들어온 순간 먼저 보여야 할 것이다(작전판 .tb-main과 같은 순서). */}
         {tab === 'team' && (
           <div className="tc-team">
-            <ConsolePanel side={SIDE} />
-            <TacticsExtras side={SIDE} />
+            <div className="tc-team__board">
+              <PitchView
+                state={engine}
+                variant="tactics"
+                analysis
+                analysisHighlight={highlight}
+                nameLabels
+              />
+              {caption && <p key={caption.tick} className="tb-cap" role="status">{caption.text}</p>}
+            </div>
+            <TacticsWorkbench side={SIDE} idPrefix="tc" />
           </div>
         )}
         {tab === 'opp' && <OppPanel />}
       </div>
 
-      {/* 하단 고정 액션 바 — 화면당 primary는 하나다. 점선 테두리 버튼·라임 채움
-          버튼·중복 커밋 버튼(채택/지시 적용/전술 확정)을 전부 걷어낸 결과다. */}
+      {/* 하단 고정 바 — 이제 **설계 보조**만 남는다(추천·초기화·검토 상태).
+          주 CTA를 여기서 헤더로 올린 것은 위치 문제만이 아니다: [설계 초기화]는
+          되돌리는 동작이고 [킥오프]는 되돌릴 수 없는 동작인데, 둘이 같은 바에서
+          이웃해 있었다. 성격이 반대인 버튼을 붙여 두지 않는다. */}
       <div className="tc-actions">
         <button type="button" className="btn btn--secondary" onClick={applyRecommendation}>
           추천 적용
@@ -217,10 +264,6 @@ export function TacticsCenter({ onKickoff, referenceScore }: {
         <span className="tc-actions__status">
           {warnCount > 0 ? `검토 — 주의 ${warnCount}건` : '검토 완료 · 특이사항 없음'}
         </span>
-        {/* 화살표는 장식이므로 접근성 이름은 "킥오프"로 고정한다. */}
-        <button type="button" className="btn btn--primary btn--lg" aria-label="킥오프" onClick={onKickoff}>
-          킥오프 <span aria-hidden="true">▶</span>
-        </button>
       </div>
     </div>
   )

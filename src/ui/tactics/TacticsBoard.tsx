@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import type { FormationId, GroupIntensity, Instructions, Mentality, Player, TacticState } from '../../engine/types'
 import {
   canIntervene, interventionLevel, nextBreakMinute, touchlineNotice, touchlineTacticsError, useMatchStore,
@@ -6,13 +6,12 @@ import {
 import { buildCoachAdvice, hasPatch, type TacticPatch } from '../../game/coach'
 import { playerMatchStats, type PlayerMatchStats } from '../../game/playerStats'
 import { PitchView } from '../pitch/PitchView'
-import type { AnalysisAxis, AnalysisHighlight } from '../pitch/AnalysisLayer'
-import { ConsolePanel } from '../console/ConsolePanel'
 import { SubPanel } from '../console/SubPanel'
 import { OppPanel } from './OppPanel'
 import { PlayerCard } from '../common/PlayerCard'
 import { PlayerCompare, type ComparePlayer } from '../common/PlayerCompare'
-import { TacticsExtras } from './TacticsExtras'
+import { TacticsWorkbench } from './TacticsWorkbench'
+import { useAxisHighlight, useChangeCaption } from './boardFeedback'
 import { TeamTalk } from '../match/TeamTalk'
 import { autoFill, swapPlayers } from '../lineup/swap'
 import './tactics.css'
@@ -55,70 +54,11 @@ function reasonText(
   }
 }
 
-/** 전술 축 스냅샷 — 강조 판정의 입력. 값이 아니라 "무엇이 바뀌었나"만 뽑는다. */
-interface AxisSnapshot {
-  lineHeight: number
-  pressing: number
-  tempo: number
-  attackFocus: Instructions['attackFocus']
-  attackPattern: string
-}
-
-/** 축 변경 → 보드 강조. **정착(settle) 후 한 번만** 올린다.
- *
- *  ★ 왜 즉시 올리지 않는가(사용자 지시: "드래그 중 화면이 요동치면 조작이 어렵다"):
- *  슬라이더 드래그는 1px마다 change를 쏜다. 변경마다 펄스를 걸면 700ms 애니메이션이
- *  프레임마다 재시작해 선이 계속 굵기를 바꾸며 깜박인다 — 값을 읽는 것 자체가 어려워진다.
- *  SETTLE_MS 동안 아무 변화가 없을 때만 "이번 조작은 끝났다"로 보고 한 번 강조한다.
- *  버튼 클릭(공격 패턴·공격방향)은 애초에 단발이라 SETTLE_MS 뒤 즉시 뜬다.
- *
- *  ★ 도형의 **이동 자체는 지연 없이** 매 프레임 반영된다(강조만 지연된다). 즉 "값이
- *  즉시 보인다"와 "무엇이 바뀌었는지 강조된다"를 분리했다. */
-const SETTLE_MS = 260
-/** 강조를 걷어내는 시각(펄스 700ms보다 조금 길게). */
-const HIGHLIGHT_MS = 900
-
-function useAxisHighlight(snap: AxisSnapshot): AnalysisHighlight | undefined {
-  const [hl, setHl] = useState<AnalysisHighlight | undefined>(undefined)
-  const prev = useRef(snap)
-  const pending = useRef(new Set<AnalysisAxis>())
-  const tick = useRef(0)
-  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    const keys: AnalysisAxis[] = ['lineHeight', 'pressing', 'tempo', 'attackFocus', 'attackPattern']
-    let any = false
-    for (const k of keys) {
-      if (prev.current[k] !== snap[k]) { pending.current.add(k); any = true }
-    }
-    prev.current = snap
-    if (!any) return
-    if (settleTimer.current) clearTimeout(settleTimer.current)
-    settleTimer.current = setTimeout(() => {
-      if (pending.current.size === 0) return
-      tick.current += 1
-      setHl({ axes: [...pending.current], tick: tick.current })
-      pending.current.clear()
-      if (clearTimer.current) clearTimeout(clearTimer.current)
-      clearTimer.current = setTimeout(() => setHl(undefined), HIGHLIGHT_MS)
-    }, SETTLE_MS)
-    // snap 객체는 매 렌더 새로 만들어진다 — 의존성은 **값**이어야 한다.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snap.lineHeight, snap.pressing, snap.tempo, snap.attackFocus, snap.attackPattern])
-
-  useEffect(() => () => {
-    if (settleTimer.current) clearTimeout(settleTimer.current)
-    if (clearTimer.current) clearTimeout(clearTimer.current)
-  }, [])
-
-  return hl
-}
-
 /** 작전판(tactics 모드 본체) — 방송 관전과 확연히 다른 다크 전술판 정체성.
  *  중앙 대형 보드(PitchView 재사용, 이름 라벨 + 다크 variant) + 상단 포메이션 셀렉터,
- *  우측 지시 패널(전술=ConsolePanel·교체=SubPanel·상대=Phase 4A T7 예정),
- *  하단 [전술 확정] 대형 버튼(halftime은 [후반 시작]) + 현재 정지 사유.
+ *  우측 지시 패널(전술=TacticsWorkbench·교체=SubPanel·상대=OppPanel),
+ *  **헤더 우측**에 [전술 확정](halftime은 [후반 시작]) — 헤더가 sticky라 스크롤과
+ *  무관하게 항상 보인다(예전엔 푸터라 900px에서 접힌 아래로 갔다).
  *  하프타임엔 팀토크 카드를 상단에 얹는다.
  *
  *  실시간 보드 반영: 포메이션 셀렉터 변경 시 swap.autoFill로 XI를 재배치하고
@@ -164,6 +104,9 @@ export function TacticsBoard() {
     attackFocus: shownIns.attackFocus,
     attackPattern: engine?.[SIDE].tactics.attackPattern ?? 'balanced',
   })
+  // 보드에 도형이 없는 축(멘탈리티·적극성·세트피스·페이즈 대형·GK·포메이션 이름)은
+  // 문장으로 말한다 — 없는 도형을 지어내지 않는다(boardFeedback.ts 상단 논증).
+  const caption = useChangeCaption(engine?.[SIDE].tactics)
 
   if (!engine) return null
   const halftime = phase === 'halftime'
@@ -263,7 +206,22 @@ export function TacticsBoard() {
     <div className="tb-root" role="dialog" aria-label="작전판" aria-modal="true">
       <div className="tb-head">
         <span className="tb-head__label">작전 타임</span>
+        {/* 정지 사유는 액션이 아니라 **상태**다("전반 종료"·"감독 타임"·"하이드레이션
+            브레이크"). 그래서 버튼이 아니라 제목 옆 라벨로 둔다 — 아래에 같은 문장을
+            한 번 더 적던 푸터는 걷어냈다(같은 사실을 한 화면에서 두 번 말했다). */}
         <span className="tb-head__reason">{reasonText(pauseReason, halftime)}</span>
+
+        {/* ── 헤더 우측 그룹: 부 액션 → 스코어 → 주 CTA ──────────────────────
+            주 CTA를 헤더로 올린 이유(사용자 지시 2026-08-01, 감사 6라운드 미룬 항목 C):
+            `.tb-root`는 뷰포트보다 길어서 푸터에 있던 [후반 시작]·[전술 확정]이 900px
+            높이에서 접힌 아래에 있었다. 자동화는 auto-scroll로 눌렀지만 사람은 "다음이
+            뭐지"에서 멈춘다. 헤더는 sticky라 스크롤 위치와 무관하게 항상 보인다.
+
+            ★ 순서가 곧 오조작 방지다. [코치 회의 열기]는 부 액션이므로 주 CTA 옆에 두지
+              않고 **스코어를 사이에 끼워** 떼어 놓았다. 두 버튼이 붙어 있으면 회의를
+              열려다 후반을 시작하게 된다. 스코어는 밀려나지 않는다 — CTA는 그 오른쪽에
+              새로 붙었고, 좁은 폭에서는 이 그룹이 통째로 다음 줄로 내려간다. */}
+        <div className="tb-head__right">
         {/* 팝업을 닫은 뒤 다시 부르는 유일한 경로. 상시 노출한다 — 숨겨 두면
             "실수로 닫았을 때 다시 열 수 있다"가 발견되지 않는 기능이 된다. */}
         {!coachOpen && (
@@ -301,6 +259,17 @@ export function TacticsBoard() {
           <span className="tb-head__code num">{engine.away.team.fifaCode}</span>
           <span className="kit-strip kit-strip--them" aria-hidden="true" />
           <span className="tb-head__clock num">{halftime ? 'HT' : `${engine.minute}'`}</span>
+        </div>
+        <button
+          type="button"
+          className="btn btn--primary btn--lg tb-head__go"
+          // 작전판 이탈 애니메이션(600ms) 동안 버튼이 DOM에 남아 있어 연타가 가능하다.
+          // 두 번째 클릭은 이미 phase가 'playing'이라 store가 throw한다 — 개입 가능할 때만 보낸다.
+          disabled={!canIntervene(phase)}
+          onClick={() => { if (canIntervene(phase)) confirmTactics() }}
+        >
+          {halftime ? '후반 시작' : '전술 확정'}
+        </button>
         </div>
       </div>
 
@@ -367,6 +336,11 @@ export function TacticsBoard() {
               ghost={ghost}
               onDotClick={pick}
             />
+            {/* 도형이 없는 축의 변경 캡션. 보드 아래쪽에 잠깐 떴다가 스스로 사라진다 —
+                상주하지 않는다(상주하면 그것 자체가 새 상시 UI가 된다). */}
+            {caption && (
+              <p key={caption.tick} className="tb-cap" role="status">{caption.text}</p>
+            )}
             {pair && (
               <div className="tb-pop tb-pop--cmp" role="group" aria-label="선수 비교">
                 {/* 워룸과 같은 비교 컴포넌트. 다른 점은 **이 경기 기록**이 얹힌다는 것뿐이다. */}
@@ -446,16 +420,16 @@ export function TacticsBoard() {
           <div className="tb-side__body">
             {tab === 'tactics' && (
               <div className="tb-tactics">
-                {!full && (
-                  <p className="tb-locked" role="status">
-                    {/* "전부 잠김"이 아니다 — 지시 4축·태세·적극성·패턴·세트피스가 아래에서
-                        열려 있다. 무엇이 잠겼는지를 정확히 적지 않으면 열린 축까지 죽은
-                        것으로 읽힌다(확장 개방 이후로는 잠긴 쪽이 소수다). */}
-                    {touchlineNotice(engine.minute, schedule)}
-                  </p>
-                )}
-                <ConsolePanel side={SIDE} onPreview={setPreview} />
-                <TacticsExtras side={SIDE} />
+                {/* ★ 여기 있던 `.tb-locked`(터치라인 안내 복사본)를 걷어냈다(2026-08-01).
+                    같은 문장이 화면 위쪽 `.tb-touchline` 배너에 이미 있고, 보드와 지시
+                    패널이 나란히 서는 지금 레이아웃에서는 **둘이 동시에 보인다** —
+                    한 화면에서 같은 말을 두 번 하면 두 번째는 노이즈다. 무엇이 잠겼는지
+                    더 좁혀 말할 곳은 서브탭 라벨("대형 잠김")과 그 축 옆 사유다. */}
+                {/* 전술 탭은 다시 서브탭으로 나뉜다(지시 / 태세 / 세트피스·대형).
+                    한 화면에 다 펴 놓으면 우측 레일이 1,000px을 넘어 작전판 전체가
+                    스크롤 문서가 됐다 — 그 스크롤이 주 CTA를 접힌 아래로 밀었다.
+                    전술 센터(킥오프 전)와 **같은 컴포넌트**라 조작법이 하나다. */}
+                <TacticsWorkbench side={SIDE} idPrefix="tb" onPreview={setPreview} />
               </div>
             )}
             {tab === 'sub' && (
@@ -472,20 +446,6 @@ export function TacticsBoard() {
           </div>
         </aside>
       </div>
-
-      <footer className="tb-foot">
-        <span className="tb-foot__reason">{reasonText(pauseReason, halftime)}</span>
-        <button
-          type="button"
-          className="btn btn--primary btn--lg"
-          // 작전판 이탈 애니메이션(600ms) 동안 버튼이 DOM에 남아 있어 연타가 가능하다.
-          // 두 번째 클릭은 이미 phase가 'playing'이라 store가 throw한다 — 개입 가능할 때만 보낸다.
-          disabled={!canIntervene(phase)}
-          onClick={() => { if (canIntervene(phase)) confirmTactics() }}
-        >
-          {halftime ? '후반 시작' : '전술 확정'}
-        </button>
-      </footer>
     </div>
   )
 }
