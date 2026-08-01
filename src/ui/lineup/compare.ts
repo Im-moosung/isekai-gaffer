@@ -102,14 +102,23 @@ export interface CompareModel {
   condition: CompareMetric[]
   /** 이 경기 기록. matchStats 미지정이거나 두 선수 다 0인 지표는 줄이 아예 생기지 않는다. */
   match: CompareMetric[]
-  /** 한 문장 결론 — "이 자리에는 누가 낫다". */
-  verdict: string
-  /** 결론의 방향. 'a'|'b'면 그 쪽이 낫다, 'tie'면 방향이 없다.
-   *  ★ 자리 바꾸기는 "누가 낫다"가 아니라 "바꾸는 게 낫다"이므로 항상 'tie'다 —
-   *  방향이 없다는 뜻이지 결론이 약하다는 뜻이 아니다. 세기는 decisive가 말한다. */
-  verdictSide: 'a' | 'b' | 'tie'
-  /** 결론이 실제로 한쪽을 가리키는가. 거짓이면 "대등하다"는 뜻이라 렌더가 톤을 낮춘다. */
-  decisive: boolean
+  /**
+   * 맨 위 한 줄 — **집계 수치**다. 결론이 아니다.
+   *
+   * ★ 2026-08-01 재판정(사용자 지시): 예전에는 여기에 *"지금 배치가 낫습니다"*,
+   *   *"손흥민이(가) 낫습니다"*가 들어갔다. 사용자 판정은 **과도한 개입**이었다 —
+   *   *"사용자가 판단해서 즐길 수 있게 해."*
+   *
+   *   경계는 **화자**다. 코치 회의(coach.ts)·스카우팅 브리핑은 게임 안의 인물이 말하고
+   *   감독이 `[감독 판단대로 간다]`로 무시할 수 있게 설계돼 있다(기획서 원칙 2).
+   *   이 줄에는 화자가 없다. 무기명 UI가 단정하면 그건 조언이 아니라 판정이고,
+   *   유저에게 남는 선택은 "따르거나 틀리거나"뿐이다.
+   *
+   *   그래서 **사실은 전부 남기고 단정만 뺐다.** `합계 적합도 -1.20`은 계산 결과이므로
+   *   남고, `지금 배치가 낫습니다`는 결론이므로 빠진다. 아래 발산 막대가 근거이고
+   *   이 줄은 막대가 못 보여 주는 **합계**를 맡는다(교환 이득은 어느 행에도 없다).
+   */
+  readout: string
   /** 축이 달라 능력치를 못 겹친 경우의 안내(없으면 null). */
   note: string | null
 }
@@ -233,7 +242,7 @@ export function buildCompare(input: CompareInput): CompareModel {
     })
   }
 
-  const v = buildVerdict(input, kind, axes.length > 0)
+  const v = buildReadout(input, kind, axes.length > 0)
   return {
     kind,
     match: matchMetrics(input.matchStats, a.id, b.id),
@@ -242,77 +251,57 @@ export function buildCompare(input: CompareInput): CompareModel {
     fitness: fitness ? { ...fitness, a: round2(fitness.a), b: round2(fitness.b) } : null,
     axes,
     condition,
-    verdict: v.verdict,
-    verdictSide: v.verdictSide,
-    decisive: v.decisive,
+    readout: v.readout,
     note: v.note,
   }
 }
 
-/** 결론 문장 — 비교 뷰 맨 위에 한 줄로 놓인다.
+/** 부호를 붙인 델타(+0.30 / -1.20). 0.00에 `-`가 붙지 않게 round2를 먼저 통과시킨다. */
+function signed(v: number): string {
+  return `${v > 0 ? '+' : ''}${v.toFixed(2)}`
+}
+
+/**
+ * 맨 위 한 줄 — **집계 수치만**. 결론은 유저가 낸다(CompareModel.readout 주석 참조).
  *
- *  ★ 왜 문장인가: 수치를 나란히 놓기만 하면 "그래서 누구냐"를 유저가 계산해야 한다.
- *  "한눈에" 요구를 만족시키는 것은 막대가 아니라 이 한 줄이다. 막대는 근거다.
- *
- *  판단 규칙(우선순위):
- *   1. 자리 바꾸기 — 합계 적합도 변화(swapFitDelta)의 부호. 자리 교환의 유일한 직접 효과다.
- *   2. 교체 — 그 자리 적합도 차이가 유의미하면 그것으로 결정한다.
- *   3. 적합도가 사실상 같으면 컨디션(체력)으로 가른다 — 같은 자리를 같은 수준으로
- *      소화하는 둘 중에는 덜 지친 쪽이 낫다.
- *   4. 둘 다 벤치면 판단할 자리가 없다. */
-function buildVerdict(
+ * 무엇을 적는가는 "아래 막대가 못 보여 주는 것"이 정한다:
+ *  1. 자리 바꾸기 — **합계** 적합도 변화(swapFitDelta). 행에는 교환 후 각자의 적합도가
+ *     따로 적히지만 그 둘을 더한 값은 어느 행에도 없다. 부호가 곧 정보다.
+ *  2. 교체 — 그 자리 적합도 두 값과 차이. 행과 겹치지만 **이름이 붙는다**(행에는 없다).
+ *  3. 적합도가 오차 안이면 체력을 함께 적는다 — 같은 자리를 같은 수준으로 소화하면
+ *     다음으로 볼 수치가 그것이라는 사실만 말하고, 어느 쪽인지는 말하지 않는다.
+ *  4. 둘 다 벤치면 잴 자리가 없다 — 그 사실을 적는다.
+ */
+function buildReadout(
   input: CompareInput, kind: CompareKind, hasAxes: boolean,
-): { verdict: string; verdictSide: 'a' | 'b' | 'tie'; decisive: boolean; note: string | null } {
+): { readout: string; note: string | null } {
   const { a, b, aSlot, bSlot, stamina } = input
   const note = hasAxes ? null : 'GK와 필드 선수는 능력치 축이 달라 겹쳐 비교하지 않습니다.'
 
   if (kind === 'none') {
-    return { verdict: '둘 다 벤치입니다 — 바꿀 자리가 없습니다.', verdictSide: 'tie', decisive: false, note }
+    return { readout: '둘 다 벤치입니다 — 기준이 될 자리가 없어 적합도를 재지 않습니다.', note }
   }
 
   if (kind === 'swap') {
     const d = round2(swapFitDelta(a, aSlot!, b, bSlot!))
-    if (d > FIT_EPS) {
-      return {
-        verdict: `자리를 바꾸면 합계 적합도 +${d.toFixed(2)} — 바꾸는 쪽이 낫습니다.`,
-        verdictSide: 'tie', decisive: true, note,
-      }
+    if (Math.abs(d) > FIT_EPS) {
+      return { readout: `자리를 바꾸면 합계 적합도 ${signed(d)}`, note }
     }
-    if (d < -FIT_EPS) {
-      return {
-        verdict: `자리를 바꾸면 합계 적합도 ${d.toFixed(2)} — 지금 배치가 낫습니다.`,
-        verdictSide: 'tie', decisive: true, note,
-      }
-    }
-    return {
-      verdict: '자리를 바꿔도 적합도는 사실상 같습니다 — 역할·발 방향으로 판단하십시오.',
-      verdictSide: 'tie', decisive: false, note,
-    }
+    return { readout: `자리를 바꿔도 합계 적합도 변화는 ±${FIT_EPS.toFixed(2)} 안입니다`, note }
   }
 
-  // sub — 어느 쪽이 선발인지와 무관하게 "그 자리"에 누가 맞는지를 본다.
+  // sub — 어느 쪽이 선발인지와 무관하게 "그 자리"의 수치를 나란히 적는다.
   const slot = (aSlot ?? bSlot)!
-  const fa = positionFitness(a, slot)
-  const fb = positionFitness(b, slot)
-  const fd = round2(fa - fb)
-  if (Math.abs(fd) >= FIT_EPS) {
-    const win = fd > 0 ? a : b
-    return {
-      verdict: `${slot} 자리에는 ${win.name.ko}이(가) 낫습니다 — 적합도 ${Math.abs(fd).toFixed(2)} 우위.`,
-      verdictSide: fd > 0 ? 'a' : 'b', decisive: true, note,
-    }
+  const fa = round2(positionFitness(a, slot))
+  const fb = round2(positionFitness(b, slot))
+  const head = `${slot} 적합도 — ${a.name.ko} ${fa.toFixed(2)} · ${b.name.ko} ${fb.toFixed(2)}`
+  if (Math.abs(round2(fa - fb)) >= FIT_EPS) {
+    return { readout: `${head} (차 ${Math.abs(round2(fa - fb)).toFixed(2)})`, note }
   }
   const sa = stamina?.[a.id]
   const sb = stamina?.[b.id]
   if (sa != null && sb != null && Math.abs(sa - sb) >= 5) {
-    const win = sa > sb ? a : b
-    return {
-      verdict: `${slot} 적합도는 같습니다 — 체력 ${Math.round(Math.abs(sa - sb))}% 앞선 ${win.name.ko}이(가) 낫습니다.`,
-      verdictSide: sa > sb ? 'a' : 'b', decisive: true, note,
-    }
+    return { readout: `${head} · 체력 ${Math.round(sa)}% · ${Math.round(sb)}%`, note }
   }
-  return {
-    verdict: `${slot} 적합도·컨디션이 대등합니다 — 능력치로 판단하십시오.`,
-    verdictSide: 'tie', decisive: false, note,
-  }
+  return { readout: head, note }
 }

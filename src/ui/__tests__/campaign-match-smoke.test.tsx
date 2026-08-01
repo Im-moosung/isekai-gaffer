@@ -26,7 +26,9 @@ describe('App 캠페인 경기 스모크 — 실 MatchScreen 진입', () => {
     expect(getByRole('button', { name: '킥오프' })).toBeTruthy()
     expect(container.querySelector('svg.pv-root')).toBeTruthy()
     expect(useMatchStore.getState().phase).toBe('pre')
-    // 음소거 토글이 스코어버그 옆에 렌더된다(aria-label).
+    // 소리 제어는 제어 pod의 **설정 팝업** 안에 있다(2026-08-01 ①). 킥오프 전에도
+    // 음소거는 살아 있어야 한다 — 워룸에서 이미 BGM(M03 워룸)이 돌고 있기 때문이다.
+    fireEvent.click(getByRole('button', { name: '설정' }))
     expect(getByRole('button', { name: '음소거' })).toBeTruthy()
   })
 })

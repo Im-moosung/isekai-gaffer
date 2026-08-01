@@ -148,14 +148,16 @@ describe('2명 클릭 → 나란히 비교 + 실행 버튼', () => {
 })
 
 describe('비교 뷰 — 차이를 강조한다', () => {
-  it('결론 한 줄·발산 막대·델타가 함께 나온다', () => {
+  it('집계 한 줄·발산 막대·델타가 함께 나온다', () => {
     const stamina = Object.fromEntries(team.squad.map((p, i) => [p.id, 40 + i * 2]))
     const { container } = render(<Editor staminaByPlayer={stamina} />)
     fireEvent.click(chips(container)[0])
     fireEvent.click(cards(container)[0])
     const cmp = container.querySelector('.cmp') as HTMLElement
-    // (1) 결론 문장 (2) 우세 쪽 굵은 수치 (3) 한쪽으로만 뻗는 막대 (4) 델타 숫자
-    expect(cmp.querySelector('.cmp__verdict')!.textContent!.length).toBeGreaterThan(4)
+    // (1) 집계 수치 한 줄 (2) 우세 쪽 굵은 수치 (3) 한쪽으로만 뻗는 막대 (4) 델타 숫자
+    // ★ (1)은 **결론이 아니다**. 2026-08-01에 "낫습니다"류 단정을 걷어내고 수치만 남겼다
+    //   (compare.test.ts의 "결론 문구가 없다"가 그 경계를 고정한다).
+    expect(cmp.querySelector('.cmp__readout')!.textContent!.length).toBeGreaterThan(4)
     expect(cmp.querySelectorAll('.cmp__val--win').length).toBeGreaterThan(0)
     expect(cmp.querySelectorAll('.cmp__fill').length).toBeGreaterThan(0)
     expect(Array.from(cmp.querySelectorAll('.cmp__d')).some(e => e.textContent!.startsWith('+'))).toBe(true)

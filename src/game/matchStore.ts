@@ -765,12 +765,22 @@ export interface MatchUIState {
   /** 1분 재생 스텝(UI 타이머가 호출). 브레이크·하프타임 도달 시 자동 정지,
    *  동적 순간 감지 시 정지하지 않고 momentPrompt만 세팅(재생 계속). */
   advanceMinute(): void
-  /** 유저 자유 일시정지(감독 타임). */
-  pauseByUser(): void
+  /**
+   * 유저 자유 일시정지(감독 타임).
+   *
+   * ★ **거절하면 그 이유를 돌려준다**(성공은 null). 예전에는 조용히 `return`했다 —
+   *   눌러도 아무 일이 없고 이유도 없는 컨트롤이고, 이 프로젝트가 세 곳(교체·GK
+   *   파워플레이·감독 타임)에서 통일한 *"막히면 이유를 말한다"*와 정면으로 어긋난다.
+   *   throw로 만들지 않는 이유는 그대로다(onClick에 물려 있어 렌더 경로의 예외가 된다).
+   *   사유의 정본은 freeInterventionState.blockedReason 하나이고, 화면은 그걸 그대로
+   *   잠깐 뜨는 알림으로 옮긴다.
+   */
+  pauseByUser(): string | null
   /** 전술 확정 — 모든 정지 상태에서 재개. 부스트 만료 분 설정. */
   confirmTactics(): void
-  /** 동적 순간 제안 수락 → 'paused-moment'로 정지. */
-  acceptMoment(): void
+  /** 동적 순간 제안 수락 → 'paused-moment'로 정지.
+   *  pauseByUser와 같은 계약 — 거절하면 사유 문자열, 성공하면 null. */
+  acceptMoment(): string | null
   /** 동적 순간 제안 무시(재생 계속). */
   dismissMoment(): void
   submitCommand(side: 'home' | 'away', cmd: MatchCommand): void
@@ -840,7 +850,12 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     set({ phase: 'playing', matchPlan: structuredClone(engine.home.tactics), planDeviation: 0, adaptUntil: 0 })
   },
   advanceMinute: () => {
-    const { engine, phase, schedule, firedMoments, momentPrompt: prevPrompt, momentPromptScore: prevPromptScore, boostUntil, oppFired, oppNotices, matchPlan, adaptUntil } = get()
+    const {
+      engine, phase, schedule, firedMoments, momentPrompt: prevPrompt, momentPromptScore: prevPromptScore,
+      boostUntil, oppFired, oppNotices, matchPlan, adaptUntil,
+      // 순간 제안이 **제안으로 성립하는지**를 같은 분에 판정하기 위해 자원 상태도 읽는다.
+      freeInterventionsUsed, lastInterventionMinute,
+    } = get()
     if (!engine) throw new Error('경기 미시작')
     if (phase !== 'playing') return // 정지 중엔 재개(confirmTactics)로만 진행
     const prevScore: [number, number] = [engine.score[0], engine.score[1]]
@@ -901,32 +916,62 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
       return
     }
 
-    // 동적 순간 감지 — 정지하지 않고 제안(momentPrompt)만 세팅. 유형당 1회.
-    // 이미 다른 제안이 떠 있으면(momentPrompt 존재) 덮어쓰지 않는다.
+    // ── 동적 순간 감지 ────────────────────────────────────────────────
+    // 정지하지 않고 제안(momentPrompt)만 세팅한다. 이미 제안이 떠 있으면 덮지 않는다.
+    //
+    // ★ 2026-08-01 재판정(사용자 지적): *"개입을 다 썼거나 쿨타임일 때도 '개입하시겠습니까?'
+    //   버튼이 뜬다."* 감지가 **자원을 전혀 보지 않았다.**
+    //
+    // 고친 방향은 "자원 없으면 감지하지 않는다"가 **아니다.** 순간 자체는 정보다 —
+    // `흐름이 상대에게 넘어갑니다`는 감독 타임을 못 쓴다고 사라져야 할 사실이 아니고,
+    // 숨기면 화면이 조용해진다. 그래서 **감지는 그대로 두고 제안만 자원에 건다**:
+    // 배너를 그릴 때 화면이 freeInterventionState를 읽어, 쓸 수 있으면 [사용]/[흘려보낸다]를,
+    // 못 쓰면 사실 + 못 쓰는 이유만 그린다(MatchScreen). 자원 판정을 **감지 시점이 아니라
+    // 렌더 시점**에 두는 것이 핵심이다 — 쿨다운은 분마다 줄어들므로, 같은 제안이 살아 있는
+    // 동안 쿨다운이 풀리면 배너가 저절로 "알림 → 제안"으로 승격한다(추가 상태가 필요 없다).
+    //
+    // ★ firedMoments(유형당 1회) 소비 규칙 — **손해가 겹치지 않게** 한다.
+    //   기준은 "이 제안이 제안으로 성립했는가"다.
+    //    · 쓸 수 있었다 → 소비. 지금까지와 같다.
+    //    · 횟수 소진(left=0) → 소비. 자원이 돌아올 길이 **없으므로** 다시 띄워도 같은
+    //      거절문을 반복할 뿐이다. 유형당 한 번 알리고 끝내는 게 정직하다.
+    //    · 쿨다운 → **소비하지 않는다.** 기다리면 풀리는 막힘이라 자원이 돌아온 뒤 같은
+    //      유형이 다시 필요하다. 여기서 소비하면 쿨다운 중에 우연히 감지됐다는 이유로
+    //      그 유형이 경기 내내 영영 사라진다(사용자가 지적한 "손해가 겹친다").
+    //   같은 유형이 두 번 뜰 수 있지만, 두 번째는 **다른 사건**(다른 실점·다른 구간)이고
+    //   그때는 실제로 쓸 수 있다. 살아 있는 제안은 새 감지를 막으므로 연달아 겹치지 않는다.
+    const fi = freeInterventionState(freeInterventionsUsed, lastInterventionMinute, minute)
     if (!momentPrompt) {
       const moment = detectMoment(
         next.events, minute, next.score, prevScore, homeStaminaFloor(next),
         { homeId: next.home.team.id, awayId: next.away.team.id },
       )
       if (moment && !firedMoments.includes(moment.kind)) {
+        const consume = fi.canPause || fi.left === 0
         set({
           engine: next, momentPrompt: moment, momentPromptScore: [next.score[0], next.score[1]],
-          firedMoments: [...firedMoments, moment.kind], ...opp,
+          firedMoments: consume ? [...firedMoments, moment.kind] : firedMoments, ...opp,
         })
         return
       }
+    } else if (fi.canPause && !firedMoments.includes(momentPrompt.kind)) {
+      // 쿨다운 때문에 소비를 미뤄 둔 제안이 **살아 있는 동안** 쓸 수 있게 됐다.
+      // 여기서 비로소 유형을 소비한다 — 이제 진짜 제안이 됐으므로, 흘려보낸 뒤 같은
+      // 유형이 또 뜨면 그건 반복이다.
+      set({ engine: next, firedMoments: [...firedMoments, momentPrompt.kind], ...opp })
+      return
     }
     set({ engine: next, ...expiry, ...opp })
   },
   pauseByUser: () => {
     const { engine, phase, freeInterventionsUsed, lastInterventionMinute } = get()
     if (!engine) throw new Error('경기 미시작')
-    if (phase !== 'playing') return
+    if (phase !== 'playing') return '지금은 재생 중이 아닙니다.'
     // store가 최종 방어선이다 — UI가 버튼을 죽이는 것만으로는 부족하다.
-    // 막혔을 때 throw하지 않고 조용히 거절하는 이유: 이 액션은 화면 버튼의 onClick에
-    // 그대로 물려 있어 throw가 곧 렌더 경로의 예외가 된다. 사유는 화면이
-    // freeInterventionState(같은 판정)로 미리 읽어 표시한다.
-    if (!freeInterventionState(freeInterventionsUsed, lastInterventionMinute, engine.minute).canPause) return
+    // 막혔으면 **사유를 돌려준다**(throw가 아니다 — onClick에 물려 있어 렌더 경로의
+    // 예외가 된다). 화면은 이 문자열을 잠깐 뜨는 알림으로 옮기기만 한다.
+    const fi = freeInterventionState(freeInterventionsUsed, lastInterventionMinute, engine.minute)
+    if (!fi.canPause) return fi.blockedReason
     // 감독 타임 진입 자체가 창을 연다 — 한 번 불러 세운 동안 내리는 지시는 한 번의 개입이다.
     // 그래서 이 안에서의 터치라인 지시는 추가 비용이 없다(touchlineWindow 주석).
     set({
@@ -935,6 +980,7 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
       lastInterventionMinute: engine.minute,
       touchlineWindow: { minute: engine.minute, side: 'home', tactics: structuredClone(engine.home.tactics) },
     })
+    return null
   },
   confirmTactics: () => {
     const { engine, phase, pauseReason } = get()
@@ -975,7 +1021,13 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     if (!momentPrompt) throw new Error('제안된 순간이 없음')
     // 순간 제안 수락도 자유 개입이다 — 배너가 문자 그대로 "감독 타임을 쓰시겠습니까?"라고
     // 묻는다. 세지 않으면 [흘려보낸다]가 대가 없는 선택이 되어 버튼이 장식이 된다.
-    if (engine && !freeInterventionState(freeInterventionsUsed, lastInterventionMinute, engine.minute).canPause) return
+    // ★ 막혔으면 사유를 돌려준다(pauseByUser와 같은 계약). 다만 여기까지 오는 일은
+    //   이제 드물다 — 배너가 애초에 자원이 있을 때만 [사용]을 그리기 때문이다.
+    //   그래도 store가 최종 방어선이라는 원칙은 유지한다(키보드·경합 진입 경로).
+    if (engine) {
+      const fi = freeInterventionState(freeInterventionsUsed, lastInterventionMinute, engine.minute)
+      if (!fi.canPause) return fi.blockedReason
+    }
     const minute = engine?.minute ?? 0
     set({
       phase: 'paused-moment', pauseReason: { kind: 'moment', moment: momentPrompt },
@@ -983,6 +1035,7 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
       lastInterventionMinute: minute,
       ...(engine ? { touchlineWindow: { minute, side: 'home' as const, tactics: structuredClone(engine.home.tactics) } } : {}),
     })
+    return null
   },
   dismissMoment: () => set({ momentPrompt: null, momentPromptScore: null }),
   submitCommand: (side, cmd) => {

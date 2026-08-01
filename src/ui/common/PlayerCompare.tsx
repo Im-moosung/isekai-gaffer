@@ -10,6 +10,11 @@
 // 우세는 (1) 막대가 그쪽으로 뻗고 (2) 수치가 굵어지고 (3) 델타 숫자가 그쪽에 붙는
 // 세 겹으로 표시된다. 색(--good)은 네 번째 단서일 뿐이다.
 //
+// ── 결론은 유저가 낸다 ────────────────────────────────────────────
+// 지표별 우열(막대·굵기·델타)은 **계산 결과**라 남는다. 반대로 "그래서 누구를 쓸
+// 것인가"는 감독의 몫이므로 화면이 대신 말하지 않는다. 맨 위 한 줄은 결론이 아니라
+// 집계 수치다(compare.ts의 CompareModel.readout 주석에 판정 근거).
+//
 // ── 색 규칙 ───────────────────────────────────────────────────────
 // 빨강/파랑은 팀 전용, 라임은 --live 전용이므로 비교 막대에 쓰지 않는다. 우세는
 // --good(초록), 열세는 무채색 표면이다. 브랜드 파랑은 "감독의 행동"(실행 버튼)에만.
@@ -56,15 +61,9 @@ export function PlayerCompare({
 
   return (
     <section className="cmp" aria-label="선수 비교">
-      {/* 결론이 먼저다. 수치를 읽어 스스로 계산하게 만들면 "잘 보이는" 화면이 아니다. */}
-      {/* 방향(a/b/tie)과 세기(decisive)를 따로 표시한다 — 자리 바꾸기는 방향이 없어도
-          결론은 단호할 수 있다("바꾸는 쪽이 낫습니다"). 톤을 낮추는 것은 세기 쪽이다. */}
-      <p
-        className={`cmp__verdict cmp__verdict--${model.verdictSide}${model.decisive ? '' : ' cmp__verdict--soft'}`}
-        role="status"
-      >
-        {model.verdict}
-      </p>
+      {/* 집계 수치 한 줄. **결론이 아니다** — 아래 막대가 못 보여 주는 합계를 맡는다.
+          (예전에는 여기서 "지금 배치가 낫습니다"라고 단정했다. compare.ts의 readout 주석) */}
+      <p className="cmp__readout num" role="status">{model.readout}</p>
 
       <div className="cmp__heads">
         <Head side="a" order={1} entry={a} />
@@ -104,6 +103,19 @@ function slotContext(model: CompareModel, a: ComparePlayer, b: ComparePlayer): s
   return '둘 다 벤치'
 }
 
+/**
+ * 두 선수의 신원 한 칸.
+ *
+ * ★ 2026-08-01 — **상태 칩을 이름 줄에서 내렸다.** 예전에는 한 줄에
+ * `[순서][번호·이름][상태 칩]`이 나란히 서서 세 요소가 같은 가로폭을 놓고 다퉜다.
+ * 칩은 개수가 상황에 따라 늘어나는데(체력·사기·경고·정지…) 유일하게 줄어들 수 있는 것이
+ * 이름이라, 칩이 두어 개만 붙어도 이름 칸이 40px 아래로 눌려 `손...`이 됐다
+ * (사용자 캡처 ③). 폭이 넉넉한 화면에서는 안 보이고 좁아질수록 심해지는 종류의 결함이라
+ * 미디어 쿼리로는 못 막는다 — 이 컴포넌트는 420px 팝오버 안에도 들어가기 때문이다.
+ *
+ * 지금은 **이름이 첫 줄을 통째로 갖는다.** 칩은 포지션·선발/벤치와 함께 둘째 줄로 내려가고,
+ * 그 줄은 랩이 허용된다. 스캔 순서(누구인가 → 지금 문제가 있는가)와도 맞는다.
+ */
 function Head({ side, order, entry }: { side: 'a' | 'b'; order: number; entry: ComparePlayer }) {
   const { player, slot, status } = entry
   return (
@@ -119,9 +131,9 @@ function Head({ side, order, entry }: { side: 'a' | 'b'; order: number; entry: C
         <span className="cmp__posline">
           <span className="cmp__pos">{slot ?? player.position}</span>
           <span className="cmp__where">{slot ? '선발' : '벤치'}</span>
+          <StatusChips className="cmp__sx" input={status} />
         </span>
       </span>
-      <StatusChips className="cmp__sx" input={status} />
     </div>
   )
 }

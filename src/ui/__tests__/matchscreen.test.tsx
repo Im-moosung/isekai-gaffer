@@ -101,7 +101,7 @@ describe('MatchScreen 조립 — 오버레이 폐지(피치 상시 노출)', () 
     // 하단 재개 버튼은 [후반 시작] 라벨.
     expect(getByRole('button', { name: '후반 시작' })).toBeTruthy()
     // 정지 사유 표시.
-    expect(container.querySelector('.tb-foot__reason')!.textContent).toContain('전반 종료')
+    expect(container.querySelector('.tb-head__reason')!.textContent).toContain('전반 종료')
   })
 
   it('(e) LIVE 뱃지는 재생 중에만 노출 — 킥오프 전 없음, 재생 중 존재', () => {
@@ -135,7 +135,7 @@ describe('MatchScreen 개입 허브 — 브레이크·순간 제안·풀타임',
     // 하단 [전술 확정] 대형 버튼.
     expect(getByRole('button', { name: '전술 확정' })).toBeTruthy()
     // 정지 사유 문구.
-    expect(container.querySelector('.tb-foot__reason')!.textContent).toContain('하이드레이션 브레이크')
+    expect(container.querySelector('.tb-head__reason')!.textContent).toContain('하이드레이션 브레이크')
   })
 
   it('(i) momentPrompt 배너: [사용]→paused-moment, [흘려보낸다]→playing 유지', () => {
@@ -159,6 +159,54 @@ describe('MatchScreen 개입 허브 — 브레이크·순간 제안·풀타임',
     act(() => { useMatchStore.setState({ momentPrompt: { kind: 'conceded', minute: 13, title: 't' } }) })
     fireEvent.click(getByRole('button', { name: '사용' }))
     expect(store().phase).toBe('paused-moment')
+  })
+
+  // ── 순간 배너는 자원에 따라 두 얼굴이다(사용자 지적 2026-08-01) ──────────
+  // *"개입을 다 썼거나 쿨타임일 때도 '개입하시겠습니까?' 버튼이 떠."*
+  // 상황 자체는 유저가 알아야 할 경기 정보이므로 숨기지 않는다. 대신 쓸 수 없으면
+  // 묻지 않고 **알린다** — 사실 + 왜 못 쓰는지, 버튼 없음.
+  it('(i-2) 자원이 없으면 제안이 아니라 알림이다 — [사용]이 없고 사유가 붙는다', () => {
+    const { getByRole, container, queryByRole } = render(<MatchScreen home={home} away={away} seed={20260724} />)
+    kickoffNow(getByRole)
+    step(2)
+    const c = container as HTMLElement
+    act(() => {
+      useMatchStore.setState({
+        momentPrompt: { kind: 'momentum-lost', minute: 12, title: 't' },
+        freeInterventionsUsed: MAX_FREE_INTERVENTIONS,
+      })
+    })
+    const banner = c.querySelector('.ms-banner')!
+    // 사실은 그대로 남는다.
+    expect(banner.textContent).toContain('흐름이 상대에게 넘어갑니다')
+    // 묻지 않는다.
+    expect(banner.textContent).not.toContain('쓰시겠습니까')
+    expect(queryByRole('button', { name: '사용' })).toBeNull()
+    // 대신 왜 못 쓰는지 — store가 정본이다.
+    const reason = freeInterventionState(MAX_FREE_INTERVENTIONS, null, store().engine!.minute).blockedReason!
+    expect(banner.textContent).toContain(reason)
+    // 결정을 요구하지 않으므로 톤도 낮다(브랜드 틴트를 걷는다).
+    expect(banner.classList.contains('ms-banner--info')).toBe(true)
+  })
+
+  it('(i-3) 쿨다운이 풀리면 같은 배너가 저절로 제안으로 승격한다', () => {
+    const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
+    kickoffNow(getByRole)
+    step(2)
+    const c = container as HTMLElement
+    const minute = store().engine!.minute
+    act(() => {
+      useMatchStore.setState({
+        momentPrompt: { kind: 'momentum-lost', minute, title: 't' },
+        lastInterventionMinute: minute,
+      })
+    })
+    expect(c.querySelector('.ms-banner--info')).toBeTruthy()
+    // 쿨다운만 풀면(같은 제안 그대로) 배너가 제안으로 바뀐다 — 판정이 렌더 시점에 있다.
+    act(() => { useMatchStore.setState({ lastInterventionMinute: null }) })
+    expect(c.querySelector('.ms-banner--info')).toBeNull()
+    expect(c.querySelector('.ms-banner')!.textContent).toContain('쓰시겠습니까')
+    expect(getByRole('button', { name: '사용' })).toBeTruthy()
   })
 
   // ★ 계약 변경: 종료 화면은 **리포트가 전부**다. 예전엔 빈 3D 피치가 화면의 47%를
@@ -373,20 +421,35 @@ describe('MatchScreen — 자유 개입 자원 표시(감독 타임)', () => {
     expect(timeBtn(container as HTMLElement).disabled).toBe(false)
   })
 
-  it('횟수를 다 쓰면 버튼이 죽고 **소진** 사유가 화면에 있다', () => {
+  // ★ 2026-08-01 계약 변경(사용자 지시 ①) — 사유는 **상시 노출에서 눌렀을 때 노출로**
+  //   옮겼다. 40자 넘는 문장이 버튼 옆에 늘 서서 제어 pod를 두 줄로 만들었는데, "언제
+  //   돌아오는가"는 쿨다운 링이 이미 말하고 있었다. 없앤 게 아니라 옮긴 것이므로
+  //   **사유의 정확성은 그대로** 검증한다(store의 blockedReason과 문자열이 같아야 한다).
+  //   버튼도 disabled가 아니라 aria-disabled다 — disabled면 클릭이 오지 않아 사유를
+  //   띄울 기회 자체가 없다("이유 없는 disabled는 고장으로 읽힌다").
+  it('횟수를 다 썼을 때: 사유는 평소엔 안 보이고, 누르면 그 문장이 뜬다', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
     kickoffNow(getByRole)
     step(3)
     act(() => { useMatchStore.setState({ freeInterventionsUsed: MAX_FREE_INTERVENTIONS }) })
     const c = container as HTMLElement
     expect(pod(c).textContent).toContain('개입 0/5')
-    expect(timeBtn(c).disabled).toBe(true)
+    const btn = timeBtn(c)
+    expect(btn.getAttribute('aria-disabled')).toBe('true')
     const reason = freeInterventionState(MAX_FREE_INTERVENTIONS, null, store().engine!.minute).blockedReason!
     expect(reason).toBeTruthy()
-    expect(pod(c).textContent).toContain(reason)
+    // 평소에는 없다 — 이게 자리를 되찾은 부분이다.
+    expect(c.querySelector('.ms-notice')).toBeNull()
+    expect(pod(c).textContent).not.toContain(reason)
+    // 누르면 뜬다.
+    act(() => { fireEvent.click(btn) })
+    expect(c.querySelector('.ms-notice')!.textContent).toBe(reason)
+    // 그리고 스스로 사라진다(상시 노출로 되돌아가지 않는다).
+    act(() => { vi.advanceTimersByTime(4000) })
+    expect(c.querySelector('.ms-notice')).toBeNull()
   })
 
-  it('쿨다운 중에는 버튼이 죽고 **남은 분**이 화면에 있다(외침과는 다른 시계)', () => {
+  it('쿨다운 중에도 같다 — 링이 상시로 말하고, 남은 분은 누를 때 말한다', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
     kickoffNow(getByRole)
     step(3)
@@ -395,12 +458,25 @@ describe('MatchScreen — 자유 개입 자원 표시(감독 타임)', () => {
     const c = container as HTMLElement
     const st = freeInterventionState(0, minute, store().engine!.minute)
     expect(st.cooldownLeft).toBeGreaterThan(0)
-    expect(timeBtn(c).disabled).toBe(true)
-    expect(pod(c).textContent).toContain(String(st.cooldownLeft))
-    expect(pod(c).textContent).toContain(st.blockedReason!)
-    // 링도 함께 뜬다 — ShoutBar와 같은 시각 언어다. 다만 재는 시계는 다르다
-    // (개입 10분 · 외침 5분). 링은 "언제 돌아오는가"를 말하고, 어느 자원인지는 옆 라벨이 말한다.
+    expect(timeBtn(c).getAttribute('aria-disabled')).toBe('true')
+    // 링은 상시다 — ShoutBar와 같은 시각 언어이고, 이것이 설명문을 대신한다.
+    // (개입 10분 · 외침 5분으로 재는 시계는 다르다. 어느 자원인지는 옆 라벨이 말한다.)
     expect(c.querySelector('.ms-controls .sb-ring')).toBeTruthy()
+    expect(pod(c).textContent).not.toContain(st.blockedReason!)
+    act(() => { fireEvent.click(timeBtn(c)) })
+    const notice = c.querySelector('.ms-notice')!.textContent!
+    expect(notice).toBe(st.blockedReason!)
+    expect(notice).toContain(String(st.cooldownLeft))
+  })
+
+  it('막히지 않았으면 누를 때 알림이 뜨지 않는다(감독 타임이 그냥 열린다)', () => {
+    const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
+    kickoffNow(getByRole)
+    step(3)
+    const c = container as HTMLElement
+    act(() => { fireEvent.click(timeBtn(c)) })
+    expect(store().phase).toBe('paused-user')
+    expect(c.querySelector('.ms-notice')).toBeNull()
   })
 
   it('두 사유는 서로 다른 문장이다(무엇이 막았는지 구별된다)', () => {

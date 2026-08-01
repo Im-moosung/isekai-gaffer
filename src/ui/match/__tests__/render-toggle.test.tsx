@@ -43,6 +43,14 @@ function kickoff(getByRole: (role: string, opts: { name: string }) => HTMLElemen
   fireEvent.click(getByRole('button', { name: '입장 연출 건너뛰고 바로 킥오프' }))
 }
 
+/** ★ 2026-08-01 — [2D|3D]·[음소거]·[해설 끄기]는 **설정 팝업 안**으로 내려갔다
+ *  (사용자 지시 ①: 자주 안 바꾸는 것은 아이콘으로 접어라). 셋 다 localStorage에 기억되는
+ *  "한 번 정하는 값"이고, 바에는 경기 중 계속 쓰는 것만 남는다(재생·배속·개입·감독 타임).
+ *  그래서 이 컨트롤들을 검증하려면 먼저 톱니를 눌러 시트를 열어야 한다. */
+function openSettings(getByRole: (role: string, opts: { name: string }) => HTMLElement) {
+  fireEvent.click(getByRole('button', { name: '설정' }))
+}
+
 beforeEach(() => { ls = installLocalStorage() })
 afterEach(() => { cleanup(); useMatchStore.getState().reset(); ls.clear() })
 
@@ -54,6 +62,7 @@ describe('MatchScreen — 2D/3D 렌더러 토글', () => {
     const { getByRole } = render(<MatchScreen home={home} away={away} seed={7} />)
     kickoff(getByRole)
     await flush()
+    openSettings(getByRole)
     expect(getByRole('button', { name: '3D' }).getAttribute('aria-pressed')).toBe('true')
     expect(getByRole('button', { name: '2D' }).getAttribute('aria-pressed')).toBe('false')
   })
@@ -62,6 +71,7 @@ describe('MatchScreen — 2D/3D 렌더러 토글', () => {
     const { getByRole } = render(<MatchScreen home={home} away={away} seed={7} />)
     kickoff(getByRole)
     await flush()
+    openSettings(getByRole)
     fireEvent.click(getByRole('button', { name: '2D' }))
     expect(getByRole('button', { name: '2D' }).getAttribute('aria-pressed')).toBe('true')
     expect(getByRole('button', { name: '3D' }).getAttribute('aria-pressed')).toBe('false')
@@ -73,6 +83,7 @@ describe('MatchScreen — 2D/3D 렌더러 토글', () => {
     const { getByRole } = render(<MatchScreen home={home} away={away} seed={7} />)
     kickoff(getByRole)
     await flush()
+    openSettings(getByRole)
     expect(getByRole('button', { name: '2D' }).getAttribute('aria-pressed')).toBe('true')
   })
 
@@ -87,15 +98,19 @@ describe('MatchScreen — 2D/3D 렌더러 토글', () => {
     const { container, getByRole } = render(<MatchScreen home={home} away={away} seed={7} />)
     kickoff(getByRole)
     await flush()
+    openSettings(getByRole)
     fireEvent.click(getByRole('button', { name: '2D' }))
     await flush()
     expect(container.querySelector('.pv-root')).toBeTruthy()
   })
 
+  // 음소거·TTS는 설정 팝업 안으로 자리를 옮겼을 뿐 **계약은 그대로다** —
+  // 특히 음소거 토글 하나가 BGM·효과음·TTS를 전부 끊는다(sfx.setMuted 단일 진실원).
   it('기존 방송 DOM 레이어(스코어버그·티커·음소거·TTS)는 3D 도입 후에도 그대로다', async () => {
     const { container, getByRole } = render(<MatchScreen home={home} away={away} seed={7} />)
     kickoff(getByRole)
     await flush()
+    openSettings(getByRole)
     expect(getByRole('button', { name: '음소거' })).toBeTruthy()
     expect(getByRole('button', { name: '해설 음성 끄기' })).toBeTruthy()
     expect(container.querySelector('.ms-root')).toBeTruthy()

@@ -51,6 +51,9 @@
   border-bottom: 1px solid var(--s-line);
 }
 .ms-controls {
+  /* 설정 시트와 막힘 알림이 pod 아래에 **얹히므로** 위치 기준 상자가 된다.
+     흐름에 넣으면 알림이 뜰 때마다 pod가 늘어나 버튼이 손가락 밑에서 움직인다. */
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -66,6 +69,105 @@
 .ms-plan-slot .plan-badge {
   position: static;
   box-shadow: none;
+}
+
+/* ── 설정 팝업(SettingsMenu) ───────────────────────────────────────
+   자주 안 바꾸는 셋(2D/3D · 음소거 · 해설 음성)을 톱니 하나로 접는다.
+   pod 안에서 위치 기준 상자가 되어야 시트가 톱니 바로 아래에 붙는다. */
+.ms-set {
+  position: relative;
+  display: inline-flex;
+}
+/* 아이콘 버튼은 정사각이다 — 글자 버튼과 같은 좌우 패딩을 주면 톱니가 한가운데
+   있지 않고 넓적한 알약이 된다. 높이는 옆의 btn--sm과 맞춘다. */
+.ms-set__btn {
+  padding: 0;
+  width: 32px; /* .btn--sm의 min-height와 같다(shell.css) — 정사각 아이콘 버튼 */
+  min-width: 32px;
+  justify-content: center;
+}
+.ms-set__btn--open {
+  border-color: var(--brand);
+  color: var(--t-hi);
+}
+/* ★ 클릭·포커스는 항상 바깥 <button>이 받는다. SVG 안으로 들어가면 전역
+   `:focus-visible { outline: 2px }`가 사용자 단위로 해석돼 배율만큼 부푼다(297e74b).
+   아이콘은 aria-hidden + focusable="false"에 더해 여기서 포인터도 통과시킨다. */
+.ms-gear {
+  pointer-events: none;
+  flex: 0 0 auto;
+}
+
+.ms-set__sheet {
+  position: absolute;
+  top: calc(100% + var(--sp-2));
+  right: 0;
+  z-index: var(--z-overlay);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-width: 232px;
+  padding: var(--sp-3);
+  border: 1px solid var(--s-line-strong);
+  border-radius: var(--r-md);
+  /* 방송 스테이지 위에 뜨므로 **완전 불투명**이어야 한다 — 스크림(88%)으로 두면
+     잔디와 선수 도트가 글자 사이로 비친다(외침 배너에서 확인한 것과 같은 결함). */
+  background: var(--s-1);
+  box-shadow: var(--shadow-2);
+  text-align: left;
+}
+.ms-set__title {
+  margin: 0;
+}
+.ms-set__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+.ms-set__label {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--t-mid);
+  white-space: nowrap;
+}
+.ms-set__note {
+  margin: 0;
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--s-line);
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
+  color: var(--t-low);
+}
+
+/* ── 막힘 알림 — 제어 pod 아래에 잠깐 떴다 사라진다(3.8초) ────────────
+   팀토크 배너(.tt-banner) 문법을 그대로 입는다. 자리와 수명만 다르다는 점에서
+   외침 결과 배너(.sb-banner)와 같은 관계다.
+   ★ pod의 흐름에 넣지 않고 **얹는다**: 흘려 넣으면 알림이 뜰 때마다 pod가 늘어나
+   [감독 타임] 버튼이 손가락 밑에서 움직인다 — 방금 누른 버튼이 도망가는 화면이다. */
+.ms-notice {
+  position: absolute;
+  top: calc(100% + var(--sp-2));
+  right: 0;
+  z-index: var(--z-overlay);
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  max-width: min(420px, 84vw);
+  background: var(--s-1);
+  box-shadow: var(--shadow-2);
+  text-align: left;
+}
+/* 헤드라인 크기(--fs-h2)는 3.8초짜리 사유 한 줄에 과하다 — 본문 크기로 내린다.
+   색도 중립이다: 이건 실패가 아니라 규칙 안내다(빨강은 역효과 배너의 몫). */
+.ms-notice .tt-banner__text {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  line-height: var(--lh-md);
+  color: var(--t-hi);
+}
+/* 왼쪽 굵은 띠 대신 테두리 한 겹으로 "지금 답이 왔다"를 표시한다(좌측 컬러 띠 금지 규칙). */
+.ms-notice {
+  border-color: var(--s-line-strong);
 }
 
 /* 입장 연출 중의 유일한 furniture — 대진 한 줄(시계·스코어 없음). */
@@ -364,6 +466,17 @@
   font-weight: 600;
   color: var(--t-mid);
 }
+/* 순간이 감지됐지만 개입 자원이 없어 **알림**으로 내려온 배너.
+   결정을 요구하지 않으므로 브랜드 틴트를 걷고 통보와 같은 무게로 말한다 —
+   테두리·배경이 "여기 누를 것이 있다"고 신호하는데 정작 버튼이 없으면 그게 결함이다. */
+.ms-banner--moment.ms-banner--info {
+  border-color: var(--s-line);
+  background: var(--s-1);
+  font-weight: 600;
+}
+.ms-banner--info .ms-banner__text {
+  color: var(--t-mid);
+}
 .ms-banner__text {
   color: var(--t-hi);
 }
@@ -516,6 +629,12 @@
   font-size: var(--fs-xs);
   color: var(--t-low);
   white-space: nowrap;
+}
+/* [감독 타임]은 disabled가 아니라 aria-disabled다 — 눌러야 사유 알림이 뜬다.
+   겉모습은 disabled와 같게 맞춘다(SubPanel의 [교체 확정]과 같은 처방). */
+.ms-controls .btn[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* 외침 결과 배너 — 팀토크 배너(.tt-banner) 문법을 그대로 입고, 자리와 수명만 다르다.

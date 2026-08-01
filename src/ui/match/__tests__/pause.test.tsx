@@ -165,7 +165,8 @@ describe('MatchScreen — 일시정지', () => {
     expect(queryByRole('button', { name: '일시정지' })).not.toBeNull()
 
     // 버튼에 포커스가 있으면 브라우저가 그 버튼을 눌러 준다 — 여기서 또 처리하면 2번 토글된다.
-    const btn = getByRole('button', { name: '음소거' })
+    // (음소거는 설정 팝업 안으로 옮겨 갔다 — 아무 버튼이나 하나면 되므로 톱니를 쓴다.)
+    const btn = getByRole('button', { name: '설정' })
     act(() => { fireEvent.keyDown(btn, { code: 'Space', key: ' ' }) })
     await flush()
     expect(queryByRole('button', { name: '일시정지' })).not.toBeNull()

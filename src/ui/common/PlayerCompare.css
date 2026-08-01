@@ -6,6 +6,12 @@
    막대가 중앙 라벨을 축으로 우세한 쪽으로만 뻗으므로, 열여덟 쌍의 숫자를 눈으로 빼는
    대신 실루엣 하나로 우열이 읽힌다. 열 폭이 고정이라 행마다 축이 어긋나지 않는다. */
 
+/* ★ container query를 쓰지 않는다 — 실측으로 기각됐다.
+   `container-type: inline-size`는 인라인 축 containment를 켜므로 **내용이 자기 폭에
+   기여하지 못한다**. 이 컴포넌트가 사는 작전판 팝오버(`.tb-pop--cmp`)는 절대배치 +
+   `max-width: 420px`짜리 shrink-to-fit 상자라, 컨테이너로 지정하는 순간 폭 계산이
+   0으로 무너져 팝업 전체가 44px로 접혔다(실측 docs/audit/shots/r10-hud-*).
+   대신 아래처럼 **레이아웃 자체를 폭에 안 지게** 만든다(머리 2줄 구조). */
 .cmp {
   display: flex;
   flex-direction: column;
@@ -17,19 +23,16 @@
   background: var(--s-1);
 }
 
-/* ── 결론 한 줄 ─────────────────────────────────────────────
-   좌측 컬러 띠 금지 규칙에 따라 색은 텍스트에만 얹는다. */
-.cmp__verdict {
+/* ── 집계 수치 한 줄 ────────────────────────────────────────
+   **결론이 아니다.** 단정을 뺀 뒤로 이 줄은 "합계 적합도 -1.20" 같은 수치이므로
+   헤드라인 무게(800)를 쓰지 않는다 — 굵기는 화면이 얼마나 강하게 말하는지의 신호다.
+   좌측 컬러 띠 금지 규칙에 따라 색도 얹지 않는다(우열은 아래 막대가 말한다). */
+.cmp__readout {
   margin: 0;
-  font-size: var(--fs-md);
-  font-weight: 800;
-  line-height: var(--lh-md);
-  color: var(--t-hi);
-}
-/* "대등하다"는 결론은 행동을 요구하지 않는다 — 단호한 결론과 같은 무게로 쓰지 않는다. */
-.cmp__verdict--soft {
-  color: var(--t-mid);
+  font-size: var(--fs-sm);
   font-weight: 700;
+  line-height: var(--lh-md);
+  color: var(--t-mid);
 }
 
 /* ── 머리: 두 선수 신원 + 상태 칩 ───────────────────────── */
@@ -95,11 +98,18 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 둘째 줄 — 포지션 · 선발/벤치 · 상태 칩. **여기서 랩한다.**
+   칩 개수는 상황이 정하므로(체력·사기·경고·정지…) 한 줄에 들어간다는 보장이 없다.
+   이름 줄과 분리해 두면 칩이 몇 개가 되든 이름은 영향을 받지 않는다. */
 .cmp__posline {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--sp-1) var(--sp-2);
+  min-width: 0;
 }
+/* 두 글자짜리 라벨은 **줄 안에서 쪼개지지 않는다.** 실측(before)에서 `선발`이 `선/발`로
+   갈려 두 줄이 되면서 포지션 알약과 세로로 어긋났다 — 랩은 항목 사이에서만 일어나야 한다. */
 .cmp__pos {
   padding: 1px var(--sp-2);
   border-radius: var(--r-sm);
@@ -107,13 +117,22 @@
   color: var(--t-mid);
   font-size: var(--fs-xs);
   font-weight: 800;
+  white-space: nowrap;
 }
 .cmp__where {
   font-size: var(--fs-xs);
   color: var(--t-low);
+  white-space: nowrap;
 }
+/* 칩은 둘째 줄 안에서 줄바꿈한다 — 이름 줄을 밀어내지 않는 것이 핵심 계약이다. */
 .cmp__sx {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+/* ident가 머리 칸의 남는 폭을 전부 가져간다. min-width:0이 없으면 flex 기본값(auto)이
+   내용 최소 폭을 바닥으로 잡아 그리드 열을 밀어낸다. */
+.cmp__ident {
+  flex: 1 1 auto;
 }
 
 /* 가운데 맥락 — 무엇을 두고 비교하는가(자리). 결론은 verdict가 말한다. */
@@ -244,6 +263,11 @@
   gap: var(--sp-3);
   padding-top: var(--sp-3);
   border-top: 1px solid var(--s-line);
+}
+/* 버튼 라벨은 쪼개지 않는다 — `선택 해제`가 두 줄이 되면 옆의 실행 버튼과 높이가
+   어긋나 실행 버튼이 무엇인지 흐려진다(실측 r10-hud-*-compare). */
+.cmp__action .btn {
+  white-space: nowrap;
 }
 
 /* ── sm(<720) ───────────────────────────────────────────

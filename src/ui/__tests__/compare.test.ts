@@ -70,44 +70,55 @@ describe('buildCompare — 조합이 라벨·기준 자리·결론을 정한다'
     expect(c.kind).toBe('swap')
     expect(c.actionLabel).toBe('자리 바꾸기')
     expect(c.slots).toEqual(['CB', 'ST'])
-    // 서로 남의 자리로 가면 합계 적합도가 떨어지므로 "지금 배치가 낫다"고 말한다.
-    expect(c.verdict).toContain('지금 배치가 낫습니다')
-    // 자리 교환은 "누가 낫다"가 아니므로 방향은 없지만, 결론 자체는 단호하다.
-    expect(c.verdictSide).toBe('tie')
-    expect(c.decisive).toBe(true)
+    // 서로 남의 자리로 가면 합계 적합도가 떨어진다 — **수치만** 적는다.
+    expect(c.readout).toMatch(/합계 적합도 -\d/)
   })
 
-  it('우열이 없을 때만 결론의 톤이 낮아진다(decisive=false)', () => {
-    const c = buildCompare({ a: st0, aSlot: 'ST', b: st1 })
-    expect(c.verdictSide).toBe('tie')
-    expect(c.decisive).toBe(false)
+  // ── 결론은 유저가 낸다(사용자 지시 2026-08-01) ─────────────────────────
+  // *"이런 거 너무 과도한 개입이야. 사용자가 판단해서 즐길 수 있게 해."*
+  // 화자가 없는 UI가 단정하면 조언이 아니라 판정이다. 사실은 남기고 단정만 뺀다.
+  // 이 테스트가 그 경계를 고정한다 — 문구를 되돌리려면 이 줄을 지워야 한다.
+  it('★ 결론 문구가 없다 — 어떤 조합에서도 UI가 대신 판단하지 않는다', () => {
+    const cases = [
+      buildCompare({ a: cb, aSlot: 'CB', b: st0, bSlot: 'ST' }),          // swap 음수
+      buildCompare({ a: st0, aSlot: 'CB', b: cb, bSlot: 'ST' }),          // swap 양수
+      buildCompare({ a: st0, aSlot: 'ST', b: st1 }),                      // sub 대등
+      buildCompare({ a: cb, aSlot: 'ST', b: st0 }),                       // sub 차이 큼
+      buildCompare({ a: st0, b: st1 }),                                   // 둘 다 벤치
+      buildCompare({ a: st0, aSlot: 'ST', b: st1, stamina: { [st0.id]: 55, [st1.id]: 95 } }),
+    ]
+    // "낫습니다"·"권합니다"·"좋습니다"는 결론이고, "하십시오"는 지시다.
+    const VERDICT = /낫습니다|권합니다|좋습니다|하십시오|하세요|추천/
+    for (const c of cases) expect(c.readout).not.toMatch(VERDICT)
   })
 
-  it('선발+벤치 → 교체하기, 빠지는 선발의 자리가 기준이고 결론이 이름을 부른다', () => {
+  it('선발+벤치 → 교체하기, 빠지는 선발의 자리가 기준이고 두 수치가 이름과 함께 적힌다', () => {
     const c = buildCompare({ a: cb, aSlot: 'ST', b: st0 })
     expect(c.kind).toBe('sub')
     expect(c.actionLabel).toBe('교체하기')
     expect(c.slots).toEqual(['ST'])
     expect(c.fitness!.label).toBe('ST 적합도')
-    // ST 자리에는 ST가 맞다 — 벤치 쪽(b)이 이긴다.
-    expect(c.verdictSide).toBe('b')
-    expect(c.verdict).toContain(st0.name.ko)
+    // 누가 낫다고 말하지 않는다 — 두 사람의 수치를 나란히 적고 차이를 밝힌다.
+    expect(c.readout).toContain(st0.name.ko)
+    expect(c.readout).toContain(cb.name.ko)
+    expect(c.readout).toMatch(/차 \d\.\d\d/)
   })
 
   it('벤치+벤치 → 기준 자리가 없고 적합도 줄도 없다', () => {
     const c = buildCompare({ a: st0, b: st1 })
     expect(c.kind).toBe('none')
     expect(c.fitness).toBeNull()
-    expect(c.verdict).toContain('둘 다 벤치')
+    expect(c.readout).toContain('둘 다 벤치')
   })
 
-  it('적합도가 같으면 체력이 결론을 가른다', () => {
+  it('적합도가 대등하면 체력을 함께 적는다(어느 쪽인지는 말하지 않는다)', () => {
     const c = buildCompare({
       a: st0, aSlot: 'ST', b: st1,
       stamina: { [st0.id]: 55, [st1.id]: 95 },
     })
-    expect(c.verdictSide).toBe('b')
-    expect(c.verdict).toContain('체력')
+    expect(c.readout).toContain('체력')
+    expect(c.readout).toContain('55%')
+    expect(c.readout).toContain('95%')
   })
 
   it('GK와 필드 선수는 능력치를 겹치지 않고 이유를 말한다', () => {

@@ -22,6 +22,7 @@ import { onPitchIds } from './shootout-setup'
 import { StatsTable } from './StatsTable'
 import { ShoutBar } from './ShoutBar'
 import { LiveStats } from './LiveStats'
+import { SettingsMenu } from './SettingsMenu'
 // 입장 연출 — three 무의존이라 정적 import여도 3D 청크 분리가 깨지지 않는다.
 // (entrance.ts/EntranceOverlay.tsx 모두 three를 타입으로도 import하지 않는다.)
 import { EntranceOverlay } from '../pitch/three/EntranceOverlay'
@@ -105,6 +106,10 @@ const MODE_TRANSITION_MS = 600
 // 링 옆의 라벨(개입 N/5 · 외침 바)이 말한다.
 const RING_R = 8
 const RING_C = 2 * Math.PI * RING_R
+
+/** 막힘 알림이 화면에 머무는 시간(ms). 외침 결과 배너(ShoutBar.BANNER_MS)와 **같은 값**이다 —
+ *  같은 문법(tt-banner)을 입은 알림이 서로 다른 수명을 가지면 유저가 두 번 배워야 한다. */
+const NOTICE_MS = 3800
 
 const MOMENT_PHRASE: Record<MomentKind, string> = {
   conceded: '실점 직후입니다',
@@ -214,6 +219,26 @@ export function MatchScreen({
 
   const [shootoutOpen, setShootoutOpen] = useState(false)
   const [speed, setSpeed] = useState<PlaybackSpeed>(1)
+  /** 설정 팝업(2D/3D · 음소거 · 해설 음성) 열림. 자주 안 바꾸는 것들의 집 — SettingsMenu 주석. */
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  /**
+   * **막힌 컨트롤을 눌렀을 때 잠깐 떴다 사라지는 알림.**
+   *
+   * 사용자 지시(2026-08-01 ①): *"게임 쿨다운에 대한 설명은 어차피 아이콘으로 돌아가고
+   * 있으니깐 사용자 버튼을 쿨다운일 때도 눌렀을 때 잠깐 뜨는 알럿 형식으로 떴다가
+   * 사라지게 해."* 예전에는 `freeInterventionState.blockedReason` 한 줄이 제어 pod에
+   * **상시로** 붙어 있었다 — 40자 넘는 문장이 버튼들 옆에 늘 서서 pod를 두 줄로 만들었다.
+   *
+   * 없앤 것이 아니라 **옮긴 것**이다. 이 프로젝트는 "막히면 이유를 말한다"를 세 곳
+   * (교체·GK 파워플레이·감독 타임)에서 통일했고, 그 규칙은 그대로다. 달라진 것은
+   * **언제** 말하는가뿐이다: 쿨다운 링이 이미 시각으로 "언제 돌아오는가"를 말하고 있으므로
+   * 문장은 실제로 막힌 순간(=눌렀을 때)에만 나오면 된다.
+   *
+   * 사유의 정본은 여전히 store다 — pauseByUser()가 거절하며 돌려주는 문자열을 그대로 쓴다.
+   * 화면에서 다시 조립하면 "눌리는데 다른 이유를 말하는" 조합이 생긴다.
+   */
+  const [notice, setNotice] = useState<{ id: number; text: string } | null>(null)
+  const noticeSeqRef = useRef(0)
   // 렌더러 선택 — 3D(three) ↔ 2D(pixi). localStorage 기억, 기본 3D.
   const [render3d, setRender3d] = useState(read3dPref)
   // 사운드 — 음소거 상태(sfx 모듈 = localStorage 진실원)와 관중 스웰(골 직후 4초).
@@ -725,6 +750,28 @@ export function MatchScreen({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [canFreeze])
 
+  // ── 막힘 알림 자동 소멸 ────────────────────────────────────────────
+  // key(id)가 바뀌면 애니메이션이 다시 재생되고 타이머도 다시 걸린다 — 같은 사유를
+  // 두 번 눌러도 "도착했다"는 신호가 매번 난다(SubPanel의 nudge와 같은 장치).
+  useEffect(() => {
+    if (!notice) return
+    const t = setTimeout(() => setNotice(null), NOTICE_MS)
+    return () => clearTimeout(t)
+  }, [notice])
+
+  /** 거절 사유를 알림 슬롯으로 옮긴다. 성공(null)이면 남아 있던 알림을 치운다. */
+  function report(reason: string | null) {
+    if (!reason) { setNotice(null); return }
+    noticeSeqRef.current += 1
+    setNotice({ id: noticeSeqRef.current, text: reason })
+  }
+
+  /** 감독 타임 — 막히면 store가 사유를 돌려주고, 그 문장을 그대로 알림으로 띄운다. */
+  const handleManagerTime = () => report(pauseByUser())
+  /** 순간 제안 [사용] — 배너가 자원이 있을 때만 이 버튼을 그리지만, 누르는 사이에 분이
+   *  넘어가 쿨다운이 시작될 수 있다. 그 틈에도 침묵하지 않도록 같은 통로를 쓴다. */
+  const handleAcceptMoment = () => report(acceptMoment())
+
   // 2D/3D 렌더러 선택 — localStorage에 기억한다(저사양·심사 환경 배려).
   // ★ 토글이 아니라 **세그먼트**다. 예전 단일 버튼은 표시 텍스트가 현재 모드,
   //   aria-label이 전환 대상이라 시각 사용자와 스크린리더 사용자가 반대로 이해했다.
@@ -847,8 +894,28 @@ export function MatchScreen({
   //   이미 노출된 결과를 말하고 있어 누설이 아니고, 거기까지 닫으면 뒤따르는 골 분마다
   //   배너가 통째로 사라졌다 돌아온다 — 결정을 요구하는 슬롯이 깜빡이는 게 더 나쁘다.
   const momentShowable = revealed || (!!momentPrompt && momentPrompt.minute < displayMinute)
-  const momentBanner = replaying && momentPrompt && momentShowable
-    ? `${MOMENT_PHRASE[momentPrompt.kind]} — 감독 타임을 쓰시겠습니까?`
+  /**
+   * **제안인가, 알림인가** — 자원이 가른다(사용자 지적 2026-08-01).
+   *
+   * 예전에는 순간이 감지되면 무조건 *"… — 감독 타임을 쓰시겠습니까?"* + [사용]을 그렸다.
+   * 개입을 다 썼거나 쿨다운 중이어도 그대로 떴고, 눌러도 store가 조용히 거절했다.
+   * 화면이 쓸 수 없는 것을 권한 셈이다.
+   *
+   * 지금은 같은 순간을 두 얼굴로 그린다:
+   *  · 쓸 수 있다 → 제안. `… — 감독 타임을 쓰시겠습니까?` + [사용] [흘려보낸다]
+   *  · 못 쓴다   → 알림. `…` + **왜 못 쓰는지**(store의 blockedReason 그대로). 버튼 없음.
+   *
+   * 상황 자체를 숨기지 않는 이유: `흐름이 상대에게 넘어갑니다`는 감독 타임과 무관하게
+   * 유저가 알아야 할 경기 사실이고, 그 사실까지 지우면 화면이 조용해진다.
+   * 판정을 **렌더 시점**에 두므로, 배너가 살아 있는 동안 쿨다운이 풀리면 같은 배너가
+   * 저절로 알림에서 제안으로 승격한다(matchStore.advanceMinute의 소비 규칙과 짝이다).
+   */
+  const momentLive = replaying && !!momentPrompt && momentShowable
+  const momentOfferable = momentLive && freeIntervention.canPause
+  const momentBanner = momentLive
+    ? momentOfferable
+      ? `${MOMENT_PHRASE[momentPrompt!.kind]} — 감독 타임을 쓰시겠습니까?`
+      : `${MOMENT_PHRASE[momentPrompt!.kind]} — ${freeIntervention.blockedReason}`
     : null
   const lastNotice = oppNotices.length > 0 ? oppNotices[oppNotices.length - 1] : null
   const recentNotice = lastNotice && displayMinute - lastNotice.minute < 3 ? lastNotice.text : null
@@ -1030,16 +1097,21 @@ export function MatchScreen({
             하필 결정을 요구하는 순간에 히치가 나는 셈이다. 390에서는 흐름으로 돌아간다. ── */}
         {bannerText && !finished && (
           <div
-            className={`ms-banner${momentBanner ? ' ms-banner--moment' : ' ms-banner--opp'}`}
+            className={
+              `ms-banner${momentBanner ? ' ms-banner--moment' : ' ms-banner--opp'}` +
+              // 자원이 없어 제안이 아닌 **알림**인 경우 — 행동을 요구하지 않으므로 톤을 낮춘다.
+              `${momentBanner && !momentOfferable ? ' ms-banner--info' : ''}`
+            }
             role="status"
           >
             <span className="ms-banner__text">{bannerText}</span>
-            {/* ★ momentBanner를 조건으로 쓴다(momentPrompt가 아니라). 노출 게이트로 제안 문장이
-                밀려 상대 감독 통보가 슬롯을 차지한 동안에는 "실점 직후입니다"가 안 보이는데
-                [사용]/[흘려보낸다]만 통보 옆에 붙어 무엇에 대한 선택인지 알 수 없게 된다. */}
-            {momentBanner && (
+            {/* ★ momentBanner가 아니라 momentOfferable을 조건으로 쓴다. 노출 게이트로 제안
+                문장이 밀려 상대 감독 통보가 슬롯을 차지한 동안에는 "실점 직후입니다"가 안
+                보이는데 [사용]/[흘려보낸다]만 통보 옆에 붙어 무엇에 대한 선택인지 알 수
+                없게 되고, 자원이 없을 때는 누를 수 없는 [사용]이 붙는다. */}
+            {momentOfferable && (
               <span className="ms-banner__actions">
-                <button type="button" className="btn btn--primary btn--sm" onClick={acceptMoment}>사용</button>
+                <button type="button" className="btn btn--primary btn--sm" onClick={handleAcceptMoment}>사용</button>
                 <button type="button" className="btn btn--ghost btn--sm" onClick={dismissMoment}>흘려보낸다</button>
               </span>
             )}
@@ -1062,49 +1134,7 @@ export function MatchScreen({
                 <PlanBadge />
               </span>
             )}
-            {!preDesign && (
-              <div className="seg" role="group" aria-label="화면 렌더러">
-                <button
-                  type="button"
-                  className="seg__item"
-                  aria-pressed={!render3d}
-                  onClick={() => selectRenderer(false)}
-                >
-                  2D
-                </button>
-                <button
-                  type="button"
-                  className="seg__item"
-                  aria-pressed={render3d}
-                  onClick={() => selectRenderer(true)}
-                >
-                  3D
-                </button>
-              </div>
-            )}
             {!preDesign && <SpeedToggle speed={speed} onChange={setSpeed} />}
-            {/* 아이콘 대신 평문 한글 — 이모지는 OS마다 모양·크기가 달라 톤이 무너진다.
-                방송도 레드카드 픽토그램 대신 "DOWN TO 10 PLAYERS" 평문 배너를 쓴다. */}
-            <button
-              type="button"
-              className="btn btn--secondary btn--sm"
-              aria-label={muted ? '소리 켜기' : '음소거'}
-              aria-pressed={muted}
-              onClick={toggleMute}
-            >
-              {muted ? '소리 켜기' : '음소거'}
-            </button>
-            {!preDesign && (
-            <button
-              type="button"
-              className="btn btn--secondary btn--sm"
-              aria-label={ttsOn ? '해설 음성 끄기' : '해설 음성 켜기'}
-              aria-pressed={ttsOn}
-              onClick={toggleTts}
-            >
-              {ttsOn ? '해설 끄기' : '해설 켜기'}
-            </button>
-            )}
             {/* 일시정지 — **감독 타임과 다른 조작이다**. 시계만 멈추고 개입 권한은
                 주지 않는다. 그래서 primary(감독의 결정)가 아니라 secondary다. */}
             {canFreeze && (
@@ -1132,15 +1162,23 @@ export function MatchScreen({
                 같은 10분 시계이므로 다르게 생기면 다른 자원으로 읽힌다.
 
                 문구는 store(freeInterventionState.blockedReason)가 정본이다. 화면에서
-                따로 지어내면 "눌리는데 거부되는" 조합이 생긴다. */}
+                따로 지어내면 "눌리는데 거부되는" 조합이 생긴다.
+
+                ★ 2026-08-01 — 사유 문장을 **상시 노출에서 뺐다**(사용자 지시 ①). 40자가
+                넘는 문장이 버튼 옆에 늘 서 있어 pod가 두 줄이 됐는데, 정작 "언제 돌아오는가"는
+                쿨다운 링이 이미 말하고 있었다. 지금은 **누르면** 잠깐 뜨는 알림으로 나온다
+                (notice 상태 주석). 그래서 버튼도 disabled가 아니라 aria-disabled다 —
+                disabled면 클릭이 오지 않아 "눌러도 아무 말이 없다"가 그대로 남는다
+                (SubPanel의 [교체 확정]과 같은 처방). */}
             {replaying && (
               <>
                 <span className="badge num">개입 {freeIntervention.left}/{MAX_FREE_INTERVENTIONS}</span>
                 <button
                   type="button"
                   className="btn btn--primary btn--sm sb-btn"
-                  disabled={!freeIntervention.canPause}
-                  onClick={pauseByUser}
+                  aria-disabled={!freeIntervention.canPause}
+                  data-blocked={!freeIntervention.canPause || undefined}
+                  onClick={handleManagerTime}
                 >
                   {freeIntervention.cooldownLeft > 0 && (
                     <svg className="sb-ring" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
@@ -1156,10 +1194,35 @@ export function MatchScreen({
                   )}
                   감독 타임
                 </button>
-                {freeIntervention.blockedReason && (
-                  <span className="sb-cool" role="status">{freeIntervention.blockedReason}</span>
-                )}
               </>
+            )}
+            {/* ── 설정 — 자주 안 바꾸는 셋(2D/3D · 음소거 · 해설 음성)을 접는다.
+                pod의 **맨 끝**이다: 경기 중 손이 가는 순서(재생 → 배속 → 개입 → 감독 타임)를
+                지나 마지막에 놓아야 자주 쓰는 것이 먼저 잡힌다. ── */}
+            <SettingsMenu
+              open={settingsOpen}
+              onOpenChange={setSettingsOpen}
+              showRenderer={!preDesign}
+              render3d={render3d}
+              onSelectRenderer={selectRenderer}
+              muted={muted}
+              onToggleMute={toggleMute}
+              showTts={!preDesign}
+              ttsOn={ttsOn}
+              onToggleTts={toggleTts}
+            />
+
+            {/* ── 막힘 알림 — 3.8초 뒤 스스로 사라진다.
+                문법은 팀토크 배너(tt-banner)를 그대로 빌린다. 외침 결과 배너(sb-banner)가
+                이미 같은 문법을 입고 있어, 유저가 한 번 배운 "잠깐 떴다 사라지는 말"의
+                읽는 법이 화면 위아래에서 똑같이 쓰인다 — 새 레이어를 발명하지 않는다. ── */}
+            {/* ★ `--down`(빨강)을 쓰지 않는다. 그 톤은 팀토크·외침이 **역효과**를 냈을 때의
+                것이고, 여기서 일어난 일은 나쁜 결과가 아니라 *"아직 쓸 수 없다"*는 규칙
+                안내다. 규칙을 실패처럼 칠하면 유저가 자기가 뭘 잘못했다고 읽는다. */}
+            {notice && (
+              <div key={notice.id} className="tt-banner ms-notice" role="status">
+                <span className="tt-banner__text">{notice.text}</span>
+              </div>
             )}
           </div>
         )}
