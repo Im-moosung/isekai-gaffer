@@ -8,10 +8,15 @@
 //
 // 팀 데이터·XI 선정·소개 문안 중 무엇이 바뀌든 여기서 걸린다.
 import { describe, it, expect } from 'vitest'
-import { readFileSync, existsSync } from 'node:fs'
 import { createMatch } from '../../engine/simulate'
 import { loadTeam, TEAM_IDS } from '../../data/loader'
 import { buildEntranceCast, entranceScript } from '../../ui/pitch/three/entrance'
+
+// node는 **동적 import**로 가져온다. 앱 tsconfig의 `types`는 `vite/client`뿐이라 정적
+// `import ... from 'node:fs'`는 TS2591로 빌드를 깬다(실측: `npm run build` 실패).
+// src의 다른 파일 읽기 테스트 셋이 이미 이 방식을 쓴다 — 같은 규칙으로 맞춘다.
+// @ts-expect-error node 타입은 앱 tsconfig(types: vite/client)에 없다. 런타임에는 존재한다.
+const { readFileSync, existsSync } = await import('node:fs')
 
 const INDEX = 'public/tts/index.json'
 const present = existsSync(INDEX)
