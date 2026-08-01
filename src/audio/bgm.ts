@@ -55,17 +55,21 @@ export const DUCK_RATIO = 0.1
 export const DUCK_HOLD_MS = 2600
 
 /**
- * 스팅 덕킹이 풀리는 데 걸리는 시간(ms) — `playSting({ duckUntilMs })` 전용.
+ * 스팅이 예정된 시각에 **소리를 완전히 비우는 데** 쓰는 페이드 길이(ms) —
+ * `playSting({ fadeOutAtMs })` 전용.
  *
- * 왜 램프인가(= 왜 완전 무음이 아닌가): 이 계약의 유일한 손님인 M06은 "11초쯤 정점 →
- * 13.8초에 해소"로 만들어진 팡파르다. 소개 구간을 게인 0으로 막았다가 풀면, 곡의 **가장
- * 큰 소절**이 예고 없이 튀어나온다 — 스펙 §배선의 "하드 컷 금지"를 정면으로 어긴다.
- * DUCK_RATIO로 깔아 두면 캐스터의 마지막 이름들 밑에 팡파르가 이미 스며 있다가 소개가
- * 끝나는 순간 부풀어 오른다(실제 중계가 명단 낭독 꼬리에서 하는 바로 그 동작).
- * 900ms는 한 소절(≈2초)보다 짧아 "지금 커졌다"가 들리면서, 400ms(CROSSFADE_MS)처럼
- * 스위치를 켠 것으로는 들리지 않는 값이다.
+ * ★ 2026-08-01 재판정 — 예전에는 여기에 `STING_UNDUCK_MS`(덕킹 해제 램프)가 있었다.
+ *   "말이 주인인 구간에는 음악을 DUCK_RATIO로 깔아 둔다"는 절충의 부품이었고, 실제
+ *   플레이에서 실패했다(사용자 2026-08-01: *"선수 입장 시에 BGM이 아예 안 나와… 그냥
+ *   명확하게 해"*). 절충은 두 가지를 동시에 잃었다 — 입장 컷에는 음악이 없고, 소개 밑에는
+ *   지워지지 않는 소리가 남았다. 그래서 **깔아 두기를 버리고 끄기로** 바꾼다.
+ *
+ * 왜 500ms인가: 스펙 §배선이 "300~500ms, 하드 컷 금지"를 요구한다. 그 밴드의 위쪽을 쓰는
+ * 이유는 이 페이드에는 **받아 주는 다음 트랙이 없기** 때문이다. 크로스페이드(400ms)는
+ * 들어오는 곡이 나가는 곡을 가려 주지만, 여기서는 무음으로 나가므로 꼬리가 더 길어야
+ * "꺼졌다"가 아니라 "잦아들었다"로 들린다.
  */
-export const STING_UNDUCK_MS = 900
+export const STING_FADEOUT_MS = 500
 
 /** 장면을 null로 내릴 때의 유예(ms). setScene 주석 참조 — 화면 전환의 언마운트/마운트
  *  틈에서 음악이 끊기지 않게 하는 값이라, 크로스페이드(400ms)보다 짧아야 한다. */
@@ -112,7 +116,7 @@ const fading: Voice[] = []
 /** 원하는 장면(제스처 전에도 기억해 둔다 — 컨텍스트가 열리면 그때 시작한다). */
 let wantedScene: BgmScene | null = null
 /** 원하는 스팅(로드 대기·제스처 대기 중인 1회 재생 요청). */
-let wantedSting: { track: BgmTrack; alignEndAtMs?: number; duckUntilMs?: number; requestedAt: number } | null = null
+let wantedSting: { track: BgmTrack; alignEndAtMs?: number; fadeOutAtMs?: number; requestedAt: number } | null = null
 /** 스팅이 끝나는 ctx 시각(초). 그때까지 루프 시작을 미룬다 — 겹치면 둘 다 죽는다. */
 let stingEndsAt = 0
 let stingTimer: ReturnType<typeof setTimeout> | undefined
@@ -407,21 +411,21 @@ function scheduleAfterSting(ctx: AudioContext): void {
  *   길이가 어긋나면 앞을 자르거나 시작을 늦춰서 **끝을 맞춘다**(entrance.entranceScript의
  *   totalMs가 길이의 정본이고, 이 모듈은 그 값을 받기만 한다).
  *
- * @param opts.duckUntilMs 이 시각(요청 시점 기준 ms)까지 스팅을 {@link DUCK_RATIO} 배로
- *   눌러 두었다가 {@link STING_UNDUCK_MS}에 걸쳐 제 음량으로 올린다. **말이 주인인 구간**을
- *   위한 것이다 — 입장 연출 full 모드에서 M06은 끝 맞추기 때문에 캐스터가 22명을 호명하는
- *   소개 구간 위로 11.6초 겹쳐 드는데, 그 위를 제 음량으로 밟으면 안 된다. 시각의 정본은
- *   entrance.entranceIntroEndMs이고 이 모듈은 그 값을 받기만 한다.
- *   `alignEndAtMs`와 독립이다 — 곡이 **언제 시작하느냐**는 앞이 정하고, **언제 커지느냐**는
- *   이쪽이 정한다. 곡이 시작하기도 전에 덕킹이 풀리는 순서(duckUntil < 시작 시각)라면
- *   덕킹은 아무 일도 하지 않는다(처음부터 제 음량).
+ * @param opts.fadeOutAtMs 이 시각(요청 시점 기준 ms)에 **소리가 0이 되도록**
+ *   {@link STING_FADEOUT_MS} 동안 미리 잦아든다. 곡이 그 전에 자연히 끝나면 아무 일도
+ *   하지 않는다. **말이 주인인 구간이 시작되는 지점**을 위한 것이다 — 입장 연출 full
+ *   모드에서 캐스터가 22명을 호명하기 시작하는 순간이 그것이고, 시각의 정본은
+ *   entrance.entranceIntroStartMs다(이 모듈은 값을 받기만 한다).
+ *   `alignEndAtMs`와 독립이며 실제로 둘은 배타적으로 쓰인다 — 끝을 맞출 것인가(short:
+ *   해소가 킥오프 휘슬에 떨어진다) 아니면 앞을 맞추고 도중에 걷을 것인가(full: 입장과
+ *   동시에 시작해 소개 직전에 사라진다)는 같은 곡의 두 가지 쓰임이다.
  */
-export function playSting(track: BgmTrack, opts: { alignEndAtMs?: number; duckUntilMs?: number } = {}): void {
+export function playSting(track: BgmTrack, opts: { alignEndAtMs?: number; fadeOutAtMs?: number } = {}): void {
   hookFirstGesture()
   wantedSting = {
     track,
     ...(opts.alignEndAtMs != null ? { alignEndAtMs: opts.alignEndAtMs } : {}),
-    ...(opts.duckUntilMs != null ? { duckUntilMs: opts.duckUntilMs } : {}),
+    ...(opts.fadeOutAtMs != null ? { fadeOutAtMs: opts.fadeOutAtMs } : {}),
     requestedAt: now(),
   }
   startSting(track)
@@ -467,28 +471,40 @@ function startSting(track: BgmTrack): void {
     gain.gain.value = full
     gain.connect(g.bus)
     const startAt = ctx.currentTime + delaySec
-    // ── 말이 주인인 구간의 덕킹(duckUntilMs) ──────────────────
+    const naturalEndAt = startAt + (buf.duration - offset)
+    // ── 말이 주인인 구간 앞에서 걷기(fadeOutAtMs) ──────────────
     // 스팅 **자체의** 게인 노드에 건다. 공용 duckNode를 쓰면 골 덕킹과 서로를 덮어쓴다.
     // 스케줄은 AudioParam이 잡으므로 rAF·타이머가 죽어도(백그라운드 탭) 곡선이 그대로 간다.
-    const duckLeftSec = req.duckUntilMs != null
-      ? (req.duckUntilMs - (now() - req.requestedAt)) / 1000
+    const fadeEndSec = req.fadeOutAtMs != null
+      ? (req.fadeOutAtMs - (now() - req.requestedAt)) / 1000
       : -1
-    const unduckAt = ctx.currentTime + duckLeftSec
-    if (duckLeftSec > 0 && unduckAt > startAt) {
-      gain.gain.setValueAtTime(full * DUCK_RATIO, ctx.currentTime)
-      gain.gain.setValueAtTime(full * DUCK_RATIO, unduckAt)
-      gain.gain.linearRampToValueAtTime(full, unduckAt + STING_UNDUCK_MS / 1000)
+    const fadeEndAt = ctx.currentTime + fadeEndSec
+    // 곡이 그 전에 자연히 끝나면(fadeEnd ≥ 자연 종료) 걷을 것이 없다 — 스케줄을 걸지 않는다.
+    const willFade = fadeEndSec > 0 && fadeEndAt > startAt && fadeEndAt < naturalEndAt
+    if (willFade) {
+      // 페이드 시작점이 곡 시작보다 앞이면(구간이 곡보다 짧다) 시작하자마자 잦아든다.
+      const fadeStartAt = Math.max(startAt, fadeEndAt - STING_FADEOUT_MS / 1000)
+      gain.gain.setValueAtTime(full, fadeStartAt)
+      gain.gain.linearRampToValueAtTime(0, fadeEndAt)
     }
     const src = ctx.createBufferSource()
     src.buffer = buf
     src.connect(gain)
     src.start(startAt, offset)
+    // 게인이 0이 된 뒤에도 소스가 돌면 스팅 채널이 계속 점유된다 — 거기서 끊는다.
+    if (willFade) {
+      try {
+        src.stop(fadeEndAt)
+      } catch {
+        /* stop 미지원 스텁 — 게인이 이미 0이므로 들리지는 않는다 */
+      }
+    }
     const v: Voice = {
       track, gain, src, offset, startedAt: startAt,
       duration: buf.duration, loop: false,
     }
     stingVoice = v
-    stingEndsAt = startAt + (buf.duration - offset)
+    stingEndsAt = willFade ? fadeEndAt : naturalEndAt
     src.onended = () => {
       if (stingVoice === v) {
         stingVoice = null

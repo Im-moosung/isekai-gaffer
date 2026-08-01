@@ -14,6 +14,7 @@ import {
   entranceFrame,
   entranceHighlightAt,
   entranceIntroEndMs,
+  entranceIntroStartMs,
   entranceIntroSide,
   entrancePhaseAt,
   entranceScript,
@@ -110,29 +111,41 @@ describe('스크립트 · 타임라인', () => {
 
   // ── 소개를 기본으로, 대가는 음악 처리로 ──────────────────────────────
   // 사용자 실플레이 제보(2026-08-01): "선수 소개 보기를 눌러야만 해설이 나온다."
-  // 소개는 이 연출의 본체다. 길이의 대가는 모드가 아니라 M06 덕킹으로 치른다.
+  // 소개는 이 연출의 본체다. 길이의 대가는 모드가 아니라 M06을 걷는 것으로 치른다.
   it('기본 모드는 언제나 full — 소개는 버튼 뒤에 숨지 않는다', () => {
     expect(defaultEntranceMode()).toBe('full')
     markEntranceSeen()
     expect(defaultEntranceMode()).toBe('full') // 본 적이 있어도 짧아지지 않는다
   })
 
-  it('entranceIntroEndMs가 M06 덕킹 해제 시각의 정본이다', () => {
-    // full: 소개 마지막 컷(away-intro)이 끝나는 시각 = disperse 시작.
+  it('entranceIntroStartMs가 M06을 걷는 시각의 정본이다', () => {
+    // full: 소개 첫 컷(home-intro)이 시작하는 시각 = split이 끝나는 시각.
+    expect(entranceIntroStartMs(full)).toBe(span(full, 'home-intro').start)
+    expect(entranceIntroStartMs(full)).toBe(span(full, 'split').end)
+    // short: 소개가 없다 → 걷을 것도 없다(끝 맞추기 계약이 그대로 간다).
+    expect(entranceIntroStartMs(short)).toBeNull()
+    // 짝이 되는 반대쪽 끝.
     expect(entranceIntroEndMs(full)).toBe(span(full, 'away-intro').end)
     expect(entranceIntroEndMs(full)).toBe(span(full, 'disperse').start)
-    // short: 소개가 없다 → 누를 것도 없다.
     expect(entranceIntroEndMs(short)).toBeNull()
   })
 
-  it('M06(13.80s)은 끝 맞추기 때문에 소개 위로 겹친다 — 덕킹이 필요한 이유', () => {
+  it('입장 컷(터널·워크아웃·정렬)이 M06을 담을 만큼 길다 — 앞에 거는 것이 성립하는 이유', () => {
     const M06_MS = 13_800
-    const startsAt = full.totalMs - M06_MS
-    const overlap = entranceIntroEndMs(full)! - startsAt
-    // 겹치는 구간이 실제로 존재해야 이 계약에 의미가 있다(실측 11.6초).
-    expect(overlap).toBeGreaterThan(5_000)
-    // 그리고 곡의 해소(마지막 2.2초 = disperse)는 덕킹 밖에 남아야 한다.
-    expect(full.totalMs - entranceIntroEndMs(full)!).toBeGreaterThan(1_000)
+    const introStart = entranceIntroStartMs(full)!
+    // 입장 컷은 10.8초다. 곡보다 짧으므로 M06은 해소까지 가지 못하고 소개 직전에 걷힌다 —
+    // 그 대신 **첫 음이 입장 첫 프레임에 붙는다**(사용자 지시: "입장과 동시에").
+    expect(introStart).toBe(
+      ENTRANCE_TUNNEL_MS + span(full, 'walkout').end - span(full, 'walkout').start
+      + span(full, 'split').end - span(full, 'split').start,
+    )
+    expect(introStart).toBeGreaterThan(8_000) // 팡파르가 "잠깐 났다 만" 것으로 들리지 않을 길이
+    expect(introStart).toBeLessThan(M06_MS) // 그래서 페이드아웃이 필요하다
+    // 예전 계약(끝 맞추기)이면 곡은 여기서 시작했다 — 소개가 거의 끝나 가는 시점이고,
+    // 입장 컷은 이미 40초 전에 지나갔다. 그 격차가 이 재판정의 근거다.
+    const oldStart = full.totalMs - M06_MS
+    expect(oldStart).toBeGreaterThan(introStart + 30_000)
+    expect(oldStart).toBeGreaterThan(entranceIntroEndMs(full)! * 0.8)
   })
 
   it('경계 시각의 단계가 정확하다', () => {

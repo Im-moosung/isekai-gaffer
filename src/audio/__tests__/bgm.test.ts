@@ -286,20 +286,20 @@ describe('bgm 스팅', () => {
     expect(bgm.bgmState().loop).toBe('M04')
   })
 
-  it('M06은 alignEndAtMs로 **끝을 맞춘다** — full은 늦게 시작, short는 앞을 자른다', async () => {
+  it('alignEndAtMs는 **끝을 맞춘다** — 남은 시간이 곡보다 길면 늦게 시작, 짧으면 앞을 자른다', async () => {
     DECODE_DURATION = 13.8
     const { sfx, bgm, ctx } = await setup()
     sfx.init()
 
-    // full 62.73s: 13.8s 곡이 끝에서 끝나려면 48.93s 뒤에 시작해야 한다.
+    // 62.73s 뒤가 목표: 13.8s 곡이 끝에서 끝나려면 48.93s 뒤에 시작해야 한다.
     bgm.playSting('M06', { alignEndAtMs: 62730 })
     await flush()
-    const full = ctx.sources[ctx.sources.length - 1]
-    expect(full.started).toBeTruthy()
-    expect(full.started!.when - ctx.currentTime).toBeCloseTo(48.93, 1)
-    expect(full.started!.offset).toBeCloseTo(0, 3)
+    const late = ctx.sources[ctx.sources.length - 1]
+    expect(late.started).toBeTruthy()
+    expect(late.started!.when - ctx.currentTime).toBeCloseTo(48.93, 1)
+    expect(late.started!.offset).toBeCloseTo(0, 3)
 
-    // short 13.00s: 곡이 0.8s 더 길다 → 앞 0.8s를 잘라 낸다(해소는 휘슬에 맞는다).
+    // short 모드(13.00s): 곡이 0.8s 더 길다 → 앞 0.8s를 잘라 낸다(해소가 휘슬에 맞는다).
     bgm.stopSting(0)
     bgm.playSting('M06', { alignEndAtMs: 13000 })
     await flush()
@@ -308,39 +308,66 @@ describe('bgm 스팅', () => {
     expect(short.started!.offset).toBeCloseTo(0.8, 1)
   })
 
-  // full 모드에서 M06은 끝 맞추기 때문에 48.94s에 시작해 **소개 구간 위로 11.6초** 겹쳐 든다.
-  // 그 구간은 캐스터가 22명을 호명하는 시간이라 음악이 제 음량으로 밟으면 안 된다.
-  it('duckUntilMs — 말이 주인인 구간에서는 스팅 자신의 게인을 DUCK_RATIO로 눌러 둔다', async () => {
+  // ── 입장 연출 M06의 두 앵커(2026-08-01 재판정) ──────────────────────────
+  // full 모드는 **앞**에 건다: 입장과 동시에 시작하고 소개 첫 컷에서 완전히 걷힌다.
+  // 예전 계약(양쪽 다 끝 맞추기 + 소개 위 덕킹)은 실제 플레이가 기각했다 —
+  // full에서 곡이 49초 뒤에야 시작해 "소개 끝물에 갑자기 팡파르"로 들렸다.
+  it('fadeOutAtMs — full 입장은 즉시 시작하고 소개 시작 시각에 0이 된다', async () => {
     DECODE_DURATION = 13.8
     const { sfx, bgm, ctx } = await setup()
     sfx.init()
 
-    bgm.playSting('M06', { alignEndAtMs: 62735, duckUntilMs: 60535 })
+    // entranceIntroStartMs(full) = tunnel 1600 + walkout 4600 + split 4600 = 10800.
+    bgm.playSting('M06', { fadeOutAtMs: 10800 })
     await flush()
-    const g = ctx.gains[ctx.gains.length - 1] // 이 스팅을 위해 마지막으로 만든 게인
+    const src = ctx.sources[ctx.sources.length - 1]
+    const g = ctx.gains[ctx.gains.length - 1]
     const FULL = 0.8 // TRACK_GAIN 기본값
 
-    // 눌린 값은 곡 게인 × 0.1 — 골 덕킹과 같은 배율이고, 공용 duckNode는 건드리지 않는다.
-    expect(g.gain.value).toBeCloseTo(FULL * bgm.DUCK_RATIO, 4)
+    // ① 입장과 **동시에** 시작한다 — 지연도 앞 자르기도 없다.
+    expect(src.started!.when - ctx.currentTime).toBeCloseTo(0, 2)
+    expect(src.started!.offset).toBeCloseTo(0, 3)
+    // ② 소개 전까지는 제 음량이다(깔아 두기·덕킹 없음).
+    expect(g.gain.value).toBeCloseTo(FULL, 4)
+    // ③ 소개가 시작되는 10.8s에 0이 되고, 그 램프는 STING_FADEOUT_MS 동안 내려온다.
+    const drop = g.gain.ramps[g.gain.ramps.length - 1]
+    expect(drop.v).toBe(0)
+    expect(drop.t - ctx.currentTime).toBeCloseTo(10.8, 1)
+    // ④ 하드 컷이 아니다 — 스펙 §배선 300~500ms 밴드 안.
+    expect(bgm.STING_FADEOUT_MS).toBeGreaterThanOrEqual(300)
+    expect(bgm.STING_FADEOUT_MS).toBeLessThanOrEqual(500)
+    // ⑤ 게인이 0이 되는 순간 소스도 끊는다 — 스팅 채널을 붙잡고 있지 않는다.
+    expect(src.stopped).not.toBeNull()
+    expect(src.stopped! - ctx.currentTime).toBeCloseTo(10.8, 1)
+    expect(bgm.bgmState().stingEndsInMs).toBe(10800)
+    // ⑥ 공용 duckNode는 건드리지 않는다(골 덕킹과 서로를 덮어쓰지 않는다).
     expect(bgm.bgmState().duck).toBe(1)
-
-    // 소개가 끝나는 60.535s에 해제가 시작되어 STING_UNDUCK_MS에 걸쳐 제 음량으로 오른다.
-    const rise = g.gain.ramps[g.gain.ramps.length - 1]
-    expect(rise.v).toBeCloseTo(FULL, 4)
-    expect(rise.t - ctx.currentTime).toBeCloseTo((60535 + bgm.STING_UNDUCK_MS) / 1000, 1)
-    // 해소(62.735s)는 제 음량으로 들려야 한다 — 램프가 그 전에 끝난다.
-    expect(rise.t - ctx.currentTime).toBeLessThan(62.735)
   })
 
-  it('소개가 없으면(short) 덕킹하지 않는다 — 처음부터 제 음량', async () => {
+  it('소개가 없으면(short) 걷지 않는다 — 곡이 끝까지 가고 해소가 휘슬에 맞는다', async () => {
     DECODE_DURATION = 13.8
     const { sfx, bgm, ctx } = await setup()
     sfx.init()
     bgm.playSting('M06', { alignEndAtMs: 13000 })
     await flush()
     const g = ctx.gains[ctx.gains.length - 1]
+    const src = ctx.sources[ctx.sources.length - 1]
     expect(g.gain.value).toBeCloseTo(0.8, 4)
     expect(g.gain.ramps).toHaveLength(0)
+    expect(src.stopped).toBeNull()
+  })
+
+  it('페이드 시각이 곡의 자연 종료보다 뒤면 아무 일도 하지 않는다', async () => {
+    DECODE_DURATION = 13.8
+    const { sfx, bgm, ctx } = await setup()
+    sfx.init()
+    // 곡(13.8s)이 그 전에 끝난다 → 걷을 것이 없다.
+    bgm.playSting('M06', { fadeOutAtMs: 20000 })
+    await flush()
+    const g = ctx.gains[ctx.gains.length - 1]
+    const src = ctx.sources[ctx.sources.length - 1]
+    expect(g.gain.ramps).toHaveLength(0)
+    expect(src.stopped).toBeNull()
   })
 })
 

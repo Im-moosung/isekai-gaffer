@@ -426,12 +426,32 @@ export function entranceScript(cast: EntranceCast, mode: EntranceMode = 'full'):
 }
 
 /**
- * 소개(캐스터 낭독)가 끝나는 시각(ms). 소개가 없는 short 모드면 null.
+ * 소개(캐스터 낭독)가 **시작되는** 시각(ms). 소개가 없는 short 모드면 null.
  *
- * M06 팡파르를 **어디까지 눌러 둘지**의 정본이다 — 상수를 다시 쓰지 마라. 곡은
- * `alignEndAtMs = totalMs`로 끝이 킥오프 휘슬에 맞춰져 있으므로(길이 13.80s) full 모드에서
- * 곡의 앞 11.6초가 away-intro 위로 겹쳐 든다. 그 구간은 캐스터가 22명을 호명하는 시간이고,
- * 인플레이에 음악을 깔지 않는 것과 같은 이유로 **말이 주인**이어야 한다.
+ * M06 팡파르를 **어디서 걷을지**의 정본이다 — 상수를 다시 쓰지 마라(MatchScreen이
+ * `bgm.playSting('M06', { fadeOutAtMs })`에 그대로 넘긴다).
+ *
+ * ★ 2026-08-01 재판정 — 예전에는 이 자리에 `entranceIntroEndMs`(소개 **끝**)가 있었고,
+ *   곡을 소개 위에 덕킹으로 깔아 두었다가 그 시각에 부풀렸다. 실제 플레이가 그 설계를
+ *   기각했다(사용자: *"선수 입장 시에 BGM이 아예 안 나와… 선수 소개 거의 다 할 때 갑자기
+ *   BGM이 나와"*). 끝 맞추기(alignEndAtMs = totalMs)가 full 모드에서 곡을 연출의 마지막
+ *   1/5로 밀어냈기 때문이다 — 곡 13.8초, 연출 약 63초.
+ *
+ *   그래서 앵커를 **뒤에서 앞으로** 옮긴다: 음악은 입장(터널·워크아웃·정렬)과 **동시에**
+ *   시작해 소개가 시작되는 이 시각에 완전히 사라진다. 소개 구간은 무음이다 — 인플레이에
+ *   음악을 깔지 않는 것과 같은 이유로 **말이 주인**이고, 절충(덕킹)은 이미 실패했다.
+ */
+export function entranceIntroStartMs(script: EntranceScript): number | null {
+  for (const span of script.phases) {
+    // home-intro가 소개의 첫 컷이다. 길이 0이면 소개 자체가 없는 모드(short).
+    if (span.phase === 'home-intro' && span.end > span.start) return span.start
+  }
+  return null
+}
+
+/**
+ * 소개가 끝나는 시각(ms) = disperse 시작. 소개가 없는 short 모드면 null.
+ * {@link entranceIntroStartMs}와 짝을 이루는 순수 조회다(구간의 반대쪽 끝).
  */
 export function entranceIntroEndMs(script: EntranceScript): number | null {
   let end: number | null = null
@@ -448,7 +468,7 @@ export function entranceIntroEndMs(script: EntranceScript): number | null {
 //   본 적이 있으면 short를 기본으로 삼았다. 그런데 실제로 플레이한 사용자는 반대로 말했다:
 //   *"선수 소개 보기를 눌러야만 해설이 나온다"* — 소개는 이 연출의 **본체**이고, 버튼 뒤에
 //   숨겨 두면 대부분의 경기에서 영영 안 들린다. 길이의 대가는 모드가 아니라 **음악 처리**로
-//   치른다(entranceIntroEndMs → bgm.playSting duckUntilMs). 건너뛰기는 그대로 남는다.
+//   치른다(entranceIntroStartMs → bgm.playSting fadeOutAtMs). 건너뛰기는 그대로 남는다.
 //   seen 플래그는 계속 기록한다 — 모드를 고르지는 않지만 "이 유저가 전체 컷을 본 적이
 //   있는가"는 다른 연출 판단에 쓸 수 있는 사실이다.
 const ENTRANCE_SEEN_KEY = 'rematch-entrance-seen'

@@ -26,7 +26,8 @@ import { LiveStats } from './LiveStats'
 // (entrance.ts/EntranceOverlay.tsx 모두 three를 타입으로도 import하지 않는다.)
 import { EntranceOverlay } from '../pitch/three/EntranceOverlay'
 import {
-  ENTRANCE_SPEECH_SPEED, buildEntranceCast, defaultEntranceMode, entranceScript, markEntranceSeen,
+  ENTRANCE_SPEECH_SPEED, buildEntranceCast, defaultEntranceMode, entranceIntroStartMs,
+  entranceScript, markEntranceSeen,
   type EntranceMode, type EntranceScript,
 } from '../pitch/three/entrance'
 import {
@@ -619,21 +620,33 @@ export function MatchScreen({
   }
 
   /**
-   * 입장 팡파르 M06(13.80s) — **끝을 킥오프 휘슬에 맞춘다.**
+   * 입장 팡파르 M06(13.80s) — **두 모드가 서로 다른 것에 곡을 건다.**
    *
-   * 길이의 정본은 `entranceScript(...).totalMs`이고(short 13.00s / full 62.73s) 곡 길이와
-   * 다르다. 곡은 "11초쯤 정점 → 13.8초에 깨끗하게 해소, 이어서 휘슬"로 만들어졌으므로
-   * 지켜야 할 계약은 시작이 아니라 **끝**이다. 그래서 남은 시간이 곡보다 길면(full)
-   * 그만큼 늦게 시작하고, 짧으면(short) 앞 0.8초를 잘라 낸다.
+   * ★ 2026-08-01 재판정. 예전에는 두 모드 모두 `alignEndAtMs = totalMs`로 **끝을 킥오프
+   *   휘슬에 맞췄다**. 근거는 "곡이 13.8초에 해소되고 이어서 휘슬"이었고, 그것은
+   *   short(13.00s)에서만 성립한다. full(약 63초)에서는 곡이 **49초 뒤에야** 시작해
+   *   연출의 마지막 1/5에만 걸린다. 유저가 실제로 들은 것은 그래서
+   *   *"입장에는 아무 소리도 없다가 소개 끝물에 갑자기 팡파르"*였다(사용자 제보).
+   *   덕킹으로 소개 위를 눌러 두는 절충도 같이 기각됐다 — *"그냥 명확하게 해"*.
    *
-   * full의 앞 49초(터널·워크아웃·선수 소개)에 음악을 깔지 않은 것은 의도다 —
-   * 그 구간은 캐스터가 22명의 이름을 부르는 시간이고, 인플레이에 음악을 넣지 않는 것과
-   * 같은 이유로 말이 주인이어야 한다. 대신 관중 루프가 이미 0.3으로 깔려 있다.
-   * (대안이던 "M06 2.04회 루프"는 팡파르 중간에 이음매가 생기고 해소가 임의 지점에서
-   *  잘린다 — 계약을 지키지 못한다.)
+   * 지금 규칙:
+   *  · **full** — 입장(터널·워크아웃·정렬)과 **동시에** 시작하고, 소개 첫 컷이 시작되는
+   *    시각에 완전히 걷힌다(`fadeOutAtMs = entranceIntroStartMs`). 소개 구간은 무음이다.
+   *  · **short** — 소개가 없으니 걷을 곳도 없다. 끝 맞추기를 그대로 둔다(곡 13.8s가
+   *    연출 13.0s보다 0.8초 길어 앞을 잘라 내고, 해소가 킥오프 휘슬에 떨어진다).
+   *
+   * 소개가 끝난 뒤(disperse 2.2초 → 휘슬)를 **무음으로 두는 것도 결정**이다. 2.2초는
+   * 13.8초짜리 팡파르의 어느 조각도 해소까지 데려갈 수 없는 길이여서, 되돌리면 반드시
+   * 임의 지점에서 잘린다(예전 "M06 루프" 안이 기각된 바로 그 이유). 그 구간의 소리는
+   * 관중 스웰과 킥오프 휘슬이 맡는다 — 실제 중계도 명단 낭독 뒤에 음악을 다시 넣지 않는다.
    */
   function startEntranceMusic(scr: EntranceScript) {
-    bgm.playSting('M06', { alignEndAtMs: scr.totalMs })
+    const introStart = entranceIntroStartMs(scr)
+    if (introStart == null) {
+      bgm.playSting('M06', { alignEndAtMs: scr.totalMs })
+      return
+    }
+    bgm.playSting('M06', { fadeOutAtMs: introStart })
   }
 
   /** short 모드에서 "선수 소개 보기" — 전체 연출로 갈아 끼우고 처음부터 다시 재생한다. */
