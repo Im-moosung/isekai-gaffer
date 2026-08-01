@@ -46,7 +46,7 @@ describe('TeamTalk 컴포넌트', () => {
     expect(container.querySelector('.tt-morale__status')?.textContent).toContain('사기')
   })
 
-  it('선택 시 즉시 효과 배너(+/사기 상승)와 선수 반응 아이콘을 크게 표시', () => {
+  it('선택 시 즉시 효과 배너(+/사기 상승)와 선수 반응을 표시', () => {
     // 비기는 중(0-0) → 침착 +4(even)
     store().startMatch(a, b, 37)
     toHalftime()
@@ -60,10 +60,50 @@ describe('TeamTalk 컴포넌트', () => {
     const reactions = container.querySelectorAll('.tt-reactions__item')
     expect(reactions.length).toBeGreaterThanOrEqual(2)
     expect(reactions.length).toBeLessThanOrEqual(3)
-    // 버튼 비활성
+  })
+
+  it('선택하면 톤 버튼이 DOM에서 사라진다(비활성이 아니라 부재)', () => {
+    store().startMatch(a, b, 37)
+    toHalftime()
+    const { getByRole, queryByRole, container } = render(<TeamTalk side="home" />)
+    expect(container.querySelectorAll('.tt-btn').length).toBe(4)
+    fireEvent.click(getByRole('button', { name: new RegExp('침착') }))
+
+    // 팀토크는 경기당 1회라 되돌릴 수 없다 → 카드는 남길 이유가 없다.
     for (const label of ['격노', '격려', '침착', '신뢰']) {
-      expect((getByRole('button', { name: new RegExp(label) }) as HTMLButtonElement).disabled).toBe(true)
+      expect(queryByRole('button', { name: new RegExp(label) })).toBeNull()
     }
+    expect(container.querySelectorAll('.tt-btn').length).toBe(0)
+    // 사기 게이지(사전 정보)도 함께 접힌다 — 수치는 결과 줄에 압축돼 남는다.
+    expect(container.querySelector('.tt-morale')).toBeNull()
+    expect(container.querySelector('.tt-banner__morale')?.textContent).toContain('사기')
+  })
+
+  it('접힌 뒤에도 고른 톤 라벨·delta 문장·선수 반응은 남는다', () => {
+    store().startMatch(a, b, 37)
+    toHalftime()
+    const { getByRole, container } = render(<TeamTalk side="home" />)
+    fireEvent.click(getByRole('button', { name: new RegExp('침착') }))
+
+    // 카드가 사라지므로 "무엇을 골랐는지"는 배너가 말해야 한다.
+    expect(container.querySelector('.tt-banner__tone')?.textContent).toBe('침착')
+    expect(container.querySelector('.tt-banner__text')?.textContent).toContain('사기 상승 (+4)')
+    expect(container.querySelectorAll('.tt-reactions__item').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('talked=true인 채 새로 마운트하면 버튼 없이 요약 한 줄만 남는다', () => {
+    // 작전판을 닫았다 다시 열면 result(로컬 state)가 날아간다. 그래도 접힌 상태여야 한다.
+    store().startMatch(a, b, 37)
+    toHalftime()
+    store().applyTeamTalk('home', 'calm', { expectation: 'even', repeated: false })
+    expect(store().talked).toBe(true)
+
+    const { queryByRole, container } = render(<TeamTalk side="home" />)
+    for (const label of ['격노', '격려', '침착', '신뢰']) {
+      expect(queryByRole('button', { name: new RegExp(label) })).toBeNull()
+    }
+    expect(container.querySelector('.tt-morale')).toBeNull()
+    expect(container.querySelector('.tt-done')?.textContent).toContain('팀 토크 전달 완료')
   })
 
   it('역효과(이기는 중 격노) → 저하 배너(-)', () => {

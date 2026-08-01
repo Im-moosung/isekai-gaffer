@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo, useRef, lazy, Suspense, Component, type ReactNode } from 'react'
-import type { Team, TacticState, MatchEvent, DecisionEntry } from '../../engine/types'
-import { useMatchStore } from '../../game/matchStore'
+import type { Team, TacticState, MatchEvent, DecisionEntry, SideStats } from '../../engine/types'
+import {
+  useMatchStore, freeInterventionState, MAX_FREE_INTERVENTIONS, SHOUT_COOLDOWN,
+} from '../../game/matchStore'
 import type { MomentKind } from '../../game/matchSession'
 import { teamCardTally } from '../../game/playerStats'
 import { commentateAt, commentateTimeline, flowLineAt, type CommentaryCtx } from '../../game/commentary'
@@ -96,6 +98,11 @@ const MODE_TRANSITION_MS = 600
 // 동적 순간 유형별 방송 배너 문구(제안 시). matchSession.DecisionMoment.title과 별개로,
 // 배너에서는 감독에게 말 거는 어투로 노출한다(스펙 §17.2 방송 배너).
 // broadcast 모드(재생 중)에서만 노출 — 정지·하프타임 안내는 작전판이 담당한다.
+// 쿨다운 링 기하 — ShoutBar와 **같은 값**을 쓴다. 감독 타임과 외침은 하나의 10분 시계를
+// 공유하므로(matchStore.lastShoutMinute) 링이 다르게 생기면 다른 자원으로 읽힌다.
+const RING_R = 8
+const RING_C = 2 * Math.PI * RING_R
+
 const MOMENT_PHRASE: Record<MomentKind, string> = {
   conceded: '실점 직후입니다',
   'momentum-lost': '흐름이 상대에게 넘어갑니다',
@@ -187,6 +194,10 @@ export function MatchScreen({
   const engine = useMatchStore(s => s.engine)
   const momentPrompt = useMatchStore(s => s.momentPrompt)
   const oppNotices = useMatchStore(s => s.oppNotices)
+  // 자유 개입(감독 타임) 자원 — 잔량·쿨다운·막힘 사유를 store의 순수 함수 하나로 받는다.
+  // 판정을 화면에서 다시 조립하면 store가 거부하는데 버튼은 살아 있는 조합이 생긴다.
+  const freeInterventionsUsed = useMatchStore(s => s.freeInterventionsUsed)
+  const lastShoutMinute = useMatchStore(s => s.lastShoutMinute)
   const startMatch = useMatchStore(s => s.startMatch)
   const kickoff = useMatchStore(s => s.kickoff)
   const advanceMinute = useMatchStore(s => s.advanceMinute)
@@ -234,10 +245,29 @@ export function MatchScreen({
    * 이 플래그가 **결과를 아는 모든 UI**의 스위치다 — 발화·스코어버그·티커·골 드라마·
    * 관중 함성이 전부 여기 걸린다. 반대로 **안무·카메라·2D 보드는 걸리지 않는다**
    * (그것들이 결과를 보여주는 주체다). 하이라이트 안무가 없는 분은 처음부터 true다.
+   *
+   * ★ 2026-08-01(6라운드 실측): 상태가 **어느 분의 노출인지**까지 들고 있어야 한다.
+   *   예전에는 boolean 하나였는데, 분이 막 바뀐 첫 렌더에서는 아래 타이머 effect가 아직
+   *   돌지 않아 지난 분의 true가 그대로 남았다. 실측(tools/moment-sync)에서 그 한 프레임에
+   *   스코어가 0-1로 튀었다가 1ms 뒤 0-0으로 돌아오고(204627 → 204628), 제안 배너도 같이
+   *   깜빡였다 — 게이트가 한 프레임 늦게 닫히면 결과가 그 프레임에 새어 나간다.
+   *   그래서 `minute`을 함께 들고, **그 분의 판정이 실제로 내려졌을 때만** 노출로 친다.
+   *   (boolean만 갱신하면 revealMs=0인 분에서 setState가 no-op이라 리렌더도 없어,
+   *    게이트가 열린 줄 모르고 그 분 내내 닫혀 있는 반대 결함이 생긴다.)
    */
-  const [revealed, setRevealed] = useState(true)
+  const [revealState, setRevealState] = useState<{ minute: number; on: boolean }>({ minute: -1, on: true })
+  // 재생 중이 아니면(킥오프 전·정지·하프타임·종료) 미룰 결과가 없다 — 전부 노출로 본다.
+  const revealed = revealState.on && (phase !== 'playing' || revealState.minute === (engine?.minute ?? -1))
   /** 이번 분의 남은 노출 대기(ms). 일시정지에서 이어 붙이기 위한 미러. */
   const revealRef = useRef({ minute: -1, left: 0 })
+  /**
+   * 마지막으로 **노출된 상태에서** 본 라이브 스탯 스냅샷.
+   *
+   * engine.stats는 그 분을 시뮬레이션한 즉시 갱신되므로 그대로 HUD에 넘기면 좌하단
+   * "슛 8"이 슛 장면보다 먼저 9로 올라간다 — 스코어버그와 정확히 같은 누설이다.
+   * 노출 전에는 이 스냅샷을 대신 보여 준다(직전에 이미 보여 준 값이라 새 정보가 없다).
+   */
+  const shownStatsRef = useRef<[SideStats, SideStats] | null>(null)
   const swellTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const firedGoalMinuteRef = useRef(-1)
   const spokenMinuteRef = useRef(-1)
@@ -273,6 +303,8 @@ export function MatchScreen({
     () => ({ decisions: decisionLog, managedTeamId: home.id }),
     [decisionLog, home.id],
   )
+
+  const freeIntervention = freeInterventionState(freeInterventionsUsed, lastShoutMinute, engine?.minute ?? 0)
 
   // 재생 중 = playing. 시간 정지(카운트다운 없음)는 phase가 playing이 아닐 때.
   const replaying = phase === 'playing'
@@ -396,7 +428,8 @@ export function MatchScreen({
   useEffect(() => {
     if (!engine || phase !== 'playing') {
       revealRef.current = { minute: -1, left: 0 }
-      setRevealed(true)
+      // 이미 초기 상태면 그대로 둔다(같은 값을 새 객체로 넣으면 헛 리렌더가 난다).
+      setRevealState(s => (s.minute === -1 && s.on ? s : { minute: -1, on: true }))
       return
     }
     const m = engine.minute
@@ -407,14 +440,15 @@ export function MatchScreen({
       const sceneMs = sceneDwellMs(eventsAtMinute, speed, clutch, diff)
       const revealMs = minuteRevealMs(eventsAtMinute, engine.home, engine.away, sceneMs)
       revealRef.current = { minute: m, left: revealMs }
-      setRevealed(revealMs <= 0)
+      // 객체를 새로 넣는다 — 값이 같아도 분이 바뀌었으면 리렌더가 일어나야 한다.
+      setRevealState({ minute: m, on: revealMs <= 0 })
     }
     const left = revealRef.current.left
     if (frozen || left <= 0) return
     const started = performance.now()
     const timer = setTimeout(() => {
       revealRef.current.left = 0
-      setRevealed(true)
+      setRevealState({ minute: m, on: true })
     }, left)
     return () => {
       clearTimeout(timer)
@@ -504,15 +538,36 @@ export function MatchScreen({
     if (tacticsMode) setFrozen(false)
   }, [tacticsMode])
 
+  /**
+   * **노출된 스코어** — 아직 화면에 보여 주지 않은 이 분의 골을 뺀 [home, away].
+   *
+   * 소리도 결과를 미리 말한다. engine.score를 그대로 보면 아직 안 보여 준 골로 관중이
+   * 먼저 조용해지거나(2골차 → 게인 0.3) 먼저 뜨거워지고(1골차 → 0.5), 클러치 베드가
+   * 골보다 먼저 깔린다. 화면에 보인 것만 세는 규칙은 하나뿐이어야 하므로 여기 한 곳에
+   * 두고 관중 게인·BGM 클러치 베드·스코어버그가 같은 값을 읽는다 —
+   * 같은 판정을 세 번 다시 쓰다가 한 곳(관중)만 원본을 보고 있었던 게 이 결함이다.
+   */
+  const revealedScore = useMemo<[number, number]>(() => {
+    const s: [number, number] = [0, 0]
+    if (!engine) return s
+    for (const e of engine.events) {
+      if (e.type !== 'goal') continue
+      if (e.minute > engine.minute || (e.minute === engine.minute && !revealed)) continue
+      s[e.teamId === engine.home.team.id ? 0 : 1] += 1
+    }
+    return s
+  }, [engine, revealed])
+
   // 관중 함성 강도: 기본 0.3, 클러치(80분+·1골차 이내) 0.5, 골 직후 스웰 0.8. crowdLoop('start')는 게인만 갱신(멱등).
   // 일시정지 중에는 낮은 웅성거림으로 **덕킹**한다 — 끊으면 재개 때 클릭이 나고
   // (teardownCrowd는 페이드가 없다) 그대로 두면 정지 화면에 함성만 남아 어색하다.
   useEffect(() => {
     if (phase !== 'playing' || !engine) return
-    const m = engine.minute
-    const clutch = m >= 80 && Math.abs(engine.score[0] - engine.score[1]) <= 1
+    // ★ revealed 게이트(revealedScore 경유): 클러치 판정은 **노출된 스코어**로만 센다.
+    //   원본 engine.score로 세면 관중이 골보다 먼저 반응한다 — 눈보다 귀가 빨라도 예지력이다.
+    const clutch = engine.minute >= 80 && Math.abs(revealedScore[0] - revealedScore[1]) <= 1
     sfx.crowdLoop('start', frozen ? CROWD_FROZEN : crowdSwell ? 0.8 : clutch ? 0.5 : 0.3)
-  }, [phase, engine, crowdSwell, frozen])
+  }, [phase, engine, revealedScore, crowdSwell, frozen])
 
   // ── BGM 장면 배선(docs/audio/bgm-spec.md) ───────────────────────────
   //
@@ -522,18 +577,8 @@ export function MatchScreen({
   //
   // 클러치 판정은 **노출된 스코어**로만 센다 — 아직 화면에 보이지 않은 골로 베드가
   // 깔리면 음악이 결과를 미리 말한다(사용자가 지적한 "예지력"과 같은 구조의 누설).
-  const clutchBed = useMemo(() => {
-    if (!engine || engine.minute < 80) return false
-    let h = 0
-    let a = 0
-    for (const e of engine.events) {
-      if (e.type !== 'goal') continue
-      if (e.minute > engine.minute || (e.minute === engine.minute && !revealed)) continue
-      if (e.teamId === engine.home.team.id) h += 1
-      else a += 1
-    }
-    return Math.abs(h - a) <= 1
-  }, [engine, revealed])
+  // 세는 일 자체는 revealedScore가 한다(관중 게인과 같은 값을 써야 둘이 어긋나지 않는다).
+  const clutchBed = !!engine && engine.minute >= 80 && Math.abs(revealedScore[0] - revealedScore[1]) <= 1
 
   const bgmScene: bgm.BgmScene | null =
     entranceScr ? null // 입장은 스팅 M06이 독점한다
@@ -722,10 +767,16 @@ export function MatchScreen({
   const commentaryLines = commentateTimeline(shown, home, away, seed, commentaryCtx, tickerUntil)
   const tickerLines = commentaryLines.map(l => ({ minute: l.minute, text: l.text, speaker: l.speaker }))
   const lastEvent = shown[shown.length - 1]
-  const shownScore: [number, number] = [0, 0]
-  for (const e of shown) {
-    if (e.type === 'goal') shownScore[e.teamId === home.id ? 0 : 1] += 1
-  }
+  // 스코어버그가 읽는 표시 스코어 = 노출된 스코어. 위 `shown`에서 다시 세도 같은 값이지만,
+  // 같은 규칙을 두 번 적어 두면 한쪽만 고쳐지는 사고가 난다(관중 게인이 그렇게 샜다).
+  const shownScore = revealedScore
+  // 좌하단 HUD가 읽는 스탯도 노출 게이트를 따른다 — 슛·유효슛·점유율은 그 분을
+  // 시뮬레이션한 즉시 engine.stats에 들어가므로, 그대로 넘기면 숫자가 슛 장면보다 먼저
+  // 올라간다. 노출 전에는 직전에 이미 보여 준 스냅샷을 유지한다.
+  //
+  // (분 경계의 한 프레임 누설은 revealed 자체가 막는다 — revealState 주석 참조.)
+  if (revealed || !shownStatsRef.current) shownStatsRef.current = [engine.stats[0], engine.stats[1]]
+  const shownStats = shownStatsRef.current
   // 빨리감기 연출: 재생 중 현재 분에 이벤트가 없으면 분 숫자가 빠르게 넘어간다.
   const fastForward = replaying && !engine.events.some(e => e.minute === displayMinute)
 
@@ -773,7 +824,15 @@ export function MatchScreen({
   // 상단 방송 배너 — broadcast 모드(재생 중) 순간 제안이 우선. 정지·하프타임 안내는 작전판이 담당.
   // 제안이 없을 때만 상대 감독의 최근 변경 통보를 3분간 흘려보낸다(슬롯 1개를 공유하므로
   // 감독의 결정 기회를 상대 통보가 가리면 안 된다).
-  const momentBanner = replaying && momentPrompt
+  //
+  // ★ revealed 게이트 — "실점 직후입니다"가 실점보다 먼저 뜨면 배너가 스코어버그·GOAL
+  //   연출을 제치고 결과를 말해 버린다(예지력의 텍스트판). momentPrompt는 advanceMinute이
+  //   그 분을 시뮬레이션한 **직후** 세팅되는데 골 안무는 6~7초 뒤에야 공을 그물에 넣는다.
+  //   단, 게이트는 **이번 분에 뜬 제안**에만 건다. 지난 분의 제안(TTL 동안 살아 있다)은
+  //   이미 노출된 결과를 말하고 있어 누설이 아니고, 거기까지 닫으면 뒤따르는 골 분마다
+  //   배너가 통째로 사라졌다 돌아온다 — 결정을 요구하는 슬롯이 깜빡이는 게 더 나쁘다.
+  const momentShowable = revealed || (!!momentPrompt && momentPrompt.minute < displayMinute)
+  const momentBanner = replaying && momentPrompt && momentShowable
     ? `${MOMENT_PHRASE[momentPrompt.kind]} — 감독 타임을 쓰시겠습니까?`
     : null
   const lastNotice = oppNotices.length > 0 ? oppNotices[oppNotices.length - 1] : null
@@ -955,7 +1014,10 @@ export function MatchScreen({
             role="status"
           >
             <span className="ms-banner__text">{bannerText}</span>
-            {replaying && momentPrompt && (
+            {/* ★ momentBanner를 조건으로 쓴다(momentPrompt가 아니라). 노출 게이트로 제안 문장이
+                밀려 상대 감독 통보가 슬롯을 차지한 동안에는 "실점 직후입니다"가 안 보이는데
+                [사용]/[흘려보낸다]만 통보 옆에 붙어 무엇에 대한 선택인지 알 수 없게 된다. */}
+            {momentBanner && (
               <span className="ms-banner__actions">
                 <button type="button" className="btn btn--primary btn--sm" onClick={acceptMoment}>사용</button>
                 <button type="button" className="btn btn--ghost btn--sm" onClick={dismissMoment}>흘려보낸다</button>
@@ -1037,10 +1099,47 @@ export function MatchScreen({
                 {frozen ? '재생' : '일시정지'}
               </button>
             )}
+            {/* ── 감독 타임 = **희소 자원**. 잔량과 쿨다운이 항상 보여야 한다 ──
+                자유 개입은 5회 + 외침과 공유하는 10분 쿨다운이다. 계획해서 쓰라고 만든
+                제약인데 잔량이 안 보이면 계획이 불가능하다 — 그래서 부가 정보가 아니라
+                버튼과 한 묶음이다.
+
+                왜 여기(제어 pod)인가: 잔량은 **그 버튼의 상태**이지 경기 상황이 아니다.
+                ShoutBar가 쿨다운 문구를 자기 버튼 옆에 두는 것과 같은 규칙이고
+                ("이유 없는 disabled는 고장으로 읽힌다"), 하단 액션 바로 내리면 감독 타임
+                버튼과 그 사유가 화면 반대편으로 갈라져 무엇이 막혔는지 알 수 없다.
+                시각 언어는 ShoutBar에서 그대로 빌린다(sb-ring 원형 링·sb-cool 사유 문구) —
+                같은 10분 시계이므로 다르게 생기면 다른 자원으로 읽힌다.
+
+                문구는 store(freeInterventionState.blockedReason)가 정본이다. 화면에서
+                따로 지어내면 "눌리는데 거부되는" 조합이 생긴다. */}
             {replaying && (
-              <button type="button" className="btn btn--primary btn--sm" onClick={pauseByUser}>
-                감독 타임
-              </button>
+              <>
+                <span className="badge num">개입 {freeIntervention.left}/{MAX_FREE_INTERVENTIONS}</span>
+                <button
+                  type="button"
+                  className="btn btn--primary btn--sm sb-btn"
+                  disabled={!freeIntervention.canPause}
+                  onClick={pauseByUser}
+                >
+                  {freeIntervention.cooldownLeft > 0 && (
+                    <svg className="sb-ring" viewBox="0 0 20 20" width="16" height="16" aria-hidden="true">
+                      <circle className="sb-ring__track" cx="10" cy="10" r={RING_R} />
+                      <circle
+                        className="sb-ring__arc"
+                        cx="10"
+                        cy="10"
+                        r={RING_R}
+                        strokeDasharray={`${(Math.min(1, freeIntervention.cooldownLeft / SHOUT_COOLDOWN) * RING_C).toFixed(2)} ${RING_C.toFixed(2)}`}
+                      />
+                    </svg>
+                  )}
+                  감독 타임
+                </button>
+                {freeIntervention.blockedReason && (
+                  <span className="sb-cool" role="status">{freeIntervention.blockedReason}</span>
+                )}
+              </>
             )}
           </div>
         )}
@@ -1056,8 +1155,8 @@ export function MatchScreen({
             하나다 — 보는 모드는 HUD가, 읽는 모드는 작전판이 답한다. */}
         {replaying && !analysisOn && (
           <LiveStats
-            us={engine.stats[0]}
-            them={engine.stats[1]}
+            us={shownStats[0]}
+            them={shownStats[1]}
             minute={displayMinute}
             usCode={home.fifaCode}
             themCode={away.fifaCode}

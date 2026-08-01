@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormationId, GroupIntensity, Instructions, Mentality, Player, TacticState } from '../../engine/types'
-import { canIntervene, interventionLevel, touchlineNotice, useMatchStore } from '../../game/matchStore'
+import {
+  canIntervene, interventionLevel, nextBreakMinute, touchlineNotice, touchlineTacticsError, useMatchStore,
+} from '../../game/matchStore'
 import { buildCoachAdvice, hasPatch, type TacticPatch } from '../../game/coach'
 import { playerMatchStats, type PlayerMatchStats } from '../../game/playerStats'
 import { PitchView } from '../pitch/PitchView'
@@ -130,12 +132,15 @@ export function TacticsBoard() {
   const schedule = useMatchStore(s => s.schedule)
   const confirmTactics = useMatchStore(s => s.confirmTactics)
   const submitCommand = useMatchStore(s => s.submitCommand)
-  // 개입 권한 등급 — 'touchline'(감독 타임·상황 개입)에서는 교체와 열람만 가능하다.
+  // 개입 권한 등급 — 'touchline'(감독 타임·상황 개입)에서는 **대형만** 잠긴다
+  // (matchStore TOUCHLINE_AXES 주석의 "포메이션의 경계" 논증).
   const level = interventionLevel(phase, pauseReason)
   const full = level === 'full'
-  // 터치라인 등급으로 들어왔다면 유일하게 할 수 있는 일(교체) 탭을 먼저 연다
-  // — 잠긴 전술 탭을 첫 화면으로 보여주면 "고장난 건가"로 읽힌다.
-  const [tab, setTab] = useState<TacticsTab>(() => (full ? 'tactics' : 'sub'))
+  // 전술 탭을 먼저 연다. 예전에는 터치라인 등급에서 교체 탭을 먼저 열었는데, 그 근거는
+  // "전술 탭이 통째로 잠겨 있어 첫 화면이 고장으로 읽힌다"였다. 확장 개방으로 전술 탭은
+  // 대형을 뺀 전부가 열려 있으므로 그 근거가 사라졌다 — 감독 타임에 들어간 이유는
+  // 대개 지시를 바꾸려는 것이다.
+  const [tab, setTab] = useState<TacticsTab>('tactics')
   // 선택은 **최대 2명, 클릭 순서 보존**이다(조작 규약 — 워룸 LineupEditor와 같은 규칙).
   // 1명이면 상세, 2명이면 나란히 비교 + 실행 버튼. 순서가 비교 뷰의 좌/우를 정한다.
   const [selection, setSelection] = useState<string[]>([])
@@ -291,7 +296,7 @@ export function TacticsBoard() {
             (경기가 흐르는 중에 모달을 띄우면 관전을 막는다).
           ★ 닫아도 헤더 버튼으로 다시 열 수 있다. 실수로 닫았을 때 조언이 영영 사라지면
             "무시할 수 있다"가 아니라 "잃어버렸다"가 된다. */}
-      <CoachMeeting canAdopt={full} open={coachOpen} onOpenChange={setCoachOpen} />
+      <CoachMeeting full={full} open={coachOpen} onOpenChange={setCoachOpen} />
 
       {halftime && (
         <div className="tb-talk">
@@ -412,9 +417,10 @@ export function TacticsBoard() {
               <div className="tb-tactics">
                 {!full && (
                   <p className="tb-locked" role="status">
-                    {/* "전부 잠김"이 아니다 — 압박·템포는 아래 콘솔에서 열려 있다.
-                        무엇이 잠겼는지를 정확히 적지 않으면 열린 축까지 죽은 것으로 읽힌다. */}
-                    포메이션·태세·세트피스는 잠김 — {touchlineNotice(engine.minute, schedule)}
+                    {/* "전부 잠김"이 아니다 — 지시 4축·태세·적극성·패턴·세트피스가 아래에서
+                        열려 있다. 무엇이 잠겼는지를 정확히 적지 않으면 열린 축까지 죽은
+                        것으로 읽힌다(확장 개방 이후로는 잠긴 쪽이 소수다). */}
+                    {touchlineNotice(engine.minute, schedule)}
                   </p>
                 )}
                 <ConsolePanel side={SIDE} onPreview={setPreview} />
@@ -482,14 +488,20 @@ const DEFAULT_GI: GroupIntensity = { attack: 0, midfield: 0, defense: 0 }
  *  각 카드 [채택]은 부분 전술(TacticPatch)을 현재 draft에 병합해 즉시 반영한다(유저가 이후 수정 가능).
  *  전술 축으로 표현할 수 없는 조언(교체 권유 등)은 패치가 비어 있어 [채택]이 붙지 않는다.
  *  맨 아래 [감독 판단대로 간다]는 전체 카드를 접는다(전부 무시 — 감독의 딜레마 존중).
- *  canAdopt=false(터치라인 등급)면 조언은 그대로 읽되 [채택]은 걸지 않는다 — 채택은
- *  전술 축을 바꾸는 일이라 전원 소집 사항이고, 열람까지 막으면 정보만 사라진다. */
-function CoachMeeting({ canAdopt, open, onOpenChange }: {
-  canAdopt: boolean
+ *
+ *  ★ 터치라인 등급에서의 [채택](2026-08-01 확장 개방): 예전에는 등급 하나로 전부 껐다.
+ *  이제는 **패치 내용으로 판정한다** — 코치 조언은 지시·태세·적극성·패턴의 조합이라
+ *  대부분 터치라인에서도 성립하지만, 한 카드가 멘탈리티를 두 단계 밀거나 지시를 ±15
+ *  넘게 움직이면 그 카드만 막혀야 한다. 판정은 store와 **같은 함수**(touchlineTacticsError)를
+ *  쓴다. 막힌 카드는 사유를 그 자리에 적는다 — 이유 없는 disabled는 고장으로 읽힌다. */
+function CoachMeeting({ full, open, onOpenChange }: {
+  full: boolean
   open: boolean
   onOpenChange(v: boolean): void
 }) {
   const engine = useMatchStore(s => s.engine)
+  const schedule = useMatchStore(s => s.schedule)
+  const touchlineWindow = useMatchStore(s => s.touchlineWindow)
   const submitCommand = useMatchStore(s => s.submitCommand)
 
   if (!engine || !open) return null
@@ -505,18 +517,26 @@ function CoachMeeting({ canAdopt, open, onOpenChange }: {
     )
   }
 
-  // TacticPatch → 현재 tactics에 병합 후 formation 명령으로 제출(엔진은 tactics 통째 교체).
-  const adopt = (p: TacticPatch) => {
+  // TacticPatch → 현재 tactics에 병합. 판정과 제출이 같은 결과를 보게 순수 함수로 뽑는다.
+  const mergedOf = (p: TacticPatch): TacticState => {
     const t = engine[SIDE].tactics
-    const merged: TacticState = {
+    return {
       ...t,
       ...(p.instructions ? { instructions: { ...t.instructions, ...p.instructions } } : {}),
       ...(p.mentality ? { mentality: p.mentality } : {}),
       ...(p.groupIntensity ? { groupIntensity: { ...(t.groupIntensity ?? DEFAULT_GI), ...p.groupIntensity } } : {}),
       ...(p.attackPattern ? { attackPattern: p.attackPattern } : {}),
     }
-    submitCommand(SIDE, { type: 'formation', tactics: merged })
   }
+  const adopt = (p: TacticPatch) => submitCommand(SIDE, { type: 'formation', tactics: mergedOf(p) })
+
+  // 터치라인에서 이 패치가 통과하는가 — store와 같은 판정, 같은 기준점(창 스냅샷).
+  const minute = engine.minute
+  const windowOpen = !!touchlineWindow && touchlineWindow.minute === minute && touchlineWindow.side === SIDE
+  const base = windowOpen && touchlineWindow ? touchlineWindow.tactics : engine[SIDE].tactics
+  const adoptBlock = (p: TacticPatch): string | null => full ? null : touchlineTacticsError(base, mergedOf(p), {
+    minute, losing: engine.score[0] < engine.score[1], nextBreak: nextBreakMinute(minute, schedule),
+  })
 
   return (
     // 스크림 + 카드. role=dialog는 작전판 루트에도 있지만 중첩 대화상자는 정상이다
@@ -528,22 +548,32 @@ function CoachMeeting({ canAdopt, open, onOpenChange }: {
           <button type="button" className="tb-coach__close" aria-label="코치 회의 닫기" onClick={() => onOpenChange(false)}>✕</button>
         </header>
         <ul className="tb-coach__list">
-          {advice.map((a, i) => (
-            <li key={`${a.coach}-${i}`} className="tb-coach__card">
-              <div className="tb-coach__role">{a.coach}</div>
-              <p className="tb-coach__rationale">{a.rationale}</p>
-              <p className="tb-coach__proposal">{a.proposal}</p>
-              {canAdopt && hasPatch(a.apply) && (
-                <div className="tb-coach__actions">
-                  {/* 채택하면 반영되고 **팝업이 사라진다**(사용자 지시). 회의는 결정하는
-                      자리지 머무는 자리가 아니다 — 고른 뒤에도 남아 있으면 다시 닫아야 한다. */}
-                  <button type="button" className="tb-coach__adopt btn btn--secondary btn--sm" onClick={() => { adopt(a.apply); onOpenChange(false) }}>
-                    채택
-                  </button>
-                </div>
-              )}
-            </li>
-          ))}
+          {advice.map((a, i) => {
+            const block = hasPatch(a.apply) ? adoptBlock(a.apply) : null
+            return (
+              <li key={`${a.coach}-${i}`} className="tb-coach__card">
+                <div className="tb-coach__role">{a.coach}</div>
+                <p className="tb-coach__rationale">{a.rationale}</p>
+                <p className="tb-coach__proposal">{a.proposal}</p>
+                {hasPatch(a.apply) && (
+                  <div className="tb-coach__actions">
+                    {/* 채택하면 반영되고 **팝업이 사라진다**(사용자 지시). 회의는 결정하는
+                        자리지 머무는 자리가 아니다 — 고른 뒤에도 남아 있으면 다시 닫아야 한다. */}
+                    <button
+                      type="button"
+                      className="tb-coach__adopt btn btn--secondary btn--sm"
+                      disabled={!!block}
+                      onClick={() => { adopt(a.apply); onOpenChange(false) }}
+                    >
+                      채택
+                    </button>
+                    {/* 막힌 카드는 사유를 그 자리에 적는다 — 조언은 읽히되 왜 못 쓰는지가 보인다. */}
+                    {block && <span className="tb-coach__block">{block}</span>}
+                  </div>
+                )}
+              </li>
+            )
+          })}
         </ul>
         {/* 아무것도 고르지 않고 닫는 경로. 기획서 원칙 2 — 코치는 전부 무시할 수 있어야 한다. */}
         <button type="button" className="btn btn--ghost btn--sm" onClick={() => onOpenChange(false)}>

@@ -1,4 +1,7 @@
-import { interventionLevel, useMatchStore } from '../../game/matchStore'
+import {
+  interventionLevel, nextBreakMinute, useMatchStore,
+  SHOUT_COOLDOWN, TOUCHLINE_RANK_STEP,
+} from '../../game/matchStore'
 import { MENTALITIES, ATTACK_PATTERNS, BOX_LOADS, SET_PIECE_ROUTES } from '../../engine/tactics'
 import { counterRiskScale } from '../../engine/simulate'
 import { zoneStrength } from '../../engine/strength'
@@ -32,9 +35,14 @@ const DEFAULT_GI: GroupIntensity = { attack: 0, midfield: 0, defense: 0 }
 // recommendPlan도 이 축을 고른다. 그런데 유저가 볼 수도 바꿀 수도 없었다 — 기획서
 // 차별점 3번("상대마다 다른 정답, 그리고 그 검증")의 축 하나가 화면에 없었던 셈이다.
 //
-// 왜 여기(TacticsExtras)인가: 세트피스 루틴은 훈련장에서 약속하는 구조다. 페이즈
-// 포메이션·태세와 같은 등급('full')이고, 두 화면(워룸·작전판)이 같은 컨트롤을 써야
-// 유저가 한 번만 배운다. 이 컴포넌트가 이미 그 역할을 하고 있다.
+// 왜 여기(TacticsExtras)인가: 태세·적극성·패턴과 같은 성격의 지시이고, 두 화면
+// (워룸·작전판)이 같은 컨트롤을 써야 유저가 한 번만 배운다.
+//
+// ★ 등급 재판정(2026-08-01 확장 개방): 예전에는 "세트피스 루틴은 훈련장에서 약속하는
+//   구조"라며 페이즈 포메이션과 같은 'full' 등급에 두었다. 그러나 훈련장에서 약속하는
+//   것은 **루틴 자체**이고, 코너 앞에서 감독이 하는 일은 **이미 약속된 것 중 하나를
+//   고르는** 것이다(실제로도 손짓 하나로 전달된다). 새 루틴을 발명하는 것이 아니므로
+//   터치라인에서 연다. 대형 재배치가 아니라는 것이 판정의 기준이다.
 const ROUTE_KO: Record<SetPieceRoute, string> = { near: '니어', far: '파', short: '짧게' }
 const LOAD_KO: Record<BoxLoad, string> = { light: '적게', normal: '표준', heavy: '많이' }
 const MARKINGS: readonly SetPieceMarking[] = ['zonal', 'man']
@@ -50,19 +58,29 @@ function oppGkAerialOf(opp: SideState): number {
   return gk?.gkStats?.aerial ?? 25
 }
 
-/** 확장 전술 지시 — 멘탈리티·그룹 적극성·공격 패턴·GK 파워플레이·페이즈 포메이션.
+/** 확장 전술 지시 — 멘탈리티·그룹 적극성·공격 패턴·GK 파워플레이·세트피스·페이즈 포메이션.
  *  각 컨트롤은 즉시 submitCommand({type:'formation'})로 tactics를 갱신한다(포메이션 셀렉터와 동일 패턴).
  *  4축 슬라이더(ConsolePanel)와 달리 별도 [적용] 버튼 없이 토글/버튼 즉시 반영.
- *  개입 창(정지·하프타임)에서만 활성. */
+ *
+ *  ★ 2026-08-01 확장 개방 — 잠금을 **축별로** 쪼갠다.
+ *   예전에는 `level === 'full'` 하나로 전 컨트롤을 잠갔다. 그런데 태세·적극성·패턴·세트피스는
+ *   "같은 대형 안에서 어떻게 행동할지"라 터치라인에서 소리쳐 전달되는 지시다. 잠기는 것은
+ *   **대형**(페이즈 포메이션)뿐이다 — 판정 정본은 store의 touchlineTacticsError다.
+ *   서열 축(멘탈리티·그룹 적극성)에는 한 번에 ±1단계 제한이 붙고, 기준점은 **개입이
+ *   시작된 시점의 스냅샷**(touchlineWindow)이다. 그래서 버튼도 그 기준으로 잠근다. */
 export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
   const phase = useMatchStore(s => s.phase)
   const pauseReason = useMatchStore(s => s.pauseReason)
   const engine = useMatchStore(s => s.engine)
+  const schedule = useMatchStore(s => s.schedule)
+  const lastShoutMinute = useMatchStore(s => s.lastShoutMinute)
+  const touchlineWindow = useMatchStore(s => s.touchlineWindow)
   const submitCommand = useMatchStore(s => s.submitCommand)
 
   // 킥오프 전(전술 센터)도 개입 창이다 — store의 판정을 그대로 따른다.
-  // 확장 전술도 구조 변경이라 '전원 소집' 등급에서만 열린다(터치라인에선 열람만).
-  const open = interventionLevel(phase, pauseReason) === 'full'
+  const level = interventionLevel(phase, pauseReason)
+  const full = level === 'full'
+  const touchline = level === 'touchline'
   const state = engine?.[side]
   if (!state) return null
   const t = state.tactics
@@ -76,12 +94,49 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
   // 부분 갱신 → 전체 tactics로 formation 명령 제출(엔진 applyCommand는 tactics 통째 교체).
   const patch = (p: Partial<TacticState>) => submitCommand(side, { type: 'formation', tactics: { ...t, ...p } })
 
-  // GK 파워플레이 잠금 판정: 85'+ & 해당 side 지는 중에만 유효.
   const minute = engine!.minute
   const [own, opp] = side === 'home' ? [engine!.score[0], engine!.score[1]] : [engine!.score[1], engine!.score[0]]
   const losing = own < opp
-  const ppUnlocked = minute >= 85 && losing
-  const ppReason = minute < 85 ? "85' 이후에만" : !losing ? '지고 있을 때만' : ''
+
+  // ── 개입 자원 상태 ────────────────────────────────────────────────
+  // 같은 분에 열린 창 안이면 추가 비용이 없다(ConsolePanel과 같은 규칙).
+  const windowOpen = !!touchlineWindow && touchlineWindow.minute === minute && touchlineWindow.side === side
+  const cooldownLeft = touchline && !windowOpen && lastShoutMinute !== null
+    ? Math.max(0, SHOUT_COOLDOWN - (minute - lastShoutMinute))
+    : 0
+  const onCooldown = cooldownLeft > 0
+  /** 터치라인에서 열리는 축의 공통 활성 조건. */
+  const liveOpen = full || (touchline && !onCooldown)
+  const nextBreak = nextBreakMinute(minute, schedule)
+  const breakTail = nextBreak === null
+    ? '남은 브레이크가 없습니다'
+    : `다음 브레이크(${nextBreak}분)에서`
+
+  // ── 서열 축 폭 제한(한 번에 ±1단계) ─────────────────────────────
+  // 기준은 창 스냅샷 — 현재값 기준이면 같은 개입 안에서 여러 번 눌러 끝에서 끝까지 간다.
+  const baseTactics = windowOpen && touchlineWindow ? touchlineWindow.tactics : t
+  const baseMentalityRank = MENTALITIES.indexOf(baseTactics.mentality ?? 'balanced')
+  const baseGi = { ...DEFAULT_GI, ...(baseTactics.groupIntensity ?? {}) }
+  /** 이 멘탈리티를 지금 고를 수 있는가(터치라인 한정 ±1단계). */
+  const mentalityPickable = (m: Mentality) =>
+    !touchline || Math.abs(MENTALITIES.indexOf(m) - baseMentalityRank) <= TOUCHLINE_RANK_STEP
+  const intensityPickable = (line: keyof GroupIntensity, v: -1 | 0 | 1) =>
+    !touchline || Math.abs(v - baseGi[line]) <= TOUCHLINE_RANK_STEP
+
+  // ── GK 파워플레이 잠금 판정 ──────────────────────────────────────
+  // ★ 결함 수정(2026-08-01): 예전에는 버튼이 `!open || !ppUnlocked`로 막히는데 안내문은
+  //   ppUnlocked만 봤다. 85분이 지나면 "해제됐다"는 문구가 뜬 채 버튼은 등급 잠금으로
+  //   죽어 있었다 — "조건은 충족됐다는데 눌리지 않는" 모순이다. 잠금 조건이 여럿이면
+  //   **지금 막고 있는 조건**을 말해야 한다(ShoutBar 선례: 이유 없는 disabled는 고장으로 읽힌다).
+  // 끄는 것은 조건과 무관하게 허용한다 — 위험한 상태를 되돌리는 길까지 막을 이유가 없다.
+  const ppEngineBlock = gkPowerplay ? null : minute < 85 ? "85' 이후에만 효과가 있습니다" : !losing ? '지고 있을 때만 효과가 있습니다' : null
+  const ppResourceBlock = liveOpen ? null
+    : onCooldown ? `개입 쿨다운 — ${cooldownLeft}분 남음`
+    : `지금은 개입 창이 아닙니다 — ${breakTail}`
+  // 두 조건이 동시에 막을 수 있으므로 **둘 다** 적는다. 하나만 적으면 그 하나를 풀었는데도
+  // 여전히 눌리지 않는 같은 결함이 재발한다.
+  const ppBlocks = [ppResourceBlock, ppEngineBlock].filter((x): x is string => !!x)
+  const ppDisabled = ppBlocks.length > 0
 
   // 세트피스 판별자 — 엔진이 쓰는 것과 **같은 두 값**을 화면에도 그대로 적는다.
   // 추천을 조용히 적용하는 대신 근거를 보이고 유저가 뒤집을 수 있게 하는 것이 이 UI의 목적이다.
@@ -96,6 +151,15 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
 
   return (
     <section className="tx-panel" aria-label="확장 전술 지시">
+      {/* 터치라인에서 지금 무엇이 열려 있고 무엇이 제한되는지 — 화면이 먼저 말한다. */}
+      {touchline && (
+        <p className="tx-hint" role="status">
+          {onCooldown
+            ? `터치라인 지시 쿨다운 — ${cooldownLeft}분 뒤에 다시 외칠 수 있습니다(외침·감독 타임과 같은 시계).`
+            : `경기 중에도 태세·적극성·패턴·세트피스를 소리쳐 전달합니다 — 서열 축은 한 번에 ±${TOUCHLINE_RANK_STEP}단계. 대형(페이즈 포메이션)만 ${breakTail} 바꿀 수 있습니다.`}
+        </p>
+      )}
+
       {/* 멘탈리티 5버튼 */}
       <div className="tx-group" role="group" aria-label="멘탈리티">
         <h4 className="tx-group__title">멘탈리티</h4>
@@ -105,7 +169,8 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
               key={m}
               type="button"
               aria-pressed={m === mentality}
-              disabled={!open}
+              // 두 겹의 잠금 — 개입 자원(창·쿨다운)과 폭 제한(±1단계). 아래 안내가 둘을 구분한다.
+              disabled={!liveOpen || !mentalityPickable(m)}
               className="tx-btn"
               onClick={() => patch({ mentality: m })}
             >
@@ -113,6 +178,11 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
             </button>
           ))}
         </div>
+        {touchline && liveOpen && (
+          <p className="tx-hint">
+            한 번에 한 단계씩 — 지금은 <b>{MENTALITY_KO[baseTactics.mentality ?? 'balanced']}</b>의 양옆까지입니다.
+          </p>
+        )}
       </div>
 
       {/* 그룹 적극성 3줄 */}
@@ -127,7 +197,7 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
                   key={v}
                   type="button"
                   aria-pressed={gi[key] === v}
-                  disabled={!open}
+                  disabled={!liveOpen || !intensityPickable(key, v)}
                   className="tx-btn tx-btn--sm"
                   onClick={() => patch({ groupIntensity: { ...gi, [key]: v } })}
                 >
@@ -137,6 +207,9 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
             </div>
           </div>
         ))}
+        {touchline && liveOpen && (
+          <p className="tx-hint">한 라인당 한 번에 한 단계씩 — 자제에서 적극으로 한 번에 갈 수는 없습니다.</p>
+        )}
       </div>
 
       {/* 공격 패턴 4택 */}
@@ -148,7 +221,8 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
               key={p}
               type="button"
               aria-pressed={p === pattern}
-              disabled={!open}
+              // 범주 축이라 폭 개념이 없다 — 열려 있거나 닫혀 있거나 둘 중 하나다.
+              disabled={!liveOpen}
               className="tx-btn"
               onClick={() => patch({ attackPattern: p })}
             >
@@ -166,16 +240,16 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
         <button
           type="button"
           aria-pressed={gkPowerplay}
-          disabled={!open || !ppUnlocked}
+          disabled={ppDisabled}
           className="tx-toggle"
           onClick={() => patch({ gkPowerplay: !gkPowerplay })}
         >
           GK 전진
         </button>
         <p className="tx-hint">
-          {ppUnlocked
-            ? '세트피스 찬스 퀄 +40% · 역습 시 빈 골문 실점 위험 3배'
-            : `잠김 — ${ppReason} 가능`}
+          {ppDisabled
+            ? `잠김 — ${ppBlocks.join(' · ')}`
+            : '세트피스 찬스 퀄 +40% · 역습 시 빈 골문 실점 위험 3배'}
         </p>
       </div>
 
@@ -197,7 +271,7 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
           ko={ROUTE_KO}
           value={sp.route}
           recommended={bestRoute}
-          disabled={!open}
+          disabled={!liveOpen}
           onPick={v => patch({ setPiece: { ...sp, route: v } })}
         />
         <SetPieceRow
@@ -206,7 +280,7 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
           ko={LOAD_KO}
           value={sp.boxLoad}
           recommended={bestLoad}
-          disabled={!open}
+          disabled={!liveOpen}
           onPick={v => patch({ setPiece: { ...sp, boxLoad: v } })}
         />
         <SetPieceRow
@@ -214,7 +288,7 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
           values={MARKINGS}
           ko={MARKING_KO}
           value={sp.marking}
-          disabled={!open}
+          disabled={!liveOpen}
           onPick={v => patch({ setPiece: { ...sp, marking: v } })}
         />
         <p className="tx-hint">
@@ -244,15 +318,23 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
         <PhaseFormationRow
           label="공격 시"
           value={pf.attack}
-          disabled={!open}
+          disabled={!full}
           onPick={f => patch({ phaseFormations: { ...pf, attack: f } })}
         />
         <PhaseFormationRow
           label="수비 시"
           value={pf.defense}
-          disabled={!open}
+          disabled={!full}
           onPick={f => patch({ phaseFormations: { ...pf, defense: f } })}
         />
+        {/* 이 패널에서 유일하게 잠기는 축이다 — 왜 잠겼고 언제 풀리는지를 반드시 말한다.
+            나머지가 전부 열려 있는 화면에서 이유 없이 죽어 있으면 고장으로 읽힌다. */}
+        {!full && (
+          <p className="tx-hint">
+            잠김 — 페이즈 포메이션도 <b>대형</b>입니다. 열한 명의 좌표를 다시 그리는 일은
+            {' '}선수를 모아 놓고 해야 합니다. {breakTail} 바꿀 수 있습니다.
+          </p>
+        )}
       </div>
     </section>
   )

@@ -3,6 +3,8 @@ import {
   useMatchStore, TEAM_TALK_TABLE, scoreSituation, SHOUT_TABLE, SHOUT_COOLDOWN,
   teamExpectation, recommendedTone, EXPECTATION_ADJUST, computeDeviation,
   interventionLevel, nextBreakMinute, touchlineNotice, touchlineOrderError,
+  touchlineTacticsError, tacticsDiff, freeInterventionState, MAX_FREE_INTERVENTIONS,
+  MOMENT_PROMPT_TTL,
 } from '../matchStore'
 import { makeTestTeam, pickBestXI } from '../../engine/fixtures/testTeams'
 import { loadTeam } from '../../data/loader'
@@ -641,9 +643,13 @@ describe('플랜 스냅샷과 이탈 계산', () => {
   })
 })
 
-describe('감독 타임(자유 정지)은 지시 부스트를 주지 않는다', () => {
-  // pauseByUser에 횟수 제한이 없어, 확정마다 부스트를 주면 8분 주기로
-  // 정지·확정만 반복해 부스트를 상시 유지하는 공짜 이득이 생긴다.
+describe('자유 개입(감독 타임·순간 제안)은 지시 부스트를 주지 않는다', () => {
+  // 2026-08-01 재판정. 예전 근거는 "pauseByUser에 횟수 제한이 없어 8분 주기로 정지·확정만
+  // 반복하면 부스트가 상시 유지된다"였고, 5회+쿨다운이 생기면서 그 전제는 사라졌다.
+  // 그래서 다시 재 봤더니(tools/touchline-balance · n=400 페어드) **전술을 하나도 바꾸지
+  // 않고 5회를 소진만 하는 전략**이 상대 5팀 전부에서 +1.3~+2.3pp(SE 0.6~0.7)로 유의했다.
+  // "판단 없이 정지 버튼만 다섯 번"이 공짜 승률이 되는 것이 정확히 지배 전략이라 거뒀다.
+  // 부스트는 **자원을 소모하지 않는 개입**(하이드레이션·하프타임)에만 붙는다.
   it('감독 타임 확정은 boostUntil을 올리지 않는다', () => {
     const s = store()
     s.startMatch(a, b, 4242)
@@ -671,10 +677,13 @@ describe('감독 타임(자유 정지)은 지시 부스트를 주지 않는다',
   })
 })
 
+
 describe('개입 권한 2등급 — 전원 소집 vs 터치라인', () => {
   const INS = { lineHeight: 50, pressing: 88, tempo: 50, attackFocus: 'balanced' } as const
 
-  /** 감독 타임에 들어간 상태를 만든다(터치라인 등급). */
+  /** 감독 타임에 들어간 상태를 만든다(터치라인 등급).
+   *  ★ 2026-08-01: 감독 타임 진입 자체가 자유 개입 1회를 쓰고, 그 분에 **창**을 연다
+   *  — 그 창 안의 지시는 추가 비용이 없다(touchlineWindow). */
   function toManagerTime() {
     store().startMatch(a, b, 42)
     store().kickoff()
@@ -682,11 +691,20 @@ describe('개입 권한 2등급 — 전원 소집 vs 터치라인', () => {
     store().pauseByUser()
   }
 
+  /** 창 없이 터치라인 등급만 만든다 — 창·쿨다운 규칙 자체를 검증할 때 쓴다. */
+  function toTouchlineWithoutWindow() {
+    store().startMatch(a, b, 42)
+    store().kickoff()
+    store().advanceMinute()
+    useMatchStore.setState({ phase: 'paused-user', pauseReason: { kind: 'user' } })
+  }
+
   /** 라인업 밖 벤치 선수 1명(결정론 — squad 순서). */
   const benchId = () => {
     const home = store().engine!.home
     return home.team.squad.find(p => !home.tactics.lineup.some(l => l.playerId === p.id))!.id
   }
+  const tac = () => store().engine!.home.tactics
 
   it('등급 판정: 킥오프 전·하이드레이션·하프타임은 full, 감독 타임·상황 개입은 touchline', () => {
     expect(interventionLevel('pre', null)).toBe('full')
@@ -698,98 +716,273 @@ describe('개입 권한 2등급 — 전원 소집 vs 터치라인', () => {
     expect(interventionLevel('fulltime', null)).toBe('none')
   })
 
-  // ── 터치라인 지시(2026-08-01 개방) ───────────────────────────────
-  // "압박 올려!"·"템포 낮춰!"는 실제로 소리쳐 전달되는 지시라 터치라인에서 열렸다.
-  // 라인·공격방향·포메이션은 여전히 전원 소집 사항이고, 폭(±15)과 쿨다운이 걸린다.
+  // ── 터치라인 확장 개방(2026-08-01) ───────────────────────────────
+  // 열린 축: 지시 4축(라인·압박·템포 ±15, 공격방향 범주) · 멘탈리티(±1단계) ·
+  //          그룹 적극성(라인당 ±1단계) · 공격 패턴 · 세트피스 3축 · GK 파워플레이(엔진 조건 유지)
+  // 잠긴 축: 포메이션 · 페이즈 포메이션 · 자리 배치(lineup) — 전부 "대형"이다.
 
-  it('감독 타임: 압박·템포는 ±15까지 열린다', () => {
+  it('감독 타임: 지시 3축이 모두 ±15까지 열린다(라인 포함)', () => {
     toManagerTime()
-    const cur = store().engine!.home.tactics.instructions
+    const cur = tac().instructions
     store().submitCommand('home', {
       type: 'instructions',
-      instructions: { ...cur, pressing: cur.pressing + 15, tempo: cur.tempo - 15 },
+      instructions: { ...cur, lineHeight: cur.lineHeight + 15, pressing: cur.pressing + 15, tempo: cur.tempo - 15 },
     })
-    expect(store().engine!.home.tactics.instructions.pressing).toBe(cur.pressing + 15)
-    expect(store().engine!.home.tactics.instructions.tempo).toBe(cur.tempo - 15)
+    expect(tac().instructions.lineHeight).toBe(cur.lineHeight + 15)
+    expect(tac().instructions.pressing).toBe(cur.pressing + 15)
+    expect(tac().instructions.tempo).toBe(cur.tempo - 15)
+  })
+
+  it('감독 타임: 공격방향은 범주 축이라 폭 제한 없이 바뀐다', () => {
+    toManagerTime()
+    const cur = tac().instructions
+    store().submitCommand('home', { type: 'instructions', instructions: { ...cur, attackFocus: 'left' } })
+    expect(tac().instructions.attackFocus).toBe('left')
   })
 
   it('감독 타임: ±15를 넘는 지시는 거부된다(속도 제한)', () => {
     toManagerTime()
-    const cur = store().engine!.home.tactics.instructions
+    const cur = tac().instructions
     expect(() => store().submitCommand('home', {
-      type: 'instructions', instructions: { ...cur, pressing: cur.pressing + 16 },
+      type: 'instructions', instructions: { ...cur, lineHeight: cur.lineHeight + 16 },
     })).toThrow('15보다 크게')
-    expect(store().engine!.home.tactics.instructions.pressing).toBe(cur.pressing)
+    expect(tac().instructions.lineHeight).toBe(cur.lineHeight)
   })
 
-  it('감독 타임: 라인·공격방향은 여전히 거부된다(전원 소집 사항)', () => {
+  it('감독 타임: 멘탈리티는 한 단계까지만 움직인다', () => {
     toManagerTime()
-    const cur = store().engine!.home.tactics.instructions
-    expect(() => store().submitCommand('home', {
-      type: 'instructions', instructions: { ...cur, lineHeight: cur.lineHeight + 5 },
-    })).toThrow('백라인 전체')
-    expect(() => store().submitCommand('home', {
-      type: 'instructions', instructions: { ...cur, attackFocus: 'left' },
-    })).toThrow('공격 방향')
-    expect(store().engine!.home.tactics.instructions.lineHeight).toBe(cur.lineHeight)
+    const t = tac()
+    store().submitCommand('home', { type: 'formation', tactics: { ...t, mentality: 'attacking' } })
+    expect(tac().mentality).toBe('attacking')
+    // 같은 창 안에서 한 단계 더 미는 것은 창 스냅샷(balanced) 기준이라 두 단계다 → 거부.
+    expect(() => store().submitCommand('home', { type: 'formation', tactics: { ...tac(), mentality: 'very-attacking' } }))
+      .toThrow('한 단계')
+    expect(tac().mentality).toBe('attacking')
   })
 
-  it('감독 타임: 터치라인 지시는 외침과 쿨다운을 공유한다', () => {
+  it('감독 타임: 그룹 적극성은 라인당 한 단계 — 자제에서 적극으로 한 번에 못 간다', () => {
+    store().startMatch(a, b, 42)
+    store().kickoff()
+    store().advanceMinute()
+    // 브레이크(전원 소집)에서 공격 라인을 '자제'로 내려 둔 상태를 만든다.
+    pauseAtBreak()
+    store().submitCommand('home', {
+      type: 'formation',
+      tactics: { ...tac(), groupIntensity: { attack: -1, midfield: 0, defense: 0 } },
+    })
+    store().confirmTactics()
+    store().pauseByUser()
+    // 자제(-1) → 적극(+1)은 두 단계라 거부, 기본(0)은 한 단계라 통과.
+    expect(() => store().submitCommand('home', {
+      type: 'formation', tactics: { ...tac(), groupIntensity: { attack: 1, midfield: 0, defense: 0 } },
+    })).toThrow('한 단계')
+    store().submitCommand('home', {
+      type: 'formation', tactics: { ...tac(), groupIntensity: { attack: 0, midfield: 0, defense: 0 } },
+    })
+    expect(tac().groupIntensity!.attack).toBe(0)
+  })
+
+  it('감독 타임: 공격 패턴·세트피스는 범주 축이라 그대로 통과한다', () => {
     toManagerTime()
-    const cur = store().engine!.home.tactics.instructions
+    store().submitCommand('home', { type: 'formation', tactics: { ...tac(), attackPattern: 'longshot' } })
+    expect(tac().attackPattern).toBe('longshot')
+    store().submitCommand('home', {
+      type: 'formation',
+      tactics: { ...tac(), setPiece: { route: 'near', boxLoad: 'heavy', marking: 'man' } },
+    })
+    expect(tac().setPiece).toEqual({ route: 'near', boxLoad: 'heavy', marking: 'man' })
+  })
+
+  it("감독 타임: GK 파워플레이는 등급 잠금이 풀리되 엔진 조건(85'+·지는 중)은 남는다", () => {
+    toManagerTime()
+    expect(() => store().submitCommand('home', { type: 'formation', tactics: { ...tac(), gkPowerplay: true } }))
+      .toThrow("85'")
+    // 85분·지는 중으로 옮기면 통과한다.
+    const eng = structuredClone(store().engine!)
+    eng.minute = 87
+    eng.score = [0, 1]
+    useMatchStore.setState({ engine: eng, touchlineWindow: null })
+    store().submitCommand('home', { type: 'formation', tactics: { ...tac(), gkPowerplay: true } })
+    expect(tac().gkPowerplay).toBe(true)
+    // 끄는 것은 조건과 무관하게 허용한다(위험한 상태를 되돌리는 길까지 막지 않는다).
+    const eng2 = structuredClone(store().engine!)
+    eng2.score = [1, 0]
+    useMatchStore.setState({ engine: eng2 })
+    store().submitCommand('home', { type: 'formation', tactics: { ...tac(), gkPowerplay: false } })
+    expect(tac().gkPowerplay).toBe(false)
+  })
+
+  it('감독 타임: 포메이션·페이즈 포메이션·자리 배치는 잠긴다(대형은 소리쳐 전달되지 않는다)', () => {
+    toManagerTime()
+    const t = tac()
+    expect(() => store().submitCommand('home', { type: 'formation', tactics: { ...t, formation: '5-4-1' } }))
+      .toThrow('포메이션 변경')
+    expect(() => store().submitCommand('home', {
+      type: 'formation', tactics: { ...t, phaseFormations: { attack: '3-5-2' } },
+    })).toThrow('페이즈 포메이션')
+    const swapped = t.lineup.map((l, i) => (i === 1 ? { ...l, playerId: t.lineup[2].playerId } : i === 2 ? { ...l, playerId: t.lineup[1].playerId } : l))
+    expect(() => store().submitCommand('home', { type: 'formation', tactics: { ...t, lineup: swapped } }))
+      .toThrow('자리 배치')
+    expect(tac().formation).toBe(t.formation)
+  })
+
+  it('잠금 사유는 언제 풀리는지를 함께 말한다(다음 브레이크 분)', () => {
+    toManagerTime()
+    const next = nextBreakMinute(store().engine!.minute, store().schedule)!
+    let msg = ''
+    try { store().submitCommand('home', { type: 'formation', tactics: { ...tac(), formation: '5-4-1' } }) }
+    catch (e) { msg = (e as Error).message }
+    expect(msg).toContain(`다음 브레이크(${next}분)`)
+  })
+
+  // ── 창(window) — 같은 분의 여러 지시를 한 번의 개입으로 묶는다 ──────
+  it('감독 타임 진입이 창을 연다 — 그 안의 추가 지시는 쿨다운을 다시 소모하지 않는다', () => {
+    toManagerTime()
+    const at = store().engine!.minute
+    expect(store().touchlineWindow?.minute).toBe(at)
+    expect(store().lastShoutMinute).toBe(at)
+    const cur = tac().instructions
+    store().submitCommand('home', { type: 'instructions', instructions: { ...cur, pressing: cur.pressing + 10 } })
+    // 두 번째·세 번째 지시도 그대로 통과한다(같은 개입이므로).
+    store().submitCommand('home', { type: 'formation', tactics: { ...tac(), attackPattern: 'cross' } })
+    store().submitCommand('home', { type: 'formation', tactics: { ...tac(), mentality: 'attacking' } })
+    expect(tac().attackPattern).toBe('cross')
+    expect(tac().mentality).toBe('attacking')
+    expect(store().lastShoutMinute).toBe(at)
+  })
+
+  it('창 안에서 여러 번 눌러도 폭 제한은 창 스냅샷 기준이다(우회 차단)', () => {
+    toManagerTime()
+    const cur = tac().instructions
+    store().submitCommand('home', { type: 'instructions', instructions: { ...cur, pressing: cur.pressing + 15 } })
+    // 현재값 기준이면 +30이 통과하지만, 창 스냅샷 기준이라 거부된다.
+    expect(() => store().submitCommand('home', {
+      type: 'instructions', instructions: { ...tac().instructions, pressing: cur.pressing + 30 },
+    })).toThrow('15보다 크게')
+    expect(tac().instructions.pressing).toBe(cur.pressing + 15)
+  })
+
+  it('창이 없으면 터치라인 지시가 쿨다운을 새로 소모한다(외침과 같은 시계)', () => {
+    toTouchlineWithoutWindow()
+    const cur = tac().instructions
     store().submitCommand('home', { type: 'instructions', instructions: { ...cur, pressing: cur.pressing + 10 } })
     expect(store().lastShoutMinute).toBe(store().engine!.minute)
-    const now = store().engine!.home.tactics.instructions
+    // 창을 지우고 같은 분에 새 지시를 시도하면 쿨다운에 걸린다.
+    useMatchStore.setState({ touchlineWindow: null })
     expect(() => store().submitCommand('home', {
-      type: 'instructions', instructions: { ...now, tempo: now.tempo + 5 },
+      type: 'instructions', instructions: { ...tac().instructions, tempo: tac().instructions.tempo + 5 },
     })).toThrow('쿨다운')
   })
 
-  it('감독 타임: 값이 그대로면 쿨다운을 소모하지 않는다', () => {
-    toManagerTime()
-    const cur = store().engine!.home.tactics.instructions
-    store().submitCommand('home', { type: 'instructions', instructions: { ...cur } })
+  it('값이 그대로면 창도 쿨다운도 소모하지 않는다', () => {
+    toTouchlineWithoutWindow()
+    store().submitCommand('home', { type: 'instructions', instructions: { ...tac().instructions } })
     expect(store().lastShoutMinute).toBeNull()
+    expect(store().touchlineWindow).toBeNull()
   })
 
-  it('touchlineOrderError: 축·폭 규칙을 순수 함수로 고정한다', () => {
-    const base = { lineHeight: 50, pressing: 50, tempo: 50, attackFocus: 'balanced' as const }
-    expect(touchlineOrderError(base, { ...base, pressing: 65, tempo: 35 })).toBeNull()
-    expect(touchlineOrderError(base, { ...base, pressing: 66 })).toContain('15보다 크게')
-    expect(touchlineOrderError(base, { ...base, lineHeight: 51 })).toContain('백라인')
-    expect(touchlineOrderError(base, { ...base, attackFocus: 'right' })).toContain('공격 방향')
+  it('외침만으로는 창이 열리지 않는다 — 외치고 나서 전 축을 공짜로 바꿀 수 없다', () => {
+    store().startMatch(a, b, 42)
+    store().kickoff()
+    store().advanceMinute()
+    store().shout('urge')
+    const at = store().engine!.minute
+    expect(store().lastShoutMinute).toBe(at)
+    expect(store().touchlineWindow).toBeNull()
+    // 같은 분에 터치라인 등급으로 들어가도(창 없음) 쿨다운에 걸린다.
+    useMatchStore.setState({ phase: 'paused-user', pauseReason: { kind: 'user' } })
+    expect(() => store().submitCommand('home', {
+      type: 'instructions', instructions: { ...tac().instructions, pressing: tac().instructions.pressing + 5 },
+    })).toThrow('쿨다운')
   })
 
-  it('감독 타임에서 formation 명령은 거부된다(확장 필드 포함)', () => {
+  it('터치라인 지시는 결정 로그를 남긴다(기자회견 근거) — 확장 축까지 한 줄로', () => {
     toManagerTime()
-    const t = store().engine!.home.tactics
-    expect(() => store().submitCommand('home', { type: 'formation', tactics: { ...t, formation: '5-4-1' } }))
-      .toThrow()
-    expect(() => store().submitCommand('home', { type: 'formation', tactics: { ...t, mentality: 'very-attacking' } }))
-      .toThrow()
-    expect(store().engine!.home.tactics.formation).toBe(t.formation)
+    const before = store().decisionLog.length
+    store().submitCommand('home', { type: 'formation', tactics: { ...tac(), mentality: 'attacking', attackPattern: 'cross' } })
+    const log = store().decisionLog
+    expect(log.length).toBe(before + 1)
+    expect(log[log.length - 1].summary).toContain('터치라인 지시')
+    expect(log[log.length - 1].summary).toContain('멘탈리티')
+    expect(log[log.length - 1].summary).toContain('공격 패턴')
+  })
+
+  it('킥오프 전 슬라이더 드래그(formation 명령)는 로그를 남기지 않는다(노이즈 방지)', () => {
+    store().startMatch(a, b, 42)
+    const t = tac()
+    store().submitCommand('home', {
+      type: 'formation',
+      tactics: { ...t, instructions: { ...t.instructions, pressing: t.instructions.pressing + 3 } },
+    })
+    expect(store().decisionLog.length).toBe(0)
   })
 
   it('감독 타임에서도 교체(sub)는 허용된다 — 감독이 무력해지면 안 된다', () => {
     toManagerTime()
-    const out = store().engine!.home.tactics.lineup[10].playerId
+    const out = tac().lineup[10].playerId
     store().submitCommand('home', { type: 'sub', out, in: benchId() })
     expect(store().engine!.home.subsUsed).toBe(1)
   })
 
-  it('하이드레이션·하프타임에서는 세 명령 모두 허용된다', () => {
+  it('하이드레이션·하프타임에서는 세 명령 모두 허용된다(폭 제한 없음)', () => {
     store().startMatch(a, b, 42)
     store().kickoff()
     store().advanceMinute()
     pauseAtBreak()
     store().submitCommand('home', { type: 'instructions', instructions: INS })
-    expect(store().engine!.home.tactics.instructions.pressing).toBe(88)
-    const t = store().engine!.home.tactics
-    store().submitCommand('home', { type: 'formation', tactics: { ...t, formation: '5-4-1' } })
-    expect(store().engine!.home.tactics.formation).toBe('5-4-1')
-    const out = store().engine!.home.tactics.lineup[10].playerId
+    expect(tac().instructions.pressing).toBe(88)
+    const t = tac()
+    store().submitCommand('home', { type: 'formation', tactics: { ...t, formation: '5-4-1', mentality: 'very-attacking' } })
+    expect(tac().formation).toBe('5-4-1')
+    expect(tac().mentality).toBe('very-attacking')
+    const out = tac().lineup[10].playerId
     store().submitCommand('home', { type: 'sub', out, in: benchId() })
     expect(store().engine!.home.subsUsed).toBe(1)
+  })
+
+  // ── 순수 판정 함수 ────────────────────────────────────────────────
+  it('touchlineOrderError: 수치 축 폭만 본다(공격방향은 통과)', () => {
+    const base = { lineHeight: 50, pressing: 50, tempo: 50, attackFocus: 'balanced' as const }
+    expect(touchlineOrderError(base, { ...base, lineHeight: 65, pressing: 65, tempo: 35 })).toBeNull()
+    expect(touchlineOrderError(base, { ...base, pressing: 66 })).toContain('15보다 크게')
+    expect(touchlineOrderError(base, { ...base, lineHeight: 66 })).toContain('15보다 크게')
+    expect(touchlineOrderError(base, { ...base, attackFocus: 'right' })).toBeNull()
+  })
+
+  it('touchlineTacticsError: 대형은 막고 태도 축은 한 단계까지 통과시킨다', () => {
+    store().startMatch(a, b, 42)
+    const cur = store().engine!.home.tactics
+    const ctx = { minute: 30, losing: false, nextBreak: 67 }
+    expect(touchlineTacticsError(cur, cur, ctx)).toBeNull()
+    expect(touchlineTacticsError(cur, { ...cur, formation: '5-4-1' }, ctx)).toContain('포메이션 변경')
+    expect(touchlineTacticsError(cur, { ...cur, phaseFormations: { attack: '4-4-2' } }, ctx)).toContain('페이즈 포메이션')
+    expect(touchlineTacticsError(cur, { ...cur, mentality: 'attacking' }, ctx)).toBeNull()
+    expect(touchlineTacticsError(cur, { ...cur, mentality: 'very-attacking' }, ctx)).toContain('한 단계')
+    expect(touchlineTacticsError(cur, { ...cur, groupIntensity: { attack: 1, midfield: 0, defense: 0 } }, ctx)).toBeNull()
+    expect(touchlineTacticsError(cur, { ...cur, attackPattern: 'through' }, ctx)).toBeNull()
+    expect(touchlineTacticsError(cur, { ...cur, gkPowerplay: true }, ctx)).toContain("85'")
+    expect(touchlineTacticsError(cur, { ...cur, gkPowerplay: true }, { minute: 87, losing: true, nextBreak: null })).toBeNull()
+    // 잠금 사유에는 언제 풀리는지가 들어간다.
+    expect(touchlineTacticsError(cur, { ...cur, formation: '5-4-1' }, ctx)).toContain('67분')
+    expect(touchlineTacticsError(cur, { ...cur, formation: '5-4-1' }, { ...ctx, nextBreak: null })).toContain('남은 브레이크가 없어')
+  })
+
+  it('tacticsDiff: 확장 축까지 한국어 한 줄로 나열한다', () => {
+    store().startMatch(a, b, 42)
+    const cur = store().engine!.home.tactics
+    const changed = tacticsDiff(cur, {
+      ...cur,
+      instructions: { ...cur.instructions, pressing: cur.instructions.pressing + 10 },
+      mentality: 'attacking',
+      groupIntensity: { attack: 1, midfield: 0, defense: 0 },
+      attackPattern: 'cross',
+      setPiece: { route: 'near' },
+    })
+    expect(changed.join(', ')).toContain('압박')
+    expect(changed.join(', ')).toContain('멘탈리티 균형→공격적')
+    expect(changed.join(', ')).toContain('공격 적극성 기본→적극')
+    expect(changed.join(', ')).toContain('공격 패턴 균형→크로스')
+    expect(changed.join(', ')).toContain('코너 루트 파→니어')
   })
 
   it('다음 브레이크 분: 지난 시점은 건너뛰고, 남은 게 없으면 null', () => {
@@ -800,10 +993,113 @@ describe('개입 권한 2등급 — 전원 소집 vs 터치라인', () => {
     expect(nextBreakMinute(70, sched)).toBeNull()
   })
 
-  it('터치라인 안내에 다음 브레이크 분이 들어가고, 없으면 그 사실을 알린다', () => {
+  it('터치라인 안내는 열린 것과 잠긴 것을 정확히 말한다', () => {
     const sched = { firstHydration: 22, secondHydration: 67 }
-    expect(touchlineNotice(50, sched)).toContain('다음 브레이크(67분)')
-    expect(touchlineNotice(50, sched)).toContain('압박·템포 지시만 가능합니다')
+    const msg = touchlineNotice(50, sched)
+    expect(msg).toContain('다음 브레이크(67분)')
+    expect(msg).toContain('포메이션')
+    expect(msg).toContain('라인·압박·템포')
+    // "압박·템포만 가능"이라는 옛 계약 문구가 남아 있으면 화면이 거짓말을 한다.
+    expect(msg).not.toContain('압박·템포 지시만')
     expect(touchlineNotice(80, sched)).toContain('남은 브레이크가 없습니다')
+  })
+})
+
+describe('자유 개입 자원 — 5회 + 10분 쿨다운(외침과 같은 시계)', () => {
+  it('freeInterventionState: 잔량·쿨다운·사유를 한 번에 답한다', () => {
+    const fresh = freeInterventionState(0, null, 10)
+    expect(fresh.left).toBe(MAX_FREE_INTERVENTIONS)
+    expect(fresh.cooldownLeft).toBe(0)
+    expect(fresh.canPause).toBe(true)
+    expect(fresh.blockedReason).toBeNull()
+
+    const cooling = freeInterventionState(1, 25, 30)
+    expect(cooling.cooldownLeft).toBe(SHOUT_COOLDOWN - 5)
+    expect(cooling.canPause).toBe(false)
+    expect(cooling.blockedReason).toContain('쿨다운')
+    expect(cooling.blockedReason).toContain(String(SHOUT_COOLDOWN - 5))
+
+    const spent = freeInterventionState(MAX_FREE_INTERVENTIONS, null, 30)
+    expect(spent.left).toBe(0)
+    expect(spent.canPause).toBe(false)
+    expect(spent.blockedReason).toContain('모두 썼습니다')
+  })
+
+  it('두 사유는 구별된다 — 소진이 쿨다운보다 우선한다(더 오래 막는 쪽)', () => {
+    const both = freeInterventionState(MAX_FREE_INTERVENTIONS, 25, 30)
+    expect(both.blockedReason).toBe(freeInterventionState(MAX_FREE_INTERVENTIONS, null, 30).blockedReason)
+    expect(both.blockedReason).not.toBe(freeInterventionState(0, 25, 30).blockedReason)
+    // 쿨다운은 기다리면 풀리고, 소진은 풀리지 않는다 — 문장이 그 차이를 말해야 한다.
+    expect(freeInterventionState(0, 25, 30).blockedReason).toContain('뒤에')
+    expect(both.blockedReason).toContain('브레이크')
+  })
+
+  it('pauseByUser가 횟수를 소모하고, 소진되면 store가 거절한다', () => {
+    store().startMatch(a, b, 42)
+    store().kickoff()
+    store().advanceMinute()
+    store().pauseByUser()
+    expect(store().freeInterventionsUsed).toBe(1)
+    store().confirmTactics()
+    // 쿨다운 중에는 들어갈 수 없다.
+    store().advanceMinute()
+    store().pauseByUser()
+    expect(store().phase).toBe('playing')
+    expect(store().freeInterventionsUsed).toBe(1)
+    // 소진 상태를 직접 만들어도 store가 최종 방어선이다.
+    useMatchStore.setState({ freeInterventionsUsed: MAX_FREE_INTERVENTIONS, lastShoutMinute: null })
+    store().pauseByUser()
+    expect(store().phase).toBe('playing')
+  })
+
+  it('브레이크·하프타임 정지는 자유 개입을 세지 않는다(규칙이 주는 것이다)', () => {
+    store().startMatch(a, b, 4242)
+    store().kickoff()
+    let guard = 0
+    while (store().phase === 'playing' && guard++ < 60) store().advanceMinute()
+    expect(store().pauseReason?.kind).toBe('hydration1')
+    expect(store().freeInterventionsUsed).toBe(0)
+    store().confirmTactics()
+    expect(store().freeInterventionsUsed).toBe(0)
+  })
+
+  it('acceptMoment도 자유 개입 1회를 쓴다 — [흘려보낸다]가 실제 선택이 되게', () => {
+    store().startMatch(a, b, 42)
+    store().kickoff()
+    const engine = structuredClone(store().engine!)
+    engine.minute = 20
+    useMatchStore.setState({
+      engine, phase: 'playing',
+      momentPrompt: { kind: 'conceded', minute: 20, title: '실점 직후' },
+      momentPromptScore: [0, 1],
+    })
+    store().acceptMoment()
+    expect(store().phase).toBe('paused-moment')
+    expect(store().freeInterventionsUsed).toBe(1)
+    expect(store().lastShoutMinute).toBe(20)
+    // 진입이 창도 연다 — 그 안의 지시는 추가 비용이 없다.
+    expect(store().touchlineWindow?.minute).toBe(20)
+  })
+
+  it('startMatch·reset이 자유 개입 자원과 창을 초기화한다', () => {
+    store().startMatch(a, b, 42)
+    store().kickoff()
+    store().advanceMinute()
+    store().pauseByUser()
+    expect(store().freeInterventionsUsed).toBe(1)
+    expect(store().touchlineWindow).not.toBeNull()
+    store().startMatch(a, b, 43)
+    expect(store().freeInterventionsUsed).toBe(0)
+    expect(store().touchlineWindow).toBeNull()
+    expect(store().lastShoutMinute).toBeNull()
+    store().reset()
+    expect(store().freeInterventionsUsed).toBe(0)
+    expect(store().touchlineWindow).toBeNull()
+  })
+
+  it('순간 제안 유효 기간은 노출 게이트 지연을 흡수한다(TTL ≥ 6)', () => {
+    // MatchScreen이 배너에 revealed 노출 게이트를 걸어 배너가 최대 그 분의 dwell 하나만큼
+    // 늦게 뜬다(골 안무 8.6s 중 reveal 6~7s). 반응할 창이 함께 밀리므로 1분을 되돌려 준다.
+    expect(MOMENT_PROMPT_TTL).toBeGreaterThanOrEqual(6)
   })
 })

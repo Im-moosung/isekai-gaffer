@@ -2,7 +2,7 @@
 // 교체 탭(작전판)의 상태 칩과 정지 잠금. 사용자가 실제로 "누굴 뺄까"를 결정하는 화면이라
 // 여기서 한눈에 안 보이면 기능이 없는 것과 같다.
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { render, cleanup } from '@testing-library/react'
+import { render, cleanup, fireEvent } from '@testing-library/react'
 import { useMatchStore } from '../../game/matchStore'
 import { SubPanel } from '../console/SubPanel'
 import { makeTestTeam } from '../../engine/fixtures/testTeams'
@@ -42,10 +42,15 @@ describe('교체 탭 — 징계·컨디션 칩', () => {
     store().startMatch(home, away, 42)
     const banned = benchId()
     store().startMatch(home, away, 42, { discipline: { suspendedIds: [banned], cautions: {} } })
+    // 개입 창을 연다 — 창이 닫혀 있으면 패널 전체 차단 사유가 개인 사유를 덮는다.
+    useMatchStore.setState({ phase: 'paused-break', pauseReason: { kind: 'hydration1' } })
     const { container } = render(<SubPanel side="home" />)
     const card = container.querySelector('.cs-card--susp') as HTMLButtonElement
     expect(card).toBeTruthy()
-    expect(card.disabled).toBe(true)
+    // disabled가 아니라 aria-disabled — 누르면 사유가 뜬다.
+    expect(card.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(card)
+    expect(container.querySelector('.cs-error')?.textContent).toContain('출장정지')
     expect(card.querySelector('.sx__chip[data-kind="susp"]')?.getAttribute('title')).toContain('출장정지')
   })
 

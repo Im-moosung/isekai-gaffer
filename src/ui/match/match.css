@@ -820,12 +820,6 @@
   border-color: var(--danger-line);
   background: color-mix(in srgb, var(--danger) 6%, var(--s-1));
 }
-.tt-banner__head {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  margin: 0;
-}
 .tt-banner__text {
   font-size: var(--fs-h2);
   font-weight: 800;
@@ -853,6 +847,42 @@
 }
 .tt-reactions__name {
   font-size: var(--fs-xs);
+  color: var(--t-mid);
+}
+/* 접힌 결과 — 톤 · delta · 사기 · 반응 칩을 한 줄에 흘린다(좁으면 랩).
+   카드 4장을 지웠는데 배너가 세로로 길면 자리를 아낀 게 아니므로,
+   패딩을 줄이고 delta 문구도 헤드라인(--fs-h2)에서 본문 크기로 낮춘다. */
+.tt-banner--done {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+}
+.tt-banner--done .tt-banner__text {
+  font-size: var(--fs-md);
+}
+.tt-banner--done .tt-reactions {
+  margin: 0;
+}
+/* 반복 감쇠 주석만 다음 줄로 내린다 — 부가 설명이라 주 문장과 섞이면 읽는 순서가 꼬인다. */
+.tt-banner--done .tt-banner__note {
+  flex-basis: 100%;
+  margin: 0;
+}
+.tt-banner__tone {
+  padding: 0 var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--s-2);
+  border: 1px solid var(--s-line);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  color: var(--t-hi);
+}
+.tt-banner__morale {
+  font-size: var(--fs-xs);
+  font-weight: 700;
   color: var(--t-mid);
 }
 .tt-done {

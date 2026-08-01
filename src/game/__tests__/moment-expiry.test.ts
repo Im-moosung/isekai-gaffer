@@ -32,10 +32,20 @@ describe('momentPromptAlive — 순수 판정', () => {
     expect(momentPromptAlive(prompt(2), [0, 1], 3, [0, 2])).toBe(false)
   })
 
-  it('반응할 시간을 남긴다 — 유효 기간은 최소 3분 이상', () => {
+  it('반응할 시간을 남긴다 — 노출 게이트 지연까지 흡수한다(최소 6분)', () => {
     // 1x 재생에서 사건 분 dwell은 최대 9.6 s, 무사건 분은 1.1 s다. 3분 미만이면
     // 2x에서 배너를 읽기도 전에 사라진다.
-    expect(MOMENT_PROMPT_TTL).toBeGreaterThanOrEqual(3)
+    // ★ 2026-08-01: MatchScreen이 배너에 `revealed` 노출 게이트를 걸었다(배너가 실점
+    //   장면보다 먼저 뜨던 결함). 노출이 밀리면 **반응할 창도 함께 밀린다.** 지연의 상한은
+    //   그 분의 dwell 하나(골 안무 8.6 s 중 reveal이 6~7 s 지점)이고, 이는 무사건 분
+    //   여섯 개(1.1 s × 6)보다 크므로 경기 분 1분을 통째로 되돌려 준다 — 5 → 6.
+    expect(MOMENT_PROMPT_TTL).toBeGreaterThanOrEqual(6)
+  })
+
+  it('그렇다고 브레이크 간격을 잠식하지 않는다 — 상한은 여전히 지킨다', () => {
+    // 하이드레이션 브레이크 간격은 약 22분이다. 한 배너가 그 절반을 차지하면 다음 제안이
+    // 뜰 자리가 사라진다(momentPrompt는 하나뿐이라 새 제안을 막는다).
+    expect(MOMENT_PROMPT_TTL).toBeLessThan(11)
   })
 })
 

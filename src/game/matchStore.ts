@@ -1,7 +1,11 @@
 // src/game/matchStore.ts
 import { create } from 'zustand'
 import { createMatch, simulateSegment, applyCommand, type MatchCommand, type SimulateOpts } from '../engine/simulate'
-import type { DecisionEntry, Instructions, MatchEvent, MatchState, TacticState, Team } from '../engine/types'
+import type {
+  AttackPattern, BoxLoad, DecisionEntry, GroupIntensity, Instructions, MatchEvent, MatchState,
+  Mentality, SetPieceMarking, SetPieceRoute, TacticState, Team,
+} from '../engine/types'
+import { MENTALITIES } from '../engine/tactics'
 import { breakSchedule, detectMoment, type DecisionMoment, type HydrationSchedule } from './matchSession'
 import { decideAwayActions } from './oppAi'
 import { subbedOffIds } from './playerStats'
@@ -248,61 +252,229 @@ export function nextBreakMinute(minute: number, schedule: HydrationSchedule | nu
 
 /** 터치라인 등급에서 화면에 띄울 안내 문구.
  *  UX 함정: 감독 타임에 들어갔는데 대부분이 잠겨 있으면 "고장난 건가"로 읽힌다.
- *  잠긴 이유와 언제 풀리는지를 반드시 함께 말해야 한다. */
+ *  잠긴 이유와 언제 풀리는지를 반드시 함께 말해야 한다.
+ *  ★ 2026-08-01 확장 개방 이후로는 **잠긴 쪽이 소수**다. 그러니 안내도 "무엇만 되는가"가
+ *    아니라 "무엇만 안 되는가"를 말해야 화면과 사실이 맞는다. */
 export function touchlineNotice(minute: number, schedule: HydrationSchedule | null): string {
   const next = nextBreakMinute(minute, schedule)
-  const head = `경기 진행 중 — 교체·외침과 ${TOUCHLINE_AXIS_TEXT} 지시만 가능합니다.`
+  const head = `경기 진행 중 — 교체·외침과 ${TOUCHLINE_AXIS_TEXT} 지시가 열려 있습니다.`
+  const tail = `${TOUCHLINE_LOCKED_TEXT}만 잠깁니다`
   return next === null
-    ? `${head} 남은 브레이크가 없습니다 — 포메이션·태세는 이대로 끝까지 갑니다.`
-    : `${head} 포메이션·태세 변경은 다음 브레이크(${next}분)에서.`
+    ? `${head} ${tail} — 남은 브레이크가 없습니다. 이 대형으로 끝까지 갑니다.`
+    : `${head} ${tail} — 다음 브레이크(${next}분)에서 바꿀 수 있습니다.`
 }
 
-// ── 터치라인 지시 (2026-08-01, round3 피드백 ②) ──────────────────────
+// ── 터치라인 지시 (2026-08-01, round3 피드백 ② → 확장 개방) ──────────────
 // 왜 여는가: 개입 등급을 나눈 원래 근거가 *"경기가 흐르는 중에 할 수 있는 것은 소리치기와
-// 교체뿐"*이었다. 그런데 "압박 올려!"·"템포 낮춰!"는 **바로 그 소리치기**다. 근거를 그대로
-// 따르면 이 두 축은 터치라인에서 열려 있어야 하고, 닫아 둔 쪽이 근거와 어긋나 있었다.
+// 교체뿐"*이었다. 그런데 "압박 올려!"·"라인 내려!"·"더 공격적으로!"는 **바로 그 소리치기**다.
+// 근거를 그대로 따르면 이 축들은 터치라인에서 열려 있어야 하고, 닫아 둔 쪽이 근거와
+// 어긋나 있었다. 1차 개방(압박·템포)은 그 근거를 절반만 적용한 것이었다.
 //
-// 왜 압박·템포만인가(라인·공격방향을 닫는 이유):
-//  · 압박·템포는 **개인이 혼자 실행할 수 있는 노력 다이얼**이다. 한 명이 들어도 그 한 명이
-//    바로 반응할 수 있다 — 소리쳐 전달되는 지시의 정의에 맞는다.
-//  · 라인 높이는 백라인 네 명이 **동시에** 같은 오프사이드 선을 잡아야 성립한다. 한 명만
-//    들으면 라인이 깨져 오히려 실점 경로가 된다(shape.ts가 라인 축을 백라인 전체의
-//    평균 x로 정의하는 것도 같은 이유다). 공격방향은 공격 3~4명의 약속된 순환이라
-//    마찬가지로 모아 놓고 다시 그려야 한다.
-//  · 포메이션·태세·페이즈 포메이션·세트피스 루틴은 그보다 더 큰 구조 변경이라 그대로 잠근다.
+// ★ 왜 라인 높이를 열었는가(1차 개방의 논거를 뒤집는다):
+//   1차 개방은 "백라인 네 명이 **동시에** 같은 오프사이드 선을 잡아야 하니 한 명만 들으면
+//   라인이 깨진다"는 이유로 라인을 닫았다. 그러나 실제 경기에서 터치라인 감독이 가장 자주
+//   내리는 지시가 바로 "라인 올려"·"내려"다 — 백라인은 서로를 보며 맞추는 훈련된 유닛이라
+//   한 명이 듣고 손을 들면 나머지가 따라간다. "동시에 실행해야 한다"는 사실은 **전달 대역폭**의
+//   문제가 아니라 **실행 정밀도**의 문제였고, 후자는 폭 제한(±15)이 이미 다루고 있다.
+//   사용자 결정(2026-08-01)이 이 판정의 정본이다.
+//
+// ★ 그래서 잠기는 것은 무엇인가 — "포메이션의 경계":
+//   기준은 **대형 재배치인가**이다. 소리쳐 전달되는 것은 "어떻게 뛰어라"이지 "어디에 서라"가
+//   아니다. 열한 명의 좌표를 다시 그리는 일은 선수들을 모아 놓고 판을 보여 줘야 한다.
+//    · formation(선발 대형 문자열) — 정의상 대형 재배치다.
+//    · phaseFormations(공격 시·수비 시 대형) — 이것도 **대형**이다. 페이즈별이라고 해서
+//      성격이 달라지지 않는다. 오히려 "언제 어느 대형으로 바뀌는가"라는 약속이라 더 큰
+//      합의가 필요하다.
+//    · lineup(슬롯 배치) — 자리 바꾸기는 좌표 재배치 그 자체다. 단 교체({type:'sub'})는
+//      규칙이 정지 상황을 보장하므로 예외다(원래부터 열려 있다).
+//   반대로 mentality·groupIntensity·attackPattern·setPiece·instructions는 **같은 대형 안에서
+//   어떻게 행동할지**를 정하는 태도·실행 지시라 전부 열었다. 세트피스도 마찬가지다:
+//   루틴 자체는 훈련장에서 약속하지만, 코너 앞에서 **이미 약속된 것 중 하나를 고르는** 것은
+//   실제로 손짓 하나로 전달된다. 새 루틴을 발명하는 것이 아니다.
 //
 // 왜 폭을 제한하는가: 소리쳐서 전달되는 것은 "지금보다 더/덜"이지 "68로 맞춰라"가 아니다.
-// 한 번에 ±15까지만 움직인다 — 세 번 외치면 어차피 끝에서 끝까지 갈 수 있으므로 상한이
-// 아니라 **속도 제한**이다.
+// 수치 축은 한 번에 ±15, 서열 축(멘탈리티 5단·그룹 적극성 3단)은 한 번에 ±1단계다.
+// 상한이 아니라 **속도 제한**이다 — 여러 번 외치면 끝에서 끝까지 갈 수 있다.
+// 범주 축(공격방향·공격 패턴·세트피스)에는 "폭"이라는 개념이 없어 제한하지 않는다.
 //
 // 왜 외침과 쿨다운을 공유하는가: 둘은 같은 행위다(터치라인에서 선수들의 주의를 끄는 일).
-// 자원을 나눠 주면 "10분마다 외치고 + 10분마다 지시"로 개입 밀도가 두 배가 되고,
-// "정지 시점이 곧 자원"이라는 설계가 pauseByUser 무제한과 맞물려 무너진다.
-// 하나로 묶으면 90분에 최대 9회이고, 그중 몇 번을 지시에 쓸지가 감독의 선택이 된다.
+// 자원을 나눠 주면 "10분마다 외치고 + 10분마다 지시"로 개입 밀도가 두 배가 된다.
+// 2026-08-01 확장으로 **감독 타임 진입까지 같은 시계를 쓴다**(freeInterventionState 참조) —
+// 시계를 나누면 "외쳤는데 감독 타임은 되고, 그 안에서 지시는 막히는" 모순이 생긴다.
 
-/** 터치라인에서 소리쳐 전달할 수 있는 지시 축. */
-export const TOUCHLINE_AXES = ['pressing', 'tempo'] as const
+/** 터치라인에서 소리쳐 전달할 수 있는 **수치** 지시 축(폭 제한 대상). */
+export const TOUCHLINE_AXES = ['lineHeight', 'pressing', 'tempo'] as const
 export type TouchlineAxis = (typeof TOUCHLINE_AXES)[number]
-/** 터치라인 지시 1회의 축당 최대 변화폭. */
+/** 터치라인 지시 1회의 수치 축당 최대 변화폭. */
 export const TOUCHLINE_STEP = 15
-const TOUCHLINE_AXIS_TEXT = TOUCHLINE_AXES.map(k => INSTRUCTION_LABEL[k]).join('·')
+/** 터치라인 지시 1회의 **서열** 축당 최대 변화폭(멘탈리티 5단·그룹 적극성 3단). */
+export const TOUCHLINE_RANK_STEP = 1
+const TOUCHLINE_AXIS_TEXT = '라인·압박·템포·공격방향·멘탈리티·그룹 적극성·공격 패턴·세트피스'
+/** 터치라인에서 잠기는 것 — 전부 "대형"이다(위 경계 논증 참조). */
+const TOUCHLINE_LOCKED_TEXT = '포메이션(선발 대형·페이즈 대형·자리 배치)'
 
-/** 터치라인 지시로 성립하는 변경인가 — 축·폭만 본다(쿨다운은 store가 따로 본다).
- *  UI(ConsolePanel)와 store가 같은 함수를 쓴다. 규칙이 갈리면 화면은 허용하는데
- *  store가 throw하는 조합이 생긴다. */
+const MENTALITY_KO: Record<Mentality, string> = {
+  'very-defensive': '매우 수비적', 'defensive': '수비적', 'balanced': '균형',
+  'attacking': '공격적', 'very-attacking': '매우 공격적',
+}
+const PATTERN_KO: Record<AttackPattern, string> = {
+  balanced: '균형', cross: '크로스', through: '중앙 침투', longshot: '중거리',
+}
+const GI_LINE_KO: Record<keyof GroupIntensity, string> = {
+  attack: '공격', midfield: '미드필드', defense: '수비',
+}
+const GI_KO: Record<-1 | 0 | 1, string> = { [-1]: '자제', 0: '기본', 1: '적극' }
+const SP_ROUTE_KO: Record<SetPieceRoute, string> = { near: '니어', far: '파', short: '짧게' }
+const SP_LOAD_KO: Record<BoxLoad, string> = { light: '적게', normal: '표준', heavy: '많이' }
+const SP_MARK_KO: Record<SetPieceMarking, string> = { zonal: '존', man: '맨투맨' }
+
+const DEFAULT_GI: GroupIntensity = { attack: 0, midfield: 0, defense: 0 }
+const GI_LINES: (keyof GroupIntensity)[] = ['attack', 'midfield', 'defense']
+
+/** 터치라인 판정에 필요한 경기 맥락. 순수 함수를 유지하면서도 "언제 풀리는지"를
+ *  문구에 넣기 위해 호출부가 넘긴다(UI와 store가 같은 값을 넘긴다). */
+export interface TouchlineCtx {
+  /** GK 파워플레이 엔진 조건 판정용 — 현재 분. */
+  minute: number
+  /** GK 파워플레이 엔진 조건 판정용 — 이 side가 지고 있는가. */
+  losing: boolean
+  /** 잠긴 축의 안내에 붙일 다음 전원 소집 시점. null이면 남은 브레이크 없음. */
+  nextBreak: number | null
+}
+
+/** "다음 브레이크(67분)에서 바꿀 수 있습니다." — 잠금 문구의 꼬리를 한 곳에서 만든다.
+ *  잠금 안내는 **무엇이·왜·언제 풀리는지** 셋을 다 말해야 한다(ShoutBar 선례). */
+function breakTail(nextBreak: number | null): string {
+  return nextBreak === null
+    ? '남은 브레이크가 없어 이번 경기에서는 바꿀 수 없습니다.'
+    : `다음 브레이크(${nextBreak}분)에서 바꿀 수 있습니다.`
+}
+
+/** 터치라인 지시로 성립하는 **지시 4축** 변경인가 — 폭만 본다.
+ *  touchlineTacticsError의 부분집합이며, 지시만 다루는 호출부(테스트·ConsolePanel)가 쓴다.
+ *  판정 규칙이 두 벌이 되지 않도록 본 함수가 이 함수를 그대로 호출한다. */
 export function touchlineOrderError(before: Instructions, after: Instructions): string | null {
-  if (before.lineHeight !== after.lineHeight) {
-    return '라인 높이는 백라인 전체가 동시에 잡아야 합니다 — 다음 브레이크에서.'
-  }
-  if (before.attackFocus !== after.attackFocus) {
-    return '공격 방향 전환은 모아 놓고 다시 그려야 합니다 — 다음 브레이크에서.'
-  }
   for (const k of TOUCHLINE_AXES) {
     if (Math.abs(after[k] - before[k]) > TOUCHLINE_STEP) {
       return `한 번에 ${INSTRUCTION_LABEL[k]}을(를) ${TOUCHLINE_STEP}보다 크게 바꿀 수 없습니다 — 소리쳐 전달되는 것은 "더/덜"입니다.`
     }
   }
+  // 공격방향은 범주 축이라 폭 개념이 없다. 방향 전환은 "왼쪽으로!" 한마디로 전달된다.
   return null
+}
+
+/** 터치라인 지시로 성립하는 전술 변경인가 — 축·폭만 본다(쿨다운·창은 store가 따로 본다).
+ *  UI(ConsolePanel·TacticsExtras·작전판)와 store가 **같은 함수**를 쓴다. 규칙이 갈리면
+ *  화면은 허용하는데 store가 throw하는 조합이 생긴다.
+ *
+ *  before는 **창(touchlineWindow)이 열린 순간의 스냅샷**이어야 한다 — 현재값을 기준으로
+ *  삼으면 같은 분에 세 번 눌러 +45를 만드는 우회가 열린다. */
+export function touchlineTacticsError(before: TacticState, after: TacticState, ctx: TouchlineCtx): string | null {
+  // ① 대형 — 터치라인에서 소리쳐 전달되는 대역폭이 아니다(위 "포메이션의 경계" 논증).
+  if (before.formation !== after.formation) {
+    return `포메이션 변경은 선수를 모아 놓고 판을 보여 줘야 합니다 — ${breakTail(ctx.nextBreak)}`
+  }
+  if (JSON.stringify(before.lineup) !== JSON.stringify(after.lineup)) {
+    return `자리 배치 변경은 대형을 다시 그리는 일입니다 — ${breakTail(ctx.nextBreak)} (교체는 지금도 가능합니다)`
+  }
+  if (JSON.stringify(before.phaseFormations ?? {}) !== JSON.stringify(after.phaseFormations ?? {})) {
+    return `페이즈 포메이션도 대형입니다 — ${breakTail(ctx.nextBreak)}`
+  }
+  // ② 수치 축 폭 제한.
+  const insErr = touchlineOrderError(before.instructions, after.instructions)
+  if (insErr) return insErr
+  // ③ 서열 축 — "더/덜" 한 단계씩. 매우 수비적에서 매우 공격적으로 한 번에 가는 것은
+  //    소리쳐 전달되는 지시가 아니라 팀을 다시 짜는 일이다.
+  const bm = MENTALITIES.indexOf(before.mentality ?? 'balanced')
+  const am = MENTALITIES.indexOf(after.mentality ?? 'balanced')
+  if (Math.abs(am - bm) > TOUCHLINE_RANK_STEP) {
+    return `멘탈리티는 한 번에 한 단계씩만 바꿀 수 있습니다 — 지금은 ${MENTALITY_KO[MENTALITIES[bm]]}에서 한 칸 옆까지입니다.`
+  }
+  const bgi = { ...DEFAULT_GI, ...(before.groupIntensity ?? {}) }
+  const agi = { ...DEFAULT_GI, ...(after.groupIntensity ?? {}) }
+  for (const line of GI_LINES) {
+    if (Math.abs(agi[line] - bgi[line]) > TOUCHLINE_RANK_STEP) {
+      return `${GI_LINE_KO[line]} 적극성은 한 번에 한 단계씩만 바꿀 수 있습니다 — 자제에서 적극으로 한 번에 갈 수는 없습니다.`
+    }
+  }
+  // ④ GK 파워플레이 — 등급 잠금은 풀렸지만 **엔진 조건은 그대로**다(simulate.gkPowerplayActive).
+  //    UI만 풀면 "눌렀는데 아무 일도 안 난다"가 되므로 여기서 같은 조건으로 막고 사유를 말한다.
+  //    끄는 것은 언제나 허용한다 — 위험한 상태를 되돌리는 길까지 막을 이유가 없다.
+  if (!before.gkPowerplay && after.gkPowerplay) {
+    if (ctx.minute < 85) return "GK 파워플레이는 85' 이후에만 효과가 있습니다 — 지금 켜도 아무 일도 일어나지 않습니다."
+    if (!ctx.losing) return 'GK 파워플레이는 지고 있을 때만 효과가 있습니다 — 지금 켜도 아무 일도 일어나지 않습니다.'
+  }
+  // ⑤ 범주 축(공격 패턴·세트피스 3축)은 폭 개념이 없어 그대로 통과한다.
+  return null
+}
+
+/** 바뀐 전술 축을 사람이 읽는 한 줄로 나열한다 — 터치라인 결정 로그의 본문.
+ *  기자회견이 "언제 어떻게 개입했나"를 추궁하려면 지시 4축뿐 아니라 태세·적극성·패턴까지
+ *  같은 문장에 들어와야 한다(기존 instructionDiff는 4축만 봤다). */
+export function tacticsDiff(before: TacticState, after: TacticState): string[] {
+  const out = instructionDiff(before.instructions, after.instructions)
+  if (before.formation !== after.formation) out.push(`포메이션 ${before.formation}→${after.formation}`)
+  const bm = before.mentality ?? 'balanced', am = after.mentality ?? 'balanced'
+  if (bm !== am) out.push(`멘탈리티 ${MENTALITY_KO[bm]}→${MENTALITY_KO[am]}`)
+  const bgi = { ...DEFAULT_GI, ...(before.groupIntensity ?? {}) }
+  const agi = { ...DEFAULT_GI, ...(after.groupIntensity ?? {}) }
+  for (const line of GI_LINES) {
+    if (bgi[line] !== agi[line]) out.push(`${GI_LINE_KO[line]} 적극성 ${GI_KO[bgi[line]]}→${GI_KO[agi[line]]}`)
+  }
+  const bp = before.attackPattern ?? 'balanced', ap = after.attackPattern ?? 'balanced'
+  if (bp !== ap) out.push(`공격 패턴 ${PATTERN_KO[bp]}→${PATTERN_KO[ap]}`)
+  if (!!before.gkPowerplay !== !!after.gkPowerplay) out.push(`GK 파워플레이 ${after.gkPowerplay ? 'ON' : 'OFF'}`)
+  const bsp = before.setPiece ?? {}, asp = after.setPiece ?? {}
+  if ((bsp.route ?? 'far') !== (asp.route ?? 'far')) out.push(`코너 루트 ${SP_ROUTE_KO[bsp.route ?? 'far']}→${SP_ROUTE_KO[asp.route ?? 'far']}`)
+  if ((bsp.boxLoad ?? 'normal') !== (asp.boxLoad ?? 'normal')) out.push(`박스 인원 ${SP_LOAD_KO[bsp.boxLoad ?? 'normal']}→${SP_LOAD_KO[asp.boxLoad ?? 'normal']}`)
+  if ((bsp.marking ?? 'zonal') !== (asp.marking ?? 'zonal')) out.push(`수비 마킹 ${SP_MARK_KO[bsp.marking ?? 'zonal']}→${SP_MARK_KO[asp.marking ?? 'zonal']}`)
+  return out
+}
+
+// ── 자유 개입(감독 타임) = 희소 자원 (2026-08-01) ──────────────────────
+// 왜 제한하는가: 랜딩이 *"90분과 다섯 번의 개입이 주어진다"*고 약속하는데 코드에는 그 실체가
+// 없었다(pauseByUser 무제한). 문구가 가리키는 것을 실제로 만든다 — 개입이 자원이어야
+// "언제 쓸 것인가"가 감독의 결정이 된다.
+//
+// 무엇을 세는가: **감독이 고른 정지만** 센다. 자유 정지(pauseByUser)와 순간 제안 수락
+// (acceptMoment — 배너가 문자 그대로 "감독 타임을 쓰시겠습니까?"라고 묻는다)이 그것이다.
+// 순간 제안을 세지 않으면 [흘려보낸다]가 아무 대가 없는 선택이 되어 버튼이 장식이 된다.
+// 반대로 하이드레이션·하프타임은 **규칙이 주는 것**이라 세지 않는다 — "하프타임 들어갔다고
+// 내 개입이 깎였다"는 감각은 설계 의도가 아니다.
+//
+// 왜 쿨다운을 새로 만들지 않는가: 외침·터치라인 지시와 **같은 10분 시계**(lastShoutMinute)를
+// 쓴다. 셋 다 "터치라인에서 선수들의 주의를 끄는" 같은 행위이고, 시계를 나누면 "외쳤는데
+// 감독 타임은 되고, 그 감독 타임 안에서 지시는 쿨다운에 걸리는" 모순이 생긴다.
+
+/** 자유 개입(감독 타임) 총량. 랜딩 "90분과 다섯 번의 개입"의 실체다. */
+export const MAX_FREE_INTERVENTIONS = 5
+
+/** 지금 감독 타임을 쓸 수 있는가 — 잔량·쿨다운·사유를 한 번에 답한다.
+ *  순수 함수라 UI와 store가 같은 판정을 쓴다(규칙이 갈리면 "눌리는데 거부되는" 조합이 생긴다).
+ *  두 사유는 반드시 구별된다 — 횟수 소진과 쿨다운은 풀리는 방식이 다르다(쿨다운은 기다리면
+ *  풀리고, 소진은 영영 풀리지 않는다). 둘 다 막혔으면 더 오래 막는 쪽(소진)을 말한다. */
+export function freeInterventionState(
+  used: number,
+  lastShoutMinute: number | null,
+  minute: number,
+): { left: number; cooldownLeft: number; canPause: boolean; blockedReason: string | null } {
+  const left = Math.max(0, MAX_FREE_INTERVENTIONS - used)
+  const cooldownLeft = lastShoutMinute === null
+    ? 0
+    : Math.max(0, SHOUT_COOLDOWN - (minute - lastShoutMinute))
+  if (left === 0) {
+    return {
+      left, cooldownLeft, canPause: false,
+      blockedReason: `자유 개입 ${MAX_FREE_INTERVENTIONS}회를 모두 썼습니다 — 남은 개입은 정해진 브레이크(하이드레이션·하프타임)뿐입니다.`,
+    }
+  }
+  if (cooldownLeft > 0) {
+    return {
+      left, cooldownLeft, canPause: false,
+      blockedReason: `개입 쿨다운 — ${cooldownLeft}분 뒤에 감독 타임을 쓸 수 있습니다(외침·터치라인 지시와 같은 시계).`,
+    }
+  }
+  return { left, cooldownLeft: 0, canPause: true, blockedReason: null }
 }
 
 /** 홈 주전(라인업, 퇴장 제외) 중 최저 스태미나. 동적 순간 'fatigue' 판정용. */
@@ -321,16 +493,24 @@ function homeStaminaFloor(engine: MatchState): number {
  * 무기한 남으면 2'에 뜬 실점 배너가 7' 동점 이후에도 같은 문장으로 떠 있어
  * 화면이 실제 스코어와 정반대의 말을 한다(실측: 10'→22' 12분 지속).
  *
- * 왜 5분인가: 유저가 반응할 시간이 먼저다. 재생 dwell(playback.ts)은 1x에서
+ * 왜 5분이었나: 유저가 반응할 시간이 먼저다. 재생 dwell(playback.ts)은 1x에서
  * 무사건 분 1.1 s · 사건 분 최대 9.6 s이고, 제안이 뜨는 분은 거의 항상 사건 분이다
  * (실점·득점은 골 dwell 8.6 s). 5분이면 1x에서 최소 13 s, 2x에서도 6~7 s가 남아
  * [사용]/[흘려보낸다]를 누를 여유가 있다. 반대로 10분을 주면 다음 제안이 뜰 때까지
  * 낡은 문장이 살아 있고(momentPrompt는 하나뿐이라 새 제안을 막는다), 하이드레이션
  * 브레이크 간격(약 22분)의 절반을 한 배너가 차지한다.
  *
+ * 왜 5 → 6인가(2026-08-01): 위 논증은 "배너가 뜨는 순간 = 그 분이 시작되는 순간"을
+ * 전제했다. 그런데 MatchScreen이 배너에 `revealed` 노출 게이트를 걸었다 — 실점 장면이
+ * 화면에 드러나기 **전에** "실점 직후입니다" 배너가 먼저 뜨던 결함을 고치기 위해서다.
+ * 노출이 뒤로 밀리면 유저가 반응할 창도 같이 밀린다. 지연의 상한은 그 분의 dwell 하나
+ * (골 안무 8.6 s 중 reveal이 6~7 s 지점 → 최대 약 7 s)이고, 이는 무사건 분 여섯 개
+ * (1.1 s × 6)보다 크므로 **경기 분 1분을 통째로 되돌려 준다.** 6분이어도 위 상한
+ * 논증(10분은 과하다)은 그대로 성립한다 — 브레이크 간격의 절반에는 여전히 못 미친다.
+ *
  * 스코어 변화에 의한 소거는 이 기간과 별개로 즉시 적용된다 — 만료보다 강한 신호다.
  */
-export const MOMENT_PROMPT_TTL = 5
+export const MOMENT_PROMPT_TTL = 6
 
 /** 이 분에 순간 제안을 그대로 유지해도 되는가. 스코어가 스냅샷과 다르거나
  *  유효 기간이 지났으면 false(= 소거). 순수 함수라 테스트가 직접 부른다. */
@@ -396,8 +576,16 @@ export interface MatchUIState {
   boostUntil: number
   /** 하프타임 팀토크 1회 제한 플래그. */
   talked: boolean
-  /** 마지막 터치라인 외침 분(쿨다운 계산·진행 표시용). null이면 아직 외침 없음. */
+  /** 마지막 터치라인 개입 분(쿨다운 계산·진행 표시용). null이면 아직 없음.
+   *  외침·터치라인 지시·감독 타임 진입이 **같은 시계**를 쓴다(TOUCHLINE_AXES 주석). */
   lastShoutMinute: number | null
+  /** 쓴 자유 개입 횟수(감독 타임 + 순간 제안 수락). MAX_FREE_INTERVENTIONS가 상한. */
+  freeInterventionsUsed: number
+  /** 열려 있는 터치라인 지시 창. 같은 분의 여러 지시를 **한 번의 개입**으로 묶는다.
+   *  IFAB 교체 기회가 "같은 분의 복수 교체는 한 기회"로 묶는 것과 같은 문법이다.
+   *  tactics는 **창이 열린 순간의 스냅샷**이라 폭 제한(±15·±1단계)의 기준점이 된다 —
+   *  현재값을 기준으로 삼으면 같은 창에서 세 번 눌러 제한을 우회할 수 있다. */
+  touchlineWindow: { minute: number; side: 'home' | 'away'; tactics: TacticState } | null
   /** 감독 개입 로그 — 기자회견 근거. startMatch/reset 시 초기화. */
   decisionLog: DecisionEntry[]
   /** 상대 AI가 이미 발동한 액션 키(유형당 1회 제한). */
@@ -449,6 +637,8 @@ const initial = {
   boostUntil: 0,
   talked: false,
   lastShoutMinute: null as number | null,
+  freeInterventionsUsed: 0,
+  touchlineWindow: null as { minute: number; side: 'home' | 'away'; tactics: TacticState } | null,
   decisionLog: [] as DecisionEntry[],
   oppFired: [] as string[],
   oppNotices: [] as OppNotice[],
@@ -568,10 +758,22 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     set({ engine: next, ...expiry, ...opp })
   },
   pauseByUser: () => {
-    const { engine, phase } = get()
+    const { engine, phase, freeInterventionsUsed, lastShoutMinute } = get()
     if (!engine) throw new Error('경기 미시작')
     if (phase !== 'playing') return
-    set({ phase: 'paused-user', pauseReason: { kind: 'user' } })
+    // store가 최종 방어선이다 — UI가 버튼을 죽이는 것만으로는 부족하다.
+    // 막혔을 때 throw하지 않고 조용히 거절하는 이유: 이 액션은 화면 버튼의 onClick에
+    // 그대로 물려 있어 throw가 곧 렌더 경로의 예외가 된다. 사유는 화면이
+    // freeInterventionState(같은 판정)로 미리 읽어 표시한다.
+    if (!freeInterventionState(freeInterventionsUsed, lastShoutMinute, engine.minute).canPause) return
+    // 감독 타임 진입 자체가 창을 연다 — 한 번 불러 세운 동안 내리는 지시는 한 번의 개입이다.
+    // 그래서 이 안에서의 터치라인 지시는 추가 비용이 없다(touchlineWindow 주석).
+    set({
+      phase: 'paused-user', pauseReason: { kind: 'user' },
+      freeInterventionsUsed: freeInterventionsUsed + 1,
+      lastShoutMinute: engine.minute,
+      touchlineWindow: { minute: engine.minute, side: 'home', tactics: structuredClone(engine.home.tactics) },
+    })
   },
   confirmTactics: () => {
     const { engine, phase, pauseReason } = get()
@@ -581,39 +783,86 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     // 재생 시작도 하지 않는다 — 'pre'의 진행은 kickoff()가 담당한다.
     if (phase === 'pre') return
     // 개입 직후 부스트: 지금부터 BOOST_MINUTES분간 찬스 퀄 +8%·실점 위험 −6%(advanceMinute이 엔진 전달).
-    // 단 자유 정지(감독 타임)에는 주지 않는다 — pauseByUser에 횟수 제한이 없어
-    // 8분마다 정지·확정만 반복하면 부스트가 상시 유지되는 공짜 이득이 생긴다.
-    // 정해진 개입 지점(하이드레이션·하프타임·상황 제안)만 "선수단이 지시를 받는
-    // 순간"으로 보고 효과를 싣는다. 감독 타임은 상황을 들여다보는 자유 정지다.
-    const scheduled = pauseReason?.kind !== 'user'
+    //
+    // ★ 2026-08-01 재판정 — **자유 개입에는 부스트를 주지 않는다. 실측이 그렇게 시켰다.**
+    //
+    // 예전 규칙(감독 타임 제외)의 근거는 *"pauseByUser에 횟수 제한이 없어 8분마다
+    // 정지·확정만 반복하면 부스트가 상시 유지된다"*였고, 그 전제는 이번에 사라졌다
+    // (자유 개입 5회 + 10분 쿨다운 — MAX_FREE_INTERVENTIONS·freeInterventionState).
+    // 그래서 "이제는 줘도 된다"가 잠정 판단이었고, 판정을 측정에 맡겼다.
+    //
+    // 측정(tools/touchline-balance/run.mjs · kor 홈 · n=400 페어드 · 시드 20260801~):
+    // 전술을 **하나도 바꾸지 않고 5회를 소진만** 하는 전략(spend-only)이
+    //   rsa +2.0pp(SE 0.7) · mex +2.3pp(0.7) · esp +1.3pp(0.6) · fra +1.5pp(0.6) · arg +2.0pp(0.7)
+    // 로 **상대 5팀 전부에서 유의하게 양수**였다. 즉 "판단 없이 정지 버튼만 다섯 번
+    // 누른다"가 공짜 승률이 된다 — 정의상 지배 전략이고, 이 게임이 팔려는 것(무엇을
+    // 언제 바꿀 것인가)과 정반대다. 사전에 정한 결정 규칙대로 부스트를 거둔다.
+    //
+    // 남는 규칙: 부스트는 **자원을 소모하지 않는 개입**(하이드레이션·하프타임)에만 붙는다.
+    // 자유 개입(감독 타임·순간 제안 수락)이 주는 것은 부스트가 아니라 **권한**이다 —
+    // 경기 중에 지시를 바꿀 수 있다는 것 자체가 그 5회의 값이다. 순간 제안도 이제 5회에서
+    // 세므로 같은 규칙을 적용한다(예전엔 무료라 부스트를 줬다).
+    const scheduled = pauseReason?.kind !== 'user' && pauseReason?.kind !== 'moment'
     set({
       phase: 'playing', pauseReason: null, momentPrompt: null, momentPromptScore: null,
       ...(scheduled ? { boostUntil: engine.minute + BOOST_MINUTES } : {}),
     })
   },
   acceptMoment: () => {
-    const { phase, momentPrompt } = get()
+    const { engine, phase, momentPrompt, freeInterventionsUsed, lastShoutMinute } = get()
     if (phase !== 'playing') throw new Error('재생 중이 아님')
     if (!momentPrompt) throw new Error('제안된 순간이 없음')
-    set({ phase: 'paused-moment', pauseReason: { kind: 'moment', moment: momentPrompt } })
+    // 순간 제안 수락도 자유 개입이다 — 배너가 문자 그대로 "감독 타임을 쓰시겠습니까?"라고
+    // 묻는다. 세지 않으면 [흘려보낸다]가 대가 없는 선택이 되어 버튼이 장식이 된다.
+    if (engine && !freeInterventionState(freeInterventionsUsed, lastShoutMinute, engine.minute).canPause) return
+    const minute = engine?.minute ?? 0
+    set({
+      phase: 'paused-moment', pauseReason: { kind: 'moment', moment: momentPrompt },
+      freeInterventionsUsed: freeInterventionsUsed + 1,
+      lastShoutMinute: minute,
+      ...(engine ? { touchlineWindow: { minute, side: 'home' as const, tactics: structuredClone(engine.home.tactics) } } : {}),
+    })
   },
   dismissMoment: () => set({ momentPrompt: null, momentPromptScore: null }),
   submitCommand: (side, cmd) => {
-    const { engine, phase, pauseReason, schedule, decisionLog, matchPlan, planDeviation } = get()
+    const { engine, phase, pauseReason, schedule, decisionLog, matchPlan, planDeviation, touchlineWindow } = get()
     if (!engine) throw new Error('경기 미시작')
     if (!INTERVENTION_PHASES.includes(phase)) throw new Error('개입 불가 시점')
     // 스토어가 최종 방어선이다 — UI가 섹션을 접는 것만으로는 부족하다.
-    // 터치라인 등급에서 통과하는 것은 둘뿐이다: 교체, 그리고 압박·템포 지시(소리쳐 전달되는
-    // 범위 — TOUCHLINE_AXES 주석 참조). 나머지는 전원 소집 사항이라 여기서 막는다.
+    // 터치라인 등급에서 통과하는 것: 교체, 그리고 대형을 건드리지 않는 전술 지시 전부
+    // (TOUCHLINE_AXES 주석의 "포메이션의 경계" 논증 참조). 대형은 여기서 막는다.
     const touchline = interventionLevel(phase, pauseReason) === 'touchline'
+    // 같은 분에 열려 있는 창인가 — 있으면 폭 제한의 기준점이자 "추가 비용 없음"의 근거다.
+    const openWindow = touchlineWindow && touchlineWindow.minute === engine.minute && touchlineWindow.side === side
+      ? touchlineWindow
+      : null
+    /** 터치라인 지시가 실제로 바꾼 축(로그 본문). 빈 배열이면 무료 no-op이다. */
+    let touchlineChanged: string[] = []
     if (touchline && cmd.type !== 'sub') {
-      if (cmd.type !== 'instructions') throw new Error(touchlineNotice(engine.minute, schedule))
-      const axisErr = touchlineOrderError(engine[side].tactics.instructions, cmd.instructions)
-      if (axisErr) throw new Error(axisErr)
-      // 외침과 같은 자원을 쓴다 — 둘 다 "터치라인에서 주의를 끄는" 같은 행위다.
-      const last = get().lastShoutMinute
-      if (last !== null && engine.minute - last < SHOUT_COOLDOWN) {
-        throw new Error(`터치라인 지시 쿨다운 — ${SHOUT_COOLDOWN - (engine.minute - last)}분 뒤에 다시 외칠 수 있습니다.`)
+      if (cmd.type !== 'instructions' && cmd.type !== 'formation') {
+        throw new Error(touchlineNotice(engine.minute, schedule))
+      }
+      const cur = engine[side].tactics
+      const after: TacticState = cmd.type === 'instructions'
+        ? { ...cur, instructions: cmd.instructions }
+        : cmd.tactics
+      // 폭 제한은 **창 스냅샷 기준**이다 — 현재값 기준이면 같은 창에서 세 번 눌러 +45를 만든다.
+      const base = openWindow ? openWindow.tactics : cur
+      const [own, opp] = side === 'home'
+        ? [engine.score[0], engine.score[1]]
+        : [engine.score[1], engine.score[0]]
+      const err = touchlineTacticsError(base, after, {
+        minute: engine.minute, losing: own < opp, nextBreak: nextBreakMinute(engine.minute, schedule),
+      })
+      if (err) throw new Error(err)
+      touchlineChanged = tacticsDiff(cur, after)
+      // 자원 소모는 **창을 새로 여는 경우에만**. 같은 창 안의 추가 지시는 한 번의 개입이다.
+      // 아무것도 바뀌지 않는 재전송도 무료다(슬라이더가 같은 값을 되돌려 놓는 경우).
+      if (touchlineChanged.length > 0 && !openWindow) {
+        const last = get().lastShoutMinute
+        if (last !== null && engine.minute - last < SHOUT_COOLDOWN) {
+          throw new Error(`터치라인 지시 쿨다운 — ${SHOUT_COOLDOWN - (engine.minute - last)}분 뒤에 다시 외칠 수 있습니다.`)
+        }
       }
     }
     const minute = engine.minute
@@ -628,14 +877,22 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     // "언제 내린 결정인가"가 서사적으로 중요하다. 세 명령 분기가 같은 규칙을 쓴다.
     const when = phase === 'pre' ? '킥오프 전' : phase === 'halftime' ? 'HT' : `${minute}'`
     let entry: DecisionEntry | null = null
-    if (cmd.type === 'instructions') {
+    if (touchline && cmd.type !== 'sub') {
+      // 터치라인에서 내린 지시는 명령 종류와 무관하게 **한 줄로** 남긴다 — 기자회견이
+      // "언제 어떻게 개입했나"를 추궁하는 근거다. 킥오프 전 슬라이더 드래그가 남기던
+      // 노이즈는 여기 들어오지 않는다('pre'는 full 등급이라 이 분기를 타지 않는다).
+      if (touchlineChanged.length > 0) {
+        entry = {
+          minute, kind: 'instructions',
+          summary: `${when} 터치라인 지시: ${touchlineChanged.join(', ')}`,
+          detail: { changed: touchlineChanged, touchline: true },
+        }
+      }
+    } else if (cmd.type === 'instructions') {
       const changed = instructionDiff(sideState.tactics.instructions, cmd.instructions)
       // 변경 축이 0개면 로그 스킵(엔진 적용은 그대로) — "45' 지시 변경: " 같은 빈 요약 방지.
       if (changed.length > 0) {
-        // 터치라인에서 내린 지시는 로그에서도 구분한다 — 기자회견이 "언제 어떻게 개입했나"를
-        // 추궁할 때 브레이크 지시와 경기 중 외침은 성격이 다른 결정이다.
-        const kindText = touchline ? '터치라인 지시' : '지시 변경'
-        entry = { minute, kind: 'instructions', summary: `${when} ${kindText}: ${changed.join(', ')}`, detail: { changed, touchline } }
+        entry = { minute, kind: 'instructions', summary: `${when} 지시 변경: ${changed.join(', ')}`, detail: { changed } }
       }
     } else if (cmd.type === 'sub') {
       const nameOf = (id: string) => sideState.team.squad.find(p => p.id === id)?.name.ko ?? id
@@ -658,13 +915,19 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     const structChanged = side === 'home' && !!matchPlan
       && (before.formation !== after.formation
         || (before.mentality ?? 'balanced') !== (after.mentality ?? 'balanced'))
-    // 터치라인 지시가 실제로 무언가를 바꿨을 때만 자원을 소모한다(같은 값 재전송은 무료).
-    const consumesShout = touchline && cmd.type === 'instructions' && !!entry
+    // 터치라인 지시가 실제로 무언가를 바꿨고, 그것이 **새 창**일 때만 자원을 소모한다.
+    // 같은 창 안의 추가 지시와 같은 값 재전송은 무료다(창 설계 — touchlineWindow 주석).
+    const opensWindow = touchline && cmd.type !== 'sub' && touchlineChanged.length > 0 && !openWindow
     set({
       engine: nextEngine,
       planDeviation: dev,
       ...(structChanged ? { adaptUntil: engine.minute + ADAPT_MINUTES } : {}),
-      ...(consumesShout ? { lastShoutMinute: engine.minute } : {}),
+      ...(opensWindow
+        ? {
+            lastShoutMinute: engine.minute,
+            touchlineWindow: { minute: engine.minute, side, tactics: structuredClone(engine[side].tactics) },
+          }
+        : {}),
       ...(entry ? { decisionLog: [...decisionLog, entry] } : {}),
     })
   },

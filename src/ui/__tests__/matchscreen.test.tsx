@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, fireEvent, cleanup, act } from '@testing-library/react'
-import { useMatchStore } from '../../game/matchStore'
+import { useMatchStore, freeInterventionState, MAX_FREE_INTERVENTIONS } from '../../game/matchStore'
 import { MatchScreen } from '../match/MatchScreen'
 import { makeTestTeam } from '../../engine/fixtures/testTeams'
 import type { MatchEvent } from '../../engine/types'
@@ -327,17 +327,19 @@ describe('MatchScreen — 플랜 배지(PlanBadge)', () => {
 
   // ★ 작전판(오버레이) 진입 중에는 배지가 언마운트된다(T-2) — 배지는 **방송 복귀 후**
   //   상태를 말한다. 그래서 전술을 바꾼 뒤 확정하고 돌아와서 읽는다.
-  it('구조(포메이션)를 바꾸면 "플랜 이탈 N축"으로 전환된다', () => {
+  // 2026-08-01: "플랜 이탈 N축" 갈래를 없앴다(사용자 지시). 이탈하면 배지가 사라진다 —
+  //   배지의 존재 자체가 "보너스 살아 있음"이다(PlanBadge.tsx 주석의 논증).
+  it('구조(포메이션)를 바꾸면 배지가 사라진다(이탈 추궁 문구를 띄우지 않는다)', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
     kickoffNow(getByRole)
     replayTo('paused-break')
     fireEvent.click(getByRole('button', { name: '5-4-1' }))
     fireEvent.click(getByRole('button', { name: '전술 확정' }))
     act(() => { vi.advanceTimersByTime(700) })
-    const b = badge(container as HTMLElement)!
-    expect(b.textContent).toContain('플랜 이탈')
-    expect(b.textContent).toContain('1축')
-    expect(b.className).not.toContain('plan-badge--ok')
+    expect(badge(container as HTMLElement)).toBeNull()
+    expect(container.textContent).not.toContain('플랜 이탈')
+    // 집계 자체는 살아 있어야 한다 — 기자회견이 store에서 직접 읽는다.
+    expect(store().planDeviation).toBeGreaterThan(0)
   })
 
   it('지시 미세 조정만으로는 배지가 "플랜 유지"를 유지한다(구조 기준)', () => {
@@ -351,5 +353,60 @@ describe('MatchScreen — 플랜 배지(PlanBadge)', () => {
     fireEvent.click(getByRole('button', { name: '전술 확정' }))
     act(() => { vi.advanceTimersByTime(700) })
     expect(badge(container as HTMLElement)!.textContent).toContain('플랜 유지')
+  })
+})
+
+// ── 감독 타임 = 희소 자원. 잔량·쿨다운·막힘 사유가 화면에 있어야 한다 ──────
+// 사용자 요구: "개입이 몇 번 남았는지, 개입까지 몇 분인지를 알 수 있어야 해."
+// 계획해서 쓰라고 건 제약이므로 잔량이 안 보이면 제약이 설계로 성립하지 않는다.
+// 문구의 정본은 store(freeInterventionState.blockedReason)다 — 화면은 그대로 옮긴다.
+describe('MatchScreen — 자유 개입 자원 표시(감독 타임)', () => {
+  const pod = (c: HTMLElement) => c.querySelector('.ms-controls')!
+  const timeBtn = (c: HTMLElement) =>
+    [...c.querySelectorAll('.ms-controls button')].find(b => b.textContent?.includes('감독 타임')) as HTMLButtonElement
+
+  it('재생 중 잔량이 항상 보인다(개입 N/5)', () => {
+    const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
+    kickoffNow(getByRole)
+    step(3)
+    expect(pod(container as HTMLElement).textContent).toContain(`개입 ${MAX_FREE_INTERVENTIONS}/${MAX_FREE_INTERVENTIONS}`)
+    expect(timeBtn(container as HTMLElement).disabled).toBe(false)
+  })
+
+  it('횟수를 다 쓰면 버튼이 죽고 **소진** 사유가 화면에 있다', () => {
+    const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
+    kickoffNow(getByRole)
+    step(3)
+    act(() => { useMatchStore.setState({ freeInterventionsUsed: MAX_FREE_INTERVENTIONS }) })
+    const c = container as HTMLElement
+    expect(pod(c).textContent).toContain('개입 0/5')
+    expect(timeBtn(c).disabled).toBe(true)
+    const reason = freeInterventionState(MAX_FREE_INTERVENTIONS, null, store().engine!.minute).blockedReason!
+    expect(reason).toBeTruthy()
+    expect(pod(c).textContent).toContain(reason)
+  })
+
+  it('쿨다운 중에는 버튼이 죽고 **남은 분**이 화면에 있다(외침과 같은 시계)', () => {
+    const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
+    kickoffNow(getByRole)
+    step(3)
+    const minute = store().engine!.minute
+    act(() => { useMatchStore.setState({ lastShoutMinute: minute }) })
+    const c = container as HTMLElement
+    const st = freeInterventionState(0, minute, store().engine!.minute)
+    expect(st.cooldownLeft).toBeGreaterThan(0)
+    expect(timeBtn(c).disabled).toBe(true)
+    expect(pod(c).textContent).toContain(String(st.cooldownLeft))
+    expect(pod(c).textContent).toContain(st.blockedReason!)
+    // 링도 함께 뜬다 — ShoutBar와 같은 시각 언어(같은 자원임을 말한다).
+    expect(c.querySelector('.ms-controls .sb-ring')).toBeTruthy()
+  })
+
+  it('두 사유는 서로 다른 문장이다(무엇이 막았는지 구별된다)', () => {
+    const spent = freeInterventionState(MAX_FREE_INTERVENTIONS, null, 30).blockedReason
+    const cooling = freeInterventionState(0, 25, 30).blockedReason
+    expect(spent).toBeTruthy()
+    expect(cooling).toBeTruthy()
+    expect(spent).not.toBe(cooling)
   })
 })

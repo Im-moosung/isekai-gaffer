@@ -10,7 +10,8 @@
 // 두 경로가 같은 이벤트에서 나왔는지를 실엔진 90분 재생으로 분마다 대조한다.
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { act, cleanup, render } from '@testing-library/react'
-import type { MatchEvent } from '../../../engine/types'
+import type { MatchEvent, SideStats } from '../../../engine/types'
+import { countLine } from '../stat-display'
 
 // ── 두 경로 가로채기(실제 구현은 그대로 쓰고 인자만 기록) ──
 const builtByMinute = new Map<number, MatchEvent>()
@@ -137,7 +138,7 @@ async function flush() {
  *   두 타이머가 영원히 안 돈다. 그래서 가짜 시계를 **타이머 하나씩** 전진시켜
  *   실제 순서를 그대로 재현한다.
  */
-async function playFullMatch(): Promise<void> {
+async function playFullMatch(onTick?: () => void): Promise<void> {
   act(() => { useMatchStore.getState().kickoff() })
   await flush()
   for (let i = 0; i < 4000; i++) {
@@ -149,6 +150,62 @@ async function playFullMatch(): Promise<void> {
       act(() => { s.confirmTactics() })
     }
     await flush()
+    onTick?.()
+  }
+}
+
+/**
+ * 그 분의 결과 노출 시각(ms) — 실제로 그려진 장면에서 잰다.
+ *
+ * 되계산이 아니라 실측인 이유는 revealTAt 주석과 같다(장면이 상대 라인 높이에도
+ * 의존하므로 종료 상태로 되계산하면 어긋난다). 하이라이트가 아닌 분은 0이다.
+ */
+function revealMsAt(minute: number): number {
+  const eng = useMatchStore.getState().engine!
+  const atMinute = eng.events.filter(e => e.minute === minute)
+  const diff = Math.abs(eng.score[0] - eng.score[1])
+  const sceneMs = sceneDwellMs(atMinute, 1, minute >= 80 && diff <= 1, 0)
+  if (minuteRevealMs(atMinute, eng.home, eng.away, sceneMs) <= 0) return 0
+  const rt = revealTAt.get(minute)
+  if (rt == null) return 0
+  return Math.round(rt * sceneMs)
+}
+
+/** 한 틱에서 읽은 화면 상태. 노출 게이트를 화면(DOM)으로 검증하기 위한 표본이다. */
+interface Sample {
+  minute: number
+  /** 그 분이 시작된 뒤 흐른 시간(ms). builtAt 기준 — 발화 계약과 같은 기준점이다. */
+  since: number
+  /** 순간 제안 배너의 문장(없으면 null). */
+  moment: string | null
+  /** 스토어에 제안이 살아 있는 분(없으면 null). 배너와 대조해 게이트를 확인한다. */
+  promptMinute: number | null
+  /** 좌하단 HUD의 누적량 한 줄(HUD가 내려가 있으면 null). */
+  counts: string | null
+  /** **엔진 원본**으로 같은 줄을 만든 것. HUD가 이 값을 따라가면 누설이다. */
+  live: string
+}
+
+/** LiveStats가 그리는 누적량 한 줄을 엔진 스탯에서 그대로 재구성한다. */
+function countsFrom(us: SideStats, them: SideStats): string {
+  return countLine([
+    { label: '슛', us: Math.round(us.shots), them: Math.round(them.shots) },
+    { label: '유효', us: Math.round(us.shotsOnTarget), them: Math.round(them.shotsOnTarget) },
+  ])
+}
+
+function sample(): Sample {
+  const s = useMatchStore.getState()
+  const minute = s.engine?.minute ?? -1
+  const t0 = builtAt.get(minute)
+  const momentEl = document.querySelector('.ms-banner--moment .ms-banner__text')
+  return {
+    minute,
+    since: t0 === undefined ? -1 : Date.now() - t0,
+    moment: momentEl?.textContent ?? null,
+    promptMinute: s.momentPrompt?.minute ?? null,
+    counts: document.querySelector('.ms-hud__counts')?.textContent ?? null,
+    live: s.engine ? countsFrom(s.engine.stats[0], s.engine.stats[1]) : '',
   }
 }
 
@@ -206,6 +263,77 @@ describe('MatchScreen — 음성과 안무가 같은 이벤트를 쓴다(Phase B
     }
     // 하이라이트(골·세이브·미스·슛)가 실제로 여러 번 있어야 계약에 의미가 있다.
     expect(checked).toBeGreaterThan(5)
+  })
+
+  // ── 배너 계약(2026-08-01 6라운드 피드백) ────────────────────────────
+  // 사용자 지적: "실점 직후입니다 — 감독 타임을 쓰시겠습니까?"가 실점 장면보다 먼저 뜬다.
+  // momentPrompt는 그 분을 시뮬레이션한 직후 세팅되므로, 게이트가 없으면 배너가 스코어버그·
+  // GOAL 연출·캐스터를 전부 제치고 결과를 먼저 말한다.
+  it('순간 제안 배너는 그 분의 결과가 화면에 보인 뒤에 뜬다', async () => {
+    render(<MatchScreen home={home} away={away} seed={1003} />)
+    await flush()
+    const samples: Sample[] = []
+    await playFullMatch(() => samples.push(sample()))
+
+    // 제안이 **태어난 분**의 표본만 본다(다음 분으로 넘어간 제안은 이미 노출된 결과를 말한다).
+    const born = samples.filter(s => s.promptMinute !== null && s.promptMinute === s.minute && s.since >= 0)
+    const minutes = [...new Set(born.map(s => s.minute))]
+    let checkedMinutes = 0
+    let gatedSamples = 0
+    for (const m of minutes) {
+      const revealMs = revealMsAt(m)
+      if (revealMs <= 0) continue // 하이라이트 안무가 없는 분은 미룰 결과 자체가 없다
+      checkedMinutes++
+      const mine = born.filter(s => s.minute === m)
+      for (const s of mine) {
+        if (s.since >= revealMs) continue
+        // 이 한 줄이 이번 버그의 회귀 방지선이다.
+        expect(s.moment, `${m}분: 결과 노출 ${revealMs}ms 전(${s.since}ms)에 제안 배너가 떴다`).toBeNull()
+        gatedSamples++
+      }
+      const shown = mine.find(s => s.moment !== null)
+      if (shown) {
+        expect(shown.since, `${m}분: 배너가 노출 ${revealMs}ms보다 먼저 나타났다`).toBeGreaterThanOrEqual(revealMs)
+      }
+    }
+    // 계약에 의미가 있으려면 골 분에 태어난 제안(실점·득점)이 실제로 있어야 하고,
+    // 그중 노출 전 구간의 표본이 실제로 잡혀야 한다.
+    expect(checkedMinutes).toBeGreaterThan(0)
+    expect(gatedSamples).toBeGreaterThan(0)
+  })
+
+  // 같은 누설의 숫자판 — 좌하단 HUD의 "슛 8-9"가 슛 장면보다 먼저 올라가면 안 된다.
+  it('라이브 스탯 HUD는 이 분의 슛을 결과 노출 전에 올리지 않는다', async () => {
+    render(<MatchScreen home={home} away={away} seed={1003} />)
+    await flush()
+    const samples: Sample[] = []
+    await playFullMatch(() => samples.push(sample()))
+
+    // 각 분이 시작되기 **직전에** 엔진이 갖고 있던 누적량 = 그 분의 노출 전에 보여야 할 값.
+    // (HUD는 2D 작전판 분에는 내려가므로 화면 이력이 아니라 엔진 이력으로 기준을 잡는다.)
+    const beforeMinute = new Map<number, string>()
+    let running: string | null = null
+    for (const s of samples) {
+      if (s.minute >= 0 && !beforeMinute.has(s.minute) && running !== null) beforeMinute.set(s.minute, running)
+      running = s.live
+    }
+
+    let checked = 0
+    let biting = 0
+    for (const s of samples) {
+      if (s.counts === null || s.since < 0) continue
+      const prev = beforeMinute.get(s.minute)
+      if (prev === undefined) continue
+      const revealMs = revealMsAt(s.minute)
+      if (revealMs <= 0 || s.since >= revealMs) continue
+      expect(s.counts, `${s.minute}분: 노출(${revealMs}ms) 전 ${s.since}ms에 HUD가 이 분의 기록을 먼저 보여 줬다`)
+        .toBe(prev)
+      checked++
+      // 이 분에 실제로 숫자가 바뀌었을 때만 계약이 "문다" — 그런 표본이 있어야 회귀를 잡는다.
+      if (s.live !== prev) biting++
+    }
+    expect(checked).toBeGreaterThan(5)
+    expect(biting).toBeGreaterThan(0)
   })
 
   it('sceneRevealT — 세이브는 GK 접촉, 나머지는 마지막 키프레임', () => {

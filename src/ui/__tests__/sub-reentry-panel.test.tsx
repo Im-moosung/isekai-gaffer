@@ -55,7 +55,10 @@ describe('교체 탭 — 교체 아웃 선수', () => {
     const { container } = render(<SubPanel side="home" />)
     const card = cardOf(container, outId)!
     expect(card.classList.contains('cs-card--out')).toBe(true)
-    expect(card.disabled).toBe(true)
+    // disabled가 아니라 aria-disabled — 눌리되 사유를 말한다(침묵하는 컨트롤 금지).
+    expect(card.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(card)
+    expect(container.querySelector('.cs-error')?.textContent).toContain('IFAB 제3조')
     const chip = card.querySelector('.sx__chip[data-kind="out"]')
     expect(chip?.getAttribute('title')).toContain('교체 아웃')
     expect(chip?.getAttribute('title')).toContain('IFAB 제3조')

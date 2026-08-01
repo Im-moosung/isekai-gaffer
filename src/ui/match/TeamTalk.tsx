@@ -38,9 +38,19 @@ function moraleStatus(avg: number): string {
   return '선수들이 위축되어 있습니다'
 }
 
+/** 톤 값 → 라벨. 접힌 뒤에는 카드가 사라지므로 "무엇을 골랐는지"를 이 표로 되살린다. */
+const TONE_LABEL: Record<TeamTalkTone, string> =
+  Object.fromEntries(TONES.map(t => [t.tone, t.label])) as Record<TeamTalkTone, string>
+
 /** 하프타임 팀토크 — 상황(스코어)에 맞는 톤별 문장형 버튼 4개.
  *  선택 시 matchStore.applyTeamTalk가 결정론 테이블(+기대치·반복 감쇠)만큼 사기를 보정하고,
- *  즉시 효과 배너(사기 delta·선수별 반응)를 크게 노출한다. 경기당 1회(선택 후 버튼 비활성). */
+ *  즉시 효과 배너(사기 delta·선수별 반응)를 노출한다.
+ *
+ *  ★ 선택 후에는 **선택 UI 전체를 접는다**(카드 4장 + 사기 게이지 제거, 결과만 남김).
+ *    팀토크는 경기당 1회(matchStore.applyTeamTalk가 talked를 보고 throw)라 되돌릴 수 없으므로
+ *    "다시 펼치기" 토글은 누를 이유가 없는 컨트롤만 하나 늘린다 — 접기는 단방향이다.
+ *    작전판은 세로 공간이 귀한 화면인데 이 블록이 폭·높이를 통째로 먹고 있었고,
+ *    선택이 끝난 뒤의 카드 4장은 이미 disabled라 정보값이 0이었다. */
 export function TeamTalk({ side }: { side: 'home' }) {
   const engine = useMatchStore(s => s.engine)
   const applyTeamTalk = useMatchStore(s => s.applyTeamTalk)
@@ -86,6 +96,49 @@ export function TeamTalk({ side }: { side: 'home' }) {
     setResult({ ...res, tone })
   }
 
+  // 접힌 뒤에도 사기 수치는 남긴다 — 팀토크가 실제로 무엇을 바꿨는지 보여 주는 값이다.
+  // 다만 게이지 바 + 상태 문구(2줄)는 결과 줄에 `사기 78` 한 토막으로 압축한다.
+  // 사전 정보로서의 가치(무슨 말을 고를지 판단)는 선택이 끝난 순간 사라지기 때문이다.
+  if (talked) {
+    return (
+      <div className="tt-root">
+        <p className="tt-label">팀 토크</p>
+        {result ? (
+          <div
+            className={`tt-banner tt-banner--done ${result.delta > 0 ? 'tt-banner--up' : result.delta < 0 ? 'tt-banner--down' : 'tt-banner--flat'}`}
+            role="status"
+          >
+            <span className="tt-banner__tone">{TONE_LABEL[result.tone]}</span>
+            <span className="tt-banner__text">
+              {result.delta > 0
+                ? `선수단 사기 상승 (+${result.delta})`
+                : result.delta < 0
+                  ? `역효과! 선수단 사기 저하 (${result.delta})`
+                  : '선수단 반응이 미지근합니다 (±0)'}
+            </span>
+            <span className="tt-banner__morale">사기 {avgMorale}</span>
+            {/* 반응은 세로 목록이면 최대 3줄을 먹는다 — 칩으로 눕혀 한 줄에 흘린다. */}
+            <ul className="tt-reactions">
+              {result.reactions.map(r => (
+                <li key={r.playerId} className="tt-reactions__item">
+                  <span className="tt-reactions__name">{nameOf(r.playerId)}</span>
+                  <span className="badge">{REACTION_KO[r.icon] ?? r.icon}</span>
+                </li>
+              ))}
+            </ul>
+            {result.repeated && (
+              <p className="tt-banner__note">지난 경기와 같은 말 — 울림이 덜합니다</p>
+            )}
+          </div>
+        ) : (
+          // 작전판을 닫았다 다시 열면 컴포넌트가 재마운트돼 result(로컬 state)가 날아간다.
+          // 상세는 복원할 수 없으니 "이미 전달했다"는 사실 + 현재 사기만 한 줄로 남긴다.
+          <p className="tt-done">팀 토크 전달 완료 · 사기 {avgMorale}</p>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="tt-root">
       <p className="tt-label">팀 토크</p>
@@ -106,7 +159,6 @@ export function TeamTalk({ side }: { side: 'home' }) {
               key={tone}
               type="button"
               className={`tt-btn${isRec ? ' tt-btn--rec' : ''}`}
-              disabled={talked}
               aria-pressed={false}
               onClick={() => onSelect(tone)}
             >
@@ -117,37 +169,6 @@ export function TeamTalk({ side }: { side: 'home' }) {
           )
         })}
       </div>
-
-      {/* 선택 즉시 효과 배너 — delta 부호별 색·아이콘 + 선수별 반응 2~3명 */}
-      {result && (
-        <div
-          className={`tt-banner ${result.delta > 0 ? 'tt-banner--up' : result.delta < 0 ? 'tt-banner--down' : 'tt-banner--flat'}`}
-          role="status"
-        >
-          <p className="tt-banner__head">
-            <span className="tt-banner__text">
-              {result.delta > 0
-                ? `선수단 사기 상승 (+${result.delta})`
-                : result.delta < 0
-                  ? `역효과! 선수단 사기 저하 (${result.delta})`
-                  : '선수단 반응이 미지근합니다 (±0)'}
-            </span>
-          </p>
-          {result.repeated && (
-            <p className="tt-banner__note">지난 경기와 같은 말 — 울림이 덜합니다</p>
-          )}
-          <ul className="tt-reactions">
-            {result.reactions.map(r => (
-              <li key={r.playerId} className="tt-reactions__item">
-                <span className="tt-reactions__name">{nameOf(r.playerId)}</span>
-                <span className="badge">{REACTION_KO[r.icon] ?? r.icon}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {talked && !result ? <p className="tt-done">지시 전달 완료</p> : null}
     </div>
   )
 }

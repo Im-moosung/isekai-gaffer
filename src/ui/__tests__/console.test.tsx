@@ -114,9 +114,15 @@ describe('SubPanel (교체)', () => {
     expect(container.querySelectorAll('.cs-sub__lineup .cs-card').length).toBe(11)
     const outCard = container.querySelector('.cs-sub__lineup .cs-card') as HTMLElement
     const inCard = container.querySelector('.cs-sub__bench .cs-card') as HTMLElement
+    // 막힌 상태에서도 카드는 눌린다(disabled 아님) — 누르면 배너가 다시 고지된다.
     fireEvent.click(outCard)
+    expect(container.querySelector('.cs-sub__locked')!.getAttribute('data-nudge')).toBe('1')
     fireEvent.click(inCard)
-    expect((getByRole('button', { name: '교체 확정' }) as HTMLButtonElement).disabled).toBe(true)
+    // [교체 확정]은 disabled가 아니라 aria-disabled다 — 눌러야 이유를 말할 수 있다.
+    const confirm = getByRole('button', { name: '교체 확정' })
+    expect(confirm.getAttribute('aria-disabled')).toBe('true')
+    fireEvent.click(confirm)
+    expect(store().engine!.home.subsUsed).toBe(0)
 
     // 하프타임을 지난 뒤에는 "하프타임에는…" 안내가 거짓이 되므로 문구가 바뀐다.
     const eng2 = store().engine!

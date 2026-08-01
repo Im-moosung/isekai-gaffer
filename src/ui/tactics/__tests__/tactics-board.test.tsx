@@ -84,7 +84,7 @@ describe('TacticsBoard — 확장 전술 지시(Task 5)', () => {
     const { getByRole, getByText } = mountAt('paused-break')
     const btn = getByRole('button', { name: 'GK 전진' }) as HTMLButtonElement
     expect(btn.disabled).toBe(true)
-    expect(getByText(/85' 이후에만 가능/)).toBeTruthy()
+    expect(getByText(/85' 이후에만 효과가 있습니다/)).toBeTruthy()
   })
 
   it('GK 파워플레이: 85\'+ & 지는 중이면 해제 → 토글 반영', () => {
@@ -98,6 +98,40 @@ describe('TacticsBoard — 확장 전술 지시(Task 5)', () => {
     expect(btn.disabled).toBe(false)
     fireEvent.click(btn)
     expect(store().engine!.home.tactics.gkPowerplay).toBe(true)
+  })
+
+  // ★ 결함 회귀(2026-08-01): 예전에는 버튼이 `!open || !ppUnlocked`로 막히는데 안내문은
+  //   ppUnlocked만 봤다. 85분이 지나면 "해제됐다"는 문구가 뜬 채 버튼이 죽어 있었다.
+  //   잠금 조건이 여럿이면 **지금 막고 있는 조건 전부**가 화면에 있어야 한다.
+  it("GK 파워플레이: 85'+·지는 중이어도 개입 창 밖이면 그 사실을 화면이 말한다", () => {
+    const { getByRole, container } = mountAt('paused-user')
+    fireEvent.click(getByRole('tab', { name: /전술/ }))
+    act(() => {
+      const eng = structuredClone(store().engine!)
+      eng.minute = 87; eng.score = [0, 1]
+      // 쿨다운 중 = 개입 자원이 막힌 상태. 엔진 조건은 충족돼 있다.
+      useMatchStore.setState({ engine: eng, lastShoutMinute: 85, touchlineWindow: null })
+    })
+    const btn = getByRole('button', { name: 'GK 전진' }) as HTMLButtonElement
+    expect(btn.disabled).toBe(true)
+    // 화면이 "해제됐다"고 말하면 안 된다 — 막고 있는 것은 쿨다운이고, 그것을 말해야 한다.
+    const grp = container.querySelector('[aria-label="GK 파워플레이"]')!
+    expect(grp.textContent).toContain('잠김')
+    expect(grp.textContent).toContain('쿨다운')
+  })
+
+  it('GK 파워플레이: 켜 둔 상태는 조건이 사라져도 끌 수 있다', () => {
+    const { getByRole } = mountAt('paused-break')
+    act(() => {
+      const eng = structuredClone(store().engine!)
+      eng.minute = 87; eng.score = [0, 1]
+      eng.home.tactics = { ...eng.home.tactics, gkPowerplay: true }
+      useMatchStore.setState({ engine: eng })
+    })
+    const btn = getByRole('button', { name: 'GK 전진' }) as HTMLButtonElement
+    expect(btn.disabled).toBe(false)
+    fireEvent.click(btn)
+    expect(store().engine!.home.tactics.gkPowerplay).toBe(false)
   })
 
   // 네이티브 <select>는 폐지했다(OS 기본 스타일이 그대로 나오고, 7개짜리 배타 선택은
@@ -185,6 +219,45 @@ describe('TacticsBoard — 코치 회의 (근거가 있는 코치만 등장)', (
     expect(after.instructions.pressing).toBe(55)
     // +1이 '적극(강화)'이다 — 수비를 굳히자면서 -1을 걸면 존 전력이 오히려 떨어진다.
     expect(after.groupIntensity!.defense).toBe(1)
+  })
+
+  // ★ 확장 개방(2026-08-01): [채택]을 등급 하나로 끄지 않는다 — **패치 내용으로 판정**한다.
+  //   코치 조언은 대개 터치라인에서도 성립하고, 폭을 넘는 카드만 막혀야 한다.
+  it('감독 타임: 폭 안의 조언은 채택되고, 폭을 넘는 조언은 사유와 함께 막힌다', () => {
+    const r = mountAt('paused-user')
+    seedCoachData()
+    const cards = Array.from(r.container.querySelectorAll('.tb-coach__card'))
+      .filter(c => c.querySelector('.tb-coach__adopt'))
+    expect(cards.length).toBeGreaterThan(0)
+    // 막힌 카드는 반드시 사유를 그 자리에 적는다(이유 없는 disabled 금지).
+    for (const c of cards) {
+      const btn = c.querySelector('.tb-coach__adopt') as HTMLButtonElement
+      if (btn.disabled) expect(c.querySelector('.tb-coach__block')!.textContent!.length).toBeGreaterThan(0)
+    }
+    // 열려 있는 카드는 실제로 반영된다.
+    const openCard = cards.find(c => !(c.querySelector('.tb-coach__adopt') as HTMLButtonElement).disabled)
+    if (openCard) {
+      const before = JSON.stringify(store().engine!.home.tactics)
+      fireEvent.click(openCard.querySelector('.tb-coach__adopt') as HTMLElement)
+      expect(JSON.stringify(store().engine!.home.tactics)).not.toBe(before)
+    }
+  })
+
+  it('감독 타임: 대형을 바꾸는 조언은 채택이 막힌다(포메이션의 경계)', () => {
+    const r = mountAt('paused-user')
+    seedCoachData()
+    // 멘탈리티를 두 단계 미는 패치를 만들 수는 없으므로, 창 스냅샷을 반대편 끝으로 옮겨
+    // 코치의 태세 제안이 두 단계가 되게 한다 — 그러면 그 카드만 막혀야 한다.
+    act(() => {
+      const eng = structuredClone(store().engine!)
+      eng.home.tactics = { ...eng.home.tactics, mentality: 'very-defensive' }
+      useMatchStore.setState({ engine: eng, touchlineWindow: null })
+    })
+    const blocked = Array.from(r.container.querySelectorAll('.tb-coach__card'))
+      .filter(c => (c.querySelector('.tb-coach__adopt') as HTMLButtonElement | null)?.disabled)
+    for (const c of blocked) {
+      expect(c.querySelector('.tb-coach__block')).toBeTruthy()
+    }
   })
 
   it('[감독 판단대로 간다] → 아무것도 반영하지 않고 팝업만 닫는다(전부 무시 경로)', () => {
@@ -310,15 +383,22 @@ describe('TacticsBoard — 개입 권한 2등급', () => {
   it('감독 타임: 포메이션 버튼이 잠기고, 잠긴 이유와 다음 브레이크 분을 알린다', () => {
     const { container, getByRole } = mountAt('paused-user')
     const notice = container.querySelector('.tb-touchline')!
-    expect(notice.textContent).toContain('압박·템포 지시만 가능합니다')
+    // 확장 개방 이후로는 **잠긴 쪽이 소수**다 — 안내도 그렇게 말해야 화면이 사실과 맞는다.
+    expect(notice.textContent).toContain('포메이션')
+    expect(notice.textContent).toContain('라인·압박·템포')
+    expect(notice.textContent).not.toContain('압박·템포 지시만')
     // 스케줄의 다음 브레이크 분이 문구에 그대로 들어간다(1분 시점 → 첫 하이드레이션).
     expect(notice.textContent).toContain(`${store().schedule!.firstHydration}분`)
     expect((getByRole('button', { name: '5-4-1' }) as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('감독 타임: 교체 탭이 먼저 열리고 교체는 가능하다', () => {
+  it('감독 타임: 전술 탭이 먼저 열린다(대형만 잠기므로 첫 화면이 고장으로 읽히지 않는다)', () => {
     const { getByRole } = mountAt('paused-user')
-    expect(getByRole('tab', { name: '교체' }).getAttribute('aria-selected')).toBe('true')
+    expect(getByRole('tab', { name: /전술/ }).getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('감독 타임: 교체는 여전히 가능하다', () => {
+    mountAt('paused-user')
     const home = store().engine!.home
     const out = home.tactics.lineup[10].playerId
     const inId = home.team.squad.find(p => !home.tactics.lineup.some(l => l.playerId === p.id))!.id
@@ -326,11 +406,26 @@ describe('TacticsBoard — 개입 권한 2등급', () => {
     expect(store().engine!.home.subsUsed).toBe(1)
   })
 
-  it('감독 타임: 전술 탭은 잠금 안내를 띄우고 멘탈리티 버튼이 비활성이다', () => {
+  it('감독 타임: 멘탈리티는 한 칸 옆까지 열리고 두 칸은 잠긴다(±1단계)', () => {
     const { getByRole, container } = mountAt('paused-user')
     fireEvent.click(getByRole('tab', { name: /전술/ }))
-    expect(container.querySelector('.tb-locked')!.textContent).toContain('포메이션·태세·세트피스는 잠김')
+    expect(container.querySelector('.tb-locked')!.textContent).toContain('포메이션')
+    // 기준은 현재값(균형). 공격적/수비적은 한 칸이라 열리고, 매우 공격적은 두 칸이라 잠긴다.
+    expect((getByRole('button', { name: '공격적' }) as HTMLButtonElement).disabled).toBe(false)
+    expect((getByRole('button', { name: '수비적' }) as HTMLButtonElement).disabled).toBe(false)
     expect((getByRole('button', { name: '매우 공격적' }) as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(getByRole('button', { name: '공격적' }))
+    expect(store().engine!.home.tactics.mentality).toBe('attacking')
+  })
+
+  it('감독 타임: 페이즈 포메이션만 잠기고, 왜·언제 풀리는지가 화면에 있다', () => {
+    const { getByRole, container } = mountAt('paused-user')
+    fireEvent.click(getByRole('tab', { name: /전술/ }))
+    expect((getByRole('button', { name: '공격 시 3-5-2' }) as HTMLButtonElement).disabled).toBe(true)
+    const grp = container.querySelector('[aria-label="페이즈 포메이션"]')!
+    expect(grp.textContent).toContain('잠김')
+    expect(grp.textContent).toContain('대형')
+    expect(grp.textContent).toContain(`${store().schedule!.firstHydration}분`)
   })
 
   it('하이드레이션 브레이크: 안내가 없고 포메이션 버튼이 열린다', () => {
@@ -405,33 +500,60 @@ describe('TacticsBoard — 세트피스 UI(결함 ④)', () => {
     expect(grp.querySelector('.tx-btn__rec')).toBeTruthy()
   })
 
-  it('터치라인 등급에서는 세트피스가 잠긴다(훈련장에서 약속하는 루틴)', () => {
+  // 등급 재판정(2026-08-01 확장 개방): 훈련장에서 약속하는 것은 **루틴 자체**이고,
+  // 코너 앞에서 감독이 하는 일은 이미 약속된 것 중 하나를 고르는 것이다(손짓 하나).
+  // 대형 재배치가 아니므로 터치라인에서 연다.
+  it('터치라인 등급에서도 세트피스는 열린다(약속된 루틴 중 하나를 고르는 일)', () => {
     const { getByRole } = mountAt('paused-user')
     fireEvent.click(getByRole('tab', { name: /전술/ }))
-    expect((getByRole('button', { name: '코너 루트 니어' }) as HTMLButtonElement).disabled).toBe(true)
+    const btn = getByRole('button', { name: '코너 루트 니어' }) as HTMLButtonElement
+    expect(btn.disabled).toBe(false)
+    fireEvent.click(btn)
+    expect(store().engine!.home.tactics.setPiece!.route).toBe('near')
   })
 })
 
 describe('TacticsBoard — 터치라인 지시 개방(사용자 지시 ③)', () => {
-  it('감독 타임: 압박·템포 슬라이더는 열리고 라인·공격방향은 잠긴다', () => {
+  it('감독 타임: 지시 4축이 전부 열린다(라인·공격방향 포함)', () => {
     const { getByRole, getByLabelText } = mountAt('paused-user')
     fireEvent.click(getByRole('tab', { name: /전술/ }))
     expect((getByLabelText('압박') as HTMLInputElement).disabled).toBe(false)
     expect((getByLabelText('템포') as HTMLInputElement).disabled).toBe(false)
-    expect((getByLabelText('라인') as HTMLInputElement).disabled).toBe(true)
-    expect((getByRole('button', { name: '좌측' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((getByLabelText('라인') as HTMLInputElement).disabled).toBe(false)
+    expect((getByRole('button', { name: '좌측' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
-  it('감독 타임: 슬라이더 범위 자체가 ±15로 잘린다(끌 수 있는 폭이 곧 규칙)', () => {
+  // ★ 3f4af06은 슬라이더 min/max를 base±15로 잘라 규칙을 표현했다. 그 결정을 뒤집었다
+  //   (사용자 보고 2026-08-01: 지시 적용 후 손잡이가 중앙에 서서 "명령이 안 먹힌 줄 알았다").
+  //   좌표계는 절대 0~100 고정, 속도 제한은 클램프 + 밴드 표식으로 표현한다.
+  it('감독 타임: 슬라이더 좌표계는 절대 0~100이고 값은 실제 지시값이다', () => {
+    const { getByRole, getByLabelText, container } = mountAt('paused-user')
+    fireEvent.click(getByRole('tab', { name: /전술/ }))
+    const cur = store().engine!.home.tactics.instructions.pressing
+    const el = getByLabelText('압박') as HTMLInputElement
+    expect(Number(el.min)).toBe(0)
+    expect(Number(el.max)).toBe(100)
+    expect(Number(el.value)).toBe(cur)
+    // 허용 밴드는 좌표계가 아니라 트랙 위 표식으로 그린다.
+    const band = container.querySelectorAll('.cs-axis__band')
+    expect(band.length).toBe(3)
+  })
+
+  it('감독 타임: 밴드 밖으로 끌면 ±15 경계로 클램프된다(store 판정과 같은 기준)', () => {
     const { getByRole, getByLabelText } = mountAt('paused-user')
     fireEvent.click(getByRole('tab', { name: /전술/ }))
     const cur = store().engine!.home.tactics.instructions.pressing
     const el = getByLabelText('압박') as HTMLInputElement
-    expect(Number(el.min)).toBe(Math.max(0, cur - 15))
-    expect(Number(el.max)).toBe(Math.min(100, cur + 15))
+    fireEvent.change(el, { target: { value: '100' } })
+    expect(Number(el.value)).toBe(Math.min(100, cur + 15))
+    fireEvent.change(el, { target: { value: '0' } })
+    expect(Number(el.value)).toBe(Math.max(0, cur - 15))
+    // 클램프된 값은 store가 받아 준다 — 화면과 정본 판정이 어긋나지 않는다.
+    fireEvent.click(getByRole('button', { name: '터치라인 지시' }))
+    expect(store().engine!.home.tactics.instructions.pressing).toBe(Math.max(0, cur - 15))
   })
 
-  it('감독 타임: [터치라인 지시]로 엔진에 반영되고 쿨다운이 걸린다', () => {
+  it('감독 타임: [터치라인 지시]가 반영되고 그 분에 창이 열린다(추가 비용 없음)', () => {
     const { getByRole, getByLabelText } = mountAt('paused-user')
     fireEvent.click(getByRole('tab', { name: /전술/ }))
     const cur = store().engine!.home.tactics.instructions.pressing
@@ -439,8 +561,28 @@ describe('TacticsBoard — 터치라인 지시 개방(사용자 지시 ③)', ()
     fireEvent.click(getByRole('button', { name: '터치라인 지시' }))
     expect(store().engine!.home.tactics.instructions.pressing).toBe(cur + 10)
     expect(store().lastShoutMinute).toBe(store().engine!.minute)
-    // 쿨다운 중에는 같은 축이 다시 잠긴다.
+    expect(store().touchlineWindow!.minute).toBe(store().engine!.minute)
+    // 같은 창 안이므로 슬라이더는 계속 열려 있고,
+    const el = getByLabelText('압박') as HTMLInputElement
+    expect(el.disabled).toBe(false)
+    // ★ 사용자 보고의 재현 방지: 적용 후에도 좌표계는 절대 0~100이고 손잡이는 적용값에 선다.
+    //   (예전엔 min/max가 base±15로 잘려 적용값이 늘 트랙 한가운데로 보였다.)
+    expect(Number(el.min)).toBe(0)
+    expect(Number(el.max)).toBe(100)
+    expect(Number(el.value)).toBe(cur + 10)
+    // **폭의 기준점은 창 스냅샷 그대로**다 — 여기서 다시 +15를 얻어 우회할 수 없다.
+    fireEvent.change(el, { target: { value: '100' } })
+    expect(Number(el.value)).toBe(Math.min(100, cur + 15))
+  })
+
+  it('감독 타임: 쿨다운 중(창 없음)에는 슬라이더가 잠기고 남은 분이 화면에 있다', () => {
+    const { getByRole, getByLabelText, container } = mountAt('paused-user')
+    fireEvent.click(getByRole('tab', { name: /전술/ }))
+    act(() => {
+      useMatchStore.setState({ lastShoutMinute: store().engine!.minute, touchlineWindow: null })
+    })
     expect((getByLabelText('압박') as HTMLInputElement).disabled).toBe(true)
+    expect(container.querySelector('.cs-touchline')!.textContent).toContain('쿨다운')
   })
 
   it('하이드레이션 브레이크에서는 4축 전부 열리고 버튼 라벨이 [지시 적용]이다', () => {

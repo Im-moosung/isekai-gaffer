@@ -481,6 +481,15 @@
   align-items: center;
   gap: var(--sp-2);
   margin-top: var(--sp-1);
+  flex-wrap: wrap;
+}
+/* 채택이 막힌 카드의 사유. 조언은 읽되 왜 지금 쓸 수 없는지가 버튼 옆에 붙어야 한다
+   — 이유 없는 disabled는 고장으로 읽힌다(ShoutBar 선례). */
+.tb-coach__block {
+  font-size: var(--fs-xs);
+  line-height: var(--lh-md);
+  color: var(--t-mid);
+  flex: 1 1 12rem;
 }
 
 /* ── 코치 회의 팝업 (2026-08-01) ────────────────────────────────

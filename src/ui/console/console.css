@@ -63,12 +63,40 @@
   text-align: right;
   color: var(--t-hi);
 }
+/* 트랙 래퍼 — 허용 밴드 표식을 슬라이더 위에 겹치기 위한 좌표 기준.
+   슬라이더의 min/max를 잘라 규칙을 표현하던 방식(3f4af06)을 뒤집은 결과다:
+   좌표계는 절대 0~100으로 고정하고, "이번 개입에서 전달 가능한 폭"은 별도 층으로 그린다
+   (논증은 ConsolePanel.tsx의 axisBand 주석). */
+.cs-axis__track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+/* 밴드는 트랙 뒤에 깔린 하이라이트다 — 손잡이를 가리면 안 되므로 z 순서상 아래,
+   포인터 이벤트도 받지 않는다(슬라이더 조작을 가로채면 표식이 컨트롤을 망친다).
+   네이티브 트랙(4px)이 불투명해 가운데를 덮으므로, 밴드를 그보다 높게 잡아
+   위아래로 삐져나오게 한다 — 결과적으로 손잡이를 감싼 **캘리퍼(집게)** 로 읽힌다.
+   "여기까지 밀 수 있다"를 좌표계를 자르지 않고 말하는 방법이다. */
+.cs-axis__band {
+  position: absolute;
+  top: 50%;
+  height: 18px;
+  transform: translateY(-50%);
+  border-radius: var(--r-sm);
+  border-left: 2px solid var(--brand);
+  border-right: 2px solid var(--brand);
+  background: var(--brand-weak);
+  pointer-events: none;
+}
 /* range는 트랙만 얇고 히트 영역은 손가락 크기여야 한다(WCAG 2.5.5). */
 .cs-axis__range {
+  position: relative;
   width: 100%;
   height: var(--tap-min);
   accent-color: var(--brand);
   cursor: pointer;
+  background: transparent;
 }
 .cs-axis__range:disabled {
   cursor: not-allowed;
@@ -133,6 +161,16 @@
   font-size: var(--fs-sm);
   color: var(--t-mid);
 }
+/* 소진된 축이 있으면 카운터 자신이 경고가 된다 — "5/5"는 이미 답이지만 평소와 같은
+   회색으로 적혀 있으면 읽히지 않는다(cs-cost--hot과 같은 승격 규칙). */
+.cs-sub__count--hot {
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--danger-line);
+  border-radius: var(--r-sm);
+  background: var(--danger-weak);
+  font-weight: 700;
+  color: var(--danger);
+}
 .cs-sub__hint {
   margin: var(--sp-2) 0 var(--sp-1);
   font-size: var(--fs-xs);
@@ -140,18 +178,54 @@
   font-weight: 700;
   color: var(--t-mid);
 }
-/* 교체 기회 소진 안내 — 왜 [교체 확정]이 막혔는지 그 자리에서 말한다.
-   점선 테두리는 폐지했다. 4변 테두리 색조 + 배경 틴트로 상태를 말한다. */
+/* 차단 배너 — 왜 [교체 확정]이 막혔는지 그 자리에서, 사유를 전부 열거해 말한다.
+   점선 테두리는 폐지했다. 4변 테두리 색조 + 배경 틴트 + 좌측 두꺼운 띠로 상태를 말한다.
+   모달을 쓰지 않는 대신 이 배너가 목록보다 위에 상주하므로 대비를 한 단계 올렸다. */
 .cs-sub__locked {
   margin: var(--sp-2) 0 var(--sp-1);
   padding: var(--sp-2) var(--sp-3);
   border: 1px solid var(--danger-line);
+  border-left: 3px solid var(--danger);
   border-radius: var(--r-sm);
   background: var(--danger-weak);
   font-size: var(--fs-xs);
   line-height: var(--lh-md);
   font-weight: 700;
   color: var(--danger);
+}
+/* 이미 떠 있는 배너를 다시 가리키는 동작 — 막힌 컨트롤을 누를 때마다 한 번 흔든다.
+   같은 문장을 아래에 또 적는 대신이다(문장 중복은 화면을 두 번 읽게 만든다). */
+.cs-sub__locked--nudge {
+  /* --dur-2는 prefers-reduced-motion에서 토큰이 1ms로 접힌다(tokens.css) — 여기서
+     별도 미디어쿼리를 두지 않는 이유다. 그 경우에도 role="alert"가 다시 읽힌다. */
+  animation: cs-sub-nudge var(--dur-2) var(--ease-out) 1;
+}
+@keyframes cs-sub-nudge {
+  0% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  60% { transform: translateX(4px); }
+  100% { transform: translateX(0); }
+}
+.cs-sub__locked-t {
+  display: block;
+  font-size: var(--fs-sm);
+  font-weight: 800;
+}
+/* 사유가 둘 이상일 수 있다(인원과 기회는 동시에 소진된다) — 한 문단으로 이으면
+   두 규칙이 하나로 읽힌다. 목록으로 끊어 "각각이 따로 막고 있다"를 보인다. */
+.cs-sub__reasons {
+  margin: var(--sp-1) 0 0;
+  padding-left: var(--sp-4);
+  list-style: disc;
+}
+.cs-sub__reasons li + li {
+  margin-top: var(--sp-1);
+}
+/* [교체 확정]도 aria-disabled다 — 눌러야 사유가 뜬다. 겉모습은 disabled와 같게.
+   .btn의 :disabled 스타일은 shell.css 소관이라 여기서는 대비만 맞춘다. */
+.cs-sub .btn[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 .cs-sub__subtitle {
   margin: var(--sp-3) 0 var(--sp-2);
@@ -185,12 +259,19 @@
   transition: border-color var(--dur-1) var(--ease-out),
     background var(--dur-1) var(--ease-out);
 }
-.cs-card:hover:not(:disabled) {
+.cs-card:hover:not(:disabled):not([aria-disabled='true']) {
   border-color: var(--s-line-strong);
 }
-.cs-card:disabled {
+/* 막힌 카드는 disabled로 죽이지 않는다(클릭 이벤트가 와야 사유를 띄운다) —
+   그래서 잠금은 aria-disabled로 말하고, 겉모습만 disabled와 같게 맞춘다. */
+.cs-card:disabled,
+.cs-card[aria-disabled='true'] {
   cursor: not-allowed;
   opacity: 0.7;
+}
+/* 누를 수는 있으므로 눌린 순간의 피드백은 남긴다 — 아무 반응이 없으면 고장으로 읽힌다. */
+.cs-card[aria-disabled='true']:active {
+  border-color: var(--danger-line);
 }
 /* 선택 = 감독의 행동이므로 --brand. 라임은 "진행 중" 전용이라 여기 오지 않는다. */
 .cs-card--sel {
@@ -299,7 +380,8 @@
   .cs-axis__val {
     grid-area: val;
   }
-  .cs-axis__range {
+  /* 슬라이더는 이제 밴드 표식과 함께 트랙 래퍼 안에 들어 있다 — 그리드 배치도 래퍼가 받는다. */
+  .cs-axis__track {
     grid-area: range;
   }
   .cs-axis--focus {
