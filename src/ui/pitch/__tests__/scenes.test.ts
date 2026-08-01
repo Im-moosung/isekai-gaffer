@@ -5,7 +5,8 @@ import { makeTestTeam } from '../../../engine/fixtures/testTeams'
 import { createMatch } from '../../../engine/simulate'
 import {
   buildScene, sceneLibrarySize, LANE_COUNT, buildupLabel, BUILDUP_BY_PATTERN,
-  pickBuildup, FINISH_ROUTE_LABELS,
+  pickBuildup, FINISH_ROUTE_LABELS, BUILDUP_PICTURES, BUILDUP_WEIGHTS, BUILDUP_ORDER,
+  SHOT_ZONE_OUT_PCT, pickShotZone, BOX_DEPTH_M, BOX_HALF_M,
   BUILDUP_VARIANT_COUNT, FINISH_VARIANT_COUNT, SCENE_DWELL_MS, SEGMENT_SPEED,
   LANE_WEIGHTS, pickLane,
   CARRIER_RUN_SPEED, SUPPORT_RUN_SPEED, FOOT_OFFSET_M, TOUCH_MS,
@@ -56,18 +57,33 @@ function ev(type: MatchEventType, over: Partial<MatchEvent> = {}): MatchEvent {
 }
 
 describe('장면 라이브러리 규모', () => {
-  it('(빌드업 4계열 × 실행 2) × (마무리 5 × 득점루트 5) × 레인 6 = 1200 + 세트피스 4', () => {
+  // ★ 2026-08-01(9라운드) 계열 4 → **10**. 사용자 요구: "슈팅까지 가는 패턴도 더 만들어.
+  //   5개 더 만들어서 패턴이 10개 되도록." 세는 대상은 **빌드업 계열**이다(득점 루트 5종은
+  //   별도 축). 존 축(박스 안/밖)이 박스 밖 전용이 아닌 8계열의 칸을 두 배로 만든다.
+  it('(계열 10 → 존 적용 18) × 실행 2 × 마무리 5 × 득점루트 5 × 레인 6 = 5400 + 세트피스 4', () => {
     expect(LANE_COUNT).toBe(6)
     expect(BUILDUP_VARIANT_COUNT).toBe(2)
     // ★ 2026-08-01: 득점 루트를 3 → 5로 늘렸다(크로스 헤더·드리블 돌파 추가).
     expect(FINISH_VARIANT_COUNT).toBe(5)
-    expect(sceneLibrarySize()).toEqual({ open: 1200, setPiece: 4, total: 1204, reachablePerMatch: 1440 })
+    expect(sceneLibrarySize()).toEqual({
+      buildups: 10, open: 5400, setPiece: 4, total: 5404, reachablePerMatch: 6480,
+    })
+  })
+
+  it('★ 계열 10종이 서로 다른 라벨과 "한 줄 그림"을 갖는다 — 좌표만 다른 복제가 아니다', () => {
+    const ids = Object.keys(BUILDUP_PICTURES)
+    expect(ids).toHaveLength(10)
+    expect(new Set(Object.values(BUILDUP_PICTURES).map(v => v.label)).size).toBe(10)
+    expect(new Set(Object.values(BUILDUP_PICTURES).map(v => v.picture)).size).toBe(10)
+    // 박스 밖 전용은 정확히 둘(외곽 순환 · 세트피스 2차 볼)이다.
+    expect(ids.filter(id => BUILDUP_PICTURES[id as keyof typeof BUILDUP_PICTURES].alwaysOut))
+      .toEqual(['outside', 'secondball'])
   })
 
   // ★ 2026-08-01: attackPattern이 계열을 **고정하지 않고 기울이기만** 하게 되면서
   //   한 경기에서 4계열 전부가 도달 가능해졌다(예전 216 → 1440).
-  it('한 경기 도달 가능 조합은 1440이다 — 이 수가 반복 게이트의 분모다', () => {
-    expect(sceneLibrarySize().reachablePerMatch).toBe(1440)
+  it('한 경기 도달 가능 조합은 6480이다 — 이 수가 반복 게이트의 분모다', () => {
+    expect(sceneLibrarySize().reachablePerMatch).toBe(6480)
   })
 
   it('attackPattern의 최빈 계열은 4택과 1:1이고 서로 다르다', () => {
@@ -77,16 +93,16 @@ describe('장면 라이브러리 규모', () => {
   })
 
   // ★ 5라운드 피드백 ③ — 전술은 분포를 기울일 뿐 고정하지 않는다.
-  it('attackPattern은 계열 분포를 기울인다 — 4계열 전부가 나오되 고른 쪽이 최빈이다', () => {
+  it('attackPattern은 계열 분포를 기울인다 — 10계열 전부가 나오되 고른 쪽이 최빈이다', () => {
     for (const p of PATTERNS) {
       const count: Record<string, number> = {}
       for (let u = 0; u < 100; u++) {
         const id = pickBuildup(p, u)
         count[id] = (count[id] ?? 0) + 1
       }
-      // 4계열 전부 등장하고, 어느 것도 0이 아니다.
-      expect(Object.keys(count).length, p).toBe(4)
-      for (const id of Object.keys(count)) expect(count[id], `${p}/${id}`).toBeGreaterThanOrEqual(10)
+      // 10계열 전부 등장하고, 어느 것도 0이 아니다.
+      expect(Object.keys(count).length, p).toBe(10)
+      for (const id of Object.keys(count)) expect(count[id], `${p}/${id}`).toBeGreaterThanOrEqual(3)
       // 고른 전술의 계열이 최빈이고, 두 번째보다 확실히 크다(화면에서 전술이 보인다).
       const sorted = Object.entries(count).sort((a, b) => b[1] - a[1])
       expect(sorted[0][0], p).toBe(BUILDUP_BY_PATTERN[p])
@@ -315,7 +331,9 @@ describe('결정론', () => {
   })
   it('장면 키에 빌드업·마무리·레인·공수 주체가 들어간다', () => {
     const k = sceneKeyFor(ev('goal'), withPattern('cross').home, base.away)!
-    expect(k).toMatch(/^H\/(central|wing|through|outside)\.[ab]\/goal\.[abcde]\/L[0-5]$/)
+    expect(k).toMatch(
+      /^H\/(central|wing|through|outside|counter|switch|longball|press|carry|secondball)\.[ab]\/goal\.[abcde]\/L[0-5]\/Z(in|out)$/,
+    )
   })
   it('안무 없는 타입은 키도 없다', () => {
     for (const t of ['kickoff', 'sub', 'halftime', 'fulltime'] as MatchEventType[]) {
@@ -347,8 +365,8 @@ describe('역할 배정 — 배역은 엔진이 준다', () => {
       }
       throw new Error(`no u for ${id}`)
     }
-    const all = ['central', 'wing', 'through', 'outside'].map(rolesOf)
-    expect(new Set(all).size).toBe(4)
+    const all = Object.keys(BUILDUP_PICTURES).map(rolesOf)
+    expect(new Set(all).size).toBe(10)
   })
 })
 
@@ -602,6 +620,172 @@ describe('★ 골 종점 — 골라인 위, 기둥 안쪽, 크로스바 아래',
             const zM = (Math.abs(endOf(s.points).ball[1] - 50) / 100) * PITCH_H
             expect(zM, `${s.key} 접촉 z ${zM.toFixed(2)} m`).toBeLessThan(GOAL_HALF_M)
           }
+        }
+      }
+    }
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ★ 박스 안/밖 슛 비율 (2026-08-01 9라운드 사용자 요구)
+//
+// > 지금도 선수들이 박스 안에서 슈팅하는 게 많이 않아. **균형으로 했을 때 박스 안 슈팅이
+// > 70% 이상**이어야 해. **중거리 슛으로 감독이 결정하면 중거리는 실제로 70% 이상** 때리고
+// > 시뮬레이션도 그런 화면으로 나와야 해.
+//
+// 개편 전 실측(90분 실주행 40시드): balanced 박스 안 **56.9%**, longshot 박스 밖 **67.7%**.
+// 둘 다 관문 미달이었다. 원인은 (a) 계열별 슛 거리 사다리 3칸 중 2칸이 박스 밖이었고,
+// (b) 세이브 하한(SAVE_MIN_M 16~18 m)이 박스 라인 바로 위에 있어 세이브 43%가 밖으로
+// 밀렸으며, (c) 존이라는 축 자체가 없어 "중거리 지시"가 `outside` 계열 55%로만 표현됐다.
+//
+// "박스 안"의 정의는 실측 대조군(StatsBomb)과 같은 **페널티 에어리어 폴리곤**이다:
+// 골라인에서 16.5 m 이내 & 폭 40.32 m 이내. (거리 16.5 m 원이 아니다 — 박스 모서리는
+// 골문에서 25 m다.)
+// ═══════════════════════════════════════════════════════════════════════════
+describe('★ 박스 안/밖 슛 비율 — 감독의 결정이 슛 위치를 정한다', () => {
+  /** 슛 발사점의 깊이(골라인까지 m)와 좌우(m). */
+  const shotGeom = (pts: ScenePoint[]) => {
+    const b = shotOf(pts)!.ball
+    return { depth: ((100 - b[0]) / 100) * PITCH_W, lat: (Math.abs(b[1] - 50) / 100) * PITCH_H }
+  }
+  const inBox = (pts: ScenePoint[]) => {
+    const g = shotGeom(pts)
+    return g.depth <= BOX_DEPTH_M && g.lat <= BOX_HALF_M
+  }
+  const KINDS = ['goal', 'save', 'miss'] as const
+  /** SAVE_MIN_M의 하한(가장 가까운 칸) — GK가 접촉점까지 몸을 보낼 수 있는 최소 거리. */
+  const SAVE_MIN_M_FLOOR = 16.0
+  const FAMS = Object.keys(BUILDUP_PICTURES) as (keyof typeof BUILDUP_PICTURES)[]
+  /** 계열 id → 그 계열을 뽑는 해시값 u(누적 합 탐색이므로 존재가 보장된다). */
+  const uFor = (fam: string) => {
+    for (let u = 0; u < 100; u++) if (pickBuildup('balanced', u) === fam) return u
+    throw new Error(`no u for ${fam}`)
+  }
+  /** 존 id → 그 존을 뽑는 해시값 u. */
+  const zFor = (pattern: AttackPattern, zone: 'in' | 'out') => {
+    for (let u = 0; u < 100; u++) if (pickShotZone(pattern, u) === zone) return u
+    throw new Error(`no u for ${zone}`)
+  }
+
+  // ── ① 기구 계약 — 존이 실제로 슛 깊이를 정한다(오프사이드 없는 순수 저술) ──
+  it('★ 존 in은 전 조합에서 박스 안, 존 out은 전 조합에서 박스 밖이다', () => {
+    for (const fam of FAMS) {
+      const alwaysOut = BUILDUP_PICTURES[fam].alwaysOut
+      for (const zone of ['in', 'out'] as const) {
+        if (alwaysOut && zone === 'in') continue // 정의상 존재하지 않는 조합
+        for (const kind of KINDS) {
+          for (let b = 0; b < BUILDUP_VARIANT_COUNT; b++) {
+            for (let f = 0; f < FINISH_VARIANT_COUNT; f++) {
+              for (let l = 0; l < LANE_COUNT; l++) {
+                const sc = buildScene('balanced', kind, l, {
+                  family: uFor(fam), buildup: b, finish: f, zone: zFor('balanced', zone),
+                })
+                const g = shotGeom(sc.points)
+                const tag = `${sc.key}/${kind} 깊이 ${g.depth.toFixed(1)} 좌우 ${g.lat.toFixed(1)}`
+                if (zone === 'in') {
+                  expect(g.depth, tag).toBeLessThanOrEqual(BOX_DEPTH_M)
+                  expect(g.lat, tag).toBeLessThanOrEqual(BOX_HALF_M)
+                } else {
+                  expect(g.depth, tag).toBeGreaterThan(BOX_DEPTH_M)
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  })
+
+  // ── ② 분포 계약 — 가중치 표가 사용자 요구 비율을 만든다 ──
+  it('★ 가중치 표만으로 balanced 박스 안 ≥ 74% · longshot 박스 밖 ≥ 74%', () => {
+    /** 한 (계열, 존) 칸의 박스 안 비율 — 실행 2 × 루트 5 × 레인 6 × 결과 3의 평균. */
+    const cell = (pattern: AttackPattern, fam: string, zone: 'in' | 'out') => {
+      let n = 0
+      let hit = 0
+      for (const kind of KINDS) {
+        for (let b = 0; b < BUILDUP_VARIANT_COUNT; b++) {
+          for (let f = 0; f < FINISH_VARIANT_COUNT; f++) {
+            for (let l = 0; l < LANE_COUNT; l++) {
+              n++
+              if (inBox(buildScene(pattern, kind, l, {
+                family: uFor(fam), buildup: b, finish: f, zone: zFor(pattern, zone),
+              }).points)) hit++
+            }
+          }
+        }
+      }
+      return hit / n
+    }
+    const share: Record<string, number> = {}
+    for (const p of PATTERNS) {
+      let acc = 0
+      for (const fam of BUILDUP_ORDER) {
+        const w = BUILDUP_WEIGHTS[p][fam] / 100
+        if (BUILDUP_PICTURES[fam].alwaysOut) { acc += w * cell(p, fam, 'out'); continue }
+        const out = SHOT_ZONE_OUT_PCT[p] / 100
+        acc += w * ((1 - out) * cell(p, fam, 'in') + out * cell(p, fam, 'out'))
+      }
+      share[p] = acc
+    }
+    // 관문에 4 %p 여유를 둔다 — 실주행에는 오프사이드 상한이라는 한쪽 방향 손실이 있다.
+    expect(share.balanced, `balanced 박스 안 ${(share.balanced * 100).toFixed(1)}%`).toBeGreaterThanOrEqual(0.74)
+    expect(1 - share.longshot, `longshot 박스 밖 ${((1 - share.longshot) * 100).toFixed(1)}%`)
+      .toBeGreaterThanOrEqual(0.74)
+    // 크로스·스루는 문전에서 끝나는 전술이다 — 균형보다 박스 안이 많아야 한다.
+    expect(share.cross).toBeGreaterThan(share.balanced)
+    expect(share.through).toBeGreaterThan(share.balanced)
+  })
+
+  // ── ③ 실주행 계약 — 오프사이드 상한을 통과한 뒤에도 관문을 넘는다 ──
+  it('★ 90분 분량 이벤트(패턴당 270건)에서 balanced 박스 안 ≥ 70% · longshot 박스 밖 ≥ 70%', () => {
+    const measure = (p: AttackPattern) => {
+      // ★ 양 팀 모두에 패턴을 건다. `save`는 **막은 팀(수비)의 사건**이라 안무의 공격 팀이
+      //   반대편이 된다(choreography.attackingSideOf) — 한쪽만 걸면 세이브 3분의 1이
+      //   상대 전술로 그려져 측정이 섞인다.
+      const st = withPattern(p)
+      st.away.tactics.attackPattern = p
+      let n = 0
+      let hit = 0
+      for (let m = 1; m <= 90; m++) {
+        for (const type of KINDS) {
+          const seq = buildSequence(
+            ev(type, { minute: m, playerId: st.home.tactics.lineup[9].playerId }), st.home, st.away)
+          if (seq.length < 2) continue
+          const b = seq[seq.length - 2].ball
+          // ★ `save`는 막은 팀의 사건이라 공격 팀이 **원정**이고, 안무가 x를 미러한다
+          //   (choreography.buildSequence의 fx). 그쪽 골문은 x=0이다.
+          const away = type === 'save'
+          const depth = ((away ? b.x : 100 - b.x) / 100) * PITCH_W
+          const lat = (Math.abs(b.y - 50) / 100) * PITCH_H
+          n++
+          if (depth <= BOX_DEPTH_M && lat <= BOX_HALF_M) hit++
+        }
+      }
+      return { n, q: hit / n, se: Math.sqrt(((hit / n) * (1 - hit / n)) / n) }
+    }
+    const bal = measure('balanced')
+    const lng = measure('longshot')
+    expect(bal.n).toBeGreaterThanOrEqual(250)
+    // 관문에서 SE의 2배 이상 떨어져 있어야 "판정 가능"이다(이 프로젝트 규칙).
+    expect(bal.q, `balanced 박스 안 ${(bal.q * 100).toFixed(1)}% ±${(bal.se * 100).toFixed(1)}`)
+      .toBeGreaterThanOrEqual(0.70 + 2 * bal.se)
+    expect(1 - lng.q, `longshot 박스 밖 ${((1 - lng.q) * 100).toFixed(1)}% ±${(lng.se * 100).toFixed(1)}`)
+      .toBeGreaterThanOrEqual(0.70 + 2 * lng.se)
+  })
+
+  it('세이브는 거리를 줄이지 않고 **각도를 열어** 박스 안으로 들어간다 — GK 접촉 계약이 산다', () => {
+    // 존 in의 세이브는 골문 중앙까지의 거리가 SAVE_MIN_M 하한(16.0 m) 아래로 내려가면 안 된다.
+    for (let b = 0; b < BUILDUP_VARIANT_COUNT; b++) {
+      for (let f = 0; f < FINISH_VARIANT_COUNT; f++) {
+        for (let l = 0; l < LANE_COUNT; l++) {
+          const sc = buildScene('balanced', 'save', l, {
+            family: uFor('central'), buildup: b, finish: f, zone: zFor('balanced', 'in'),
+          })
+          // 볼은 슈터의 **발 앞** FOOT_OFFSET_M에 놓이므로 하한도 그만큼 앞이다
+          // (SAVE_MIN_M 주석의 비행 시간 계산이 이미 이 0.45 m를 빼고 있다).
+          const d = metres(shotOf(sc.points)!.ball, [100, 50])
+          expect(d, `${sc.key} 세이브 슛 거리 ${d.toFixed(2)} m`)
+            .toBeGreaterThanOrEqual(SAVE_MIN_M_FLOOR - FOOT_OFFSET_M - 0.05)
         }
       }
     }

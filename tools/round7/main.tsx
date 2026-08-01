@@ -7,25 +7,31 @@ import { makeTestTeam } from '../../src/engine/fixtures/testTeams'
 import { createMatch } from '../../src/engine/simulate'
 import { buildSequence, sceneKeyFor } from '../../src/ui/pitch/choreography'
 import { Match3D } from '../../src/ui/pitch/three/Match3D'
-import type { MatchEvent } from '../../src/engine/types'
+import type { AttackPattern, MatchEvent } from '../../src/engine/types'
 
 const params = new URLSearchParams(location.search)
-const wantKey = params.get('key') ?? 'goal.e'
+// ★ 2026-08-01(9라운드) `key`는 **쉼표로 나눈 부분 문자열 전부**를 요구한다(AND).
+//   계열 10종 · 존 2종으로 칸이 늘면서 `central.a/goal.a/L0/Zin`처럼 완전한 키를 그대로
+//   요구하면 한 전술에서 5,000분에 한 번밖에 안 나온다. 조건을 느슨하게 나눠 건다.
+const wantKey = (params.get('key') ?? 'goal.e').split(',').filter(Boolean)
+// 어떤 attackPattern으로 장면을 뽑을지(존·계열 분포가 여기서 갈린다).
+const wantPattern = params.get('pattern') as AttackPattern | null
 const DWELL = Number(params.get('dwell') ?? 36000)
 
 const home = makeTestTeam('kor', 82)
 const away = makeTestTeam('esp', 84)
 const state = createMatch(home, away, { seed: 42 })
+if (wantPattern) state.home.tactics.attackPattern = wantPattern
 const shooter = state.home.tactics.lineup[9].playerId
 
 let ev: MatchEvent | null = null
 let key = ''
-for (let minute = 1; minute <= 400 && !ev; minute++) {
+for (let minute = 1; minute <= 20000 && !ev; minute++) {
   const cand: MatchEvent = { minute, type: 'goal', teamId: home.id, playerId: shooter }
   const k = sceneKeyFor(cand, state.home, state.away) ?? ''
-  if (k.includes(wantKey)) { ev = cand; key = k }
+  if (wantKey.every(w => k.includes(w))) { ev = cand; key = k }
 }
-if (!ev) throw new Error(`장면 ${wantKey}를 못 찾았다`)
+if (!ev) throw new Error(`장면 ${wantKey.join(' + ')}를 못 찾았다`)
 const seq = buildSequence(ev, state.home, state.away)
 
 // 캡처 스크립트가 읽는 계약.

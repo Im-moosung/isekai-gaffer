@@ -315,6 +315,9 @@ function variantsFor(event: MatchEvent, focusDir: -1 | 0 | 1): SceneVariants {
     family: hash(`fam|${core}`) % 100,
     buildup: hash(`bv|${core}`) % BUILDUP_VARIANT_COUNT,
     finish: hash(`fv|${core}`) % FINISH_VARIANT_COUNT,
+    // 슛 존(박스 안/밖) 추첨값 — scenes.SHOT_ZONE_OUT_PCT가 전술별로 이 분포를 기울인다.
+    // ★ teamId를 넣지 않는 이유는 위와 같다: 존이 갈리면 슛 지점 x부터 미러가 깨진다.
+    zone: hash(`zn|${core}`) % 100,
   }
 }
 

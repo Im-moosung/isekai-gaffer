@@ -61,7 +61,11 @@ export const TOUCH_MS = 380
  * movement.MAX_SPEED(7.5)보다 낮게 둔다 — 저술이 클램프 한계를 요구하면 속도 클램프에
  * 걸려 선수가 공보다 뒤처지고, 그것이 곧 "공이 혼자 간다"가 된다.
  */
-export const CARRIER_RUN_SPEED = 7.0
+export const CARRIER_RUN_SPEED = 6.6
+// ★ 2026-08-01(9라운드) 7.0 → 6.6. 7.0은 movement.MAX_SPEED(7.5)와 0.5 m/s밖에 차이가 없어,
+//   장면이 시작될 때 생긴 지연을 한 구간(1.9 s) 안에 0.96 m밖에 못 닫는다. 슛 지점까지
+//   {@link MAX_RUN_IN_M} 전부를 달리는 장면(오프사이드 상한이 슈터를 뒤로 물리면 늘 그렇다)에서
+//   임팩트 순간 슈터-슛지점 어긋남이 2.4 m가 됐다(계약 2 m). 0.9 m/s 여유면 1.85 m를 닫는다.
 
 /**
  * 지원 무버(공을 만지지 않는 두 명)의 주행 상한(m/s).
@@ -118,7 +122,10 @@ export const SCENE_DWELL_MS: Record<SceneFinish, number> = {
   save: 8800,
   shot: 8800,
   miss: 8800,
-  chance: 5200,
+  // ★ 2026-08-01(9라운드) 5200 → 5500. {@link CARRIER_RUN_SPEED}를 7.0 → 6.6으로 낮추면서
+  //   캐리어 주행이 지배하는 구간이 6% 길어졌고, `chance`는 dwell이 가장 짧아 계약(≤0.8)에
+  //   여유가 없었다(실측 wing.b/chance.c 0.811). 5500이면 최댓값이 0.767이다.
+  chance: 5500,
   corner: 3700,
   foul: 2600,
 }
@@ -169,8 +176,35 @@ interface Station {
   contact?: boolean
 }
 
-/** 빌드업 종류 — attackPattern 4택과 1:1. */
-export type BuildupId = 'central' | 'wing' | 'through' | 'outside'
+/**
+ * 빌드업 종류 — **슈팅까지 가는 전개 패턴 10종**.
+ *
+ * ★ 2026-08-01(9라운드) 4 → 10. 사용자 지적: "슈팅까지 가는 패턴도 더 만들어. 5개 더
+ *   만들어서 패턴이 10개 되도록 해줘. 그래야 다양한 화면이 보이면서 재미 있을 거 아냐?"
+ *
+ * "패턴 10개"가 세는 대상은 **이 목록**이다(득점 루트 5종은 별도 축이며, 둘을 곱하면
+ * 화면 조합은 10 × 2실행 × 5루트 × 6레인 = 600칸/결과다). 늘린 축을 빌드업으로 고른
+ * 근거: 사용자가 말한 것은 "슈팅**까지 가는** 패턴"이고, 득점 루트는 이미 5종으로
+ * 늘려 둔 참이며(2026-08-01 오전), 화면에서 "다른 전개"로 읽히는 것은 마무리 0.8초가
+ * 아니라 그 앞의 3~4초짜리 볼 이동 경로이기 때문이다.
+ */
+export type BuildupId =
+  | 'central' | 'wing' | 'through' | 'outside'
+  | 'counter' | 'switch' | 'longball' | 'press' | 'carry' | 'secondball'
+
+/**
+ * 슛 존 — **박스 안에서 마무리하는가, 밖에서 때리는가.**
+ *
+ * ★ 2026-08-01(9라운드) 신설. 사용자 지적: "지금도 선수들이 박스 안에서 슈팅하는 게 많이
+ *   않아. 균형으로 했을 때 박스 안 슈팅이 70% 이상이어야 해. 중거리 슛으로 감독이
+ *   결정하면 중거리는 실제로 70% 이상 때리고 시뮬레이션도 그런 화면으로 나와야 해."
+ *
+ * 왜 계열(빌드업)과 **별개의 축**인가: 계열은 "어떤 길로 갔나"이고 존은 "어디서 방아쇠를
+ * 당겼나"다. 실제 축구에서도 둘은 독립이다 — 측면을 타고 들어갔어도 감독이 "때려"라고
+ * 하면 박스 앞에서 감아 찬다(shoot-on-sight 지시). 존을 계열에 묶으면 중거리 지시가
+ * `outside` 계열 하나로만 표현되어, 90분 내내 같은 그림이 되는 5라운드 문제로 되돌아간다.
+ */
+export type ShotZone = 'in' | 'out'
 
 /** 마무리 종류 — 엔진이 이미 정한 결과. */
 export type FinishId = 'goal' | 'save' | 'miss' | 'shot' | 'chance'
@@ -192,6 +226,14 @@ interface Buildup {
   /** 계열 라벨(워룸·분석보드에 그대로 뜬다 — 변형이 달라도 이건 안 바뀐다). */
   label: string
   variants: BuildupVariant[]
+  /**
+   * 이 계열이 **언제나 박스 밖에서 때리는가**. 계열의 정의가 곧 중거리인 둘
+   * (`outside` 외곽 순환 · `secondball` 세트피스 2차 볼)만 true다 — 그 그림은
+   * 슈터가 박스 앞에 머무는 것이 본질이라 존 추첨의 대상이 아니다.
+   */
+  alwaysOut?: boolean
+  /** 이 계열이 한 줄로 어떤 그림인가(감사·디버그 라벨). */
+  picture: string
 }
 
 // ── 유저의 attackPattern → 빌드업 ────────────────────────────────────────
@@ -209,7 +251,10 @@ export const BUILDUP_BY_PATTERN: Record<AttackPattern, BuildupId> = {
 }
 
 /** 가중치 표의 열 순서 — 누적 합 탐색이 이 순서를 쓴다(결정론). */
-export const BUILDUP_ORDER: readonly BuildupId[] = ['central', 'wing', 'through', 'outside']
+export const BUILDUP_ORDER: readonly BuildupId[] = [
+  'central', 'wing', 'through', 'outside',
+  'counter', 'switch', 'longball', 'press', 'carry', 'secondball',
+]
 
 /**
  * attackPattern → 빌드업 계열 **분포**(백분율, 합 100).
@@ -223,17 +268,72 @@ export const BUILDUP_ORDER: readonly BuildupId[] = ['central', 'wing', 'through'
  * 전술 가시성은 유지된다 — 60% 대 15%는 눈에 띄게 다른 비율이고, 한 경기(하이라이트
  * 20~30건)에서도 최빈 계열이 명확히 드러난다.
  *
- * · balanced  30/25/25/20 — "고르게". 어느 계열도 3분의 1을 넘지 않는다.
- * · cross     측면 60 / 중앙 15 / 침투 15 / 중거리 10 (스펙이 예로 든 비율)
- * · through   침투 60 / 중앙 15 / 측면 15 / 중거리 10
- * · longshot  중거리 55 / 중앙 20 / 측면 15 / 침투 10 — 중거리는 다른 계열과 그림 차이가
- *   가장 커서(슛 지점 21~30 m) 55%면 충분히 "이 팀은 밖에서 때린다"로 읽힌다.
+ * ★ 2026-08-01(9라운드) 계열이 4 → 10이 되면서 표를 다시 짰다. 원칙은 그대로다:
+ *   ① 고른 전술의 계열이 최빈이고 2위와 확실히 벌어진다(전술이 화면에 보인다),
+ *   ② 어느 계열도 0이 아니다(10종 전부 도달 가능),
+ *   ③ 박스 밖 전용 계열(`outside`·`secondball`)의 합이 곧 그 전술의 **최소 중거리 비율**이다.
+ *      balanced는 12%, longshot은 58% — 나머지는 {@link SHOT_ZONE_OUT_PCT}가 채운다.
+ *
+ * · balanced  중앙 18이 최빈이되 10종이 고루 나온다. 박스 밖 전용 합 12%.
+ * · cross     측면 40. 전환(switch)을 10으로 둔 이유는 사이드 체인지가 크로스 팀의
+ *   실제 전개 레퍼토리이기 때문이다.
+ * · through   침투 40 + 역습 10 — 뒷공간을 노리는 두 그림이 같은 성격이다.
+ * · longshot  외곽 40 + 세트피스 2차 볼 18 = 58%가 구조적으로 박스 밖이다.
  */
 export const BUILDUP_WEIGHTS: Record<AttackPattern, Record<BuildupId, number>> = {
-  balanced: { central: 30, wing: 25, through: 25, outside: 20 },
-  cross: { central: 15, wing: 60, through: 15, outside: 10 },
-  through: { central: 15, wing: 15, through: 60, outside: 10 },
-  longshot: { central: 20, wing: 15, through: 10, outside: 55 },
+  balanced: { central: 18, wing: 11, through: 11, outside: 8, counter: 12, switch: 9, longball: 9, press: 9, carry: 9, secondball: 4 },
+  cross: { central: 8, wing: 40, through: 8, outside: 3, counter: 8, switch: 10, longball: 8, press: 6, carry: 6, secondball: 3 },
+  through: { central: 8, wing: 7, through: 40, outside: 4, counter: 10, switch: 6, longball: 8, press: 8, carry: 6, secondball: 3 },
+  longshot: { central: 8, wing: 5, through: 4, outside: 40, counter: 6, switch: 6, longball: 6, press: 4, carry: 3, secondball: 18 },
+}
+
+/**
+ * attackPattern → **박스 밖에서 때리는 비율(%)**. 계열이 `alwaysOut`이 아닐 때만 쓴다.
+ *
+ * 이 표가 사용자 요구의 정본이다: 균형이면 박스 안에서 마무리하고, 중거리를 고르면
+ * 어떤 계열로 전개했든 박스 앞에서 방아쇠를 당긴다.
+ *
+ * 실제 비율(= 박스 밖) = `alwaysOut 계열 가중치 합` + `나머지 × 이 값`.
+ *   · balanced 12 + 88×0.12 = 22.6%  → 박스 안 77.4%(사용자 요구 70%에서 7.4 %p 여유)
+ *   · longshot 58 + 42×0.50 = 79.0%  → 사용자 요구 "중거리 70% 이상"에서 9 %p 여유
+ * 왜 여유를 크게 두는가: `MAX_RUN_IN_M` 주행 상한과 오프사이드 상한이 박스 안 슛을
+ * 밖으로 밀어내는 **한쪽 방향 손실**이 있다(상대가 내려서면 밖에서 때리게 된다 —
+ * 실제 축구가 그렇고, 그 손실을 없애면 안 된다). 그 손실을 흡수하고도 70%가 남아야 한다.
+ */
+/*
+ * ★★ 실측(StatsBomb 63.8%)에서 **의도적으로 벗어난다** — 되돌리지 마라.
+ *
+ * 이 프로젝트는 캘리브레이션을 실측으로 관리한다(팀별 슛/90분 ±15% 등). 그런데 박스 안
+ * 슛 비율만은 실측과 어긋나 있다: StatsBomb 오픈플레이 8,348건의 페널티 박스 안 비율은
+ * **63.8%**인데, 여기서는 balanced가 **77%**를 목표로 한다.
+ *
+ * 왜: 2026-08-01 사용자(감독)가 직접 정한 수치다 — "균형으로 했을 때 박스 안 슈팅이
+ * 70% 이상이어야 해." 이 프로젝트에서 실측은 **사용자 결정이 없을 때의 기본값**이지
+ * 사용자 위에 있는 권위가 아니다. 그리고 이 결정에는 게임으로서의 근거도 있다:
+ *   ① 실측 63.8%는 **한 경기 25슛 전체**의 비율이지만, 화면에 나오는 것은 그중 하이라이트로
+ *      뽑힌 20여 건이고 그 표본은 원래 골에 가깝다(실측도 Goal 88% · Blocked 55%로 갈린다).
+ *   ② 우리 장면은 6~9초짜리 완결된 연출이라 반복 재생된다. 실측 꼬리(먼 중거리)를 실측
+ *      비율대로 넣으면 그 꼬리가 곧 일상이 되어 "왜 다들 밖에서만 때려?"가 된다 —
+ *      실제로 5·9라운드에 두 번 지적받은 지점이다.
+ * 그 대신 **거리 분포·미스 종점·결과별 배율은 실측을 그대로 따른다.** 어긋난 축이
+ * 무엇인지 여기 적어 두는 이유는, 다음 사람이 "실측과 다르다"며 되돌리지 않게 하기
+ * 위해서다. 되돌리려면 사용자 결정을 먼저 뒤집어야 한다.
+ * 근거·실측표: docs/audit/r9-box-shots.md
+ */
+export const SHOT_ZONE_OUT_PCT: Record<AttackPattern, number> = {
+  balanced: 12,
+  cross: 5,
+  through: 5,
+  longshot: 50,
+}
+
+/**
+ * 존을 뽑는다. `u`는 0~99의 결정론 해시값(choreography가 준다).
+ * `u=0`이 언제나 'in'이 되도록 **위쪽 꼬리**를 'out'에 배정한다 — 존을 지정하지 않는
+ * 기존 호출부·테스트가 기본값 0으로 안정된 그림(박스 안)을 얻게 하기 위해서다.
+ */
+export function pickShotZone(pattern: AttackPattern, u: number): ShotZone {
+  return mod(u, 100) >= 100 - SHOT_ZONE_OUT_PCT[pattern] ? 'out' : 'in'
 }
 
 /**
@@ -271,6 +371,7 @@ const BUILDUPS: Record<BuildupId, Buildup> = {
   central: {
     id: 'central',
     label: '중앙 짧은 연결',
+    picture: '중원 세 명이 짧은 삼각형으로 주고받으며 하프스페이스로 밀고 들어간다',
     variants: [
       {
         vid: 'a',
@@ -299,6 +400,7 @@ const BUILDUPS: Record<BuildupId, Buildup> = {
   wing: {
     id: 'wing',
     label: '측면 돌파 → 크로스',
+    picture: '공이 터치라인에 붙어 엔드라인까지 내려간 뒤 문전으로 꺾여 들어간다',
     variants: [
       {
         vid: 'a',
@@ -328,6 +430,7 @@ const BUILDUPS: Record<BuildupId, Buildup> = {
   through: {
     id: 'through',
     label: '스루패스 뒷공간 침투',
+    picture: '중앙에서 낮게 깔린 한 방이 수비 라인을 관통해 뒷공간으로 빠진다',
     variants: [
       {
         vid: 'a',
@@ -356,6 +459,8 @@ const BUILDUPS: Record<BuildupId, Buildup> = {
   outside: {
     id: 'outside',
     label: '외곽 순환 → 중거리',
+    picture: '박스 앞에서 좌우로 두 번 돌린 뒤 그 자리에서 때린다 — 아무도 박스에 들어가지 않는다',
+    alwaysOut: true,
     variants: [
       {
         vid: 'a',
@@ -376,6 +481,199 @@ const BUILDUPS: Record<BuildupId, Buildup> = {
           { movers: [[64, 47], [50, 40], [58, 62]], carrier: 2, arc: 'pass' },
           // 박스 앞으로 되빼주는 공 — 뒤에서 달려드는 선수가 때린다.
           { movers: [[70, 48], [54, 44], [62, 58]], carrier: 2 },
+        ],
+      },
+    ],
+  },
+  // ── 2026-08-01(9라운드) 신설 6종 ────────────────────────────────────────
+  // 저술 규율(위 4종에서 검증된 것): ① 스테이션 3개, ② 슬롯 0(슈터)은 마지막에 x≈80
+  // (박스 밖 전용 계열만 x≈67), ③ 무버 한 명이 한 구간에 11 m 이상 달리지 않는다,
+  // ④ 빌드업 총 소요 3~4 s(그래야 배달+슛까지 6~7 s로 dwell 8.8 s의 80% 안에 든다).
+  // 새 계열은 **거리 규모는 기존과 같게 두고 그림의 모양만** 바꾼다 — 규모를 키우면
+  // 페이싱 계약(마지막 t ≤ 0.8)이 먼저 깨진다.
+
+  // 역습 속공 — 자기 진영에서 회수한 공이 **한 번의 긴 대각 패스**로 단숨에 넘어간다.
+  counter: {
+    id: 'counter',
+    label: '역습 속공',
+    picture: '공이 자기 진영 x35에서 출발해 한 번의 긴 패스로 상대 진영까지 건너뛴다 — 전개 중 볼 이동 거리가 가장 길다',
+    variants: [
+      {
+        vid: 'a',
+        label: '중앙 롱 카운터',
+        roles: [[70, 50], [80, 50], [40, 55]],
+        stations: [
+          // 첫 구간은 반드시 지면이다 — 장면의 첫 킥은 임팩트가 t=0이라 재생에 백스윙
+          // 프레임이 없다. 볼이 15 m/s로 떠나면 첫 프레임에서 이미 발에서 1 m를 넘는다
+          // (movement.test '킥의 최소 볼-발' 계약). 역습의 첫 패스를 낮게 까는 것은
+          // 실제 축구이기도 하다.
+          { movers: [[65, 46], [46, 62], [36, 52]], carrier: 2, arc: 'ground' },
+          // ★ 첫 구간의 **패서는 제자리에 선다**(36→38). 공을 차면서 달리면 재생 첫 프레임에서
+          //   볼-발 거리가 (볼 속도 + 패서 속도) × 프레임만큼 벌어지는데, 첫 킥은 임팩트가
+          //   t=0이라 백스윙 프레임이 없어 그 값이 곧 최솟값이 된다(movement.test 1 m 계약).
+          { movers: [[73, 48], [58, 58], [38, 53]], carrier: 1, arc: 'ground' },
+          // 받은 선수가 그대로 몰고 들어간다(캐리어 연속 = 드리블).
+          { movers: [[80, 50], [66, 56], [46, 54]], carrier: 1 },
+        ],
+      },
+      {
+        vid: 'b',
+        label: '측면 질주 역습',
+        roles: [[72, 46], [80, 54], [42, 62]],
+        stations: [
+          { movers: [[65, 54], [48, 74], [38, 60]], carrier: 2, arc: 'ground' },
+          { movers: [[73, 56], [58, 76], [40, 61]], carrier: 1, arc: 'ground' },
+          { movers: [[80, 58], [66, 78], [48, 63]], carrier: 1 },
+        ],
+      },
+    ],
+  },
+  // 사이드 체인지 — 한쪽에서 반대쪽으로 30 m 대각 전환 후 그쪽에서 안으로 접는다.
+  switch: {
+    id: 'switch',
+    label: '사이드 체인지 → 컷인',
+    picture: '공이 피치를 가로질러 반대 측면으로 한 번에 건너간다 — 화면에서 좌우로 크게 흔들리는 유일한 전개',
+    variants: [
+      {
+        vid: 'a',
+        label: '대각 전환 후 컷인',
+        roles: [[64, 44], [50, 32], [70, 68]],
+        stations: [
+          // 안쪽으로 내주고(지면) → 대각 전환(띄움) → 반대 측면. 전환을 **두 번째** 구간에
+          // 두는 이유는 첫 구간이 t=0 임팩트라 빠른 볼을 실을 수 없기 때문이다(counter 주석).
+          { movers: [[65, 56], [48, 34], [58, 62]], carrier: 2, arc: 'ground' },
+          // 전환 패스는 띄운다 — 지면으로 35 m를 굴리면 한 구간이 2.7 s를 먹는다.
+          { movers: [[73, 57], [50, 30], [59, 63]], carrier: 1, arc: 'cross' },
+          { movers: [[80, 58], [54, 34], [70, 72]], carrier: 2 },
+        ],
+      },
+      {
+        vid: 'b',
+        label: '역방향 전환',
+        roles: [[64, 56], [50, 68], [70, 32]],
+        stations: [
+          { movers: [[65, 44], [48, 66], [58, 38]], carrier: 2, arc: 'ground' },
+          { movers: [[73, 45], [50, 70], [59, 37]], carrier: 1, arc: 'cross' },
+          { movers: [[80, 46], [54, 66], [70, 28]], carrier: 2 },
+        ],
+      },
+    ],
+  },
+  // 롱볼 세컨볼 — 수비 진영에서 최전방으로 띄우고, 경합에서 떨어진 공을 잡는다.
+  longball: {
+    id: 'longball',
+    label: '롱볼 → 세컨볼',
+    picture: '수비 진영에서 문전까지 40 m를 한 번에 띄운 뒤, 경합에서 떨어진 공을 짧게 잡아 마무리한다',
+    variants: [
+      {
+        vid: 'a',
+        label: '최전방 경합 후 세컨볼',
+        roles: [[76, 52], [30, 50], [58, 60]],
+        stations: [
+          // 뒤로 내주고(지면) → 최전방으로 40 m 롱볼(띄움) → 경합에서 떨어진 공.
+          { movers: [[66, 52], [34, 52], [56, 58]], carrier: 2, arc: 'ground' },
+          { movers: [[74, 54], [34, 52], [57, 59]], carrier: 1, arc: 'cross' },
+          { movers: [[80, 56], [40, 53], [68, 58]], carrier: 2 },
+        ],
+      },
+      {
+        vid: 'b',
+        label: '머리로 떨궈주기',
+        roles: [[76, 44], [30, 54], [58, 42]],
+        stations: [
+          { movers: [[66, 46], [34, 48], [56, 42]], carrier: 2, arc: 'ground' },
+          { movers: [[74, 45], [34, 48], [57, 41]], carrier: 1, arc: 'cross' },
+          // 머리로 떨궈주는 공은 트래핑이 없다 — 원터치.
+          { movers: [[80, 44], [40, 49], [68, 40]], carrier: 2, oneTouch: true },
+        ],
+      },
+    ],
+  },
+  // 전방 압박 탈취 — 상대 진영에서 끊어 곧바로 마무리로 간다.
+  press: {
+    id: 'press',
+    label: '전방 압박 탈취',
+    picture: '볼이 상대 진영(x54~72) 안에서만 짧게 두 번 움직이고 끝난다 — 자기 진영을 한 번도 지나지 않는 유일한 전개',
+    variants: [
+      {
+        vid: 'a',
+        label: '하프스페이스 탈취',
+        roles: [[68, 40], [80, 50], [60, 62]],
+        stations: [
+          { movers: [[66, 52], [56, 38], [60, 60]], carrier: 1, arc: 'ground' },
+          { movers: [[73, 54], [57, 39], [66, 64]], carrier: 2, arc: 'ground' },
+          { movers: [[80, 56], [60, 42], [71, 62]], carrier: 2 },
+        ],
+      },
+      {
+        vid: 'b',
+        label: '측면 탈취 후 안으로',
+        roles: [[68, 76], [80, 48], [56, 46]],
+        stations: [
+          { movers: [[66, 58], [54, 78], [52, 46]], carrier: 1, arc: 'ground' },
+          { movers: [[73, 58], [55, 77], [60, 52]], carrier: 2, arc: 'ground' },
+          { movers: [[80, 58], [60, 74], [68, 58]], carrier: 2 },
+        ],
+      },
+    ],
+  },
+  // 개인 드리블 전진 — 한 선수가 25 m를 혼자 몰고 올라가 마지막에 내준다.
+  carry: {
+    id: 'carry',
+    label: '개인 드리블 전진',
+    picture: '공이 한 선수의 발에 붙은 채 20 m 넘게 이동한다 — 패스가 한 번도 없는 유일한 전개',
+    variants: [
+      {
+        vid: 'a',
+        label: '중앙 몰고 올라가기',
+        roles: [[64, 38], [80, 52], [56, 66]],
+        stations: [
+          { movers: [[66, 50], [44, 60], [58, 38]], carrier: 1, arc: 'ground' },
+          // 드리블 중간에 컨트롤 정지를 넣지 않는다 — 넣으면 공을 세우고 다시 가는 그림이 된다.
+          { movers: [[73, 50], [55, 56], [63, 40]], carrier: 1, arc: 'ground', oneTouch: true },
+          { movers: [[80, 52], [66, 54], [68, 42]], carrier: 1 },
+        ],
+      },
+      {
+        vid: 'b',
+        label: '측면 몰고 들어가기',
+        roles: [[64, 70], [80, 50], [56, 34]],
+        stations: [
+          { movers: [[66, 58], [46, 76], [60, 46]], carrier: 1, arc: 'ground' },
+          { movers: [[73, 58], [56, 78], [64, 48]], carrier: 1, arc: 'ground', oneTouch: true },
+          { movers: [[80, 58], [66, 76], [68, 50]], carrier: 1 },
+        ],
+      },
+    ],
+  },
+  // 세트피스 2차 볼 — 문전에서 걷어낸 공을 박스 밖에서 다시 잡아 때린다.
+  secondball: {
+    id: 'secondball',
+    label: '세트피스 2차 볼',
+    picture: '공이 문전(x86)에서 밖으로 30 m 튀어나온 뒤 박스 앞에서 다시 골문으로 향한다 — 방향이 한 번 뒤집히는 유일한 전개',
+    alwaysOut: true,
+    variants: [
+      {
+        vid: 'a',
+        label: '코너 클리어 재장전',
+        roles: [[68, 50], [84, 62], [60, 48]],
+        stations: [
+          // 문전에서 걷어낸 공이 **낮게 튀어** 박스 밖으로 굴러 나온다(첫 구간은 지면 —
+          // counter 주석의 t=0 임팩트 제약). 방향이 골문 → 밖으로 한 번 뒤집히는 그림이다.
+          { movers: [[70, 54], [86, 62], [62, 50]], carrier: 1, arc: 'ground' },
+          { movers: [[69, 52], [85, 61], [62, 50]], carrier: 2, arc: 'ground' },
+          // 박스 앞에서 한 번 더 밀어 놓고 때린다.
+          { movers: [[68, 50], [74, 54], [66, 52]], carrier: 2 },
+        ],
+      },
+      {
+        vid: 'b',
+        label: '프리킥 튕겨나온 공',
+        roles: [[68, 46], [84, 38], [58, 54]],
+        stations: [
+          { movers: [[68, 46], [84, 38], [60, 52]], carrier: 1, arc: 'ground' },
+          { movers: [[67, 48], [83, 39], [60, 52]], carrier: 2, arc: 'ground' },
+          { movers: [[66, 50], [72, 48], [64, 50]], carrier: 2 },
         ],
       },
     ],
@@ -564,6 +862,32 @@ const SOLO_RUN_IN_M = 11
  */
 const MAX_SHOT_X = 92
 
+// ── 박스 안/밖 계약 (2026-08-01 9라운드) ──────────────────────────────────
+/**
+ * "박스 안"의 정의 — **골라인에서 16.5 m 이내 & 폭 40.32 m 이내**(경기 규칙의 페널티
+ * 에어리어 그대로). 실측 대조군(StatsBomb)이 쓰는 정의와 같다.
+ */
+export const BOX_DEPTH_M = 16.5
+/** 박스 반폭(m). 슛 지점 y는 38~62(±8.16 m)로 클램프되므로 이 값에 걸리는 일은 없다. */
+export const BOX_HALF_M = 20.16
+/**
+ * 존 'in'의 **깊이 상한**(m). 15.8 = 박스 라인에서 0.7 m 안쪽.
+ *
+ * 왜 라인에 붙이지 않는가: 화면에 그려지는 슈터는 저술 좌표가 아니라 앵커링·속도 클램프를
+ * 거친 위치다(실측 어긋남 p50 0.4 m). 0.7 m 여유가 있어야 "저술은 박스 안인데 화면은 밖"이
+ * 생기지 않는다.
+ */
+const IN_BOX_DEPTH_M = 15.8
+/**
+ * 존 'out'의 **깊이 하한**(m). 17.6 = 박스 라인에서 1.1 m 밖.
+ *
+ * 안쪽(0.7)보다 여유를 크게 둔 이유: 중거리 지시는 사용자가 **눈으로 확인하겠다고 말한**
+ * 항목이라, 라인에 걸친 슛은 "박스 앞"이 아니라 "박스 안"으로 읽힌다.
+ */
+const OUT_BOX_DEPTH_M = 17.6
+/** 슛 지점 y 클램프(38~62)가 허용하는 좌우 최대 오프셋(m) — 8.16. */
+const MAX_SHOT_LATERAL_M = (12 / 100) * PITCH_H
+
 // ── 슛 발사점 분포 (StatsBomb open-data 실측) ─────────────────────────────
 // 출처: statsbomb/open-data 이벤트 전 4,235경기에서 무작위 350경기를 뽑아 얻은
 // **오픈플레이 슛 8,348건**의 `location` → 골문 중앙(120, 40) 거리(야드→m).
@@ -593,13 +917,26 @@ const MAX_SHOT_X = 92
  *  · wing(크로스)   문전 마무리 — p50 13.3 m · 골문 16.5 m 안 81%
  *  · through(스루)  뒷공간을 째면 GK와 마주 본다 — p50 14.4 m · 74%
  *  · central(균형)  실측 오픈플레이 전체 분포에 맞춘다 — p50 15.6 m(실측 16.1) · 58%
- *  · outside(중거리) 실측 **박스 밖 슛** 분포(p50 22.4 · p90 30.1)에 맞춘다 — p50 21.8 m · 0%
+ *  · outside(중거리) 실측 **박스 밖 슛** 분포(p50 22.4 · p90 30.1)에 맞춘다
+ *
+ * ★ 2026-08-01(9라운드) 박스 안 계열의 사다리를 **박스 안으로 눌렀다**(central 10.5/17/25
+ *   → 10.5/13.5/16). 예전 사다리는 3칸 중 2칸이 박스 밖이라, 존이 'in'이어도 깊이 상한
+ *   ({@link IN_BOX_DEPTH_M})에 걸려 잘리기만 하고 칸 사이의 차이가 사라졌다. 사다리 자체를
+ *   박스 안에 두면 상한이 거의 걸리지 않아 3칸이 실제로 다른 거리로 남는다.
+ *   박스 **밖** 그림은 이제 존 축(`SHOT_ZONE_OUT_PCT`)과 박스 밖 전용 계열이 담당한다.
  */
 const SHOT_DIST_M: Record<BuildupId, readonly [number, number, number]> = {
-  central: [10.5, 17, 25],
-  wing: [9, 13, 19],
-  through: [9.5, 14, 20],
+  central: [10.5, 13.5, 16],
+  wing: [9, 12, 15],
+  through: [9.5, 13, 16],
   outside: [21, 25, 30],
+  counter: [10, 13.5, 16.5],
+  switch: [10.5, 14, 16.5],
+  // 롱볼 경합·전방 압박은 구조적으로 문전에서 끝난다(둘 다 골문 가까이서 공을 얻는다).
+  longball: [9, 12, 15],
+  press: [9.5, 13, 16],
+  carry: [10, 13.5, 16.5],
+  secondball: [22, 26, 30],
 }
 
 /**
@@ -647,8 +984,16 @@ const FINISH_KIND_SCALE: Record<FinishId, number> = {
  *
  * 칸마다 다른 값을 두는 이유: 단일 하한이면 가까운 칸이 전부 한 점에 뭉쳐
  * "세이브는 늘 같은 자리에서"가 된다.
+ *
+ * ★ 2026-08-01(9라운드) 상단을 18.0 → 17.6으로 낮췄다. **하한 16.0은 그대로다** — GK 접촉
+ *   계약을 만드는 것은 하한이므로 안전하다. 낮춘 이유는 존 'in'과의 양립이다: 세이브 슛은
+ *   여기 하한 때문에 골문 중앙 16~18 m에 머무는데, 박스 라인(깊이 16.5 m)이 바로 그 띠에
+ *   있다. {@link finishStations}는 이 경우 **비행 거리를 유지한 채 좌우로 벌려** 깊이만
+ *   박스 안으로 넣는데(각도를 여는 것이지 가까이 가는 것이 아니다), 저술이 쓸 수 있는 좌우
+ *   최대치가 ±8.16 m(슛 지점 y 클램프 38~62)라 18.0에서는 깊이가 16.04로 라인에 붙는다.
+ *   17.6이면 필요한 좌우가 7.7 m로 여유 안에 들어온다.
  */
-const SAVE_MIN_M: readonly [number, number, number] = [16.0, 17.0, 18.0]
+const SAVE_MIN_M: readonly [number, number, number] = [16.0, 16.8, 17.6]
 
 /**
  * 어떤 전술이든 이 거리(m)를 넘는 슛은 저술하지 않는다.
@@ -678,6 +1023,8 @@ function finishStations(
   buildup: BuildupId,
   /** 빌드업 실행 변형 0~1 — 마무리 변형과 합쳐 거리 칸을 고른다(좌우 미러 보존). */
   buildupVariant: number,
+  /** 박스 안에서 마무리하는가, 밖에서 때리는가({@link ShotZone}). */
+  zone: ShotZone,
 ): { stations: Station[]; deliverArc: BallArc } {
   const V = FINISH_VARIANTS[variant]
   /**
@@ -694,6 +1041,8 @@ function finishStations(
   const [lx, ly] = launch
   /** 슈터(슬롯 0)가 배달 직전에 서 있는 곳 — 주행 상한은 여기서 잰다. */
   const runFrom = prev.movers[0]
+  // 전개한 쪽 부호 — 니어/파포스트와 각도 열기가 이걸 기준으로 한다.
+  const sideSign = ly > 50 ? 1 : -1
   // 슈팅 지점 y. w>0이면 전개 쪽을 유지한 채 골문으로 수렴, w<0이면 반대쪽(컷백).
   // 슈팅 지점은 박스 폭 안에 머문다 — 밖으로 나가면 "마무리"가 아니라 전환 패스가 된다.
   let my = clamp(50 + (ly - 50) * V.w, 38, 62)
@@ -705,33 +1054,72 @@ function finishStations(
    * 멋대로 늘어난다(전개 쪽 y=38이면 좌우로만 8 m가 붙는다).
    */
   const rung = mod(buildupVariant + variant, SHOT_DIST_M[buildup].length)
-  const want = Math.min(
+  const saveFloor = finish === 'save' ? SAVE_MIN_M[rung] : 0
+  let want = Math.min(
     MAX_SHOT_DIST_M,
     Math.max(
       SHOT_DIST_M[buildup][rung] * FINISH_DIST_SCALE[mod(variant, FINISH_DIST_SCALE.length)]
         * FINISH_KIND_SCALE[finish],
-      finish === 'save' ? SAVE_MIN_M[rung] : 0,
+      saveFloor,
     ),
   )
+  // ★ 존 'in'의 1차 처방 — 목표 **거리 자체**를 박스 안으로 눌러 둔다. 단 세이브 하한
+  //   (GK가 손을 뻗을 시간)보다 밑으로는 내리지 않는다. 그 경우는 아래에서 각도로 푼다.
+  if (zone === 'in') want = Math.max(saveFloor, Math.min(want, IN_BOX_DEPTH_M))
   // 좌우 성분이 목표 거리를 삼키지 않게 한다 — 삼키면 깊이가 0이 되어 골라인에 붙는다.
   let gz = ((my - 50) / 100) * PITCH_H
   if (Math.abs(gz) > want * 0.8) {
     gz = Math.sign(gz) * want * 0.8
     my = 50 + (gz / PITCH_H) * 100
   }
-  const gx = Math.sqrt(Math.max(1, want * want - gz * gz))
+  let gx = Math.sqrt(Math.max(1, want * want - gz * gz))
+  /**
+   * ★ 존 'in'의 2차 처방 — **비행 거리를 유지한 채 각도를 연다.**
+   *
+   * 세이브 슛만 여기 걸린다(want가 SAVE_MIN_M 하한에 붙어 16~17.6 m다). 거리를 줄이면
+   * GK가 접촉점까지 몸을 보낼 시간이 없어지므로(SAVE_MIN_M 주석) 줄이지 않고, 대신 좌우로
+   * 벌려 **깊이만** 박스 안으로 넣는다. 실제 축구에서도 박스 안 세이브의 상당수는 정면이
+   * 아니라 각이 있는 슛이다.
+   */
+  if (zone === 'in' && gx > IN_BOX_DEPTH_M) {
+    const need = Math.sqrt(Math.max(0, want * want - IN_BOX_DEPTH_M * IN_BOX_DEPTH_M))
+    const sign = gz !== 0 ? Math.sign(gz) : sideSign
+    gz = sign * Math.min(MAX_SHOT_LATERAL_M, Math.max(Math.abs(gz), need))
+    my = clamp(50 + (gz / PITCH_H) * 100, 38, 62)
+    gx = Math.sqrt(Math.max(1, want * want - gz * gz))
+  }
+  // ★ 존 'out' — 깊이 하한을 걸어 **박스 밖에서** 방아쇠를 당기게 한다. 좌우는 그대로이므로
+  //   실제 거리는 그만큼 늘어난다(그것이 곧 "중거리"다).
+  if (zone === 'out' && gx < OUT_BOX_DEPTH_M) gx = OUT_BOX_DEPTH_M
   let dx = clamp(100 - (gx / PITCH_W) * 100, 0, MAX_SHOT_X)
   // 슈터가 배달 한 구간에 갈 수 있는 곳인가 — 넘으면 슛 지점을 슈터 쪽으로 당긴다.
   // (당기는 것이지 자르는 것이 아니다: 방향은 유지되고 거리만 줄어든다.)
   const runCap = solo ? SOLO_RUN_IN_M : MAX_RUN_IN_M
   const runM = metres(runFrom, [dx, my])
   if (runM > runCap) {
-    const f = runCap / runM
-    dx = clamp(runFrom[0] + (dx - runFrom[0]) * f)
-    my = clamp(runFrom[1] + (my - runFrom[1]) * f, 38, 62)
+    if (zone === 'in') {
+      /**
+       * 존 'in'에서는 주행 예산을 **전진에 먼저** 쓴다.
+       *
+       * 왜 비례 축소가 아닌가: 비례로 당기면 좌우와 깊이를 같은 비율로 줄여 깊이가 남고,
+       * 그 결과 "박스 안에서 마무리하기로 한 장면이 박스 밖에서 끝난다". 목적이 깊이이므로
+       * 갈 수 있는 만큼 앞으로 가고, **남은 예산만** 좌우에 쓴다. 그래도 못 미치면(상대가
+       * 내려서서 오프사이드 상한이 슈터를 뒤로 물린 경우) 밖에서 때린다 — 실제 축구다.
+       */
+      const capX = clamp(runFrom[0] + (runCap / PITCH_W) * 100, 0, MAX_SHOT_X)
+      const tx = Math.min(dx, capX)
+      const fwd = ((tx - runFrom[0]) / 100) * PITCH_W
+      const left = Math.sqrt(Math.max(0, runCap * runCap - fwd * fwd))
+      const wantDy = ((my - runFrom[1]) / 100) * PITCH_H
+      const dy = Math.sign(wantDy) * Math.min(Math.abs(wantDy), left)
+      dx = tx
+      my = clamp(runFrom[1] + (dy / PITCH_H) * 100, 38, 62)
+    } else {
+      const f = runCap / runM
+      dx = clamp(runFrom[0] + (dx - runFrom[0]) * f)
+      my = clamp(runFrom[1] + (my - runFrom[1]) * f, 38, 62)
+    }
   }
-  // 전개한 쪽 부호 — 니어/파포스트는 이걸 기준으로 정한다.
-  const sideSign = ly > 50 ? 1 : -1
   const deliverDist = metres([lx, ly], [dx, my])
   /**
    * 배달 궤적. 측면 깊은 곳에서 문전으로 올리면 크로스, 컷백은 지면, 그 밖에는
@@ -1066,15 +1454,29 @@ function mapLane(stations: Station[], lane: number): Station[] {
  */
 function onside(stations: Station[], off?: OffsideLimit): Station[] {
   if (!off) return stations
-  return stations.map(s => {
-    // 공은 캐리어의 **발 앞** FOOT_OFFSET_M에 놓이므로(ballAt), 되돌리는 패스에서는
-    // 캐리어보다 그만큼 뒤에 있을 수 있다. 상한은 그 최악을 가정한다(보수적).
-    const footBack = (FOOT_OFFSET_M / PITCH_W) * 100
+  // 공은 캐리어의 **발 앞** FOOT_OFFSET_M에 놓이므로(ballAt), 되돌리는 패스에서는
+  // 캐리어보다 그만큼 뒤에 있을 수 있다. 상한은 그 최악을 가정한다(보수적).
+  const footBack = (FOOT_OFFSET_M / PITCH_W) * 100
+  const caps = stations.map(s => {
     const ballX = (s.carrier >= 0 ? s.movers[s.carrier][0] : (s.ball?.[0] ?? 0)) - footBack
-    const cap = Math.max(off.secondLastX, ballX, 50)
+    return Math.max(off.secondLastX, ballX, 50)
+  })
+  /**
+   * ★ 2026-08-01(9라운드) **다음 스테이션의 상한도 함께 건다.**
+   *
+   * 왜: {@link timeline}은 컨트롤 정지 앞에 "도착 키프레임"을 하나 더 만들고, 거기서
+   * 캐리어가 아닌 무버를 직전 스테이션에서 88% 지점까지만 옮긴다(ARRIVE_BLEND). 그 순간
+   * **공은 이미 다음 스테이션에 도착해 있으므로** 오프사이드 상한은 다음 스테이션의 것이다.
+   * 공이 앞으로만 가는 전개에서는 상한도 앞으로만 움직여 문제가 없었지만, `secondball`
+   * (문전 x86에서 걷어낸 공이 x52로 되돌아온다)처럼 **볼이 뒤로 크게 물러나는** 전개가
+   * 생기면서 도착 키프레임의 슈터가 상한을 1.2 units 넘겼다(전수 검증이 잡았다).
+   * 두 상한의 작은 쪽으로 자르면 88% 지점도 자동으로 두 상한 안쪽에 들어온다.
+   */
+  return stations.map((s, i) => {
+    const cap = Math.min(caps[i], caps[i + 1] ?? Infinity)
     const [sx, sy] = s.movers[0]
     if (sx <= cap) return s
-    const movers = s.movers.map((m, i) => (i === 0 ? [cap, sy] : m)) as [number, number][]
+    const movers = s.movers.map((m, k) => (k === 0 ? [cap, sy] : m)) as [number, number][]
     return { ...s, movers }
   })
 }
@@ -1183,6 +1585,11 @@ export interface SceneVariants {
    * (`choreography.focusDirFor`). 원정은 호출부가 뒤집어서 넘긴다.
    */
   focusDir?: -1 | 0 | 1
+  /**
+   * 슛 존 추첨값 0~99(결정론 해시). {@link SHOT_ZONE_OUT_PCT}가 이 값을 존으로 바꾼다.
+   * 미지정이면 0 — 즉 **박스 안**이다(박스 밖 전용 계열은 그래도 밖에서 때린다).
+   */
+  zone?: number
 }
 
 /**
@@ -1247,6 +1654,8 @@ export function buildScene(
   ]
   const bv = family.variants[mod(variants.buildup ?? 0, BUILDUP_VARIANT_COUNT)]
   const fv = mod(variants.finish ?? 0, FINISH_VARIANT_COUNT)
+  // 계열이 곧 중거리인 둘(outside·secondball)은 존 추첨을 건너뛴다 — 그 그림의 정의다.
+  const zone: ShotZone = family.alwaysOut ? 'out' : pickShotZone(pattern, variants.zone ?? 0)
   // 찬스는 "마무리 없이 박스까지"다 — 빌드업을 한 스테이션 줄여 dwell 안에 들어오게 한다.
   // 드리블 돌파도 같은 이유로 한 스테이션을 줄인다: 뒤에 드리블 터치 2개가 붙기 때문이다.
   const trim = finish === 'chance' || !!FINISH_VARIANTS[fv].solo
@@ -1254,8 +1663,9 @@ export function buildScene(
   const build = onside(mapFocus(mapLane(trim ? bv.stations.slice(1) : bv.stations, lane), fd), offside)
   const last = build[build.length - 1]
   const launch = last.movers[last.carrier] as [number, number]
-  const { stations: fin, deliverArc } =
-    finishStations(finish, last, launch, fv, lane, family.id, mod(variants.buildup ?? 0, BUILDUP_VARIANT_COUNT))
+  const { stations: fin, deliverArc } = finishStations(
+    finish, last, launch, fv, lane, family.id, mod(variants.buildup ?? 0, BUILDUP_VARIANT_COUNT), zone,
+  )
   // ★ 배달 궤적은 **빌드업 마지막 스테이션에서 출발하는 구간**의 것이다(오프바이원 수정).
   const stations: Station[] = [...build.slice(0, -1), { ...last, arc: deliverArc }, ...fin]
   const dwell = SCENE_DWELL_MS[finish]
@@ -1264,7 +1674,7 @@ export function buildScene(
     points,
     // 역할 원형도 함께 민다 — 왼쪽에서 전개하는 장면의 배역은 왼쪽 선수가 맡아야 한다.
     roles: bv.roles.map(([x, y]) => [x, clamp(laneY(y, lane) + fd * FOCUS_SHIFT, 3, 97)] as [number, number]),
-    key: `${family.id}.${bv.vid}/${finish}.${FINISH_VARIANTS[fv].vid}/L${mod(lane, LANE_COUNT)}`,
+    key: `${family.id}.${bv.vid}/${finish}.${FINISH_VARIANTS[fv].vid}/L${mod(lane, LANE_COUNT)}/Z${zone}`,
     durationMs: points[points.length - 1].t * dwell,
   }
 }
@@ -1291,11 +1701,21 @@ export function buildupLabel(pattern: AttackPattern): string {
  *   하이라이트로 뽑히는 결과는 여전히 3종(goal·save·miss)이므로
  *   팀당 `4 × 2 × 3 × 5 × 6 = 720`, 양 팀 1440이다.
  */
-export function sceneLibrarySize(): { open: number; setPiece: number; total: number; reachablePerMatch: number } {
+export function sceneLibrarySize():
+  { buildups: number; open: number; setPiece: number; total: number; reachablePerMatch: number } {
   const finishes: FinishId[] = ['goal', 'save', 'miss', 'shot', 'chance']
-  const open = Object.keys(BUILDUPS).length * BUILDUP_VARIANT_COUNT * finishes.length * FINISH_VARIANT_COUNT * LANE_COUNT
+  const buildups = Object.keys(BUILDUPS).length
+  // 존 축(박스 안/밖)은 **박스 밖 전용이 아닌 계열에서만** 칸을 두 배로 만든다.
+  const zoned = Object.values(BUILDUPS).reduce((n, b) => n + (b.alwaysOut ? 1 : 2), 0)
+  const open = zoned * BUILDUP_VARIANT_COUNT * finishes.length * FINISH_VARIANT_COUNT * LANE_COUNT
   const setPiece = 2 + 2 // corner 좌/우 + foul 위/아래
-  const reachablePerMatch =
-    2 * Object.keys(BUILDUPS).length * BUILDUP_VARIANT_COUNT * 3 * FINISH_VARIANT_COUNT * LANE_COUNT
-  return { open, setPiece, total: open + setPiece, reachablePerMatch }
+  // 한 경기에 도달 가능한 칸 — 하이라이트 결과는 3종(goal·save·miss)이고 양 팀이 쓴다.
+  const reachablePerMatch = 2 * zoned * BUILDUP_VARIANT_COUNT * 3 * FINISH_VARIANT_COUNT * LANE_COUNT
+  return { buildups, open, setPiece, total: open + setPiece, reachablePerMatch }
 }
+
+/** 계열 10종의 "한 줄 그림" — 감사 도구·디버그 HUD가 쓴다. */
+export const BUILDUP_PICTURES: Readonly<Record<BuildupId, { label: string; picture: string; alwaysOut: boolean }>> =
+  Object.fromEntries(
+    Object.values(BUILDUPS).map(b => [b.id, { label: b.label, picture: b.picture, alwaysOut: !!b.alwaysOut }]),
+  ) as Record<BuildupId, { label: string; picture: string; alwaysOut: boolean }>
