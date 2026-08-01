@@ -1332,10 +1332,20 @@ export interface LineupBeat {
   group: LineupGroupKey | null
 }
 
+/**
+ * 백라인 전용 문장 — 인원 수가 곧 대형의 이름인 경우가 있다.
+ * 3은 "스리백", 5는 중계에서 "백 파이브"로 부른다("파이브백"은 쓰지 않는다).
+ * 4는 굳이 이름을 부르지 않고 기본형("네 명의 수비가 출전합니다")을 쓴다.
+ */
+const BACKLINE_LEAD: Record<number, string> = {
+  3: '스리백입니다.',
+  5: '뒤를 다섯으로 채웁니다.',
+}
+
 /** 그룹 도입 문장 — 사용자 예문("네 명의 수비가 출전합니다")을 기본형으로 삼는다. */
 const GROUP_LEAD: Record<Exclude<LineupGroupKey, 'GK'>, (n: number) => string> = {
-  DF: n => `${countKo(n)} 명의 수비가 출전합니다.`,
-  MF: n => `중원에는 ${countKo(n)} 명이 섭니다.`,
+  DF: n => BACKLINE_LEAD[n] ?? `${countKo(n)} 명의 수비가 출전합니다.`,
+  MF: n => `중앙에는 ${countKo(n)} 명이 섭니다.`,
   FW: n => `최전방은 ${countKo(n)} 명입니다.`,
 }
 
@@ -1353,7 +1363,8 @@ const ANALYST_SHAPE: Record<number, readonly string[]> = {
   3: [
     '스리백으로 뒤를 두껍게 세웠습니다.',
     '백 스리, 좌우 윙백의 활동량이 관건입니다.',
-    '스리백입니다. 중앙을 좁게 쓰겠다는 뜻이죠.',
+    // 캐스터의 백라인 도입이 이미 "스리백입니다"라 같은 문장을 되받지 않는다.
+    '뒤를 셋으로 두고 중앙을 좁게 쓰겠다는 뜻이죠.',
   ],
   4: [
     '포백 라인이 균형을 잡습니다.',
@@ -1361,19 +1372,53 @@ const ANALYST_SHAPE: Record<number, readonly string[]> = {
     '포백입니다. 좌우 풀백이 얼마나 올라오느냐를 보시죠.',
   ],
   5: [
-    '파이브백, 일단 뒤를 잠그고 시작합니다.',
+    '백 파이브, 일단 뒤를 잠그고 시작합니다.',
     '백 파이브로 폭을 넓게 지킵니다.',
     '다섯을 뒤에 세웠습니다. 역습을 노리는 배치죠.',
   ],
 }
 const ANALYST_FALLBACK = '익숙하지 않은 배치입니다. 첫 십 분을 보면 답이 나옵니다.'
 
+/** 포메이션에서 읽어낸 소개 묶음 인원(골키퍼 제외). */
+export interface LineupSplit {
+  /** 백라인 — 첫 자릿수. */
+  DF: number
+  /** 중원 — **가운데 자릿수를 전부 더한다**(4-2-3-1 → 2+3 = 5). */
+  MF: number
+  /** 최전방 — 마지막 자릿수. */
+  FW: number
+}
+
+/**
+ * 포메이션 문자열 → 묶음 인원. **이게 소개 묶음의 정본이다.**
+ *
+ * ★ 왜 선수 개인의 등록 포지션으로 세지 않는가: `members`는 슬롯을 채운 실제 선수라
+ *   등록 포지션이 슬롯과 다를 수 있고(윙백 자리에 명목상 윙어), `GROUP_OF`는 LW·RW를
+ *   공격수로 접는다. 그래서 3-5-2가 "포백 · 최전방 다섯"으로 읽혔다(사용자 지적).
+ *   대형은 포메이션이 말하는 것이지 명단이 말하는 게 아니다.
+ *
+ * ★ 왜 가운데를 다 더하는가: 사용자 지시 — 4-2-3-1처럼 세 줄인 대형도 "중앙에 다섯"
+ *   한 문장으로 접는다. 경우의 수를 늘리는 대신 문장을 정확하게 유지한다.
+ *
+ * 자릿수 합이 10(필드 플레이어)이 아니면 **null**을 준다. 조용히 틀린 숫자를 말하느니
+ * 호출부가 폴백(개인 포지션 묶음 · 형태를 단정하지 않는 해설)으로 내려가는 편이 낫다.
+ */
+export function lineupSplitOf(formation: string): LineupSplit | null {
+  const digits = formation.split('-').map(Number)
+  if (digits.length < 3) return null
+  if (digits.some(n => !Number.isInteger(n) || n <= 0)) return null
+  const DF = digits[0]
+  const FW = digits[digits.length - 1]
+  const MF = digits.slice(1, -1).reduce((a, b) => a + b, 0)
+  return DF + MF + FW === 10 ? { DF, MF, FW } : null
+}
+
 /**
  * 한 팀의 입장 소개 비트 배열(결정론·순수).
  *
  * @param teamKo    팀 한국어 이름
- * @param formation 포메이션 id(`4-2-3-1` 등) — 도입 문장에서 자릿수로 읽는다
- * @param members   선발 XI. **정렬 순서가 곧 명단 순서**다(GK → 수비 → 중원 → 공격).
+ * @param formation 포메이션 id(`4-2-3-1` 등) — **묶음 인원의 정본**이다({@link lineupSplitOf})
+ * @param members   선발 XI. **XI 슬롯 순서**(인덱스 0 = GK → 수비 → 중원 → 공격)여야 한다.
  */
 export function lineupIntroBeats(
   teamKo: string, formation: string, members: readonly LineupMember[],
@@ -1391,11 +1436,30 @@ export function lineupIntroBeats(
     speech: `${teamKo} 선발 라인업입니다. ${formationSpeechKo(formation)} 대형.`,
   })
 
-  // 그룹은 members 순서를 지키며 접는다 — 명단 순서와 호명 순서가 어긋나면
-  // 하이라이트가 명단 위를 되돌아가며 튄다.
+  // 묶음은 **포메이션 자릿수**로 자른다. members는 XI 슬롯 순서(인덱스 0 = GK)로
+  // 들어오는 것이 계약이므로(buildEntranceCast), 앞에서부터 잘라 나누면 명단 순서와
+  // 호명 순서가 그대로 일치한다 — 하이라이트가 명단 위를 되돌아가며 튀지 않는다.
+  const split = lineupSplitOf(formation)
+  const sliced = split && members.length === split.DF + split.MF + split.FW + 1
   const order: LineupGroupKey[] = ['GK', 'DF', 'MF', 'FW']
+  const groups: Record<LineupGroupKey, LineupMember[]> = sliced
+    ? {
+      GK: members.slice(0, 1),
+      DF: members.slice(1, 1 + split.DF),
+      MF: members.slice(1 + split.DF, 1 + split.DF + split.MF),
+      FW: members.slice(1 + split.DF + split.MF),
+    }
+    // 폴백: 포메이션을 못 읽었거나 인원이 안 맞는다. 개인 포지션으로 접는다 —
+    // 숫자는 대형과 어긋날 수 있으므로 아래 해설도 형태를 단정하지 않는다.
+    : {
+      GK: members.filter(m => lineupGroupOf(m.position) === 'GK'),
+      DF: members.filter(m => lineupGroupOf(m.position) === 'DF'),
+      MF: members.filter(m => lineupGroupOf(m.position) === 'MF'),
+      FW: members.filter(m => lineupGroupOf(m.position) === 'FW'),
+    }
+
   for (const key of order) {
-    const group = members.filter(m => lineupGroupOf(m.position) === key)
+    const group = groups[key]
     if (group.length === 0) continue
     if (key === 'GK') {
       // 사용자 예문 그대로 — 골키퍼는 그룹 도입 없이 이름과 한 문장이다.
@@ -1424,7 +1488,9 @@ export function lineupIntroBeats(
     })
   }
 
-  const backline = members.filter(m => lineupGroupOf(m.position) === 'DF').length
+  // 해설의 형태 서술도 **같은 포메이션 유래 값**을 쓴다. 여기가 개인 포지션을 세던
+  // 자리라 "3-5-2인데 포백입니다"가 나왔다. 폴백일 때는 형태를 말하지 않는다.
+  const backline = sliced ? split.DF : -1
   const pool = ANALYST_SHAPE[backline]
   // 변형 키에 인원 수까지 넣는다 — 두 팀이 같은 포메이션일 때 같은 문장이 연달아
   // 나오면(양 팀 소개는 바로 이어진다) 템플릿이라는 게 그대로 드러난다.

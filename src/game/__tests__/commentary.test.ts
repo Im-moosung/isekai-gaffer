@@ -5,7 +5,11 @@ import {
   classifyGoal, hasBatchim, josaIGa, josaEunNeun, josaEulReul, josaEuRo,
   scoreKo, ordKo, minuteLabel, sanitizeSpeech, fnv1a,
   flattenLines, flowLineAt, flowStateAt, readTacticalNotes, TACTIC_LINES,
+  lineupIntroBeats, lineupSplitOf, countKo,
 } from '../commentary'
+import { XI_SLOTS } from '../../engine/formations'
+import { pickBestXI } from '../../engine/lineup'
+import type { FormationId } from '../../engine/types'
 import { safeguardFilter, DEROGATORY_WORDS } from '../../ai/safeguard'
 import { makeTestTeam } from '../../engine/fixtures/testTeams'
 import { createMatch, simulateSegment } from '../../engine/simulate'
@@ -700,6 +704,123 @@ describe('전술 반영 해설 (§3.5)', () => {
     for (const l of tactical) {
       expect(safeguardFilter(l.text), l.text).toBe(true)
       expect(l.speech, l.speech).not.toMatch(/[A-Za-z\d]/) // 포메이션 표기(3-5-2)가 새면 TTS가 오독한다
+    }
+  })
+})
+
+// ── 입장 소개 (§ lineupIntroBeats) ────────────────────────────
+//
+// ★ 회귀 대상: 묶음을 **선수 개인의 등록 포지션**으로 세면 3-5-2가 "포백 · 최전방
+//   다섯"으로 읽힌다(윙백 슬롯을 채운 명목상 윙어가 GROUP_OF에서 FW로 접힌다).
+//   묶음의 정본은 포메이션 자릿수다.
+
+/** 포메이션 → (백라인, 중원, 최전방). 사용자가 확정한 표 그대로. */
+const EXPECTED_SPLIT: Record<FormationId, [number, number, number]> = {
+  '4-3-3': [4, 3, 3],
+  '4-2-3-1': [4, 5, 1], // 2+3을 중원 하나로 접는다
+  '4-4-2': [4, 4, 2],
+  '3-5-2': [3, 5, 2],
+  '4-1-4-1': [4, 5, 1], // 1+4
+  '5-4-1': [5, 4, 1],
+}
+const FORMATION_IDS = Object.keys(XI_SLOTS) as FormationId[]
+
+/**
+ * 지원 6종의 XI를 **실제 대회 데이터**에서 뽑아 소개 입력 형태로 만든다(슬롯 순서 유지).
+ * makeTestTeam의 이름(`kor선수1`)에는 숫자가 박혀 있어 발화 검사를 못 한다.
+ */
+function membersFor(formation: FormationId) {
+  const team = loadTeam('kor')
+  const byId = new Map(team.squad.map(p => [p.id, p]))
+  return pickBestXI(team, formation).lineup.map(sl => {
+    const p = byId.get(sl.playerId)!
+    return { id: p.id, number: p.number, nameKo: p.name.ko, position: p.position }
+  })
+}
+
+describe('입장 소개 — 묶음은 포메이션이 정한다', () => {
+  it('lineupSplitOf가 6종 전부에서 확정 표와 일치한다', () => {
+    for (const f of FORMATION_IDS) {
+      const [df, mf, fw] = EXPECTED_SPLIT[f]
+      expect(lineupSplitOf(f), f).toEqual({ DF: df, MF: mf, FW: fw })
+    }
+  })
+
+  it('자릿수 합이 10이 아니거나 형식이 깨지면 null(조용히 틀린 숫자를 말하지 않는다)', () => {
+    for (const bad of ['4-4-3', '4-4', '', 'diamond', '4--2', '4-4-2-', '0-6-4', '-4-4-2']) {
+      expect(lineupSplitOf(bad), bad).toBeNull()
+    }
+  })
+
+  it('6종 전부에서 11명이 정확히 한 번씩, 슬롯 순서대로 호명된다', () => {
+    for (const f of FORMATION_IDS) {
+      const members = membersFor(f)
+      const named = lineupIntroBeats('대한민국', f, members).filter(b => b.playerId)
+      expect(named, f).toHaveLength(11)
+      // 순서·중복·누락을 한 번에 못박는다.
+      expect(named.map(b => b.playerId), f).toEqual(members.map(m => m.id))
+      expect(new Set(named.map(b => b.playerId)).size, f).toBe(11)
+    }
+  })
+
+  it('6종 전부에서 묶음 인원이 포메이션 자릿수와 같다', () => {
+    for (const f of FORMATION_IDS) {
+      const [df, mf, fw] = EXPECTED_SPLIT[f]
+      const beats = lineupIntroBeats('대한민국', f, membersFor(f))
+      const count = (g: string) => beats.filter(b => b.playerId && b.group === g).length
+      expect([count('GK'), count('DF'), count('MF'), count('FW')], f).toEqual([1, df, mf, fw])
+      // 자막의 숫자도 같은 값이다("3-5-2인데 수비 4명" 회귀).
+      expect(beats.find(b => b.kind === 'group' && b.group === 'DF')!.text, f).toBe(`수비 ${df}명`)
+      expect(beats.find(b => b.kind === 'group' && b.group === 'MF')!.text, f).toBe(`미드필더 ${mf}명`)
+      expect(beats.find(b => b.kind === 'group' && b.group === 'FW')!.text, f).toBe(`공격수 ${fw}명`)
+    }
+  })
+
+  it('해설위원의 형태 서술이 포메이션 백라인과 일치한다 (3-5-2를 포백이라 하지 않는다)', () => {
+    const WORD: Record<number, RegExp> = { 3: /스리백|셋/, 4: /포백/, 5: /백 파이브|다섯/ }
+    for (const f of FORMATION_IDS) {
+      const back = EXPECTED_SPLIT[f][0]
+      const analyst = lineupIntroBeats('대한민국', f, membersFor(f)).find(b => b.kind === 'analyst')!
+      expect(analyst.text, `${f}: ${analyst.text}`).toMatch(WORD[back])
+      // 다른 백라인 어휘가 섞이지 않는다.
+      for (const [n, re] of Object.entries(WORD)) {
+        if (Number(n) !== back) expect(analyst.text, `${f}: ${analyst.text}`).not.toMatch(re)
+      }
+    }
+  })
+
+  it('발화에 숫자·라틴 문자가 없다 (§5.3 — "4명"은 "사명"으로 오독된다)', () => {
+    for (const f of FORMATION_IDS) {
+      for (const b of lineupIntroBeats('대한민국', f, membersFor(f))) {
+        expect(b.speech, b.speech).not.toMatch(/[0-9A-Za-z]/)
+        expect(b.speech.length).toBeGreaterThan(0)
+      }
+    }
+    // 그룹 도입은 고유어 수사를 쓴다.
+    const beats = lineupIntroBeats('대한민국', '4-4-2', membersFor('4-4-2'))
+    expect(beats.find(b => b.kind === 'group' && b.group === 'MF')!.speech)
+      .toContain(`${countKo(4)} 명`)
+  })
+
+  it('결정론 — 같은 입력이면 완전히 같다', () => {
+    for (const f of FORMATION_IDS) {
+      const m = membersFor(f)
+      expect(lineupIntroBeats('대한민국', f, m)).toEqual(lineupIntroBeats('대한민국', f, m))
+    }
+  })
+
+  it('폴백 — 포메이션을 못 읽으면 개인 포지션으로 접고 형태를 단정하지 않는다', () => {
+    const beats = lineupIntroBeats('대한민국', 'diamond', membersFor('4-4-2'))
+    expect(beats.filter(b => b.playerId)).toHaveLength(11)
+    const analyst = beats.find(b => b.kind === 'analyst')!
+    expect(analyst.text).not.toMatch(/스리백|포백|백 파이브/)
+  })
+
+  it('소개 문장이 세이프가드를 통과한다', () => {
+    for (const f of FORMATION_IDS) {
+      for (const b of lineupIntroBeats('대한민국', f, membersFor(f))) {
+        expect(safeguardFilter(b.text), b.text).toBe(true)
+      }
     }
   })
 })

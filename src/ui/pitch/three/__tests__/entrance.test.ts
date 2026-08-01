@@ -24,7 +24,7 @@ import { MIN_GAIT_SPEED, strideLength } from '../player3d'
 import { FIRST_HALF_ENDS, toWorld } from '../types'
 import { tacticalCoords } from '../../shape'
 import { XI_SLOTS } from '../../../../engine/formations'
-import { lineupGroupOf } from '../../../../game/commentary'
+import { lineupSplitOf } from '../../../../game/commentary'
 import { createMatch } from '../../../../engine/simulate'
 import { makeTestTeam } from '../../../../engine/fixtures/testTeams'
 
@@ -158,30 +158,33 @@ describe('소개 비트 — 22명을 포지션 그룹으로 묶어 이름으로 
     }
   })
 
-  it('호명 순서가 포지션 그룹 순서(GK → 수비 → 중원 → 공격)다', () => {
+  it('호명 순서가 XI 슬롯 순서(GK → 수비 → 중원 → 공격)다', () => {
+    // ★ 선수의 **등록 포지션**으로 검사하지 않는다. 슬롯을 채운 선수의 등록 포지션은
+    //   슬롯과 다를 수 있어(윙백 자리의 명목상 윙어) 그 기준으로는 3-5-2가 "포백"으로
+    //   읽히는 회귀를 못 잡는다. 정본은 슬롯 순서다.
     for (const side of ['home', 'away'] as const) {
       const members = side === 'home' ? cast.home : cast.away
       const byId = new Map(members.map(m => [m.id, m]))
-      const groups = full.beats
+      const slots = full.beats
         .filter(b => b.side === side && b.playerId)
-        .map(b => lineupGroupOf(byId.get(b.playerId!)!.position))
-      const order = ['GK', 'DF', 'MF', 'FW']
-      let cursor = -1
-      for (const g of groups) {
-        const at = order.indexOf(g)
-        expect(at).toBeGreaterThanOrEqual(cursor) // 되돌아가지 않는다
-        cursor = at
-      }
+        .map(b => byId.get(b.playerId!)!.slotIndex)
+      expect(slots).toEqual([...slots].sort((a, b) => a - b))
+      expect(slots[0]).toBe(0) // 골키퍼가 먼저다
     }
   })
 
-  it('그룹 도입 문장이 인원 수를 한국어 수사로 말한다', () => {
-    const dfCount = cast.home.filter(m => lineupGroupOf(m.position) === 'DF').length
-    const lead = full.beats.find(b => b.side === 'home' && b.text.startsWith('수비 '))
-    expect(lead).toBeDefined()
-    expect(lead!.text).toBe(`수비 ${dfCount}명`)
+  it('그룹 도입 문장의 인원이 **포메이션 자릿수**와 같다', () => {
+    const split = lineupSplitOf(cast.homeFormation)!
+    expect(split).not.toBeNull()
+    const lead = (label: string) =>
+      full.beats.find(b => b.side === 'home' && b.text.startsWith(`${label} `))!
+    expect(lead('수비').text).toBe(`수비 ${split.DF}명`)
+    expect(lead('미드필더').text).toBe(`미드필더 ${split.MF}명`)
+    expect(lead('공격수').text).toBe(`공격수 ${split.FW}명`)
     // 발화에는 숫자를 남기지 않는다(§5.3 — "4명"은 "사명"으로 오독된다).
-    expect(lead!.speech).not.toMatch(/[0-9]/)
+    for (const label of ['수비', '미드필더', '공격수']) {
+      expect(lead(label).speech).not.toMatch(/[0-9]/)
+    }
   })
 
   it('발화 문자열에 라틴 문자·숫자가 없다(sanitizeSpeech 통과)', () => {
@@ -207,6 +210,12 @@ describe('소개 비트 — 22명을 포지션 그룹으로 묶어 이름으로 
       if (b.playerId) {
         expect(hi?.player.id).toBe(b.playerId)
         expect(hi?.side).toBe(b.side)
+        // 도해 도트(tacticalCoords(formation, slotIndex))와 명단 행이 같은 사람을 켜려면
+        // 하이라이트 index가 곧 캐스트 배열 위치 = slotIndex여야 한다. 묶음 기준을
+        // 포메이션으로 바꿔도 이 대응이 유지되는지 못박는다.
+        const members = b.side === 'home' ? cast.home : cast.away
+        expect(hi!.index).toBe(members.findIndex(m => m.id === b.playerId))
+        expect(members[hi!.index].slotIndex).toBe(hi!.index)
       } else {
         expect(hi).toBeNull()
       }
