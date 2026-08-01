@@ -329,6 +329,63 @@ describe('TTS 안전성 — text/speech 분리 (§5)', () => {
       }
     }
   })
+  // ★ 이름 조사 재작성(docs/audio/tts/name-rewrite.json) 회귀.
+  //   녹음 클립은 `{이름}+꼬리`를 통으로 굽는다 — 꼬리를 떼면 이음매가 음절 한복판에
+  //   떨어져 연음이 깨진다. 그래서 발화에서 이름 뒤에 올 수 있는 꼬리를 `,`와 `!`
+  //   **둘로** 고정했다. 셋째 형태가 하나라도 늘면 147명 × 1형태 = 147클립이 더 필요하고,
+  //   굽지 않으면 그 문장만 브라우저 음성으로 튄다.
+  const josaSweep = (): { h: ReturnType<typeof loadTeam>; a: ReturnType<typeof loadTeam>; evs: MatchEvent[] } => {
+    const h = loadTeam('kor'), a = loadTeam('esp')
+    // 엔진이 실제로 내지 않는 타입(chance·shot·sub)까지 넣어 **모든 풀**을 훑는다.
+    const evs: MatchEvent[] = []
+    for (const type of ALL_TYPES) {
+      for (let m = 1; m <= 90; m += 3) {
+        const mine = m % 2 === 1
+        evs.push({ minute: m, type, teamId: mine ? h.id : a.id, playerId: (mine ? h : a).squad[m % 18].id })
+      }
+    }
+    return { h, a, evs }
+  }
+  it('발화에서 선수 이름 뒤에 오는 것은 쉼표나 느낌표뿐이다', () => {
+    const { h, a, evs } = josaSweep()
+    const names = [...h.squad, ...a.squad].map(p => p.name.ko)
+    for (let seed = 0; seed < 6; seed++) {
+      for (const l of flattenLines(commentateAll(evs, h, a, seed))) {
+        for (const name of names) {
+          let from = 0
+          for (;;) {
+            const at = l.speech.indexOf(name, from)
+            if (at < 0) break
+            from = at + name.length
+            const tail = l.speech.slice(from, from + 1)
+            expect([',', '!'], `"${l.speech}" ← ${name}${tail}`).toContain(tail)
+          }
+        }
+      }
+    }
+  })
+  it('화면 문장에는 이름 뒤 조사가 그대로 남아 있다 — 재작성은 발화에만 적용된다', () => {
+    const { h, a, evs } = josaSweep()
+    const names = [...h.squad, ...a.squad].map(p => p.name.ko)
+    const seen = new Set<string>()
+    for (let seed = 0; seed < 6; seed++) {
+      for (const l of flattenLines(commentateAll(evs, h, a, seed))) {
+        for (const name of names) {
+          let from = 0
+          for (;;) {
+            const at = l.text.indexOf(name, from)
+            if (at < 0) break
+            from = at + name.length
+            const tail = l.text.slice(from, from + 1)
+            if ('이가은는을를의'.includes(tail)) seen.add(tail)
+          }
+        }
+      }
+    }
+    // 티커·이벤트 로그·문장 감사 baseline이 이 문자열을 쓴다. 조사가 사라졌다면
+    // 재작성이 화면으로 샌 것이다.
+    for (const j of ['이', '가', '은', '는', '을', '를', '의']) expect(seen, `화면에서 '${j}' 조사가 사라졌다`).toContain(j)
+  })
   it('화면 문장은 늘임말을 쓰고, 발화는 정규화된 형태를 쓴다', () => {
     const ev: MatchEvent[] = [{ minute: 20, type: 'goal', teamId: 'kor', playerId: home.squad[9].id }]
     // 선제골 풀 0번이 `고오오올`을 쓴다 — 시드를 돌려 그 변형을 찾는다.

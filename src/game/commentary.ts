@@ -281,6 +281,13 @@ function pool(name: string, intensity: Intensity, items: TplDef[]): Tpl[] {
 
 // 기본 이벤트 풀. 종결어미를 의도적으로 섞었다 — 체언 종결(`슛!` `코너킥.`),
 // `-니다`, `-네요`, `-죠`. 26/26이 `-니다`였던 게 로봇 신호였다(§4.1 #2).
+//
+// ★ 이름 뒤 조사는 **발화에서만** 쉼표로 접는다(docs/audio/tts/name-rewrite.json).
+//   녹음 클립은 `{이름}+꼬리`를 통으로 굽는다 — 꼬리를 떼면 이음매가 음절 한복판에
+//   떨어져 연음이 깨진다(`민`+`의`→[미니]). 꼬리가 9형태면 147명 × 9 = 1,323클립이고
+//   `,`·`!` 둘로 접으면 294클립이다. 그래서 조사가 붙는 템플릿은 전부 `[화면, 발화]`
+//   튜플로 쓴다. **화면 쪽 문자열은 그대로 둔다** — 티커·이벤트 로그·문장 감사
+//   baseline이 그 문자열을 쓰고, 받침 분기(josaIGa 등)도 화면에서 계속 살아 있어야 한다.
 const BASE: Record<MatchEventType, Tpl[]> = {
   kickoff: pool('kickoff', 1, [
     () => '경기가 시작됩니다.',
@@ -291,23 +298,23 @@ const BASE: Record<MatchEventType, Tpl[]> = {
   ]),
   chance: pool('chance', 1, [
     v => `${v.player}, 좋은 기회를 잡습니다.`,
-    v => `${v.playerEunNeun} 여기서 공간을 찾아냅니다.`,
+    [v => `${v.playerEunNeun} 여기서 공간을 찾아냅니다.`, v => `${v.player}, 여기서 공간을 찾아냅니다.`],
     v => `${v.teamIGa} 위험한 순간을 만들어냅니다!`,
-    v => `${v.player}에게 찬스!`,
+    [v => `${v.player}에게 찬스!`, v => `${v.player}, 찬스!`],
     v => `열립니다! ${v.player}!`,
     v => `${v.team}, 박스 안으로 파고듭니다.`,
-    v => `기회입니다. ${v.player}.`,
-    v => `${v.playerIGa} 수비 사이를 비집고 들어가네요.`,
+    [v => `기회입니다. ${v.player}.`, v => `${v.player}, 기회입니다.`],
+    [v => `${v.playerIGa} 수비 사이를 비집고 들어가네요.`, v => `${v.player}, 수비 사이를 비집고 들어가네요.`],
   ]),
   shot: pool('shot', 2, [
     v => `${v.player}, 슛!`,
-    v => `${v.playerIGa} 때립니다!`,
-    v => `${v.player}의 슈팅, 골문을 향합니다!`,
+    [v => `${v.playerIGa} 때립니다!`, v => `${v.player}, 때립니다!`],
+    [v => `${v.player}의 슈팅, 골문을 향합니다!`, v => `${v.player}, 슈팅이 골문을 향합니다!`],
     v => `슛! ${v.player}!`,
-    v => `${v.playerEunNeun} 과감하게 노려봅니다.`,
+    [v => `${v.playerEunNeun} 과감하게 노려봅니다.`, v => `${v.player}, 과감하게 노려봅니다.`],
     v => `${v.team}, 슈팅으로 연결합니다.`,
-    v => `여기서 슛을 시도합니다, ${v.player}.`,
-    v => `${v.player}의 발끝을 떠납니다!`,
+    [v => `여기서 슛을 시도합니다, ${v.player}.`, v => `${v.player}, 여기서 슛을 시도합니다.`],
+    [v => `${v.player}의 발끝을 떠납니다!`, v => `${v.player}, 발끝을 떠납니다!`],
   ]),
   // goal은 종류별 전용 풀(GOAL_POOLS)을 쓴다. 여기 값은 판정 실패 시 안전망.
   goal: pool('goal', 3, [
@@ -318,38 +325,38 @@ const BASE: Record<MatchEventType, Tpl[]> = {
   save: pool('save', 2, [
     () => '막아냅니다!',
     v => `${v.player}, 선방!`,
-    v => `${v.player}의 세이브!`,
-    v => `${v.playerIGa} 손끝으로 걷어냅니다!`,
+    [v => `${v.player}의 세이브!`, v => `${v.player}, 세이브!`],
+    [v => `${v.playerIGa} 손끝으로 걷어냅니다!`, v => `${v.player}, 손끝으로 걷어냅니다!`],
     v => `${v.team} 골키퍼, 몸을 날립니다!`,
     () => '이걸 막아내네요.',
     v => `${v.player}, 골문을 지킵니다.`,
   ]),
   miss: pool('miss', 1, [
     () => '빗나갑니다.',
-    v => `${v.player}의 슛, 골문을 벗어납니다.`,
-    [v => `아… ${v.player}. 마무리가 아쉽습니다.`, v => `아, ${v.player}. 마무리가 아쉽습니다.`],
+    [v => `${v.player}의 슛, 골문을 벗어납니다.`, v => `${v.player}, 슛이 골문을 벗어납니다.`],
+    [v => `아… ${v.player}. 마무리가 아쉽습니다.`, v => `아, ${v.player}, 마무리가 아쉽습니다.`],
     v => `${v.teamIGa} 기회를 살리지 못합니다.`,
     () => '골문 옆으로 흐릅니다.',
-    v => `${v.playerEunNeun} 고개를 떨굽니다.`,
+    [v => `${v.playerEunNeun} 고개를 떨굽니다.`, v => `${v.player}, 고개를 떨굽니다.`],
     v => `${v.player}, 조금 높았죠.`,
   ]),
   foul: pool('foul', 0, [
     () => '파울입니다.',
-    v => `${v.player}의 반칙으로 흐름이 끊깁니다.`,
-    v => `${v.playerEunNeun} 늦게 들어갔습니다.`,
+    [v => `${v.player}의 반칙으로 흐름이 끊깁니다.`, v => `${v.player}, 반칙입니다. 흐름이 끊깁니다.`],
+    [v => `${v.playerEunNeun} 늦게 들어갔습니다.`, v => `${v.player}, 늦게 들어갔습니다.`],
     () => '주심, 휘슬을 붑니다.',
     v => `${v.team} 진영에서 반칙이 나옵니다.`,
-    v => `${v.playerIGa} 상대를 넘어뜨립니다.`,
+    [v => `${v.playerIGa} 상대를 넘어뜨립니다.`, v => `${v.player}, 상대를 넘어뜨립니다.`],
   ]),
   yellow: pool('yellow', 2, [
     v => `${v.player}, 옐로카드.`,
-    v => `주심이 ${v.player}에게 경고를 줍니다.`,
-    v => `경고 하나가 나옵니다. ${v.player}입니다.`,
-    v => `${v.playerEunNeun} 경고를 피하지 못합니다.`,
+    [v => `주심이 ${v.player}에게 경고를 줍니다.`, v => `${v.player}, 주심이 경고를 줍니다.`],
+    [v => `경고 하나가 나옵니다. ${v.player}입니다.`, v => `${v.player}, 여기서 경고를 받습니다.`],
+    [v => `${v.playerEunNeun} 경고를 피하지 못합니다.`, v => `${v.player}, 경고를 피하지 못합니다.`],
   ]),
   red: pool('red', 3, [
     v => `${v.player}, 레드카드! 퇴장입니다!`,
-    v => `주심이 ${v.playerEulReul} 그라운드 밖으로 내보냅니다.`,
+    [v => `주심이 ${v.playerEulReul} 그라운드 밖으로 내보냅니다.`, v => `${v.player}, 여기서 그라운드를 떠납니다.`],
     v => `퇴장! ${v.team}, 수적 열세에 놓입니다.`,
   ]),
   corner: pool('corner', 1, [
@@ -362,7 +369,7 @@ const BASE: Record<MatchEventType, Tpl[]> = {
   sub: pool('sub', 0, [
     v => `${v.player}, 그라운드에 들어섭니다.`,
     v => `${v.team}, 교체 카드를 씁니다.`,
-    v => `교체입니다. ${v.player}.`,
+    [v => `교체입니다. ${v.player}.`, v => `${v.player}, 교체 투입입니다.`],
     v => `${v.team} 벤치가 움직입니다.`,
   ]),
   halftime: pool('halftime', 1, [
@@ -383,11 +390,11 @@ const GOAL_POOLS: Record<GoalKind, Tpl[]> = {
     [v => `고오오올! ${v.player}! 귀중한 선제골입니다!`, v => `골! ${v.player}! 귀중한 선제골입니다!`],
     v => `${v.player}! 선제골! ${v.team}, 먼저 앞서 나갑니다!`,
     v => `균형이 깨집니다! 선취점은 ${v.team}입니다!`,
-    v => `골! ${v.playerIGa} 첫 골을 신고합니다!`,
+    [v => `골! ${v.playerIGa} 첫 골을 신고합니다!`, v => `골! ${v.player}, 첫 골을 신고합니다!`],
   ]),
   equalizer: pool('goal.equalizer', 3, [
     v => `동점골! 원점입니다! ${v.player}!`,
-    [v => `따라붙습니다! ${v.scoreText}! ${v.player}의 골!`, v => `따라붙습니다! ${v.scoreSpeech}! ${v.player}의 골!`],
+    [v => `따라붙습니다! ${v.scoreText}! ${v.player}의 골!`, v => `따라붙습니다! ${v.scoreSpeech}! ${v.player}, 골입니다!`],
     v => `경기를 다시 원점으로 돌립니다! ${v.player}!`,
     v => `${v.player}! 이거 큽니다. 완전히 새 경기가 됐습니다!`,
   ]),
@@ -405,23 +412,25 @@ const GOAL_POOLS: Record<GoalKind, Tpl[]> = {
   clincher: pool('goal.clincher', 3, [
     v => `쐐기를 박습니다! ${v.player}!`,
     [v => `${v.scoreText}. 승부에 쐐기를 박는 골입니다.`, v => `${v.scoreSpeech}. 승부에 쐐기를 박는 골입니다.`],
-    v => `${v.player}의 골. 이걸로 사실상 승부는 결정됐습니다.`,
+    [v => `${v.player}의 골. 이걸로 사실상 승부는 결정됐습니다.`, v => `${v.player}, 골입니다. 이걸로 사실상 승부는 결정됐습니다.`],
     v => `${v.team}, 쐐기골입니다. 이제 뒤집기는 어려워 보이네요.`,
   ]),
   extra: pool('goal.extra', 3, [
     v => `추가골! ${v.player}!`,
-    v => `${v.team}, 한 골 더 달아납니다! ${v.player}의 골!`,
+    // ★ 표에는 `goal.equalizer.1` 한 줄로 실렸지만 그 정규식(`{P}의 골!`)은 이 문장도
+    //   잡는다 — 재작성이 코퍼스에 적용되는 이상 여기도 같이 접어야 조회표와 어긋나지 않는다.
+    [v => `${v.team}, 한 골 더 달아납니다! ${v.player}의 골!`, v => `${v.team}, 한 골 더 달아납니다! ${v.player}, 골입니다!`],
     [v => `골! ${v.scoreText}. 점수가 벌어집니다.`, v => `골! ${v.scoreSpeech}. 점수가 벌어집니다.`],
   ]),
   chase: pool('goal.chase', 3, [
     v => `추격골입니다! 아직 끝나지 않았습니다! ${v.player}!`,
     () => '한 골 따라붙습니다! 희망이 생깁니다!',
-    [v => `${v.scoreText}. ${v.player}의 골로 간격을 좁힙니다.`, v => `${v.scoreSpeech}. ${v.player}의 골로 간격을 좁힙니다.`],
+    [v => `${v.scoreText}. ${v.player}의 골로 간격을 좁힙니다.`, v => `${v.scoreSpeech}. ${v.player}, 골로 간격을 좁힙니다.`],
   ]),
   consolation: pool('goal.consolation', 2, [
     () => '만회골입니다. 조금 늦었지만 의미는 있습니다.',
     v => `${v.player}, 한 골 만회합니다.`,
-    v => `영패는 면했습니다. ${v.player}의 골입니다.`,
+    [v => `영패는 면했습니다. ${v.player}의 골입니다.`, v => `영패는 면했습니다. ${v.player}, 골입니다.`],
   ]),
 }
 
@@ -429,7 +438,7 @@ const GOAL_POOLS: Record<GoalKind, Tpl[]> = {
 const LATE_DRAMA: Tpl[] = pool('goal.lateDrama', 3, [
   [v => `고오오올!! 극장골!! ${v.player}!!`, v => `골! 극장골입니다! ${v.player}!`],
   v => `이게 됩니까! 경기 종료 직전, ${v.player}!`,
-  v => `다 끝난 경기를 되돌립니다! ${v.player}의 극장골!`,
+  [v => `다 끝난 경기를 되돌립니다! ${v.player}의 극장골!`, v => `다 끝난 경기를 되돌립니다! ${v.player}, 극장골입니다!`],
 ])
 
 const MULTI_GOAL: Tpl[] = pool('goal.multi', 3, [
@@ -439,16 +448,17 @@ const MULTI_GOAL: Tpl[] = pool('goal.multi', 3, [
 
 const HAT_TRICK: Tpl[] = pool('goal.hattrick', 3, [
   v => `해트트릭! ${v.player}, 해트트릭입니다!`,
-  v => `해트트릭! 오늘 경기 공은 ${v.playerIGa} 챙겨 갑니다!`,
+  [v => `해트트릭! 오늘 경기 공은 ${v.playerIGa} 챙겨 갑니다!`,
+    v => `해트트릭! 오늘 경기 공은 ${v.player}, 이 선수가 챙겨 갑니다!`],
 ])
 
 // streak 풀 — `또`·`이번에도`·`벌써`·`연속` 네 단어가 "기억하는 중계"를 만든다(§3.3).
 const STREAK_POOLS: Record<Exclude<StreakKind, 'conceded'>, Tpl[]> = {
   playerShots: pool('streak.playerShots', 2, [
-    v => `또 ${v.player}입니다!`,
+    [v => `또 ${v.player}입니다!`, v => `또 ${v.player}!`],
     v => `이번에도 ${v.player}!`,
     v => `${v.player}, 오늘 벌써 ${v.nth} 번째 슛입니다.`,
-    v => `계속 ${v.player}입니다. 혼자 다 하네요.`,
+    [v => `계속 ${v.player}입니다. 혼자 다 하네요.`, v => `계속 ${v.player}, 혼자 다 하네요.`],
   ]),
   saves: pool('streak.saves', 2, [
     () => '또 막아냅니다!',
@@ -463,7 +473,7 @@ const STREAK_POOLS: Record<Exclude<StreakKind, 'conceded'>, Tpl[]> = {
   ]),
   fouls: pool('streak.fouls', 1, [
     v => `${v.player}, 오늘 벌써 ${v.nth} 번째 파울입니다. 카드가 나올 수 있어요.`,
-    v => `또 ${v.player}입니다. 반칙이 잦네요.`,
+    [v => `또 ${v.player}입니다. 반칙이 잦네요.`, v => `또 ${v.player}, 반칙이 잦네요.`],
   ]),
 }
 
