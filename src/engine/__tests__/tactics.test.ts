@@ -18,6 +18,36 @@ describe('formationEdge', () => {
   it('3-5-2는 4-4-2 상대로 중원 수적 우위 (양수 edge)', () => {
     expect(formationEdge('3-5-2', '4-4-2')).toBeGreaterThan(0)
   })
+
+  // ── 서열 금지 불변식 (2026-08-01) ──────────────────────────────
+  // 구판 표는 3-5-2가 5종 전부에 우세(행 합 +0.21) · 5-4-1이 5종 전부에 열세(−0.17)인
+  // **전력 서열**이었다. 순환이 없으면 "객관적으로 좋은 형태"가 생겨 상성 축이 죽는다.
+  // 아래 둘이 그 재발을 막는다. 근거는 tactics.EDGES 주석과 리서치 §3.1a.
+  const rowSum = (a: FormationId) => FORMATIONS.reduce((s, b) => s + formationEdge(a, b), 0)
+
+  it('행 합이 전부 ±0.03 안 — 어느 형태도 전체 평균에서 앞서지 않는다', () => {
+    for (const a of FORMATIONS) {
+      expect(Math.abs(rowSum(a)), `${a} 행 합 ${rowSum(a).toFixed(3)}`).toBeLessThanOrEqual(0.0301)
+    }
+  })
+
+  it('여섯 형태 모두 최소 2승 2패 — 잡아먹는 상대와 먹히는 상대를 둘 다 갖는다', () => {
+    for (const a of FORMATIONS) {
+      const w = FORMATIONS.filter(b => formationEdge(a, b) > 0).length
+      const l = FORMATIONS.filter(b => formationEdge(a, b) < 0).length
+      expect(w, `${a} 승 ${w}`).toBeGreaterThanOrEqual(2)
+      expect(l, `${a} 패 ${l}`).toBeGreaterThanOrEqual(2)
+    }
+  })
+
+  it('크기 규약: 서로 다른 형태 사이의 |edge|는 0.02~0.05', () => {
+    for (const a of FORMATIONS) for (const b of FORMATIONS) {
+      if (a === b) continue
+      const e = Math.abs(formationEdge(a, b))
+      expect(e, `${a} vs ${b} = ${e}`).toBeGreaterThanOrEqual(0.02)
+      expect(e, `${a} vs ${b} = ${e}`).toBeLessThanOrEqual(0.05)
+    }
+  })
 })
 
 describe('instructionEffects', () => {
