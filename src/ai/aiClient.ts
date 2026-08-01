@@ -7,7 +7,18 @@ import { safeguardFilter } from './safeguard'
 import type { NarrateTask } from './prompts'
 
 /** 클라이언트 측 하드 타임아웃. 서버 내부(2.5s)보다 약간 길게 둔다. */
-const CLIENT_TIMEOUT_MS = 3000
+/**
+ * 클라이언트 상한. 서버 상한(9s)보다 길어야 서버의 502가 유저에게 닿는다.
+ *
+ * ★ 3000ms는 Gemini Flash-Lite 기준이었다. gpt-5-nano로 바꾸면서 늘렸다.
+ *   **기다리게 해도 되는 이유**: 두 호출부 모두 화면을 막지 않는다 — 엔딩은 템플릿을
+ *   먼저 그려 놓고 도착하면 갈아끼우고, 기자회견은 아래 HEADLINE_TIMEOUT_MS로 따로
+ *   짧게 잡는다(그쪽은 await가 화면을 막는다).
+ */
+const CLIENT_TIMEOUT_MS = 6000
+
+/** 기자회견 헤드라인 전용 상한 — 그 호출은 await로 화면을 막는다. */
+export const HEADLINE_TIMEOUT_MS = 6000  // 실측 1.75초 · 서버 상한 5초보다 길게
 
 /**
  * AI 내레이션을 요청한다. 성공 시 세이프가드를 통과한 텍스트, 그 외에는 null.
@@ -16,9 +27,10 @@ const CLIENT_TIMEOUT_MS = 3000
 export async function narrate(
   task: NarrateTask,
   context: Record<string, unknown>,
+  timeoutMs: number = CLIENT_TIMEOUT_MS,
 ): Promise<string | null> {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), CLIENT_TIMEOUT_MS)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
     const res = await fetch('/api/narrate', {
       method: 'POST',

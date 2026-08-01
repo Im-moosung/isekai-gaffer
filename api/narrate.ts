@@ -19,8 +19,16 @@ const GEMINI_MODEL = 'gemini-2.5-flash-lite' // 배포 시 gemini-3.5(-flash-lit
 const ANTHROPIC_MODEL = 'claude-haiku-4-5'
 
 const MAX_TOKENS = 400
-/** 업스트림(모델 API) 내부 타임아웃. 클라이언트(3s)보다 짧게. */
-const UPSTREAM_TIMEOUT_MS = 2500
+/**
+ * 업스트림(모델 API) 내부 타임아웃. 클라이언트보다 **짧아야** 한다 — 그래야 실패가
+ * 클라이언트 abort가 아니라 502로 정직하게 돌아온다.
+ *
+ * ★ 2500ms는 Gemini Flash-Lite 기준이었다. gpt-5 계열은 **추론 모델**이라 그 안에
+ *   못 끝낸다 — 배포 실측에서 세 번 모두 2.6~2.8초에 잘렸다(즉 인증이 아니라 시간).
+ *   effort를 'minimal'로 낮추니 **실측 1.75초**로 들어왔다. 5000ms는 그 3배 여유다 —
+ *   심사 중 업스트림이 느려져도 살아남고, 넘치면 템플릿으로 폴백하므로 손해가 없다.
+ */
+const UPSTREAM_TIMEOUT_MS = 5000
 
 // 레이트리밋 상태: IP별 요청 타임스탬프.
 // 서버리스 인스턴스별 베스트에포트 — 프로덕션은 KV/Upstash 권장
@@ -141,7 +149,9 @@ async function callOpenAI(
       instructions: system,
       input: user,
       max_output_tokens: MAX_TOKENS * 4,
-      reasoning: { effort: 'low' },
+      // 'minimal' — 서사는 짧은 한국어 몇 문장이라 추론이 필요 없다. gpt-5 계열에서
+      // 지연을 가장 크게 줄이는 손잡이다(추론 토큰이 곧 대기 시간이다).
+      reasoning: { effort: 'minimal' },
     }),
   })
   if (!res.ok) return null
