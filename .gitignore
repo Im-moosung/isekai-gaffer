@@ -9,3 +9,7 @@ docs/screenshots/
 # 감사 산출물(로컬)
 docs/audit/shots/
 docs/audit/*.json
+
+# 파이썬 도구 캐시
+__pycache__/
+*.pyc
