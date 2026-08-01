@@ -271,6 +271,37 @@ export function TacticsBoard() {
             코치 회의 열기
           </button>
         )}
+        {/* ── 경기 상황: 지금 몇 분에 몇 대 몇인가 (사용자 지시 2026-08-01) ────────
+            전술을 바꾸는 판단의 첫 번째 입력이다. 이게 없으면 감독은 작전판을 닫고
+            스코어버그를 본 뒤 다시 열어야 했다. 방송 스코어버그(Scorebug)의 문법을
+            그대로 쓴다 — 킷 스트립 + FIFA 코드 + 스코어 + 시계. 같은 정보를 두 화면이
+            다른 모양으로 말하면 어느 쪽이 정본인지 알 수 없다.
+
+            ★ 왜 engine.score를 그대로 읽어도 노출 게이트(커밋 56cb691)를 어기지 않는가
+              — 가정이 아니라 확인한 사실이다.
+              1. 이 작전판은 MatchScreen이 `tacticsMode = paused || phase === 'halftime'`
+                 일 때만 마운트한다(MatchScreen.tsx 314·1258행). paused는
+                 paused-break/paused-user/paused-moment다 — **'playing'은 없다**.
+              2. 게이트의 정의는 `revealed = revealState.on && (phase !== 'playing' || ...)`
+                 이고(MatchScreen.tsx 261행), 그 주석이 스스로 말한다: "재생 중이 아니면
+                 미룰 결과가 없다 — 전부 노출로 본다".
+              3. 실제로 노출 타이머 effect(429~435행)가 `phase !== 'playing'`에서
+                 revealState를 `{minute:-1, on:true}`로 되돌린다.
+              즉 작전판이 열려 있는 모든 phase에서 revealed는 참이고, 화면에 아직
+              안 보여 준 골이 남아 있을 수 없다. 하이라이트 안무는 정지와 함께 끝났다.
+
+            ★ 하프타임에 45'가 아니라 HT를 쓰는 이유: 하프타임에도 engine.minute은 45라
+              "45'"로 적으면 시계가 도는 중으로 읽힌다. 방송이 쓰는 표기를 그대로 쓴다. */}
+        <div className="tb-head__score" role="status" aria-label="경기 상황">
+          <span className="kit-strip kit-strip--us" aria-hidden="true" />
+          <span className="tb-head__code num">{home.team.fifaCode}</span>
+          <span className="tb-head__num num">{engine.score[0]}</span>
+          <span className="tb-head__dash">:</span>
+          <span className="tb-head__num num">{engine.score[1]}</span>
+          <span className="tb-head__code num">{engine.away.team.fifaCode}</span>
+          <span className="kit-strip kit-strip--them" aria-hidden="true" />
+          <span className="tb-head__clock num">{halftime ? 'HT' : `${engine.minute}'`}</span>
+        </div>
       </div>
 
       {/* 터치라인 안내 — 잠긴 이유와 언제 풀리는지를 함께 말한다.

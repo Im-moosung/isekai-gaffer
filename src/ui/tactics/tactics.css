@@ -23,12 +23,13 @@
   overflow-y: auto;
 }
 
-/* ── 상단: "작전 타임" 라벨 + 정지 사유 ─────────────────────── */
+/* ── 상단: "작전 타임" 라벨 + 정지 사유 + 경기 상황 ───────────── */
 .tb-head {
   flex: 0 0 auto;
   display: flex;
   align-items: baseline;
-  gap: var(--sp-4);
+  flex-wrap: wrap; /* 좁은 화면에서 스코어가 잘리느니 줄을 바꾼다 */
+  gap: var(--sp-2) var(--sp-4);
 }
 .tb-head__label {
   font-size: var(--fs-h2);
@@ -41,6 +42,45 @@
   font-size: var(--fs-md);
   font-weight: 700;
   color: var(--t-mid);
+}
+
+/* 경기 상황(스코어 + 시계) — 방송 스코어버그와 **같은 문법**의 한 줄 축약판이다.
+   방송은 3단 데크(컨텍스트/스코어/시계)로 펼치지만 여기서는 헤더 한 줄에 얹는다:
+   작전판은 이미 세로가 빡빡해(보드 + 지시 패널 + 코치 회의) 새 데크를 얹으면
+   정작 봐야 할 보드가 접힌 아래로 밀린다 — 코치 회의를 팝업으로 옮긴 것과 같은 이유다.
+   시계만 배경 있는 pill로 떼어 둔다(갱신 주기가 스코어와 달라 시선이 섞이면 안 된다). */
+.tb-head__score {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-left: auto;
+}
+/* 코치 버튼이 이미 오른쪽으로 밀고 있으면 auto가 둘이 되어 버튼이 가운데로 뜬다. */
+.tb-head__coach + .tb-head__score { margin-left: var(--sp-2); }
+.tb-head__code {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--t-mid);
+}
+.tb-head__num {
+  font-size: var(--fs-h2);
+  font-weight: 800;
+  line-height: var(--lh-tight);
+  color: var(--t-hi);
+}
+.tb-head__dash {
+  font-size: var(--fs-md);
+  color: var(--t-low);
+}
+.tb-head__clock {
+  padding: 2px var(--sp-2);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-pill);
+  background: var(--s-1);
+  font-size: var(--fs-md);
+  font-weight: 800;
+  letter-spacing: var(--ls-caps);
+  color: var(--t-hi);
 }
 
 /* ── 플랜 대비(킥오프 계획 vs 현재) ───────────────────────────

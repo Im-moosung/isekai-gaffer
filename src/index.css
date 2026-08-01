@@ -99,6 +99,32 @@ canvas {
   outline-offset: 2px;
 }
 
+/* ── SVG 안의 포커스 링은 **전역 규칙으로 그리지 않는다** ────────────────────
+   왜(실측 2026-08-01, 커밋 efb6158): SVG 안에서는 CSS px가 화면 픽셀이 아니라
+   **사용자 단위**다. 작전판 viewBox 배율이 실측 ≈7.4배라, 위의 2px 아웃라인은 화면에서
+   15px 띠가 되고 크롬 UA 기본값(outline: auto 5px)은 37px 검은 덩어리가 됐다
+   ("선수를 누르면 검은 덩어리가 생긴다"의 정체). 게다가 outline은 그룹 bbox를 따라가서
+   그 안의 애니메이션(맥동하는 .pv-ring)까지 같이 뛴다.
+   efb6158은 이 사고를 도트에서만 껐다 — 전역 규칙이 남아 있으면 포커스 가능한 SVG를
+   하나 더 추가하는 순간 그대로 재발한다. 그래서 여기서 클래스째 막는다.
+
+   ★ 접근성은 포기하지 않는다. 끄는 대신 **배율에 부풀지 않는 표시**로 갈아 끼운다:
+     · 도형(circle/rect/path…)에는 흰 테두리를 직접 그린다. stroke-width는 사용자
+       단위지만 vector-effect: non-scaling-stroke가 화면 픽셀로 고정해 주므로
+       viewBox 배율이 얼마든 2px 그대로다.
+     · <g>·<a> 같은 **컨테이너**는 여기서 그리지 않는다. stroke는 상속되는 속성이라
+       자식 글자·숫자까지 흰 테두리를 뒤집어쓴다. 컨테이너를 포커스 가능하게 만드는
+       쪽이 자기 표시를 직접 그린다 — 지금 유일한 사례인 작전판 도트 그룹이
+       pitch.css에서 그렇게 하고 있다(.pv-dotg--click:focus-visible .pv-dot). */
+svg :focus-visible {
+  outline: none;
+}
+svg :is(circle, ellipse, rect, line, polyline, polygon, path, text, image, use):focus-visible {
+  stroke: #fff;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
 /* 내부 스크롤 컨테이너는 화면당 하나만 허용하고, 그 하나에는 반드시
    보이는 스크롤바를 붙인다. 다크 테마 기본 스크롤바는 사실상 투명해
    "스크롤할 수 있다"는 사실 자체가 전달되지 않았다(벤치 73% 은닉의 원인). */
