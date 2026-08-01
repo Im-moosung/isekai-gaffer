@@ -499,7 +499,11 @@
   justify-content: center;
   padding: var(--sp-4);
   box-sizing: border-box;
-  background: var(--s-scrim-soft);
+  /* --s-scrim-soft(0.45)에서 올렸다. 작전판은 이미 어두운 면이라 0.45 스크림으로는
+     뒤가 거의 안 죽는다 — 팝업이 모달이 아니라 **겹쳐 뜬 판때기**로 읽혔다
+     (docs/audit/shots/r6-1600x900-07-halftime-1-board.png: 팝업 좌우로 팀 토크 카드가
+     같은 밝기로 남는다). aria-modal="true"인 이상 시각적으로도 뒤가 물러나야 한다. */
+  background: var(--s-scrim);
   overflow-y: auto;
 }
 .tb-coachpop .tb-coach {

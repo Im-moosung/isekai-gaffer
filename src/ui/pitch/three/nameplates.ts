@@ -136,7 +136,16 @@ export function layoutPlates(
     const src = byId.get(pl.id)
     if (!src) continue
     slots.set(pl.id, pl.slot)
-    out.push({ id: pl.id, side: src.item.side, text: pl.text, x: pl.x, y: pl.y, fontPx: src.fontPx })
+    // 좌우 클램프 — 터치라인 근처 선수의 이름표가 뷰포트 밖으로 반쯤 잘려 나갔다
+    // (실측 1600×900: "손흥민"이 x 1545~1600에서 오른쪽이 잘렸다.
+    //  docs/audit/shots/r6-1600x900-06-live-21-24min.png).
+    // 플레이트는 translate(-50%)로 중심 정렬되므로 중심이 반폭보다 가장자리에 가까우면
+    // 무조건 잘린다. 폭은 레이아웃을 유발하지 않는 근사(plateWidthPx)로 구한다 —
+    // 매 프레임 offsetWidth를 읽으면 22개 × 60fps의 강제 리플로가 된다.
+    const half = plateWidthPx(pl.text, src.fontPx) / 2
+    // 뷰포트가 플레이트보다 좁으면 클램프가 뒤집힌다 — 그때는 가운데에 둔다.
+    const x = viewW >= 2 * half ? Math.min(Math.max(pl.x, half), viewW - half) : viewW / 2
+    out.push({ id: pl.id, side: src.item.side, text: pl.text, x, y: pl.y, fontPx: src.fontPx })
   }
   return { placed: out, slots }
 }

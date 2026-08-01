@@ -645,6 +645,14 @@
     min-height: 240px;
     max-height: 62vh;
   }
+  /* 단, 오버레이(입장 연출·작전판)가 열린 동안에는 상한을 푼다. 62vh는 **조작·스탯이
+     아래에 앉아 있을 때** 남길 몫을 정한 값인데, 오버레이가 열리면 MatchScreen이 그
+     furniture를 언마운트한다 — 그러면 상한만 남아서 390×844 입장 연출에서 캔버스
+     아래로 282px(844 − 39 − 523)가 통째로 검게 비었다(실측). 채울 것이 없으면 피치가
+     가져가는 게 맞다. */
+  .ms-root--live.ms-root--overlay .ms-pitch-wrap {
+    max-height: none;
+  }
   .ms-root--live .ms-topbar {
     flex-direction: row;
     align-items: flex-start;
@@ -684,6 +692,17 @@
   /* 390에서는 스코어버그(컨텍스트 스트립을 접어 2단)만 보드 위에 있다. */
   .ms-root--live .ab-root {
     padding: 104px var(--sp-2) var(--sp-2);
+  }
+  /* 대진 스트립은 **항상 2단**이어야 한다 — 입장 자막 바(entrance.css의
+     `--ent-bar-drop`)가 이 스트립 아래에 앉으므로 높이가 흔들리면 그대로 겹친다.
+     390에서 쓸 수 있는 폭은 194px뿐이라 팀 이름 + 대회명을 한 줄에 못 담는다.
+     그래서 팀 이름이 1단을 통째로 갖고(넘치면 말줄임) 대회명이 2단으로 내려간다 —
+     이름이 길어져도 3단이 되지 않는다. 실측 76px(28.8 + 12 + 19.2 + 패딩 16). */
+  .ms-root--live .ms-prematch__teams {
+    flex: 1 0 100%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 }
 

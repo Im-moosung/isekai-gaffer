@@ -243,6 +243,19 @@
   .pc-main {
     grid-area: main;
   }
+  /* 첫 질문에는 지난 문답이 없다 — `.pc-past`가 **아예 렌더되지 않는다**
+     (PressConference.tsx: `answers.length > 0 && ...`). 그런데 그리드는 좌측 레일
+     240~320px + gap을 계속 붙들고 있었고, `justify-content: center`가 그 빈 칸까지
+     포함해 가운데를 잡는 바람에 질문 카드가 통째로 오른쪽으로 밀렸다
+     (실측 1600×900: 헤더는 x 237부터인데 질문 카드는 x 583부터 — 왼쪽 346px 공백.
+      docs/audit/shots/r6-1600x900-10-after-fulltime.png).
+     레일이 없으면 한 칸짜리 그리드로 접는다. */
+  .pc-stage:not(:has(.pc-past)) {
+    grid-template-columns: minmax(0, var(--w-read));
+    grid-template-areas:
+      'strip'
+      'main';
+  }
 }
 
 /* ============================================================================

@@ -30,9 +30,25 @@
 
 /* ── 로어서드(자막 바) — 좌상단 흐름의 첫 줄. ─────────────────────────
    좌측 컬러 띠 + 다크 카드는 금지 패턴이라 걷어냈다.
-   대신 --brand 3px **상단 라인** + 다크 플레이트로 같은 위계를 만든다. */
+   대신 --brand 3px **상단 라인** + 다크 플레이트로 같은 위계를 만든다.
+
+   ★ 자리 양보: 입장 연출 동안 MatchScreen이 같은 좌상단에 대진 스트립
+   (`.ms-prematch` — "대한민국 vs 스페인 · FIFA 월드컵 2026")을 절대배치로 띄운다.
+   둘 다 (16,16)에서 시작해 **원점이 정확히 겹쳤고**, 자막 바(193px)보다 넓은
+   스트립(301px)의 꼬리만 오른쪽으로 새어 나와 "2026"의 끝 글자가 떠 있었다
+   (실측 1600×900, docs/audit/shots/entrance-4cut-1600x900-split.png 좌상단).
+
+   두 판때기는 성격이 다르다 — 스트립은 **바뀌지 않는 대진 정체**, 자막 바는
+   **지금 컷**이다. 그래서 숨기지 않고 세로로 쌓아 한 덩어리로 읽히게 한다.
+   `--ent-bar-drop`은 스트립 높이(패딩 포함)의 실측값이다. `.ent`는 `.ms-root`가
+   아니라 `.ms-pitch-wrap` 안에 있어 CSS만으로는 스트립 높이를 물을 수 없다
+   (같은 이유로 `.ms-banner`도 `top: 168px` 실측값을 쓴다 — match.css). */
+.ent {
+  --ent-bar-drop: 53px; /* 스트립 44.8px + 간격 8px */
+}
 .ent__bar {
   align-self: flex-start;
+  margin-top: var(--ent-bar-drop);
   display: inline-flex;
   align-items: baseline;
   gap: var(--sp-3);
@@ -68,7 +84,12 @@
   width: min(720px, 100%);
   border: 1px solid var(--s-line);
   border-radius: var(--r-lg);
-  background: var(--s-scrim);
+  /* --s-scrim(0.72)에서 올렸다. 이 패널은 **읽는 면**이다 — 11명의 이름을 읽어야 한다.
+     0.72에서는 뒤에서 걸어오는 선수(빨간 유니폼)가 명단 글자 사이로 그대로 비쳐
+     "김태현 / 김문환 / 엔스 카스트로프" 줄에 붉은 얼룩이 얹혔다
+     (docs/audit/shots/r6-1600x900-04-entrance-full-home-intro.png 중앙 우측).
+     "뒤에서 실제 줄이 보인다"는 원칙은 패널 **바깥**이 지킨다 — 최대 폭 720px는 그대로다. */
+  background: var(--s-scrim-strong);
   backdrop-filter: blur(10px);
   box-shadow: var(--shadow-2);
   overflow: hidden;
@@ -303,6 +324,9 @@
   .ent {
     padding: var(--sp-3);
     gap: var(--sp-2);
+    /* 390에서 대진 스트립은 2단이라 76px다(match.css가 3단이 되지 않게 고정한다).
+       스트립 위끝 8px + 76px + 간격 8px − `.ent` 패딩 12px = 80px. */
+    --ent-bar-drop: 80px;
   }
   .ent__close {
     width: 100%;

@@ -458,8 +458,21 @@ export function buildScene(THREE: ThreeAPI, opts: BuildSceneOptions = {}): Scene
   const endFenceGeo = new THREE.BoxGeometry(END_LEN, STAND_H0, 1.2)
   const sideRibbonGeo = new THREE.BoxGeometry(SIDE_LEN, 0.16, 0.06)
   const endRibbonGeo = new THREE.BoxGeometry(END_LEN, 0.16, 0.06)
-  const sideBoardGeo = new THREE.BoxGeometry(SIDE_BOARD_LEN, BOARD_H, 0.3)
-  const endBoardGeo = new THREE.BoxGeometry(END_BOARD_LEN, BOARD_H, 0.3)
+  /**
+   * 광고판은 **면 하나**다(Plane). 예전에는 BoxGeometry(len × H × 0.3)였는데,
+   * 상자는 여섯 면 전부에 같은 맵을 붙인다 — 윗면(len × 0.3)에도 같은 repeat가
+   * 걸려서 **같은 위상의 광고 띠가 한 줄 더** 그려졌다. 카메라가 보드보다 높고
+   * 가까운 입장 컷에서는 그 윗면이 앞면만큼 크게 잡혀, 광고판이 어긋나게 두 겹으로
+   * 겹쳐 보였다(docs/audit/shots/entrance-4cut-1600x900-split.png 하단).
+   * 두께 0.3m는 어차피 어느 카메라에서도 읽히지 않으므로 면으로 줄인다.
+   * 단, **DoubleSide는 안 된다** — 뒷면은 글자가 좌우로 뒤집힌다. 보드는 방향에 따라
+   * 안쪽(피치 쪽)에서 보는 컷과 바깥쪽에서 보는 컷이 둘 다 있다(먼 쪽 보드는 피치
+   * 너머로, 가까운 쪽 보드는 관중석 위를 넘어온 카메라에 등 쪽이 잡힌다). 상자는
+   * 여섯 면이 각자 바깥을 향해 정상 UV를 갖고 있어서 양쪽 다 제대로 읽혔던 것이다.
+   * 그래서 **앞뒤로 등을 맞댄 평면 두 장**으로 그 성질만 남긴다(윗면 없음).
+   */
+  const sideBoardGeo = new THREE.PlaneGeometry(SIDE_BOARD_LEN, BOARD_H)
+  const endBoardGeo = new THREE.PlaneGeometry(END_BOARD_LEN, BOARD_H)
   const sideAdMat = new THREE.MeshBasicMaterial({
     color: hdr(adTexSide ? 0xffffff : 0x101828, AD_SHARE),
     ...(adTexSide ? { map: adTexSide } : {}),
@@ -524,11 +537,19 @@ export function buildScene(THREE: ThreeAPI, opts: BuildSceneOptions = {}): Scene
     const ribbon = new THREE.Mesh(isEnd ? endRibbonGeo : sideRibbonGeo, ribbonMat)
     ribbon.position.set(0, STAND_H0 - 0.16, side.inner - 1.22)
     g.add(ribbon)
-    // 페리미터 LED 광고보드(살짝 뒤로 기울임)
-    const board = new THREE.Mesh(isEnd ? endBoardGeo : sideBoardGeo, isEnd ? endAdMat : sideAdMat)
-    board.position.set(0, 0.55, side.boardDist)
-    board.rotation.x = 0.13
-    g.add(board)
+    // 페리미터 LED 광고보드(살짝 뒤로 기울임) — 등을 맞댄 평면 두 장.
+    // 지오메트리·머티리얼은 공유하므로 메시 한 개가 늘 뿐 비용은 사실상 같다.
+    // 두 장은 같은 평면에 있지만 법선이 반대라 한 번에 하나만 통과한다(z-파이팅 없음).
+    const boardGeo = isEnd ? endBoardGeo : sideBoardGeo
+    const boardMat = isEnd ? endAdMat : sideAdMat
+    const boardPivot = new THREE.Group()
+    boardPivot.position.set(0, 0.55, side.boardDist)
+    boardPivot.rotation.x = 0.13
+    const boardOut = new THREE.Mesh(boardGeo, boardMat)
+    const boardIn = new THREE.Mesh(boardGeo, boardMat)
+    boardIn.rotation.y = Math.PI
+    boardPivot.add(boardOut, boardIn)
+    g.add(boardPivot)
     stadiumGroup.add(g)
   }
 
