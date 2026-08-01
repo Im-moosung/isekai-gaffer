@@ -140,16 +140,18 @@ describe('NewspaperCard', () => {
   })
 })
 
-describe('PressConference — 플랜 이탈 연결', () => {
-  it('matchPlan이 없으면(플랜 미수립) 추궁 질문이 없다', () => {
+describe('PressConference — 킥오프 계획 추궁 연결', () => {
+  it('matchPlan이 없으면(계획 미수립) 추궁 질문이 없다', () => {
     useMatchStore.getState().reset()
     const { container } = render(
       <PressConference record={RECORD} log={RECORD.decisions} teamName="대한민국" onDone={vi.fn()} />,
     )
-    expect(container.querySelector('.pc-question')!.textContent).not.toContain('계획')
+    const q = container.querySelector('.pc-question')!.textContent!
+    expect(q).not.toContain('처음 준비')
+    expect(q).not.toContain('전반과 후반이')
   })
 
-  it('store의 planDeviation이 첫 질문을 이탈 추궁으로 바꾼다', () => {
+  it('store의 planDeviation이 첫 질문을 계획 추궁으로 바꾼다', () => {
     useMatchStore.getState().reset()
     useMatchStore.getState().startMatch(makeTestTeam('kor', 76), makeTestTeam('esp', 88), 20260724)
     act(() => { useMatchStore.getState().kickoff() })
@@ -159,8 +161,10 @@ describe('PressConference — 플랜 이탈 연결', () => {
       <PressConference record={RECORD} log={RECORD.decisions} teamName="대한민국" onDone={vi.fn()} />,
     )
     const q = container.querySelector('.pc-question')!.textContent!
-    expect(q).toContain('5개 축')
-    expect(q).toContain('원래 계획이 틀렸던')
+    expect(q).toContain('전반과 후반이 완전히 다른 팀이었습니다')
+    expect(q).toContain('처음 준비가 틀렸던')
+    // 화면의 플랜 배지가 없어도 성립해야 하는 문장이다 — 바꾼 항목 수를 말하지 않는다.
+    expect(q).not.toMatch(/개 축|축을/)
     expect(container.querySelectorAll('.pc-answer')).toHaveLength(3)
   })
 })

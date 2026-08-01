@@ -47,7 +47,8 @@ const PRESS_DESK = [
 ] as const
 
 export function PressConference({ record, log, teamName, onDone }: Props) {
-  // 킥오프 플랜 이탈 축 수 — matchStore는 경기 종료 후에도 리셋되지 않으므로 여기서 직접 읽는다.
+  // 킥오프 계획에서 얼마나 멀어졌는가(변경 항목 수) — matchStore는 경기 종료 후에도 리셋되지
+  // 않으므로 여기서 직접 읽는다. 값은 질문 **선택**에만 쓰이고 문장에는 노출되지 않는다.
   // App→MatchScreen→onMatchEnd 콜백에 인자를 하나 더 얹는 것보다 결합이 얕고,
   // 플랜을 세운 적 없는 렌더(단독 테스트·데모)는 matchPlan이 null이라 undefined가 되어
   // 추궁 질문이 생기지 않는다.

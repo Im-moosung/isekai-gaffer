@@ -142,22 +142,109 @@ const SHOUT_BY_LABEL: Record<string, string> = {
   독려: 'urge', '더 뛰어': 'work', 침착: 'calm', 칭찬: 'praise',
 }
 
-/** "압박 62→47" 한 조각을 "압박을 62에서 47까지 내리" 꼴로. 해석 불가면 null.
- *
- *  ★ 숫자 뒤에는 '로/으로'를 쓰지 않는다 — 받침 유무가 읽기에 따라 갈린다(90=구십'으로',
- *    5=오'로'). 이 저장소가 여러 번 밟은 자리라, 수치 축은 조사 자체가 없는 '까지'로 끊는다.
- *    비수치 축(공격방향)만 한글이므로 그쪽에서만 josa로 '로/으로'를 고른다. */
+// ── 전술 변경 로그 → 기자의 문장 ────────────────────────────
+// `tacticsDiff`가 만드는 조각은 **작전판의 문법**이다: "압박 55→90", "멘탈리티 균형→공격적",
+// "공격 적극성 기본→적극", "박스 인원 표준→많이". 기자는 이렇게 말하지 않는다.
+//   ① 0~100 슬라이더 값은 우리 내부 수치다. 실제 기자는 "압박을 62에서 47까지"라고 세지 않고
+//      "압박을 늦췄다"고 말한다. 숫자를 지우면 TTS 오독 위험도 함께 사라진다.
+//   ② '멘탈리티'·'적극성'·'박스 인원'은 구현 용어다. 관중이 본 장면의 낱말로 옮긴다.
+//   ③ 예전 파서는 `(.+?)\s(.+?)→(.+)` 하나로 축 이름을 잘라, 두 낱말짜리 축을 통째로 망가뜨렸다
+//      ("공격 적극성 기본→적극" → 「공격을 적극성 기본에서 적극으로 바꾸셨습니다」). 그래서
+//      **아는 축 이름의 표**로 자른다. 모르는 축은 null — 원문을 흘리느니 질문을 만들지 않는다.
+
+/** 수치 축(0~100) → [올렸을 때, 내렸을 때]. 값 자체는 절대 문장에 넣지 않는다. */
+const NUMERIC_AXIS: Record<string, [string, string]> = {
+  '라인': ['수비 라인을 끌어올리', '수비 라인을 끌어내리'],
+  '압박': ['압박을 한층 끌어올리', '압박을 늦추'],
+  '템포': ['경기 템포를 끌어올리', '템포를 늦추'],
+}
+
+/** 공격 방향(attackFocus) 값 → 장면. 옛 로그의 '좌측/우측' 표기도 함께 받는다. */
+const FOCUS_SCENE: Record<string, string> = {
+  '좌': '공격을 왼쪽으로 몰아가', '좌측': '공격을 왼쪽으로 몰아가',
+  '우': '공격을 오른쪽으로 몰아가', '우측': '공격을 오른쪽으로 몰아가',
+  '중앙': '공격을 가운데로 모으', '균형': '공격을 양쪽으로 고르게 펴',
+}
+const MENTALITY_ORDER = ['매우 수비적', '수비적', '균형', '공격적', '매우 공격적']
+const INTENSITY_ORDER = ['자제', '기본', '적극']
+const GROUP_WORD: Record<string, string> = { '공격': '최전방', '미드필드': '중원', '수비': '수비진' }
+const PATTERN_SCENE: Record<string, string> = {
+  '크로스': '공격을 측면 크로스 위주로 돌리',
+  '중앙 침투': '공격을 중앙 침투 쪽으로 돌리',
+  '중거리': '공격을 중거리 슛 위주로 돌리',
+  '균형': '공격 방식을 다시 고르게 가져가',
+}
+const CORNER_SCENE: Record<string, string> = {
+  '니어': '코너킥을 니어포스트로 올리', '파': '코너킥을 먼 쪽으로 올리', '짧게': '코너킥을 짧게 가져가',
+}
+const BOXLOAD_SCENE: Record<string, string> = {
+  '많이': '코너에서 문전에 사람을 더 채우',
+  '적게': '코너에서 문전 인원을 줄이',
+  '표준': '코너에서 문전 인원을 원래대로 되돌리',
+}
+const MARKING_SCENE: Record<string, string> = {
+  '맨투맨': '수비를 대인 방어로 돌리', '존': '수비를 지역 방어로 돌리',
+}
+
+/** 서열 축의 방향(뒤 값이 앞 값보다 위인가). 표 밖의 값이면 null. */
+function rankUp(order: string[], before: string, after: string): boolean | null {
+  const b = order.indexOf(before), a = order.indexOf(after)
+  if (b < 0 || a < 0 || a === b) return null
+  return a > b
+}
+
+/** 범주·서열 축 → 장면. 키는 tacticsDiff가 쓰는 축 이름 그대로(긴 것부터 매칭한다). */
+const AXIS_SCENE: Record<string, (before: string, after: string) => string | null> = {
+  '멘탈리티': (b, a) => {
+    const up = rankUp(MENTALITY_ORDER, b, a)
+    return up === null ? null : up ? '팀을 더 공격적으로 돌리' : '팀을 더 단단하게 잠그'
+  },
+  '공격 적극성': (b, a) => intensityScene('공격', b, a),
+  '미드필드 적극성': (b, a) => intensityScene('미드필드', b, a),
+  '수비 적극성': (b, a) => intensityScene('수비', b, a),
+  '공격 패턴': (_b, a) => PATTERN_SCENE[a] ?? null,
+  '코너 루트': (_b, a) => CORNER_SCENE[a] ?? null,
+  '박스 인원': (_b, a) => BOXLOAD_SCENE[a] ?? null,
+  '수비 마킹': (_b, a) => MARKING_SCENE[a] ?? null,
+  '공격': (_b, a) => FOCUS_SCENE[a] ?? null,
+  '포메이션': (b, a) => `진형을 ${b}에서 ${a}로 바꾸`,
+}
+function intensityScene(line: string, before: string, after: string): string | null {
+  const up = rankUp(INTENSITY_ORDER, before, after)
+  const w = GROUP_WORD[line]
+  if (up === null || !w) return null
+  // 주어가 감독이므로 "최전방을 움직이셨습니다"가 아니라 "…에 주문하셨습니다"로 쓴다.
+  return up ? `${w}에 더 적극적으로 나서라고 주문하` : `${w}에 힘을 아끼라고 주문하`
+}
+
+/** 긴 축 이름부터 — '공격 적극성'이 '공격'에 먼저 먹히면 안 된다. */
+const AXIS_NAMES = [...Object.keys(NUMERIC_AXIS), ...Object.keys(AXIS_SCENE)]
+  .sort((a, b) => b.length - a.length)
+
+/** 전술 변경 조각 1개 → 기자의 절("…끌어올리"). 해석 불가면 null. */
 function axisClause(piece: string): string | null {
-  const m = /^(.+?)\s(.+?)→(.+)$/.exec(piece.trim())
-  if (!m) return null
-  const [, axis, before, after] = m
-  const nb = Number(before), na = Number(after)
-  const head = josa(axis, '을', '를')
-  if (Number.isFinite(nb) && Number.isFinite(na)) {
-    const verb = na > nb ? '올리' : na < nb ? '내리' : '조정하'
-    return `${head} ${before}에서 ${after}까지 ${verb}`
+  const t = piece.trim()
+  // GK 파워플레이는 화살표가 없는 on/off 스위치다. 관중석에서 가장 잘 보이는 장면이라 살린다.
+  if (t.startsWith('GK 파워플레이')) {
+    if (t.endsWith('ON')) return '골키퍼까지 상대 진영으로 올려보내'
+    if (t.endsWith('OFF')) return '골키퍼를 다시 골문으로 돌려보내'
+    return null
   }
-  return `${head} ${before}에서 ${josa(after, '으로', '로')} 바꾸`
+  const arrow = t.indexOf('→')
+  if (arrow < 0) return null
+  const left = t.slice(0, arrow).trim(), after = t.slice(arrow + 1).trim()
+  const axis = AXIS_NAMES.find(n => left === n || left.startsWith(`${n} `))
+  if (!axis) return null
+  const before = left.slice(axis.length).trim()
+  if (!before || !after) return null
+
+  const numeric = NUMERIC_AXIS[axis]
+  if (numeric) {
+    const nb = Number(before), na = Number(after)
+    if (!Number.isFinite(nb) || !Number.isFinite(na) || nb === na) return null
+    return na > nb ? numeric[0] : numeric[1]
+  }
+  return AXIS_SCENE[axis](before, after)
 }
 
 /** 결정 로그 1건 → 기자 질문. 해석할 수 없으면 null(질문을 만들지 않는다). */
@@ -171,7 +258,7 @@ function logQuestionText(e: DecisionEntry): string | null {
       if (tone) return `하프타임 라커룸 이야기가 나옵니다. ${tone} — 그 말이 후반의 흐름을 만들었다고 보십니까?`
       const shout = (typeof e.detail?.shout === 'string' ? SHOUT_SCENE[e.detail.shout] : undefined)
         ?? SHOUT_SCENE[SHOUT_BY_LABEL[/외침: (.+)$/.exec(e.summary)?.[1] ?? ''] ?? '']
-      if (shout) return `${when} 터치라인에서 ${shout} 그 한마디가 꼭 필요한 순간이었습니까?`
+      if (shout) return `${when} 터치라인에서 ${shout}. 그 한마디가 꼭 필요한 순간이었습니까?`
       return null
     }
     case 'sub': {
@@ -215,19 +302,19 @@ function resultQuestions(r: MatchRecord): string[] {
   const qs: string[] = []
   switch (out) {
     case 'bigwin':
-      qs.push(`${opp}을 상대로 큰 점수 차 승리였습니다. 이런 결과를 예상하셨습니까?`)
+      qs.push(`${josa(opp, '을', '를')} 상대로 큰 점수 차 승리였습니다. 이런 결과를 예상하셨습니까?`)
       break
     case 'narrow':
       qs.push(`한 골 차 승부 끝에 웃으셨습니다. 후반 집중력의 비결이 있었습니까?`)
       break
     case 'win':
-      qs.push(`${opp}을 넘어 승리를 거두셨습니다. 오늘 가장 큰 원동력은 무엇이었습니까?`)
+      qs.push(`${josa(opp, '을', '를')} 넘어 승리를 거두셨습니다. 오늘 가장 큰 원동력은 무엇이었습니까?`)
       break
     case 'shootoutWin':
       qs.push(`승부차기까지 가는 접전이었습니다. 그 긴장을 어떻게 견디셨습니까?`)
       break
     case 'draw':
-      qs.push(`${opp}과 무승부로 마쳤습니다. 아쉬움이 남는 결과라는 평가에 동의하십니까?`)
+      qs.push(`${josa(opp, '과', '와')} 무승부로 마쳤습니다. 아쉬움이 남는 결과라는 평가에 동의하십니까?`)
       break
     case 'loss':
       qs.push(`아쉬운 결과였습니다. 어느 지점에서 승부가 갈렸다고 보십니까?`)
@@ -243,8 +330,10 @@ function resultQuestions(r: MatchRecord): string[] {
   return qs
 }
 
-/** 킥오프 플랜 이탈 축 수 기준 — 이 이상이면 "계획을 버렸다"로 본다.
- *  구조(포메이션·멘탈리티) + 지시 2축 이상을 갈아엎어야 도달하는 값이다. */
+/** 킥오프 계획에서 얼마나 멀어졌는가(변경된 전술 항목 수) — 이 이상이면 "계획을 버렸다"로 본다.
+ *  구조(대형·태세) + 지시 두 가지 이상을 갈아엎어야 도달하는 값이다.
+ *  ★ 이 수치는 **판정에만 쓰고 문장에는 넣지 않는다.** 기자는 감독이 몇 가지를 바꿨는지 세지
+ *    않는다 — 전반과 후반의 팀이 달라 보였다고 말할 뿐이다. */
 const PIVOT_DEVIATION = 4
 
 /** 플랜 추궁 3분기. 답변은 공용 풀 대신 전용 문안을 쓴다 — "계획을 지켰다/버렸다"는
@@ -269,24 +358,29 @@ const PLAN_ANSWERS: Record<PlanBranch, [string, string, string]> = {
   ],
 }
 
-/** 플랜 이탈 정도 × 결과로 갈리는 추궁 질문. 성립하지 않으면 null.
- *  질문 문안은 중립 추궁("~습니까?") 톤을 유지한다 — 비하·단정 금지 계약. */
+/** 계획을 지켰나 / 갈아엎었나 × 결과로 갈리는 추궁 질문. 성립하지 않으면 null.
+ *  질문 문안은 중립 추궁("~습니까?") 톤을 유지한다 — 비하·단정 금지 계약.
+ *
+ *  ★ 문장에 수치를 넣지 않는 이유(2026-08-01, 사용자 지적): 예전 문안은 「N개 축을 바꾸셨는데」
+ *    였다. '축'은 전술 슬라이더를 부르는 **우리 구현 용어**이고, 기자가 바뀐 항목을 세어 오는
+ *    일도 없다. 화면의 플랜 배지가 사라져도 이 질문이 혼자 성립해야 하므로, 관중이 본 것
+ *    ("전반과 후반의 팀이 달랐다")만으로 문장을 세운다. */
 function planQuestion(planDeviation: number, won: boolean): { text: string; branch: PlanBranch } | null {
   if (planDeviation === 0 && won) {
-    return { branch: 'kept', text: '경기 내내 킥오프 때의 계획을 한 번도 흔들지 않으셨습니다. 무엇을 준비하셨습니까?' }
+    return { branch: 'kept', text: '경기 내내 처음 준비한 대로 밀고 가셨습니다. 한 번쯤 바꿔 볼 생각은 없으셨습니까?' }
   }
   if (planDeviation >= PIVOT_DEVIATION && won) {
-    return { branch: 'pivot-win', text: `전반과 완전히 다른 팀이었습니다. ${planDeviation}개 축을 바꾸셨는데, 원래 계획이 틀렸던 겁니까?` }
+    return { branch: 'pivot-win', text: '전반과 후반이 완전히 다른 팀이었습니다. 경기 중에 손을 많이 대셨는데, 처음 준비가 틀렸던 겁니까?' }
   }
   if (planDeviation >= PIVOT_DEVIATION && !won) {
-    return { branch: 'pivot-loss', text: `${planDeviation}개 축을 도중에 바꾸셨습니다. 계획을 버린 것이 결과로 이어졌다고 보십니까?` }
+    return { branch: 'pivot-loss', text: '경기 도중에 팀을 크게 흔드셨습니다. 준비한 것을 접은 판단이 결과로 이어졌다고 보십니까?' }
   }
   return null
 }
 
 /**
  * 기자 질문 3문항 생성.
- * 1) 플랜 이탈 추궁이 성립하면 최우선(감독의 사전 설계를 경기 후에 회수하는 축이다.
+ * 1) 계획 추궁이 성립하면 최우선(감독의 사전 설계를 경기 후에 회수하는 장치다.
  *    로그 질문이 항상 3개를 채우므로, 뒤에 붙이면 영영 노출되지 않는다)
  * 2) 결정 로그 기반 질문(teamtalk→sub→instructions→shootout-setup 순, summary 활용)
  * 3) 부족분은 결과 기반 질문으로 채움

@@ -30,6 +30,12 @@ const pkLog: DecisionEntry[] = [
   { minute: 90, kind: 'shootout-setup', summary: 'PK: 키커 순서 확정' },
 ]
 
+/** 계획(킥오프 플랜) 추궁 3분기 중 하나인가 — 문안이 바뀌어도 한곳만 고치면 되게 모은다. */
+function isPlanQuestion(q: { text: string }): boolean {
+  return ['처음 준비한 대로 밀고 가셨습니다', '전반과 후반이 완전히 다른 팀이었습니다', '준비한 것을 접은 판단이']
+    .some(s => q.text.includes(s))
+}
+
 // 모든 텍스트를 훑어 금지어가 없는지 확인하는 스모크 헬퍼.
 function assertClean(texts: string[]) {
   for (const t of texts) for (const w of DEROGATORY_WORDS) expect(t).not.toContain(w)
@@ -70,7 +76,7 @@ describe('buildQuestions', () => {
     const rs = buildQuestions(rec('r32', 'ecu', [2, 0], { decisions: subLog }), subLog)
     expect(rs.some(q => q.text.includes('72분에 조규성을 빼고 오현규를 투입하셨습니다'))).toBe(true)
     const ri = buildQuestions(rec('r32', 'ecu', [2, 0], { decisions: instrLog }), instrLog)
-    expect(ri.some(q => q.text.includes('60분에 압박을 55에서 90까지 올리셨습니다'))).toBe(true)
+    expect(ri.some(q => q.text.includes('60분에 압박을 한층 끌어올리셨습니다'))).toBe(true)
   })
 
   // 감사 결함 ⑦의 회귀 방지선: 기자는 우리 내부 로그의 문법으로 말하지 않는다.
@@ -95,42 +101,53 @@ describe('buildQuestions', () => {
     expect(qs.some(q => q.text.includes('알 수 없는 형식'))).toBe(false)
   })
 
-  it('planDeviation 미지정이면 플랜 추궁 질문이 생기지 않는다(기존 호출부 불변)', () => {
+  it('planDeviation 미지정이면 계획 추궁 질문이 생기지 않는다(기존 호출부 불변)', () => {
     const r = rec('group1', 'cze', [2, 1])
     expect(buildQuestions(r, [])).toEqual(buildQuestions(r, [], undefined))
-    expect(buildQuestions(r, []).some(q => q.text.includes('계획'))).toBe(false)
+    expect(buildQuestions(r, []).some(isPlanQuestion)).toBe(false)
   })
 
-  it('이탈 0 + 승리 → 계획 유지 추궁이 1번 질문으로 나온다', () => {
+  it('변경 없음 + 승리 → 계획 유지 추궁이 1번 질문으로 나온다', () => {
     const qs = buildQuestions(rec('group1', 'cze', [2, 1]), [], 0)
-    expect(qs[0].text).toContain('한 번도 흔들지 않으셨습니다')
+    expect(qs[0].text).toContain('처음 준비한 대로 밀고 가셨습니다')
     expect(qs).toHaveLength(3)
   })
 
-  it('이탈 4 이상 + 승리 → 계획이 틀렸던 것인지 추궁하고 축 수를 언급한다', () => {
+  it('크게 바꿈 + 승리 → 처음 준비가 틀렸던 것인지 추궁한다', () => {
     const qs = buildQuestions(rec('r16', 'eng', [3, 1]), [], 5)
-    expect(qs[0].text).toContain('5개 축')
-    expect(qs[0].text).toContain('원래 계획이 틀렸던')
+    expect(qs[0].text).toContain('전반과 후반이 완전히 다른 팀이었습니다')
+    expect(qs[0].text).toContain('처음 준비가 틀렸던')
   })
 
-  it('이탈 4 이상 + 승리 아님(무·패) → 패인 추궁으로 갈린다', () => {
-    for (const r of [rec('group2', 'mex', [1, 1]), rec('r16', 'eng', [0, 2])]) {
-      const qs = buildQuestions(r, [], 4)
-      expect(qs[0].text).toContain('계획을 버린 것이')
+  // 사용자 지적(2026-08-01): 기자는 "N개 축"이라고 말하지 않는다. 바꾼 항목 수는 질문을
+  // **고르는 데만** 쓰고 문장에는 넣지 않는다 — 화면의 배지가 없어도 질문이 혼자 서야 한다.
+  it('계획 추궁 문장에 변경 항목 수가 새어 나오지 않는다', () => {
+    for (const dev of [0, 4, 5, 6, 9]) {
+      for (const r of [rec('group1', 'cze', [2, 1]), rec('r16', 'eng', [0, 2])]) {
+        const q = buildQuestions(r, [], dev)[0]
+        expect(q.text).not.toMatch(/개 축|\d+\s*개|축을/)
+      }
     }
   })
 
-  it('이탈이 있지만 임계 미만이면 추궁 질문이 없다(미세 조정 면제)', () => {
+  it('크게 바꿈 + 승리 아님(무·패) → 패인 추궁으로 갈린다', () => {
+    for (const r of [rec('group2', 'mex', [1, 1]), rec('r16', 'eng', [0, 2])]) {
+      const qs = buildQuestions(r, [], 4)
+      expect(qs[0].text).toContain('준비한 것을 접은 판단이')
+    }
+  })
+
+  it('변경이 있지만 임계 미만이면 추궁 질문이 없다(미세 조정 면제)', () => {
     const qs = buildQuestions(rec('group1', 'cze', [2, 1]), [], 2)
-    expect(qs.some(q => q.text.includes('계획'))).toBe(false)
+    expect(qs.some(isPlanQuestion)).toBe(false)
   })
 
-  it('이탈 0이어도 패하면 유지 추궁을 하지 않는다', () => {
+  it('변경이 없어도 패하면 유지 추궁을 하지 않는다', () => {
     const qs = buildQuestions(rec('r16', 'eng', [0, 2]), [], 0)
-    expect(qs.some(q => q.text.includes('흔들지 않으셨습니다'))).toBe(false)
+    expect(qs.some(q => q.text.includes('밀고 가셨습니다'))).toBe(false)
   })
 
-  it('플랜 추궁도 실제 한국어 답변 3개를 가진다(자리표시자 금지)', () => {
+  it('계획 추궁도 실제 한국어 답변 3개를 가진다(자리표시자 금지)', () => {
     for (const dev of [0, 4, 6]) {
       for (const r of [rec('group1', 'cze', [2, 1]), rec('r16', 'eng', [0, 2])]) {
         const q = buildQuestions(r, [], dev)[0]
@@ -149,7 +166,7 @@ describe('buildQuestions', () => {
     expect(buildQuestions(r, r.decisions, 5)).toEqual(buildQuestions(r, r.decisions, 5))
   })
 
-  it('플랜 추궁이 들어가도 로그 질문이 1개는 남는다(3문항 예산)', () => {
+  it('계획 추궁이 들어가도 로그 질문이 1개는 남는다(3문항 예산)', () => {
     const log = [...teamTalkLog, ...subLog, ...instrLog]
     const qs = buildQuestions(rec('r16', 'eng', [4, 0], { decisions: log }), log, 5)
     expect(qs).toHaveLength(3)
@@ -309,30 +326,121 @@ describe('buildEpilogue', () => {
   })
 })
 
-describe('지시 변경 질문의 한국어', () => {
-  it('축이 여러 개면 "…고, …셨습니다"로 이어진다', () => {
+describe('전술 변경 질문의 한국어 — 작전판 용어를 기자의 말로', () => {
+  // 사용자 지적(2026-08-01): 기자는 "축"도 "멘탈리티"도 말하지 않고, 0~100 슬라이더 값을
+  // 읽어 오지도 않는다. 아래는 matchStore.tacticsDiff가 실제로 남기는 조각 전종이다.
+  function askAbout(...changed: string[]): string[] {
     const log: DecisionEntry[] = [{
-      minute: 47, kind: 'instructions', summary: "47' 지시 변경: 압박 62→47, 템포 50→70",
-      detail: { changed: ['압박 62→47', '템포 50→70'] },
+      minute: 47, kind: 'instructions', summary: `47' 지시 변경: ${changed.join(', ')}`, detail: { changed },
     }]
-    const qs = buildQuestions(rec('qf', 'fra', [1, 0], { decisions: log }), log)
-    expect(qs.some(q => q.text.includes('47분에 압박을 62에서 47까지 내리고, 템포를 50에서 70까지 올리셨습니다'))).toBe(true)
+    return buildQuestions(rec('qf', 'fra', [1, 0], { decisions: log }), log).map(q => q.text)
+  }
+
+  const CASES: [string, string][] = [
+    ['라인 40→70', '47분에 수비 라인을 끌어올리셨습니다.'],
+    ['라인 70→40', '47분에 수비 라인을 끌어내리셨습니다.'],
+    ['압박 55→90', '47분에 압박을 한층 끌어올리셨습니다.'],
+    ['압박 62→47', '47분에 압박을 늦추셨습니다.'],
+    ['템포 50→70', '47분에 경기 템포를 끌어올리셨습니다.'],
+    ['템포 70→50', '47분에 템포를 늦추셨습니다.'],
+    ['공격 균형→좌', '47분에 공격을 왼쪽으로 몰아가셨습니다.'],
+    ['공격 좌→우', '47분에 공격을 오른쪽으로 몰아가셨습니다.'],
+    ['공격 우→중앙', '47분에 공격을 가운데로 모으셨습니다.'],
+    ['공격 중앙→균형', '47분에 공격을 양쪽으로 고르게 펴셨습니다.'],
+    ['포메이션 4-2-3-1→4-4-2', '47분에 진형을 4-2-3-1에서 4-4-2로 바꾸셨습니다.'],
+    ['멘탈리티 균형→공격적', '47분에 팀을 더 공격적으로 돌리셨습니다.'],
+    ['멘탈리티 공격적→매우 수비적', '47분에 팀을 더 단단하게 잠그셨습니다.'],
+    ['공격 적극성 기본→적극', '47분에 최전방에 더 적극적으로 나서라고 주문하셨습니다.'],
+    ['미드필드 적극성 기본→자제', '47분에 중원에 힘을 아끼라고 주문하셨습니다.'],
+    ['수비 적극성 자제→기본', '47분에 수비진에 더 적극적으로 나서라고 주문하셨습니다.'],
+    ['공격 패턴 균형→크로스', '47분에 공격을 측면 크로스 위주로 돌리셨습니다.'],
+    ['공격 패턴 크로스→중앙 침투', '47분에 공격을 중앙 침투 쪽으로 돌리셨습니다.'],
+    ['공격 패턴 중앙 침투→중거리', '47분에 공격을 중거리 슛 위주로 돌리셨습니다.'],
+    ['공격 패턴 중거리→균형', '47분에 공격 방식을 다시 고르게 가져가셨습니다.'],
+    ['GK 파워플레이 ON', '47분에 골키퍼까지 상대 진영으로 올려보내셨습니다.'],
+    ['GK 파워플레이 OFF', '47분에 골키퍼를 다시 골문으로 돌려보내셨습니다.'],
+    ['코너 루트 파→니어', '47분에 코너킥을 니어포스트로 올리셨습니다.'],
+    ['코너 루트 니어→짧게', '47분에 코너킥을 짧게 가져가셨습니다.'],
+    ['코너 루트 짧게→파', '47분에 코너킥을 먼 쪽으로 올리셨습니다.'],
+    ['박스 인원 표준→많이', '47분에 코너에서 문전에 사람을 더 채우셨습니다.'],
+    ['박스 인원 많이→적게', '47분에 코너에서 문전 인원을 줄이셨습니다.'],
+    ['박스 인원 적게→표준', '47분에 코너에서 문전 인원을 원래대로 되돌리셨습니다.'],
+    ['수비 마킹 존→맨투맨', '47분에 수비를 대인 방어로 돌리셨습니다.'],
+    ['수비 마킹 맨투맨→존', '47분에 수비를 지역 방어로 돌리셨습니다.'],
+  ]
+  it.each(CASES)('%s → %s', (piece, sentence) => {
+    expect(askAbout(piece).some(t => t.includes(sentence))).toBe(true)
   })
-  it('공격방향처럼 수치가 아닌 축은 "…으로 바꾸셨습니다"', () => {
-    const log: DecisionEntry[] = [{
-      minute: 30, kind: 'instructions', summary: "30' 지시 변경: 공격방향 균형→좌측",
-      detail: { changed: ['공격방향 균형→좌측'] },
-    }]
-    const qs = buildQuestions(rec('qf', 'fra', [1, 0], { decisions: log }), log)
-    expect(qs.some(q => q.text.includes('30분에 공격방향을 균형에서 좌측으로 바꾸셨습니다'))).toBe(true)
+
+  it('여러 가지를 한꺼번에 바꾸면 "…고, …셨습니다"로 이어진다', () => {
+    const texts = askAbout('압박 55→90', '템포 70→50', '멘탈리티 균형→공격적')
+    expect(texts.some(t => t.includes(
+      '47분에 압박을 한층 끌어올리고, 템포를 늦추고, 팀을 더 공격적으로 돌리셨습니다.',
+    ))).toBe(true)
   })
-  it('포메이션 변경은 진형 문장으로 나간다', () => {
+
+  it('두 낱말짜리 축 이름을 잘라 먹지 않는다(옛 파서 회귀)', () => {
+    // 예전 정규식은 "공격 적극성 기본→적극"을 「공격을 적극성 기본에서…」로 망가뜨렸다.
+    for (const p of ['공격 적극성 기본→적극', '공격 패턴 균형→크로스', '박스 인원 표준→많이', '코너 루트 파→니어']) {
+      for (const t of askAbout(p)) expect(t).not.toMatch(/적극성 |패턴 |인원 표준|루트 니어/)
+    }
+  })
+
+  it('모르는 축은 질문을 만들지 않는다(원문 노출 금지)', () => {
+    const texts = askAbout('새로운축 가→나')
+    expect(texts.some(t => t.includes('새로운축') || t.includes('→'))).toBe(false)
+    expect(texts).toHaveLength(3)
+  })
+
+  it('슬라이더 수치가 문장에 새어 나오지 않는다', () => {
+    for (const [piece] of CASES) {
+      for (const t of askAbout(piece)) {
+        // 허용되는 숫자는 분("47분")과 진형 표기("4-2-3-1")뿐이다.
+        const rest = t.replace(/\d+분/g, '').replace(/\d(?:-\d)+/g, '')
+        expect(rest).not.toMatch(/\d/)
+      }
+    }
+  })
+
+  it('포메이션 변경은 구조화 detail로도 진형 문장이 된다', () => {
     const log: DecisionEntry[] = [{
       minute: 60, kind: 'instructions', summary: "60' 포메이션: 4-2-3-1→4-4-2",
       detail: { before: '4-2-3-1', after: '4-4-2' },
     }]
     const qs = buildQuestions(rec('qf', 'fra', [1, 0], { decisions: log }), log)
     expect(qs.some(q => q.text.includes('60분에 진형을 4-2-3-1에서 4-4-2로 바꾸셨습니다'))).toBe(true)
+  })
+})
+
+// 기자회견 문안은 화면에 뜨는 동시에 낭독될 수 있는 문자열이다(§5.2 speech 규약).
+// 라틴 문자는 ko-KR 보이스가 철자로 읽고, 슬라이더 수치는 애초에 사람이 하는 말이 아니다.
+describe('기자회견 문안의 발화 안전성', () => {
+  it('질문·답변 전 분기에 라틴 문자와 내부 기호가 없다', () => {
+    const logs: DecisionEntry[] = [
+      { minute: 45, kind: 'teamtalk', summary: 'HT 팀토크: 격노', detail: { tone: 'rage' } },
+      { minute: 58, kind: 'teamtalk', summary: "58' 외침: 독려", detail: { shout: 'urge' } },
+      { minute: 72, kind: 'sub', summary: "72' 교체: 오현규 IN, 조규성 OUT" },
+      { minute: 47, kind: 'instructions', summary: "47' 지시 변경: 압박 55→90, 멘탈리티 균형→공격적",
+        detail: { changed: ['압박 55→90', '멘탈리티 균형→공격적'] } },
+      { minute: 80, kind: 'instructions', summary: "80' 지시 변경: GK 파워플레이 ON",
+        detail: { changed: ['GK 파워플레이 ON'] } },
+      { minute: 90, kind: 'shootout-setup', summary: 'PK: 키커 순서 확정' },
+    ]
+    const records: MatchRecord[] = [
+      rec('group1', 'cze', [4, 0]), rec('group2', 'mex', [1, 1]), rec('group3', 'rsa', [0, 0]),
+      rec('r16', 'eng', [0, 2]), rec('qf', 'fra', [2, 1]),
+      rec('final', 'esp', [1, 1], { shootout: [4, 3] }),
+    ]
+    for (const r of records) for (const dev of [undefined, 0, 2, 4, 9]) {
+      for (const one of logs) for (const q of buildQuestions(r, [one], dev)) {
+        for (const text of [q.text, ...q.options]) {
+          expect(text).not.toMatch(/[A-Za-z]/)
+          expect(text).not.toMatch(/[→…]|\.\.\./)
+          // 숫자는 분·진형에서만 허용한다(그 밖의 숫자는 내부 수치가 샌 것이다).
+          expect(text.replace(/\d+분/g, '').replace(/\d(?:-\d)+/g, '')).not.toMatch(/\d/)
+        }
+      }
+    }
   })
 })
 
