@@ -29,7 +29,13 @@
   flex: none;
   font-size: 15px;
   line-height: 1;
-  color: var(--brand, #3b82f6);
+  /* --brand 원색은 3D 위 실측 4.28:1(기준 4.5)로 미달했다(2026-08-01 중앙 정렬 후 재측정).
+     알약 배경을 불투명하게 만드는 대신 글자를 올려 해결한다 — 반투명 알약이 경기장 위에
+     얹힌 것으로 읽히는 편이 낫고, 스크림을 키우면 3D를 다시 덮는다.
+     hex로 적는 이유: color-mix()의 계산값은 Chrome에서 `color(srgb 0.54 0.71 1)` 꼴이라
+     실측 스크립트(landing-contrast.mjs)의 rgb 파서가 0.54를 0.54/255로 읽어 새까만
+     색으로 오판한다. 측정 가능한 형태로 적는 것도 이 화면의 계약이다. */
+  color: #8ab4ff;
 }
 .landing__sound-text { display: block; font-weight: 700; }
 /* 정책 설명은 각주 톤 — 읽히되 CTA를 이기지 않는다. */

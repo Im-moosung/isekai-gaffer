@@ -4,17 +4,29 @@
    [2026-07-30 재설계 · 감사 L-2/L-4·M-10]
    이전: 화면 정중앙에 620px 글래스모피즘 카드(radius 18 + blur 10px)가 떠 있었다.
    그건 2020년식 SaaS 랜딩 문법이고, 방송 타이틀 시퀀스는 카드를 쓰지 않는다 —
-   텍스트를 프레임에 직접 얹고 스크림으로만 대비를 만든다. 카드를 없애고
-   문안 블록을 좌하단에 앉혔다(경기장 소실점이 화면 중앙이라 중앙 정렬 텍스트는
-   3D를 정면으로 가린다).
+   텍스트를 프레임에 직접 얹고 스크림으로만 대비를 만든다. 카드를 없앴다.
+
+   [2026-08-01 정정 · 타이틀 리디자인]
+   위 재설계는 문안 블록을 **좌하단**에 앉혔고, 그 근거를 "경기장 소실점이 화면
+   중앙이라 중앙 정렬 텍스트는 3D를 정면으로 가린다"고 적었다. 그 문장은 이제
+   사실이 아니다 — 사용자가 타이틀 시안(docs/refs/title/game-intro-title-v2.png)을
+   직접 만들어 중앙 정렬을 요구했고, 시안은 그 문제를 이렇게 푼다:
+     · 카메라를 **골대 뒤 정면 대칭**으로 세워 소실점을 화면 정중앙에 박아 두고,
+     · 타이틀을 소실점 **위쪽 어두운 띠**(원경 스탠드~밤하늘)에 올린다.
+   즉 소실점을 피해 도망가는 대신 그 위 빈 공간을 쓴다. 그래서 이번 변경은 CSS만이
+   아니라 카메라(camera.ts: 호 중심 189.1°→180°, 시선 높이 16→22m)까지 함께 갔다.
+   좌하단 배치의 흔적(align-content:end, align-items:flex-start)은 전부 걷어냈다.
    ========================================================================== */
 
 .landing {
   position: relative;
   display: grid;
-  align-content: end;
+  /* 중앙 정렬 — 시안의 핵심 구조. 세로는 살짝 위(place-content: center 뒤 translate가
+     아니라 padding 비대칭으로 만든다. transform은 3D 캔버스와 합성 레이어를 만든다). */
+  place-content: center;
+  justify-items: center;
   min-height: 100dvh;
-  padding: var(--sp-7) var(--sp-6);
+  padding: var(--sp-7) var(--sp-6) calc(var(--sp-8) * 2.2);
   overflow: hidden; /* 3D 캔버스가 어떤 상황에서도 가로 스크롤을 만들지 않게 */
   /* 배경(.landing__bg)이 실패하거나 로드 전이어도 이 그라디언트가 화면을 채운다. */
   background: radial-gradient(
@@ -66,20 +78,28 @@
   z-index: var(--z-base);
   pointer-events: none;
   background:
-    /* ① 문안 블록을 감싸는 타원. 좌하단에 앵커를 두고 텍스트 폭만큼만 덮는다. */
+    /* ① 문안 블록을 감싸는 타원. [2026-08-01] 앵커를 좌하단(19% 72%)에서 화면 중앙
+       (50% 47%)으로 옮겼다 — 문안이 중앙으로 갔으니 스크림도 따라간다. 폭을 넓힌 것은
+       중앙 정렬 제목이 좌하단 블록보다 가로로 길기 때문이고, 세로는 오히려 좁혀
+       하늘·조명탑(위)과 근경 잔디(아래)를 열어 둔다. */
     radial-gradient(
-      58% 62% at 19% 72%,
+      66% 56% at 50% 47%,
       var(--s-scrim) 0%,
-      color-mix(in srgb, var(--s-scrim) 78%, transparent) 44%,
-      color-mix(in srgb, var(--s-scrim) 34%, transparent) 68%,
-      transparent 86%
+      color-mix(in srgb, var(--s-scrim) 88%, transparent) 46%,
+      color-mix(in srgb, var(--s-scrim) 36%, transparent) 70%,
+      transparent 88%
     ),
-    /* ② 바닥 비네트 — 하단 각주·고지 두 줄이 잔디 밝은 부분에 걸리는 것만 막는다. */
+    /* ② 바닥 비네트. [2026-08-01] 시작점을 58%→44%로 올리고 기울기를 세웠다.
+       이유는 "화면을 어둡게 하기"가 아니라 **정면 대칭 구도에서 잔디가 화면 하단 절반을
+       통째로 차지하게 됐기 때문**이다 — 예전 3/4 구도에서는 좌하단 문안 자리에 어두운
+       근경 스탠드가 있었지만, 지금 그 자리는 조명 받은 잔디다. CTA·소리 안내·각주가
+       전부 이 위에 얹히므로 잔디 쪽만 눌러 준다. 하늘·조명탑·원경 스탠드는 그대로 열려 있다. */
     linear-gradient(
       180deg,
-      transparent 58%,
-      color-mix(in srgb, var(--s-scrim) 55%, transparent) 88%,
-      color-mix(in srgb, var(--s-scrim) 78%, transparent) 100%
+      transparent 44%,
+      color-mix(in srgb, var(--s-scrim) 46%, transparent) 66%,
+      color-mix(in srgb, var(--s-scrim) 72%, transparent) 84%,
+      color-mix(in srgb, var(--s-scrim) 88%, transparent) 100%
     );
 }
 
@@ -97,16 +117,29 @@
   text-shadow: none;
 }
 
-/* 문안 블록 — 3456px에서도 카드처럼 좁아지지 않게 뷰포트 폭을 따라 자란다(L-4). */
+/* 문안 블록 — 내용 폭만큼만 차지하고 화면 중앙에 선다. 폭을 고정하지 않는 이유:
+   가로 기준을 잡는 것은 제목 둘째 줄이고(가장 긴 줄), 나머지는 그에 맞춰 중앙에 걸린다. */
 .landing__content {
-  position: relative;
+  /* position을 주지 않는다 — 그리드 아이템은 position 없이도 z-index가 듣고,
+     .landing__legal이 이 블록이 아니라 **화면 바닥**을 기준으로 앉아야 하기 때문이다
+     (positioned 조상이 되면 락업 높이만큼 위로 딸려 올라간다). */
   z-index: var(--z-furniture);
-  width: clamp(360px, 52vw, 760px);
   max-width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: var(--sp-4);
+  align-items: center;
+  text-align: center;
+  gap: var(--sp-5);
+}
+
+/* 타이틀 락업 — 키커·제목·밑줄 바가 한 덩어리. 폭은 제목 둘째 줄이 정한다
+   (그래서 밑줄 바의 width:100%가 곧 "둘째 줄과 같은 폭"이 된다). */
+.landing__lockup {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  max-width: 100%;
 }
 
 /* 키커는 문안 블록의 최상단이라 스크림 타원의 가장자리에 걸린다. --t-mid로는
@@ -117,9 +150,17 @@
   color: var(--t-hi);
 }
 
+/* 제목 — 두 줄의 크기 차이가 이 화면의 농담(弄談)을 만든다. 1행은 전제, 2행은 반전이다.
+   --fs-display(최대 56px)로는 중앙에 놓았을 때 화면을 못 이겨서, 이 화면에만 쓰는
+   두 단계를 따로 잡는다(토큰을 바꾸면 경기 화면 스코어까지 커진다).
+   둘째 줄 "이세계에선 국대 감독?"의 실측 폭은 8.4em이다. 여기서 두 상수가 나온다:
+   · 5.6vw / 상한 96px — 1600px에서 제목 폭 753px(화면의 47%). 시안이 49%다.
+   · 하한 30px — 320px 화면에서도 8.4em = 252px < 288px(패딩 제외)라 한 줄이 깨지지 않는다.
+   토큰(--fs-display, 상한 56px)을 쓰지 않는 이유: 중앙에 놓으면 화면을 못 이기고,
+   토큰을 키우면 경기 화면 스코어까지 따라 커진다. */
 .landing__title {
   margin: 0;
-  font-size: var(--fs-display);
+  font-size: clamp(30px, 5.6vw, 96px);
   font-weight: 800;
   line-height: var(--lh-tight);
   letter-spacing: var(--ls-display);
@@ -128,6 +169,43 @@
 /* 절 단위 줄바꿈 고정 — 폭이 아무리 넓어도 두 줄을 유지한다. */
 .landing__title-line {
   display: block;
+}
+/* 1행은 2행의 0.44배 — em이라 어떤 뷰포트에서도 비율이 유지된다. */
+.landing__title-line--sub {
+  font-size: 0.44em;
+  font-weight: 700;
+  letter-spacing: 0;
+  margin-bottom: 0.12em;
+}
+.landing__title-line--main {
+  /* 큰 글자일수록 글자 사이가 벌어져 보인다 — 디스플레이 자간을 한 단계 더 조인다. */
+  letter-spacing: -0.03em;
+}
+
+/* 밑줄 바 — 제목 둘째 줄과 같은 폭. 시안의 파란 바 + 양 끝 노란 사선을 CSS 도형으로
+   그린다(이모지 금지 규칙: OS마다 모양이 달라 톤이 무너진다). */
+.landing__rule {
+  position: relative;
+  width: 100%;
+  height: 5px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--brand) 0%, #a9c9ff 52%, var(--brand) 100%);
+}
+.landing__rule::before,
+.landing__rule::after {
+  content: '';
+  position: absolute;
+  top: -9px;
+  width: 10px;
+  height: 23px;
+  background: var(--warn);
+  transform: skewX(-20deg);
+}
+.landing__rule::before {
+  left: -17px;
+}
+.landing__rule::after {
+  right: -17px;
 }
 
 .landing__lede {
@@ -143,12 +221,28 @@
 .landing__actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: var(--sp-3);
   margin-top: var(--sp-2);
 }
 
+/* 각주·고지 — 화면 맨 아래 중앙(바닥 비네트 위). 문안 블록의 DOM 자식이지만
+   레이아웃에서는 빠져 있어야 중앙 락업의 세로 중심이 흔들리지 않는다. */
+.landing__legal {
+  position: absolute;
+  left: 50%;
+  bottom: var(--sp-6);
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100vw - var(--sp-6) * 2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
 .landing__foot {
-  margin: var(--sp-3) 0 0;
+  margin: 0;
   font-size: var(--fs-sm);
   line-height: var(--lh-md);
   color: var(--t-mid);
@@ -165,10 +259,31 @@
 /* 모바일 — 3D는 로드하지 않는다(LandingScreen 참고). 좌우 여백만 줄인다. */
 @media (max-width: 719px) {
   .landing {
-    padding: var(--sp-6) var(--sp-4);
+    padding: var(--sp-6) var(--sp-4) calc(var(--sp-8) * 1.6);
   }
   .landing__content {
     width: 100%;
+  }
+  /* 세로 화면에서는 제목이 화면 폭을 거의 다 써야 한다 — 데스크톱 식(5.6vw)을 그대로
+     쓰면 390px에서 22px가 되어 리드 문장(16px)에 눌린다. 10.2vw는 320px에서도
+     8.4em = 274px로 좌우 패딩(32px)을 남기고, 상한 44px는 719px 경계에서 데스크톱
+     식(40px)과 이어져 창을 줄여도 크기가 튀지 않는다. */
+  .landing__title {
+    font-size: min(10.2vw, 44px);
+  }
+  /* 사선 액센트도 함께 줄인다 — 320px에서 바 양 끝이 화면 밖으로 나가면
+     .landing의 overflow:hidden이 잘라 반쪽짜리 도형이 남는다. */
+  .landing__rule::before,
+  .landing__rule::after {
+    top: -7px;
+    width: 8px;
+    height: 19px;
+  }
+  .landing__rule::before {
+    left: -12px;
+  }
+  .landing__rule::after {
+    right: -12px;
   }
   /* 390px에서 두 CTA가 각각 한 줄을 차지해야 오조작이 없다. */
   .landing__actions {

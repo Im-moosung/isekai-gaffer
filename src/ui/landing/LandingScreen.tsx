@@ -3,7 +3,15 @@
 //
 // [2026-07-30 재설계 · L-2/L-4] 유리 카드를 없애고 문안을 3D 위에 직접 얹는다.
 // 방송 타이틀 시퀀스의 문법이고, 카드가 없어야 3D가 화면을 온전히 쓴다.
-// 대비는 좌→우 선형 스크림(.landing__scrim)이 전담한다.
+//
+// [2026-08-01 타이틀 리디자인] 문안을 좌하단에서 **화면 중앙**으로 옮겼다(사용자 시안
+// docs/refs/title/game-intro-title-v2.png). 마크업에서 달라진 것은 세 가지다:
+//  · 제목이 락업(.landing__lockup)으로 묶인다 — 키커·2단 제목·밑줄 바가 한 덩어리.
+//  · 1행/2행의 크기 위계가 생겼다(--sub 0.44em / --main). 전제는 작게, 반전은 크게.
+//  · 각주·고지는 .landing__legal로 묶여 화면 바닥에 붙는다. **DOM상 .landing__content
+//    안에 남겨 두는 것이 계약이다** — landing-contrast.mjs가 배경만 캡처할 때
+//    .landing__content를 숨기므로, 밖으로 빼면 그 두 줄이 배경에 찍혀 측정이 오염된다.
+// 대비는 중앙 타원 + 바닥 비네트 스크림(.landing__scrim)이 전담한다.
 //
 // 순서 계약(심사자가 1분 안에 판단한다):
 //  1. **문안·버튼이 먼저 뜬다.** 3D는 lazy 청크라 로드에 수백 ms가 걸리므로,
@@ -121,13 +129,19 @@ export function LandingScreen({ onCampaign, onDemo }: {
       <div className="landing__scrim" aria-hidden="true" />
 
       <div className="landing__content">
-        <p className="eyebrow landing__eyebrow">대체역사 축구 감독 시뮬레이션</p>
-        {/* 제목은 두 절을 각각 한 줄로 고정한다. 뷰포트에 따라 "내가," 뒤에서
-            끊기거나 "국대 / 감독?"으로 갈라지면 밈 문장의 리듬이 죽는다. */}
-        <h1 className="landing__title">
-          <span className="landing__title-line">현실에서 축덕인 내가,</span>
-          <span className="landing__title-line">이세계에선 국대 감독?</span>
-        </h1>
+        {/* 타이틀 락업 — 제목·밑줄 바가 한 덩어리로 움직인다(바 폭 = 둘째 줄 폭). */}
+        <div className="landing__lockup">
+          <p className="eyebrow landing__eyebrow">대체역사 축구 감독 시뮬레이션</p>
+          {/* 제목은 두 절을 각각 한 줄로 고정한다. 뷰포트에 따라 "내가," 뒤에서
+              끊기거나 "국대 / 감독?"으로 갈라지면 밈 문장의 리듬이 죽는다.
+              1행은 전제(작게), 2행은 반전(크게) — 참고 이미지의 위계 그대로다. */}
+          <h1 className="landing__title">
+            <span className="landing__title-line landing__title-line--sub">현실에서 축덕인 내가,</span>
+            <span className="landing__title-line landing__title-line--main">이세계에선 국대 감독?</span>
+          </h1>
+          {/* 밑줄 바 + 양 끝 사선 액센트. 이모지가 아니라 CSS 도형이다(OS별 모양 차이 없음). */}
+          <div className="landing__rule" aria-hidden="true" />
+        </div>
         <p className="landing__lede">
           {/* 좁은 화면에서 "1 / 승 2패"처럼 숫자와 단위가 갈라지지 않게 묶는다. */}
           2026년 6월, 대한민국은 <span className="landing__nowrap">1승 2패</span>로 조별리그를 마쳤다.
@@ -162,10 +176,15 @@ export function LandingScreen({ onCampaign, onDemo }: {
             <span className="landing__sound-text">테마가 재생됩니다</span>
           </p>
         )}
-        <p className="landing__foot">실제 대회 데이터 기반 · 12개국 312명 · 시드 재현 시뮬레이션</p>
-        {/* 픽션 고지 — 기획서에 "서비스 내 명시"로 약속한 항목이다.
-            실존 대회·선수를 다루는 이상 화면에 남아 있어야 한다(각주 톤, 삭제 금지). */}
-        <p className="landing__disclaimer">※ 실제 2026 월드컵을 모티브로 한 대체역사 픽션입니다</p>
+        {/* 각주·고지는 화면 맨 아래 중앙에 붙인다(방송 자막 관례). DOM상 .landing__content의
+            자식으로 남겨 두는 것이 중요하다 — landing-contrast.mjs가 배경만 캡처할 때
+            .landing__content를 숨기므로, 여기서 빠지면 이 두 줄이 배경에 찍혀 측정이 오염된다. */}
+        <div className="landing__legal">
+          <p className="landing__foot">실제 대회 데이터 기반 · 12개국 312명 · 시드 재현 시뮬레이션</p>
+          {/* 픽션 고지 — 기획서에 "서비스 내 명시"로 약속한 항목이다.
+              실존 대회·선수를 다루는 이상 화면에 남아 있어야 한다(각주 톤, 삭제 금지). */}
+          <p className="landing__disclaimer">※ 실제 2026 월드컵을 모티브로 한 대체역사 픽션입니다</p>
+        </div>
       </div>
     </main>
   )

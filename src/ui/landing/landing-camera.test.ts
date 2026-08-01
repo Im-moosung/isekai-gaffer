@@ -123,6 +123,23 @@ describe('랜딩 배경 카메라 궤적', () => {
     expect(azimuth(p)).toBeCloseTo(LANDING_CAMERA.arcCenter, 6)
   })
 
+  /**
+   * [2026-08-01 타이틀 리디자인] 랜딩 타이틀이 화면 **중앙 정렬**로 바뀌면서 구도가
+   * 계약이 됐다: 소실점과 제목 축이 같은 세로선 위에 있어야 한다. 그래서
+   *  ① 호의 중심은 정확히 180°(골대 뒤 정면),
+   *  ② 왕복 진폭은 ±5° 이내여야 한다.
+   * 예전 값(189.1° ± 9.2°)으로 되돌리면 제목만 가운데 있고 경기장은 기울어진
+   * "기울어진 사진"이 된다 — 눈으로만 잡히는 결함이라 수치로 못을 박는다.
+   */
+  it('정면 대칭 — 호의 중심은 골대 뒤 180°, 진폭은 ±5° 이내', () => {
+    expect(LANDING_CAMERA.arcCenter).toBeCloseTo(Math.PI, 10)
+    expect(LANDING_CAMERA.arcAmp).toBeLessThanOrEqual(0.088) // 5.04°
+    // t=0(정지 컷·reduced-motion이 그리는 유일한 프레임)은 중심선 위에 정확히 선다.
+    const p = landingCameraAt(0)
+    expect(Math.abs(p.z)).toBeLessThan(1e-9)
+    expect(p.x).toBeLessThan(0) // 골대 뒤(−x)에서 피치를 바라본다
+  })
+
   it('결정론 — 같은 t는 항상 같은 좌표', () => {
     for (const t of [0, 7.5, 63.25, 512]) {
       expect(landingCameraAt(t)).toEqual(landingCameraAt(t))
