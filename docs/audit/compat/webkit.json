@@ -1,0 +1,316 @@
+{
+  "engine": "webkit",
+  "base": "http://localhost:5199",
+  "viewport": [
+    1440,
+    900
+  ],
+  "steps": [
+    {
+      "name": "랜딩 로드",
+      "ok": true,
+      "detail": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) V"
+    },
+    {
+      "name": "color-mix 지원",
+      "ok": true
+    },
+    {
+      "name": "WebGL 사용 가능",
+      "ok": true,
+      "detail": "Apple GPU"
+    },
+    {
+      "name": "한국어 TTS 음성 존재",
+      "ok": true,
+      "detail": "68개 중 ko 1개"
+    },
+    {
+      "name": "랜딩 프레임 진행",
+      "ok": true,
+      "detail": "{\"ok\":true,\"pixelDiff\":true,\"rafPer500ms\":51}"
+    },
+    {
+      "name": "랜딩 콘텐츠 렌더",
+      "ok": true,
+      "detail": "{\"chars\":234,\"canvases\":1,\"bg\":\"rgb(7, 12, 21)\"}"
+    },
+    {
+      "name": "랜딩 → 캠페인",
+      "ok": true
+    },
+    {
+      "name": "허브 → 경기 준비(전술 센터)",
+      "ok": true
+    },
+    {
+      "name": "전술 센터 렌더",
+      "ok": true,
+      "detail": "{\"chars\":874,\"lineup\":true,\"tactics\":true}"
+    },
+    {
+      "name": "전술 센터 → 킥오프",
+      "ok": true
+    },
+    {
+      "name": "AudioContext 생성",
+      "ok": true,
+      "detail": "{\"supported\":true,\"state\":\"suspended\"}"
+    },
+    {
+      "name": "입장 연출 프레임 진행",
+      "ok": true,
+      "detail": "{\"ok\":true,\"pixelDiff\":true,\"rafPer500ms\":50}"
+    },
+    {
+      "name": "입장 건너뛰기",
+      "ok": true
+    },
+    {
+      "name": "경기 캔버스 존재",
+      "ok": true,
+      "detail": "{\"canvases\":[{\"cls\":\"m3d-canvas\",\"w\":1440,\"h\":900,\"gl\":true}],\"svg\":1,\"has3d\":true}"
+    },
+    {
+      "name": "경기 프레임 진행",
+      "ok": true,
+      "detail": "{\"ok\":true,\"pixelDiff\":true,\"rafPer500ms\":52}"
+    },
+    {
+      "name": "배속 2x",
+      "ok": true,
+      "detail": "2x"
+    },
+    {
+      "name": "전반 진행 → 하프타임 도달",
+      "ok": true,
+      "detail": "{\"phase\":\"halftime\",\"reason\":{\"kind\":\"halftime\"}}"
+    },
+    {
+      "name": "하프타임 작전판 조작",
+      "ok": true,
+      "detail": "감독타임 false 교체탭 true"
+    },
+    {
+      "name": "후반 진행 → 풀타임 도달",
+      "ok": true,
+      "detail": "{\"phase\":\"fulltime\",\"reason\":null}"
+    },
+    {
+      "name": "기자회견 화면",
+      "ok": false,
+      "detail": "FIFA 월드컵 2026 · 경기 종료 KOR 3 : 2 CZE KOR CZE 55% 점유율 45% 14 슛 15 8 유효슛 8 1.77 xG 1.27 13 파울 13 4 코너 5 결과 확정"
+    },
+    {
+      "name": "신문 1면 도달",
+      "ok": true,
+      "detail": "일간 축구 2026년 여름 스포츠 · 1면 진땀승... 대한민국, 체코 상대 리드 지켜내다  조별리그 1차전 · 대한민국 3-2 체코  \"다음 상대도 우리를 경계해야 할 겁니다.\" — 대한민국 감독 대한민국 3 - "
+    }
+  ],
+  "errors": [],
+  "failedReq": [
+    "Could not connect to the server. http://localhost:5199/bgm/M09.mp3",
+    "Could not connect to the server. http://localhost:5199/bgm/M08.mp3",
+    "Could not connect to the server. http://localhost:5199/api/narrate"
+  ],
+  "probe": {
+    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.5 Safari/605.1.15",
+    "css": {
+      "color-mix": true,
+      ":has()": true,
+      "@container": true,
+      "backdrop-filter": true,
+      "oklch": true,
+      "aspect-ratio": true,
+      "text-wrap-balance": true,
+      "dvh": true,
+      "nesting": false
+    },
+    "js": {
+      "structuredClone": true,
+      "crypto.getRandomValues": true,
+      "crypto.randomUUID": true,
+      "Array.at": true,
+      "Object.hasOwn": true,
+      "Array.toSorted": true,
+      "Promise.withResolvers": true,
+      "RegExp.v": true,
+      "ResizeObserver": true,
+      "OffscreenCanvas": true,
+      "speechSynthesis": true
+    },
+    "webgl": {
+      "webgl": true,
+      "webgl2": true,
+      "renderer": "Apple GPU"
+    },
+    "audio": {
+      "AudioContext": true,
+      "prefixed": false
+    },
+    "voicesRaw": [
+      "ko-KR|Yuna",
+      "it-IT|Alice",
+      "sv-SE|Alva",
+      "fr-CA|Amélie",
+      "ms-MY|Amira",
+      "de-DE|Anna",
+      "he-IL|Carmit",
+      "id-ID|Damayanti",
+      "en-GB|Daniel",
+      "bg-BG|Daria",
+      "nl-BE|Ellen",
+      "ro-RO|Ioana",
+      "pt-PT|Joana",
+      "th-TH|Kanya",
+      "en-AU|Karen",
+      "ja-JP|Kyoko",
+      "hr-HR|Lana",
+      "sk-SK|Laura",
+      "hi-IN|Lekha",
+      "uk-UA|Lesya",
+      "vi-VN|Linh",
+      "pt-BR|Luciana",
+      "ar-001|Majed",
+      "hu-HU|Tünde",
+      "zh-TW|Meijia",
+      "el-GR|Melina",
+      "ru-RU|Milena",
+      "en-IE|Moira",
+      "es-ES|Mónica",
+      "ca-ES|Montse",
+      "nb-NO|Nora",
+      "es-MX|Paulina",
+      "en-IN|Rishi",
+      "en-US|Samantha",
+      "da-DK|Sara",
+      "fi-FI|Satu",
+      "yue-HK|Sinji",
+      "en-ZA|Tessa",
+      "fr-FR|Thomas",
+      "sl-SI|Tina",
+      "zh-CN|Tingting",
+      "nl-NL|Xander",
+      "tr-TR|Yelda",
+      "pl-PL|Zosia",
+      "cs-CZ|Zuzana",
+      "ta-IN|Vani",
+      "en-US|Albert",
+      "kn-IN|Soumya",
+      "en-US|Bad News",
+      "en-US|Bahh",
+      "en-US|Bells",
+      "en-US|Boing",
+      "en-US|Bubbles",
+      "en-US|Cellos",
+      "en-US|Wobble",
+      "en-US|Fred",
+      "te-IN|Geeta",
+      "en-US|Good News",
+      "en-US|Jester",
+      "en-US|Junior",
+      "en-US|Kathy",
+      "en-US|Organ",
+      "bn-IN|Piya",
+      "en-US|Superstar",
+      "en-US|Ralph",
+      "en-US|Trinoids",
+      "en-US|Whisper",
+      "en-US|Zarvox"
+    ],
+    "koVoices": [
+      "ko-KR|Yuna"
+    ]
+  },
+  "landingMotion": {
+    "ok": true,
+    "pixelDiff": true,
+    "rafPer500ms": 51
+  },
+  "audioAtEntrance": {
+    "supported": true,
+    "state": "suspended"
+  },
+  "entranceMotion": {
+    "ok": true,
+    "pixelDiff": true,
+    "rafPer500ms": 50
+  },
+  "renderer": {
+    "canvases": [
+      {
+        "cls": "m3d-canvas",
+        "w": 1440,
+        "h": 900,
+        "gl": true
+      }
+    ],
+    "svg": 1,
+    "has3d": true
+  },
+  "matchMotion": {
+    "ok": true,
+    "pixelDiff": true,
+    "rafPer500ms": 52
+  },
+  "elapsedMs": 222417,
+  "consoleErrors": [
+    {
+      "type": "error",
+      "text": "WebSocket connection to 'ws://localhost:5199/?token=avo3vSVLAX3v' failed: The operation couldn’t be completed. Socket is not connected"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: Could not connect to the server."
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: Could not connect to the server."
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: Could not connect to the server."
+    }
+  ],
+  "consoleWarnings": [
+    {
+      "type": "warning",
+      "text": "[aiClient] AI 내레이션 폴백: 로컬 템플릿을 사용합니다."
+    }
+  ],
+  "consoleSample": [
+    {
+      "type": "debug",
+      "text": "[vite] connecting..."
+    },
+    {
+      "type": "debug",
+      "text": "[vite] connected."
+    },
+    {
+      "type": "error",
+      "text": "WebSocket connection to 'ws://localhost:5199/?token=avo3vSVLAX3v' failed: The operation couldn’t be completed. Socket is not connected"
+    },
+    {
+      "type": "log",
+      "text": "[vite] server connection lost. Polling for restart..."
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: Could not connect to the server."
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: Could not connect to the server."
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: Could not connect to the server."
+    },
+    {
+      "type": "warning",
+      "text": "[aiClient] AI 내레이션 폴백: 로컬 템플릿을 사용합니다."
+    }
+  ],
+  "consoleTotal": 8
+}

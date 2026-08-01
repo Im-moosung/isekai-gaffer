@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>브라우저 호환 프로브 — 실제 Safari.app용</title>
+<!-- 왜 이 페이지가 있나:
+     playwright의 webkit은 Safari.app 자체가 아니다(특히 TTS 음성 목록·오디오 정책).
+     그런데 실제 Safari에서 콘솔을 읽으려면 개발자 메뉴 + Apple Events 권한이 필요하고,
+     그건 사용자 설정을 건드리는 일이다. 대신 **같은 출처 iframe**으로 앱을 띄우고
+     그 window의 onerror·console.error를 부모가 가로채 화면에 찍는다. 스크린샷 한 장으로
+     실제 Safari의 콘솔 에러·기능 지원·한국어 음성 목록을 전부 증거로 남긴다. -->
+<style>
+  :root { color-scheme: light dark; font: 13px/1.5 ui-monospace, Menlo, monospace; }
+  body { margin: 0; padding: 12px; display: grid; grid-template-columns: 380px 1fr; gap: 12px; }
+  h2 { font-size: 13px; margin: 12px 0 4px; }
+  .ok { color: #0a0; } .no { color: #c00; font-weight: 700; }
+  table { border-collapse: collapse; width: 100%; }
+  td { padding: 1px 6px 1px 0; vertical-align: top; }
+  #errs { background: #2001; border: 1px solid #c003; min-height: 60px; padding: 6px; white-space: pre-wrap; }
+  iframe { width: 100%; height: 780px; border: 1px solid #8884; }
+  button { font: inherit; padding: 6px 10px; }
+</style>
+</head>
+<body>
+<div>
+  <button id="go">① 소리 켜기(사용자 제스처) — 앱 iframe은 자동으로 로드된다</button>
+  <h2>한국어 TTS 음성</h2><div id="ko"></div>
+  <h2>앱(iframe) 콘솔 에러 / 경고 / 미처리 예외</h2><div id="errs">(없음)</div>
+  <h2>런타임</h2><div id="rt"></div>
+  <h2>CSS</h2><div id="css"></div>
+  <h2>JS</h2><div id="js"></div>
+</div>
+<iframe id="app" src="about:blank"></iframe>
+<script>
+const row = (k, v) => `<tr><td>${k}</td><td class="${v === true ? 'ok' : v === false ? 'no' : ''}">${v === true ? 'YES' : v === false ? 'NO' : v}</td></tr>`
+const table = o => '<table>' + Object.entries(o).map(([k, v]) => row(k, v)).join('') + '</table>'
+const sup = (p, v) => { try { return CSS.supports(p, v) } catch { return false } }
+const supSel = s => { try { return CSS.supports('selector(' + s + ')') } catch { return false } }
+
+let gl = false, gl2 = false, renderer = '—'
+try {
+  // 캔버스 하나에서 'webgl' → 'webgl2'를 잇달아 부르면 두 번째가 항상 null이다(스펙).
+  // 그래서 **캔버스를 따로 만든다** — 안 그러면 WebGL2 미지원으로 잘못 읽힌다.
+  gl = !!document.createElement('canvas').getContext('webgl')
+  const g2 = document.createElement('canvas').getContext('webgl2')
+  gl2 = !!g2
+  const g = g2 || document.createElement('canvas').getContext('webgl')
+  if (g) { const d = g.getExtension('WEBGL_debug_renderer_info'); renderer = d ? g.getParameter(d.UNMASKED_RENDERER_WEBGL) : g.getParameter(g.RENDERER) }
+} catch (e) { renderer = 'throw ' + e.message }
+
+const AC = window.AudioContext || window.webkitAudioContext
+document.getElementById('rt').innerHTML = table({
+  UA: navigator.userAgent, WebGL: gl, WebGL2: gl2, GPU: renderer,
+  AudioContext: !!AC, 'webkit 접두어만': !window.AudioContext && !!window.webkitAudioContext,
+  speechSynthesis: typeof speechSynthesis !== 'undefined',
+  'prefers-reduced-motion': matchMedia('(prefers-reduced-motion: reduce)').matches,
+  devicePixelRatio: devicePixelRatio,
+})
+document.getElementById('css').innerHTML = table({
+  'color-mix()': sup('color', 'color-mix(in srgb, red 50%, blue)'),
+  ':has()': supSel(':has(*)'),
+  '@container': typeof CSSContainerRule !== 'undefined',
+  'backdrop-filter': sup('backdrop-filter', 'blur(4px)'),
+  '-webkit-backdrop-filter': sup('-webkit-backdrop-filter', 'blur(4px)'),
+  'oklch()': sup('color', 'oklch(50% .1 200)'),
+  '100dvh': sup('height', '100dvh'),
+  'text-wrap: balance': sup('text-wrap', 'balance'),
+  'CSS nesting': supSel('&'),
+})
+document.getElementById('js').innerHTML = table({
+  structuredClone: typeof structuredClone === 'function',
+  'crypto.getRandomValues': !!(self.crypto && crypto.getRandomValues),
+  'crypto.randomUUID': !!(self.crypto && crypto.randomUUID),
+  'Object.hasOwn': typeof Object.hasOwn === 'function',
+  'Array.prototype.at': typeof [].at === 'function',
+  'Array.prototype.toSorted': typeof [].toSorted === 'function',
+  'Promise.withResolvers': typeof Promise.withResolvers === 'function',
+  'RegExp /v': (() => { try { new RegExp('a', 'v'); return true } catch { return false } })(),
+  ResizeObserver: typeof ResizeObserver === 'function',
+  OffscreenCanvas: typeof OffscreenCanvas === 'function',
+})
+
+const showVoices = () => {
+  let v = []
+  try { v = speechSynthesis.getVoices() || [] } catch (e) {}
+  const ko = v.filter(x => /^ko/i.test(x.lang))
+  document.getElementById('ko').innerHTML =
+    `<div>전체 ${v.length}개 / 한국어 <b class="${ko.length ? 'ok' : 'no'}">${ko.length}</b>개</div>`
+    + '<div>' + ko.map(x => `${x.name} (${x.lang}${x.localService ? ', local' : ', remote'}${x.default ? ', default' : ''})`).join('<br>') + '</div>'
+}
+showVoices()
+if (typeof speechSynthesis !== 'undefined') speechSynthesis.onvoiceschanged = showVoices
+setTimeout(showVoices, 1500)
+
+const errs = []
+const paint = () => { document.getElementById('errs').textContent = errs.length ? errs.join('\n') : '(없음)' }
+window.addEventListener('error', e => { errs.push('[부모 error] ' + e.message); paint() })
+
+// 앱은 제스처 없이도 켠다 — 렌더·콘솔 에러 확인에는 제스처가 필요 없고,
+// System Events 클릭 권한 없이 스크린샷 한 장으로 증거를 남기려면 자동이어야 한다.
+const bootApp = () => {
+  const f = document.getElementById('app')
+  if (f.dataset.booted) return
+  f.dataset.booted = '1'
+  f.src = '/'
+  f.onload = () => {
+    const w = f.contentWindow
+    try {
+      w.addEventListener('error', e => { errs.push('[앱 error] ' + (e.message || e) + ' @' + (e.filename || '') + ':' + (e.lineno || '')); paint() })
+      w.addEventListener('unhandledrejection', e => { errs.push('[앱 reject] ' + (e.reason && (e.reason.stack || e.reason.message) || e.reason)); paint() })
+      const ce = w.console.error.bind(w.console)
+      w.console.error = (...a) => { errs.push('[앱 console.error] ' + a.map(String).join(' ').slice(0, 300)); paint(); ce(...a) }
+      const cw = w.console.warn.bind(w.console)
+      w.console.warn = (...a) => { errs.push('[앱 console.warn] ' + a.map(String).join(' ').slice(0, 300)); paint(); cw(...a) }
+    } catch (e) { errs.push('[프로브] iframe 후킹 실패 ' + e.message) }
+    paint()
+  }
+}
+setTimeout(bootApp, 300)
+
+// 제스처 **없이** 말할 수 있는가 — 실제 위험은 여기다. 중계는 재생 루프(타이머) 안에서
+// speak를 부르므로, 브라우저가 제스처를 요구하면 중계가 통째로 침묵한다.
+setTimeout(() => {
+  if (typeof speechSynthesis === 'undefined') { errs.push('[tts] speechSynthesis 없음'); return paint() }
+  const u = new SpeechSynthesisUtterance('제스처 없는 발화 시험')
+  u.lang = 'ko-KR'
+  u.volume = 0.01
+  const ko = (speechSynthesis.getVoices() || []).find(v => /^ko/i.test(v.lang))
+  if (ko) u.voice = ko
+  let started = false
+  u.onstart = () => { started = true; errs.push('[tts/제스처없음] 발화 시작됨 — OK'); paint() }
+  u.onerror = e => { errs.push('[tts/제스처없음] error ' + e.error); paint() }
+  speechSynthesis.speak(u)
+  setTimeout(() => { if (!started) { errs.push('[tts/제스처없음] 3초 내 발화 시작 안 됨 — 침묵 위험'); paint() } }, 3000)
+}, 2500)
+
+document.getElementById('go').onclick = async () => {
+  // 사용자 제스처 안에서 AudioContext를 만들어 실제 정책 결과를 남긴다.
+  if (AC) {
+    const c = new AC()
+    try { await c.resume() } catch (e) {}
+    errs.push(`[audio] AudioContext.state = ${c.state}`)
+  }
+  if (typeof speechSynthesis !== 'undefined') {
+    const u = new SpeechSynthesisUtterance('테스트')
+    u.lang = 'ko-KR'
+    u.onstart = () => { errs.push('[tts] 발화 시작됨'); paint() }
+    u.onerror = e => { errs.push('[tts] error ' + e.error); paint() }
+    speechSynthesis.speak(u)
+  }
+  bootApp()
+  paint()
+}
+</script>
+</body>
+</html>

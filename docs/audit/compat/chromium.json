@@ -1,0 +1,401 @@
+{
+  "engine": "chromium",
+  "base": "http://localhost:5199",
+  "viewport": [
+    1440,
+    900
+  ],
+  "steps": [
+    {
+      "name": "랜딩 로드",
+      "ok": true,
+      "detail": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chr"
+    },
+    {
+      "name": "color-mix 지원",
+      "ok": true
+    },
+    {
+      "name": "WebGL 사용 가능",
+      "ok": true,
+      "detail": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)"
+    },
+    {
+      "name": "한국어 TTS 음성 존재",
+      "ok": true,
+      "detail": "180개 중 ko 9개"
+    },
+    {
+      "name": "랜딩 프레임 진행",
+      "ok": true,
+      "detail": "{\"ok\":true,\"pixelDiff\":true,\"rafPer500ms\":51}"
+    },
+    {
+      "name": "랜딩 콘텐츠 렌더",
+      "ok": true,
+      "detail": "{\"chars\":234,\"canvases\":1,\"bg\":\"rgb(7, 12, 21)\"}"
+    },
+    {
+      "name": "랜딩 → 캠페인",
+      "ok": true
+    },
+    {
+      "name": "허브 → 경기 준비(전술 센터)",
+      "ok": true
+    },
+    {
+      "name": "전술 센터 렌더",
+      "ok": true,
+      "detail": "{\"chars\":874,\"lineup\":true,\"tactics\":true}"
+    },
+    {
+      "name": "전술 센터 → 킥오프",
+      "ok": true
+    },
+    {
+      "name": "AudioContext 생성",
+      "ok": true,
+      "detail": "{\"supported\":true,\"state\":\"running\"}"
+    },
+    {
+      "name": "입장 연출 프레임 진행",
+      "ok": true,
+      "detail": "{\"ok\":true,\"pixelDiff\":true,\"rafPer500ms\":50}"
+    },
+    {
+      "name": "입장 건너뛰기",
+      "ok": true
+    },
+    {
+      "name": "경기 캔버스 존재",
+      "ok": true,
+      "detail": "{\"canvases\":[{\"cls\":\"m3d-canvas\",\"w\":1440,\"h\":900,\"gl\":true}],\"svg\":1,\"has3d\":true}"
+    },
+    {
+      "name": "경기 프레임 진행",
+      "ok": true,
+      "detail": "{\"ok\":true,\"pixelDiff\":true,\"rafPer500ms\":51}"
+    },
+    {
+      "name": "배속 2x",
+      "ok": true,
+      "detail": "2x"
+    },
+    {
+      "name": "전반 진행 → 하프타임 도달",
+      "ok": true,
+      "detail": "{\"phase\":\"halftime\",\"reason\":{\"kind\":\"halftime\"}}"
+    },
+    {
+      "name": "하프타임 작전판 조작",
+      "ok": true,
+      "detail": "감독타임 false 교체탭 true"
+    },
+    {
+      "name": "후반 진행 → 풀타임 도달",
+      "ok": true,
+      "detail": "{\"phase\":\"fulltime\",\"reason\":null}"
+    },
+    {
+      "name": "기자회견 화면",
+      "ok": false,
+      "detail": "FIFA 월드컵 2026 · 경기 종료 KOR 1 : 1 CZE KOR CZE 55% 점유율 45% 22 슛 6 9 유효슛 3 2.55 xG 0.55 15 파울 12 6 코너 1 결과 확정"
+    },
+    {
+      "name": "신문 1면 도달",
+      "ok": true,
+      "detail": "일간 축구 2026년 여름 스포츠 · 1면 대한민국, 체코와 무승부  조별리그 1차전 · 대한민국 1-1 체코  \"누구와 붙어도 두렵지 않습니다.\" — 대한민국 감독 대한민국 1 - 1 체코 대체역사 FICTION "
+    }
+  ],
+  "errors": [],
+  "failedReq": [
+    "net::ERR_ABORTED http://localhost:5199/api/narrate"
+  ],
+  "probe": {
+    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
+    "css": {
+      "color-mix": true,
+      ":has()": true,
+      "@container": true,
+      "backdrop-filter": true,
+      "oklch": true,
+      "aspect-ratio": true,
+      "text-wrap-balance": true,
+      "dvh": true,
+      "nesting": false
+    },
+    "js": {
+      "structuredClone": true,
+      "crypto.getRandomValues": true,
+      "crypto.randomUUID": true,
+      "Array.at": true,
+      "Object.hasOwn": true,
+      "Array.toSorted": true,
+      "Promise.withResolvers": true,
+      "RegExp.v": true,
+      "ResizeObserver": true,
+      "OffscreenCanvas": true,
+      "speechSynthesis": true
+    },
+    "webgl": {
+      "webgl": true,
+      "webgl2": true,
+      "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)"
+    },
+    "audio": {
+      "AudioContext": true,
+      "prefixed": false
+    },
+    "voicesRaw": [
+      "ko-KR|유나",
+      "en-US|Albert",
+      "it-IT|Alice",
+      "sv-SE|Alva",
+      "fr-CA|Amélie",
+      "ms-MY|Amira",
+      "de-DE|Anna",
+      "en-US|Bad News",
+      "en-US|Bahh",
+      "en-US|Bells",
+      "en-US|Boing",
+      "en-US|Bubbles",
+      "he-IL|Carmit",
+      "en-US|Cellos",
+      "id-ID|Damayanti",
+      "en-GB|Daniel",
+      "bg-BG|Daria",
+      "ko-KR|Eddy (한국어(대한민국))",
+      "zh-CN|Eddy (중국어(중국 본토))",
+      "zh-TW|Eddy (중국어(대만))",
+      "de-DE|Eddy (독일어(독일))",
+      "en-GB|Eddy (영어(영국))",
+      "en-US|Eddy (영어(미국))",
+      "es-ES|Eddy (스페인어(스페인))",
+      "es-MX|Eddy (스페인어(멕시코))",
+      "fi-FI|Eddy (핀란드어(핀란드))",
+      "fr-CA|Eddy (프랑스어(캐나다))",
+      "fr-FR|Eddy (프랑스어(프랑스))",
+      "it-IT|Eddy (이탈리아어(이탈리아))",
+      "ja-JP|Eddy (일본어(일본))",
+      "pt-BR|Eddy (포르투갈어(브라질))",
+      "nl-BE|Ellen",
+      "ko-KR|Flo (한국어(대한민국))",
+      "zh-CN|Flo (중국어(중국 본토))",
+      "zh-TW|Flo (중국어(대만))",
+      "de-DE|Flo (독일어(독일))",
+      "en-GB|Flo (영어(영국))",
+      "en-US|Flo (영어(미국))",
+      "es-ES|Flo (스페인어(스페인))",
+      "es-MX|Flo (스페인어(멕시코))",
+      "fi-FI|Flo (핀란드어(핀란드))",
+      "fr-CA|Flo (프랑스어(캐나다))",
+      "fr-FR|Flo (프랑스어(프랑스))",
+      "it-IT|Flo (이탈리아어(이탈리아))",
+      "ja-JP|Flo (일본어(일본))",
+      "pt-BR|Flo (포르투갈어(브라질))",
+      "en-US|Fred",
+      "te-IN|Geeta",
+      "en-US|Good News",
+      "ko-KR|Grandma (한국어(대한민국))",
+      "zh-CN|Grandma (중국어(중국 본토))",
+      "zh-TW|Grandma (중국어(대만))",
+      "de-DE|Grandma (독일어(독일))",
+      "en-GB|Grandma (영어(영국))",
+      "en-US|Grandma (영어(미국))",
+      "es-ES|Grandma (스페인어(스페인))",
+      "es-MX|Grandma (스페인어(멕시코))",
+      "fi-FI|Grandma (핀란드어(핀란드))",
+      "fr-CA|Grandma (프랑스어(캐나다))",
+      "fr-FR|Grandma (프랑스어(프랑스))",
+      "it-IT|Grandma (이탈리아어(이탈리아))",
+      "ja-JP|Grandma (일본어(일본))",
+      "pt-BR|Grandma (포르투갈어(브라질))",
+      "ko-KR|Grandpa (한국어(대한민국))",
+      "zh-CN|Grandpa (중국어(중국 본토))",
+      "zh-TW|Grandpa (중국어(대만))",
+      "de-DE|Grandpa (독일어(독일))",
+      "en-GB|Grandpa (영어(영국))",
+      "en-US|Grandpa (영어(미국))",
+      "es-ES|Grandpa (스페인어(스페인))",
+      "es-MX|Grandpa (스페인어(멕시코))",
+      "fi-FI|Grandpa (핀란드어(핀란드))",
+      "fr-CA|Grandpa (프랑스어(캐나다))",
+      "fr-FR|Grandpa (프랑스어(프랑스))",
+      "it-IT|Grandpa (이탈리아어(이탈리아))",
+      "ja-JP|Grandpa (일본어(일본))",
+      "pt-BR|Grandpa (포르투갈어(브라질))",
+      "ro-RO|Ioana",
+      "fr-FR|Jacques",
+      "en-US|Jester",
+      "pt-PT|Joana",
+      "en-US|Junior",
+      "th-TH|Kanya",
+      "en-AU|Karen",
+      "en-US|Kathy",
+      "ja-JP|Kyoko",
+      "hr-HR|Lana",
+      "sk-SK|Laura",
+      "hi-IN|Lekha",
+      "uk-UA|Lesya",
+      "vi-VN|Linh",
+      "pt-BR|Luciana",
+      "ar-001|Majed",
+      "zh-TW|Meijia",
+      "el-GR|Melina",
+      "ru-RU|Milena",
+      "en-IE|Moira",
+      "ca-ES|Montse",
+      "es-ES|Mónica",
+      "nb-NO|Nora",
+      "en-US|Organ",
+      "es-MX|Paulina",
+      "bn-IN|Piya",
+      "en-US|Ralph",
+      "ko-KR|Reed (한국어(대한민국))",
+      "zh-CN|Reed (중국어(중국 본토))",
+      "zh-TW|Reed (중국어(대만))",
+      "de-DE|Reed (독일어(독일))",
+      "en-GB|Reed (영어(영국))",
+      "en-US|Reed (영어(미국))",
+      "es-ES|Reed (스페인어(스페인))",
+      "es-MX|Reed (스페인어(멕시코))",
+      "fi-FI|Reed (핀란드어(핀란드))",
+      "fr-CA|Reed (프랑스어(캐나다))",
+      "it-IT|Reed (이탈리아어(이탈리아))",
+      "ja-JP|Reed (일본어(일본))",
+      "pt-BR|Reed (포르투갈어(브라질))",
+      "en-IN|Rishi",
+      "ko-KR|Rocko (한국어(대한민국))",
+      "zh-CN|Rocko (중국어(중국 본토))",
+      "zh-TW|Rocko (중국어(대만))",
+      "de-DE|Rocko (독일어(독일))",
+      "en-GB|Rocko (영어(영국))",
+      "en-US|Rocko (영어(미국))",
+      "es-ES|Rocko (스페인어(스페인))",
+      "es-MX|Rocko (스페인어(멕시코))",
+      "fi-FI|Rocko (핀란드어(핀란드))",
+      "fr-CA|Rocko (프랑스어(캐나다))",
+      "fr-FR|Rocko (프랑스어(프랑스))",
+      "it-IT|Rocko (이탈리아어(이탈리아))",
+      "ja-JP|Rocko (일본어(일본))",
+      "pt-BR|Rocko (포르투갈어(브라질))",
+      "en-US|Samantha",
+      "ko-KR|Sandy (한국어(대한민국))",
+      "zh-CN|Sandy (중국어(중국 본토))",
+      "zh-TW|Sandy (중국어(대만))",
+      "de-DE|Sandy (독일어(독일))",
+      "en-GB|Sandy (영어(영국))",
+      "en-US|Sandy (영어(미국))",
+      "es-ES|Sandy (스페인어(스페인))",
+      "es-MX|Sandy (스페인어(멕시코))",
+      "fi-FI|Sandy (핀란드어(핀란드))",
+      "fr-CA|Sandy (프랑스어(캐나다))",
+      "fr-FR|Sandy (프랑스어(프랑스))",
+      "it-IT|Sandy (이탈리아어(이탈리아))",
+      "ja-JP|Sandy (일본어(일본))",
+      "pt-BR|Sandy (포르투갈어(브라질))",
+      "da-DK|Sara",
+      "fi-FI|Satu",
+      "ko-KR|Shelley (한국어(대한민국))",
+      "zh-CN|Shelley (중국어(중국 본토))",
+      "zh-TW|Shelley (중국어(대만))",
+      "de-DE|Shelley (독일어(독일))",
+      "en-GB|Shelley (영어(영국))",
+      "en-US|Shelley (영어(미국))",
+      "es-ES|Shelley (스페인어(스페인))",
+      "es-MX|Shelley (스페인어(멕시코))",
+      "fi-FI|Shelley (핀란드어(핀란드))",
+      "fr-CA|Shelley (프랑스어(캐나다))",
+      "fr-FR|Shelley (프랑스어(프랑스))",
+      "it-IT|Shelley (이탈리아어(이탈리아))",
+      "ja-JP|Shelley (일본어(일본))",
+      "pt-BR|Shelley (포르투갈어(브라질))",
+      "yue-HK|Sinji",
+      "kn-IN|Soumya",
+      "en-US|Superstar",
+      "en-ZA|Tessa",
+      "fr-FR|Thomas",
+      "sl-SI|Tina",
+      "zh-CN|Tingting",
+      "en-US|Trinoids",
+      "hu-HU|Tünde",
+      "ta-IN|Vani",
+      "en-US|Whisper",
+      "en-US|Wobble",
+      "nl-NL|Xander",
+      "tr-TR|Yelda",
+      "en-US|Zarvox",
+      "pl-PL|Zosia",
+      "cs-CZ|Zuzana"
+    ],
+    "koVoices": [
+      "ko-KR|유나",
+      "ko-KR|Eddy (한국어(대한민국))",
+      "ko-KR|Flo (한국어(대한민국))",
+      "ko-KR|Grandma (한국어(대한민국))",
+      "ko-KR|Grandpa (한국어(대한민국))",
+      "ko-KR|Reed (한국어(대한민국))",
+      "ko-KR|Rocko (한국어(대한민국))",
+      "ko-KR|Sandy (한국어(대한민국))",
+      "ko-KR|Shelley (한국어(대한민국))"
+    ]
+  },
+  "landingMotion": {
+    "ok": true,
+    "pixelDiff": true,
+    "rafPer500ms": 51
+  },
+  "audioAtEntrance": {
+    "supported": true,
+    "state": "running"
+  },
+  "entranceMotion": {
+    "ok": true,
+    "pixelDiff": true,
+    "rafPer500ms": 50
+  },
+  "renderer": {
+    "canvases": [
+      {
+        "cls": "m3d-canvas",
+        "w": 1440,
+        "h": 900,
+        "gl": true
+      }
+    ],
+    "svg": 1,
+    "has3d": true
+  },
+  "matchMotion": {
+    "ok": true,
+    "pixelDiff": true,
+    "rafPer500ms": 51
+  },
+  "elapsedMs": 236213,
+  "consoleErrors": [
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    }
+  ],
+  "consoleWarnings": [],
+  "consoleSample": [
+    {
+      "type": "debug",
+      "text": "[vite] connecting..."
+    },
+    {
+      "type": "debug",
+      "text": "[vite] connected."
+    },
+    {
+      "type": "info",
+      "text": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"
+    },
+    {
+      "type": "error",
+      "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    }
+  ],
+  "consoleTotal": 4
+}

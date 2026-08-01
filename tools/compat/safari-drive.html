@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>실제 Safari.app 전 구간 자동 주행</title>
+<!-- 왜 이 페이지가 있나:
+     playwright의 webkit은 Safari.app이 아니다. 그런데 실제 Safari를 밖에서 조종하려면
+     손쉬운 접근성(System Events 클릭)·개발자 메뉴 권한이 필요하고, 그건 사용자의 macOS
+     설정을 건드리는 일이다. 대신 **같은 출처 iframe** 안에 앱을 띄우고 부모 스크립트가
+     DOM으로 직접 눌러 90분을 완주한다. 콘솔 에러·경고도 부모가 후킹해 화면에 남기므로,
+     스크린샷 한 장이 "실제 Safari에서 전 구간이 돌았다"의 증거가 된다.
+     열기: open -a Safari http://localhost:5199/tools/compat/safari-drive.html -->
+<style>
+  :root { color-scheme: light dark; font: 12px/1.45 ui-monospace, Menlo, monospace; }
+  body { margin: 0; padding: 10px; display: grid; grid-template-columns: 420px 1fr; gap: 10px; }
+  #log div { padding: 1px 0; }
+  .ok::before { content: 'PASS '; color: #0a0; font-weight: 700; }
+  .no::before { content: 'FAIL '; color: #c00; font-weight: 700; }
+  #errs { background: #f001; border: 1px solid #c004; padding: 6px; white-space: pre-wrap; max-height: 240px; overflow: auto; }
+  iframe { width: 100%; height: 900px; border: 1px solid #8884; }
+  h2 { font-size: 12px; margin: 10px 0 3px; }
+</style>
+</head>
+<body>
+<div>
+  <h2>진행</h2><div id="log"></div>
+  <h2>앱 콘솔 에러 / 경고 / 미처리 예외</h2><div id="errs">(없음)</div>
+</div>
+<iframe id="app" src="/"></iframe>
+<script>
+const logEl = document.getElementById('log'), errsEl = document.getElementById('errs')
+const errs = []
+const paintErrs = () => { errsEl.textContent = errs.length ? errs.join('\n') : '(없음)' }
+const rec = (name, ok, detail) => {
+  const d = document.createElement('div')
+  d.className = ok ? 'ok' : 'no'
+  d.textContent = name + (detail ? ' — ' + detail : '')
+  logEl.appendChild(d)
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms))
+const f = document.getElementById('app')
+
+f.onload = () => {
+  const w = f.contentWindow
+  try {
+    w.addEventListener('error', e => { errs.push('[error] ' + (e.message || e)); paintErrs() })
+    w.addEventListener('unhandledrejection', e => { errs.push('[reject] ' + ((e.reason && (e.reason.message || e.reason)) || '')); paintErrs() })
+    const ce = w.console.error.bind(w.console); w.console.error = (...a) => { errs.push('[console.error] ' + a.map(String).join(' ').slice(0, 240)); paintErrs(); ce(...a) }
+    const cw = w.console.warn.bind(w.console); w.console.warn = (...a) => { errs.push('[console.warn] ' + a.map(String).join(' ').slice(0, 240)); paintErrs(); cw(...a) }
+  } catch (e) { errs.push('후킹 실패 ' + e.message); paintErrs() }
+  drive(w).catch(e => rec('주행 중단', false, String(e)))
+}
+
+/** 텍스트를 포함하는 보이는 컨트롤을 누른다. 덮여 있으면 누르지 않는다(가짜 성공 방지). */
+const tap = (w, text, nth = 0) => {
+  const d = w.document
+  const els = [...d.querySelectorAll('button,a,[role=button],[role=tab],summary')]
+    .filter(e => e.textContent.trim().includes(text) && e.offsetParent !== null)
+  const el = els[nth]
+  if (!el) return false
+  const r = el.getBoundingClientRect()
+  const hit = d.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+  if (hit && !el.contains(hit) && hit !== el) return false
+  el.click()
+  return true
+}
+
+// store는 iframe **그 realm**에서 import해야 앱이 쓰는 인스턴스가 온다(부모에서 import하면
+// 별개 모듈 인스턴스가 생겨 phase가 영원히 'pre'로 보인다). 실패하면 화면 텍스트로 내려간다.
+const state = async w => {
+  try {
+    const m = await w.eval('import("/src/game/matchStore.ts")')
+    const s = m.useMatchStore.getState()
+    return { minute: s.minute, phase: s.phase, via: 'store' }
+  } catch (e) {
+    const t = w.document.body.innerText
+    const mm = t.match(/(\d{1,2})'/)
+    const phase = /하프타임|전반 종료|HT/.test(t) ? 'halftime'
+      : /풀타임|경기 종료|기자회견/.test(t) ? 'fulltime'
+        : /작전 타임|전술 확정/.test(t) ? 'paused' : 'playing'
+    return { minute: mm ? +mm[1] : 0, phase, via: 'dom' }
+  }
+}
+
+/** 프레임이 진짜 도는가 — iframe 안에서 rAF를 직접 센다. */
+const rafRate = w => new Promise(res => {
+  let n = 0; const t0 = w.performance.now()
+  const tick = () => { n++; if (w.performance.now() - t0 < 500) w.requestAnimationFrame(tick); else res(n) }
+  w.requestAnimationFrame(tick)
+})
+
+async function drive(w) {
+  await sleep(3000)
+  rec('랜딩 렌더', w.document.body.innerText.length > 50, w.document.body.innerText.slice(0, 40).replace(/\n/g, ' '))
+  rec('랜딩 프레임 진행', await rafRate(w) > 10)
+  rec('랜딩 → 캠페인', tap(w, '캠페인 시작') || tap(w, '캠페인'))
+  await sleep(1500)
+  rec('허브 → 경기 준비', tap(w, '준비'))
+  await sleep(2000)
+  const t = w.document.body.innerText
+  rec('전술 센터 렌더', t.length > 300 && /선발|라인업/.test(t) && /전술|압박|라인/.test(t), t.length + '자')
+  rec('전술 센터 → 킥오프', tap(w, '킥오프'))
+  await sleep(3500)
+  rec('입장 연출 캔버스', !!w.document.querySelector('canvas'))
+  rec('입장 연출 프레임 진행', await rafRate(w) > 10)
+  tap(w, '건너뛰기')
+  await sleep(4000)
+  const c3d = w.document.querySelector('canvas.m3d-canvas')
+  rec('경기 3D 캔버스(three)', !!c3d, c3d ? `${c3d.width}×${c3d.height}` : 'Pixi/SVG 폴백')
+  rec('경기 프레임 진행', await rafRate(w) > 10)
+  ;['2x', '×2', '2배'].some(l => tap(w, l))
+
+  const run = async (until, budgetMs) => {
+    const t0 = Date.now()
+    let last = null
+    while (Date.now() - t0 < budgetMs) {
+      const s = await state(w); last = s
+      if (!s) break
+      if (until(s)) return { ok: true, s }
+      if (s.phase !== 'playing') {
+        tap(w, '감독 판단대로 간다')
+        const labels = s.phase === 'pre' ? ['킥오프', '건너뛰기'] : ['전술 확정', '후반 시작', '재개']
+        labels.some(l => tap(w, l))
+      }
+      await sleep(1400)
+    }
+    return { ok: false, s: last }
+  }
+
+  let r = await run(s => s.phase === 'halftime' || s.minute >= 45, 420000)
+  rec('전반 → 하프타임', r.ok, JSON.stringify(r.s))
+  tap(w, '감독 판단대로 간다')
+  await sleep(600)
+  rec('하프타임 작전판 [교체] 탭', tap(w, '교체'))
+  await sleep(800)
+  ;['후반 시작', '전술 확정', '재개'].some(l => tap(w, l))
+  r = await run(s => s.phase === 'fulltime' || s.minute >= 90, 420000)
+  rec('후반 → 풀타임', r.ok, JSON.stringify(r.s))
+  await sleep(2000)
+  ;['기자회견', '다음'].some(l => tap(w, l))
+  await sleep(1500)
+  rec('기자회견 화면', /기자|질문|\?/.test(w.document.body.innerText))
+  for (let i = 0; i < 4; i++) {
+    const b = [...w.document.querySelectorAll('button')].filter(e => e.offsetParent && e.textContent.trim().length > 4)
+    if (!b.length) break
+    b[0].click()
+    await sleep(1000)
+  }
+  rec('신문 1면', /FICTION|일간/.test(w.document.body.innerText))
+  rec('앱 콘솔 에러 0', errs.filter(e => e.startsWith('[error]') || e.startsWith('[console.error]')).length === 0,
+    errs.length + '건 기록(경고 포함)')
+  rec('== 주행 종료 ==', true)
+}
+</script>
+</body>
+</html>

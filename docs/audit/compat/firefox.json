@@ -1,0 +1,1211 @@
+{
+  "engine": "firefox",
+  "base": "http://localhost:5199",
+  "viewport": [
+    1440,
+    900
+  ],
+  "steps": [
+    {
+      "name": "랜딩 로드",
+      "ok": true,
+      "detail": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:153.0) Gecko/20100101 Firefox/153.0"
+    },
+    {
+      "name": "color-mix 지원",
+      "ok": true
+    },
+    {
+      "name": "WebGL 사용 가능",
+      "ok": true,
+      "detail": "Apple M1, or similar"
+    },
+    {
+      "name": "한국어 TTS 음성 존재",
+      "ok": true,
+      "detail": "184개 중 ko 9개"
+    },
+    {
+      "name": "랜딩 프레임 진행",
+      "ok": true,
+      "detail": "{\"ok\":true,\"pixelDiff\":true,\"rafPer500ms\":51}"
+    },
+    {
+      "name": "랜딩 콘텐츠 렌더",
+      "ok": true,
+      "detail": "{\"chars\":234,\"canvases\":1,\"bg\":\"rgb(7, 12, 21)\"}"
+    },
+    {
+      "name": "랜딩 → 캠페인",
+      "ok": true
+    },
+    {
+      "name": "허브 → 경기 준비(전술 센터)",
+      "ok": true
+    },
+    {
+      "name": "전술 센터 렌더",
+      "ok": true,
+      "detail": "{\"chars\":874,\"lineup\":true,\"tactics\":true}"
+    },
+    {
+      "name": "전술 센터 → 킥오프",
+      "ok": true
+    },
+    {
+      "name": "AudioContext 생성",
+      "ok": true,
+      "detail": "{\"supported\":true,\"state\":\"suspended\"}"
+    },
+    {
+      "name": "입장 연출 프레임 진행",
+      "ok": true,
+      "detail": "{\"ok\":true,\"pixelDiff\":true,\"rafPer500ms\":51}"
+    },
+    {
+      "name": "입장 건너뛰기",
+      "ok": true
+    },
+    {
+      "name": "경기 캔버스 존재",
+      "ok": true,
+      "detail": "{\"canvases\":[{\"cls\":\"m3d-canvas\",\"w\":1440,\"h\":900,\"gl\":true}],\"svg\":1,\"has3d\":true}"
+    },
+    {
+      "name": "경기 프레임 진행",
+      "ok": true,
+      "detail": "{\"ok\":true,\"pixelDiff\":true,\"rafPer500ms\":50}"
+    },
+    {
+      "name": "배속 2x",
+      "ok": true,
+      "detail": "2x"
+    },
+    {
+      "name": "전반 진행 → 하프타임 도달",
+      "ok": true,
+      "detail": "{\"phase\":\"halftime\",\"reason\":{\"kind\":\"halftime\"}}"
+    },
+    {
+      "name": "하프타임 작전판 조작",
+      "ok": true,
+      "detail": "감독타임 false 교체탭 true"
+    },
+    {
+      "name": "후반 진행 → 풀타임 도달",
+      "ok": true,
+      "detail": "{\"phase\":\"fulltime\",\"reason\":null}"
+    },
+    {
+      "name": "기자회견 화면",
+      "ok": false,
+      "detail": "FIFA 월드컵 2026 · 경기 종료 KOR 4 : 1 CZE KOR CZE 55% 점유율 45% 22 슛 10 13 유효슛 4 2.47 xG 1.15 13 파울 7 9 코너 3 결과 확정"
+    },
+    {
+      "name": "신문 1면 도달",
+      "ok": true,
+      "detail": "일간 축구 2026년 여름 스포츠 · 1면 대한민국, 체코를 완파하다  조별리그 1차전 · 대한민국 4-1 체코  \"흔들 이유가 없었습니다. 준비한 대로 눌렀을 뿐입니다.\" — 대한민국 감독 대한민국 4 - 1 체코"
+    }
+  ],
+  "errors": [],
+  "failedReq": [],
+  "probe": {
+    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:153.0) Gecko/20100101 Firefox/153.0",
+    "css": {
+      "color-mix": true,
+      ":has()": true,
+      "@container": true,
+      "backdrop-filter": true,
+      "oklch": true,
+      "aspect-ratio": true,
+      "text-wrap-balance": true,
+      "dvh": true,
+      "nesting": false
+    },
+    "js": {
+      "structuredClone": true,
+      "crypto.getRandomValues": true,
+      "crypto.randomUUID": true,
+      "Array.at": true,
+      "Object.hasOwn": true,
+      "Array.toSorted": true,
+      "Promise.withResolvers": true,
+      "RegExp.v": true,
+      "ResizeObserver": true,
+      "OffscreenCanvas": true,
+      "speechSynthesis": true
+    },
+    "webgl": {
+      "webgl": true,
+      "webgl2": true,
+      "renderer": "Apple M1, or similar"
+    },
+    "audio": {
+      "AudioContext": true,
+      "prefixed": false
+    },
+    "voicesRaw": [
+      "en-US|Albert",
+      "it-IT|Alice",
+      "kn-IN|Soumya",
+      "sv-SE|Alva",
+      "en-IN|Aman",
+      "fr-CA|Amélie",
+      "ms-MY|Amira",
+      "de-DE|Anna",
+      "kk-KZ|Aru",
+      "en-US|Bad News",
+      "en-US|Bahh",
+      "en-US|Bells",
+      "en-US|Boing",
+      "en-US|Bubbles",
+      "he-IL|Carmit",
+      "en-US|Cellos",
+      "id-ID|Damayanti",
+      "en-GB|Daniel",
+      "bg-BG|Daria",
+      "en-US|Wobble",
+      "de-DE|Eddy (German (Germany))",
+      "en-GB|Eddy (English (UK))",
+      "en-US|Eddy (English (US))",
+      "es-ES|Eddy (Spanish (Spain))",
+      "es-MX|Eddy (Spanish (Mexico))",
+      "fi-FI|Eddy (Finnish (Finland))",
+      "fr-CA|Eddy (French (Canada))",
+      "fr-FR|Eddy (French (France))",
+      "it-IT|Eddy (Italian (Italy))",
+      "ja-JP|Eddy (Japanese (Japan))",
+      "ko-KR|Eddy (Korean (South Korea))",
+      "pt-BR|Eddy (Portuguese (Brazil))",
+      "zh-CN|Eddy (Chinese (China mainland))",
+      "zh-TW|Eddy (Chinese (Taiwan))",
+      "nl-BE|Ellen",
+      "de-DE|Flo (German (Germany))",
+      "en-GB|Flo (English (UK))",
+      "en-US|Flo (English (US))",
+      "es-ES|Flo (Spanish (Spain))",
+      "es-MX|Flo (Spanish (Mexico))",
+      "fi-FI|Flo (Finnish (Finland))",
+      "fr-CA|Flo (French (Canada))",
+      "fr-FR|Flo (French (France))",
+      "it-IT|Flo (Italian (Italy))",
+      "ja-JP|Flo (Japanese (Japan))",
+      "ko-KR|Flo (Korean (South Korea))",
+      "pt-BR|Flo (Portuguese (Brazil))",
+      "zh-CN|Flo (Chinese (China mainland))",
+      "zh-TW|Flo (Chinese (Taiwan))",
+      "en-US|Fred",
+      "te-IN|Geeta",
+      "en-US|Good News",
+      "de-DE|Grandma (German (Germany))",
+      "en-GB|Grandma (English (UK))",
+      "en-US|Grandma (English (US))",
+      "es-ES|Grandma (Spanish (Spain))",
+      "es-MX|Grandma (Spanish (Mexico))",
+      "fi-FI|Grandma (Finnish (Finland))",
+      "fr-CA|Grandma (French (Canada))",
+      "fr-FR|Grandma (French (France))",
+      "it-IT|Grandma (Italian (Italy))",
+      "ja-JP|Grandma (Japanese (Japan))",
+      "ko-KR|Grandma (Korean (South Korea))",
+      "pt-BR|Grandma (Portuguese (Brazil))",
+      "zh-CN|Grandma (Chinese (China mainland))",
+      "zh-TW|Grandma (Chinese (Taiwan))",
+      "de-DE|Grandpa (German (Germany))",
+      "en-GB|Grandpa (English (UK))",
+      "en-US|Grandpa (English (US))",
+      "es-ES|Grandpa (Spanish (Spain))",
+      "es-MX|Grandpa (Spanish (Mexico))",
+      "fi-FI|Grandpa (Finnish (Finland))",
+      "fr-CA|Grandpa (French (Canada))",
+      "fr-FR|Grandpa (French (France))",
+      "it-IT|Grandpa (Italian (Italy))",
+      "ja-JP|Grandpa (Japanese (Japan))",
+      "ko-KR|Grandpa (Korean (South Korea))",
+      "pt-BR|Grandpa (Portuguese (Brazil))",
+      "zh-CN|Grandpa (Chinese (China mainland))",
+      "zh-TW|Grandpa (Chinese (Taiwan))",
+      "en-US|Jester",
+      "ro-RO|Ioana",
+      "fr-FR|Jacques",
+      "pt-PT|Joana",
+      "en-US|Junior",
+      "th-TH|Kanya",
+      "en-AU|Karen",
+      "en-US|Kathy",
+      "ja-JP|Kyoko",
+      "hr-HR|Lana",
+      "sk-SK|Laura",
+      "hi-IN|Lekha",
+      "uk-UA|Lesya",
+      "vi-VN|Linh",
+      "pt-BR|Luciana",
+      "ar-001|Majed",
+      "hu-HU|Tünde",
+      "zh-TW|Meijia",
+      "el-GR|Melina",
+      "ru-RU|Milena",
+      "en-IE|Moira",
+      "es-ES|Mónica",
+      "ca-ES|Montse",
+      "nb-NO|Nora",
+      "lt-LT|Ona",
+      "en-US|Organ",
+      "es-MX|Paulina",
+      "bn-IN|Piya",
+      "en-US|Superstar",
+      "en-US|Ralph",
+      "de-DE|Reed (German (Germany))",
+      "en-GB|Reed (English (UK))",
+      "en-US|Reed (English (US))",
+      "es-ES|Reed (Spanish (Spain))",
+      "es-MX|Reed (Spanish (Mexico))",
+      "fi-FI|Reed (Finnish (Finland))",
+      "fr-CA|Reed (French (Canada))",
+      "it-IT|Reed (Italian (Italy))",
+      "ja-JP|Reed (Japanese (Japan))",
+      "ko-KR|Reed (Korean (South Korea))",
+      "pt-BR|Reed (Portuguese (Brazil))",
+      "zh-CN|Reed (Chinese (China mainland))",
+      "zh-TW|Reed (Chinese (Taiwan))",
+      "en-IN|Rishi",
+      "de-DE|Rocko (German (Germany))",
+      "en-GB|Rocko (English (UK))",
+      "en-US|Rocko (English (US))",
+      "es-ES|Rocko (Spanish (Spain))",
+      "es-MX|Rocko (Spanish (Mexico))",
+      "fi-FI|Rocko (Finnish (Finland))",
+      "fr-CA|Rocko (French (Canada))",
+      "fr-FR|Rocko (French (France))",
+      "it-IT|Rocko (Italian (Italy))",
+      "ja-JP|Rocko (Japanese (Japan))",
+      "ko-KR|Rocko (Korean (South Korea))",
+      "pt-BR|Rocko (Portuguese (Brazil))",
+      "zh-CN|Rocko (Chinese (China mainland))",
+      "zh-TW|Rocko (Chinese (Taiwan))",
+      "en-US|Samantha",
+      "de-DE|Sandy (German (Germany))",
+      "en-GB|Sandy (English (UK))",
+      "en-US|Sandy (English (US))",
+      "es-ES|Sandy (Spanish (Spain))",
+      "es-MX|Sandy (Spanish (Mexico))",
+      "fi-FI|Sandy (Finnish (Finland))",
+      "fr-CA|Sandy (French (Canada))",
+      "fr-FR|Sandy (French (France))",
+      "it-IT|Sandy (Italian (Italy))",
+      "ja-JP|Sandy (Japanese (Japan))",
+      "ko-KR|Sandy (Korean (South Korea))",
+      "pt-BR|Sandy (Portuguese (Brazil))",
+      "zh-CN|Sandy (Chinese (China mainland))",
+      "zh-TW|Sandy (Chinese (Taiwan))",
+      "da-DK|Sara",
+      "fi-FI|Satu",
+      "de-DE|Shelley (German (Germany))",
+      "en-GB|Shelley (English (UK))",
+      "en-US|Shelley (English (US))",
+      "es-ES|Shelley (Spanish (Spain))",
+      "es-MX|Shelley (Spanish (Mexico))",
+      "fi-FI|Shelley (Finnish (Finland))",
+      "fr-CA|Shelley (French (Canada))",
+      "fr-FR|Shelley (French (France))",
+      "it-IT|Shelley (Italian (Italy))",
+      "ja-JP|Shelley (Japanese (Japan))",
+      "ko-KR|Shelley (Korean (South Korea))",
+      "pt-BR|Shelley (Portuguese (Brazil))",
+      "zh-CN|Shelley (Chinese (China mainland))",
+      "zh-TW|Shelley (Chinese (Taiwan))",
+      "zh-HK|Sinji",
+      "en-IN|Tara",
+      "en-ZA|Tessa",
+      "fr-FR|Thomas",
+      "sl-SI|Tina",
+      "zh-CN|Tingting",
+      "en-US|Trinoids",
+      "ta-IN|Vani",
+      "en-US|Whisper",
+      "nl-NL|Xander",
+      "tr-TR|Yelda",
+      "ko-KR|Yuna",
+      "en-US|Zarvox",
+      "pl-PL|Zosia",
+      "cs-CZ|Zuzana"
+    ],
+    "koVoices": [
+      "ko-KR|Eddy (Korean (South Korea))",
+      "ko-KR|Flo (Korean (South Korea))",
+      "ko-KR|Grandma (Korean (South Korea))",
+      "ko-KR|Grandpa (Korean (South Korea))",
+      "ko-KR|Reed (Korean (South Korea))",
+      "ko-KR|Rocko (Korean (South Korea))",
+      "ko-KR|Sandy (Korean (South Korea))",
+      "ko-KR|Shelley (Korean (South Korea))",
+      "ko-KR|Yuna"
+    ]
+  },
+  "landingMotion": {
+    "ok": true,
+    "pixelDiff": true,
+    "rafPer500ms": 51
+  },
+  "audioAtEntrance": {
+    "supported": true,
+    "state": "suspended"
+  },
+  "entranceMotion": {
+    "ok": true,
+    "pixelDiff": true,
+    "rafPer500ms": 51
+  },
+  "renderer": {
+    "canvases": [
+      {
+        "cls": "m3d-canvas",
+        "w": 1440,
+        "h": 900,
+        "gl": true
+      }
+    ],
+    "svg": 1,
+    "has3d": true
+  },
+  "matchMotion": {
+    "ok": true,
+    "pixelDiff": true,
+    "rafPer500ms": 50
+  },
+  "elapsedMs": 211825,
+  "consoleErrors": [],
+  "consoleWarnings": [
+    {
+      "type": "warning",
+      "text": "[JavaScript Warning: \"WebGL context was lost.\" {file: \"http://localhost:5199/src/ui/pitch/three/host.ts\" line: 57}]"
+    },
+    {
+      "type": "warning",
+      "text": "[JavaScript Warning: \"WebGL context was lost.\" {file: \"http://localhost:5199/src/ui/pitch/three/host.ts\" line: 57}]"
+    },
+    {
+      "type": "warning",
+      "text": "[JavaScript Warning: \"WEBGL_debug_renderer_info is deprecated in Firefox and will be removed. Please use RENDERER.\" {file: \"debugger eval code line 311 > eval\" line: 13}]"
+    },
+    {
+      "type": "warning",
+      "text": "[JavaScript Warning: \"WebGL context was lost.\" {file: \"http://localhost:5199/node_modules/.vite/deps/three.module-BKY27AXr.js?v=0b966007\" line: 50855}]"
+    },
+    {
+      "type": "warning",
+      "text": "[JavaScript Warning: \"WebGL context was lost.\" {file: \"http://localhost:5199/src/ui/pitch/three/host.ts\" line: 57}]"
+    },
+    {
+      "type": "warning",
+      "text": "[JavaScript Warning: \"WebGL context was lost.\" {file: \"http://localhost:5199/src/ui/pitch/three/host.ts\" line: 57}]"
+    },
+    {
+      "type": "warning",
+      "text": "[JavaScript Warning: \"WebGL context was lost.\" {file: \"http://localhost:5199/node_modules/.vite/deps/three.module-BKY27AXr.js?v=0b966007\" line: 50855}]"
+    }
+  ],
+  "consoleSample": [
+    {
+      "type": "debug",
+      "text": "[vite] connecting..."
+    },
+    {
+      "type": "debug",
+      "text": "[vite] connected."
+    },
+    {
+      "type": "info",
+      "text": "Download the React DevTools for a better development experience: https://react.dev/link/react-devtools"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Blocking Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Transition Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Suspense Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Idle Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Render"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Commit"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Waiting for Paint"
+    },
+    {
+      "type": "timeStamp",
+      "text": "App"
+    },
+    {
+      "type": "timeStamp",
+      "text": "LandingScreen"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Blocking Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Transition Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Suspense Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Idle Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Render"
+    },
+    {
+      "type": "timeStamp",
+      "text": "LandingScreen"
+    },
+    {
+      "type": "timeStamp",
+      "text": "BackdropBoundary"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Blocking Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Transition Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Suspense Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Idle Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Blocking Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Transition Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Suspense Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Idle Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Render"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Throttled"
+    },
+    {
+      "type": "timeStamp",
+      "text": "StadiumBackdrop"
+    },
+    {
+      "type": "timeStamp",
+      "text": "StadiumBackdrop"
+    },
+    {
+      "type": "timeStamp",
+      "text": "StadiumBackdrop"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Remaining Effects"
+    },
+    {
+      "type": "warning",
+      "text": "[JavaScript Warning: \"WebGL context was lost.\" {file: \"http://localhost:5199/src/ui/pitch/three/host.ts\" line: 57}]"
+    },
+    {
+      "type": "warning",
+      "text": "[JavaScript Warning: \"WebGL context was lost.\" {file: \"http://localhost:5199/src/ui/pitch/three/host.ts\" line: 57}]"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Blocking Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Transition Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Suspense Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Idle Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Commit"
+    },
+    {
+      "type": "warning",
+      "text": "[JavaScript Warning: \"WEBGL_debug_renderer_info is deprecated in Firefox and will be removed. Please use RENDERER.\" {file: \"debugger eval code line 311 > eval\" line: 13}]"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Blocking Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Transition Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Suspense Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Idle Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Event: pointerdown"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Render"
+    },
+    {
+      "type": "timeStamp",
+      "text": "LandingScreen"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Remaining Effects"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Blocking Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Transition Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Suspense Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Idle Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Event: click"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Render"
+    },
+    {
+      "type": "timeStamp",
+      "text": "StadiumBackdrop"
+    },
+    {
+      "type": "timeStamp",
+      "text": "App"
+    },
+    {
+      "type": "timeStamp",
+      "text": "CampaignFlow"
+    },
+    {
+      "type": "timeStamp",
+      "text": "HubScreen"
+    },
+    {
+      "type": "timeStamp",
+      "text": "AppShell"
+    },
+    {
+      "type": "timeStamp",
+      "text": "JourneyLadder"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Remaining Effects"
+    },
+    {
+      "type": "warning",
+      "text": "[JavaScript Warning: \"WebGL context was lost.\" {file: \"http://localhost:5199/node_modules/.vite/deps/three.module-BKY27AXr.js?v=0b966007\" line: 50855}]"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Blocking Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Transition Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Suspense Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Idle Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Event: click"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Render"
+    },
+    {
+      "type": "timeStamp",
+      "text": "CampaignFlow"
+    },
+    {
+      "type": "timeStamp",
+      "text": "CampaignMatch"
+    },
+    {
+      "type": "timeStamp",
+      "text": "MatchScreen"
+    },
+    {
+      "type": "timeStamp",
+      "text": "MatchScreen"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Remaining Effects"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Blocking Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Transition Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Suspense Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Idle Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Render"
+    },
+    {
+      "type": "timeStamp",
+      "text": "MatchScreen"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Scorebug"
+    },
+    {
+      "type": "timeStamp",
+      "text": "TeamChip"
+    },
+    {
+      "type": "timeStamp",
+      "text": "TeamChip"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PitchBoundary"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PitchView"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PitchMarkings"
+    },
+    {
+      "type": "timeStamp",
+      "text": "SideDots"
+    },
+    {
+      "type": "timeStamp",
+      "text": "SideDots"
+    },
+    {
+      "type": "timeStamp",
+      "text": "EventMarker"
+    },
+    {
+      "type": "timeStamp",
+      "text": "SettingsMenu"
+    },
+    {
+      "type": "timeStamp",
+      "text": "TacticsCenter"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PlanSummary"
+    },
+    {
+      "type": "timeStamp",
+      "text": "LineupEditor"
+    },
+    {
+      "type": "timeStamp",
+      "text": "DndContext"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PitchMarkings"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PitchChip"
+    },
+    {
+      "type": "timeStamp",
+      "text": "MiniStamina"
+    },
+    {
+      "type": "timeStamp",
+      "text": "StatusChips"
+    },
+    {
+      "type": "timeStamp",
+      "text": "OrderBadge"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PitchChip"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PitchChip"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PitchChip"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PitchChip"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PitchChip"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PitchChip"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PitchChip"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PitchChip"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PitchChip"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PitchChip"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PitchChip"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PitchChip"
+    },
+    {
+      "type": "timeStamp",
+      "text": "BenchRow"
+    },
+    {
+      "type": "timeStamp",
+      "text": "BenchRow"
+    },
+    {
+      "type": "timeStamp",
+      "text": "BenchRow"
+    },
+    {
+      "type": "timeStamp",
+      "text": "BenchRow"
+    },
+    {
+      "type": "timeStamp",
+      "text": "BenchRow"
+    },
+    {
+      "type": "timeStamp",
+      "text": "BenchRow"
+    },
+    {
+      "type": "timeStamp",
+      "text": "MiniStamina"
+    },
+    {
+      "type": "timeStamp",
+      "text": "StatusChips"
+    },
+    {
+      "type": "timeStamp",
+      "text": "OrderBadge"
+    },
+    {
+      "type": "timeStamp",
+      "text": "BenchRow"
+    },
+    {
+      "type": "timeStamp",
+      "text": "BenchRow"
+    },
+    {
+      "type": "timeStamp",
+      "text": "BenchRow"
+    },
+    {
+      "type": "timeStamp",
+      "text": "BenchRow"
+    },
+    {
+      "type": "timeStamp",
+      "text": "BenchRow"
+    },
+    {
+      "type": "timeStamp",
+      "text": "BenchRow"
+    },
+    {
+      "type": "timeStamp",
+      "text": "BenchRow"
+    },
+    {
+      "type": "timeStamp",
+      "text": "BenchRow"
+    },
+    {
+      "type": "timeStamp",
+      "text": "BenchRow"
+    },
+    {
+      "type": "timeStamp",
+      "text": "MiniStamina"
+    },
+    {
+      "type": "timeStamp",
+      "text": "StatusChips"
+    },
+    {
+      "type": "timeStamp",
+      "text": "OrderBadge"
+    },
+    {
+      "type": "timeStamp",
+      "text": "RestoreFocus"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Accessibility"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Remaining Effects"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Blocking Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Transition Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Suspense Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Idle Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Render"
+    },
+    {
+      "type": "timeStamp",
+      "text": "DndContext"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Blocking Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Transition Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Suspense Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Idle Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Render"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Blocking Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Transition Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Suspense Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Idle Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Blocking Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Transition Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Suspense Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Idle Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Throttled"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Waiting for Paint"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Match3D"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Match3D"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Match3D"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Remaining Effects"
+    },
+    {
+      "type": "warning",
+      "text": "[JavaScript Warning: \"WebGL context was lost.\" {file: \"http://localhost:5199/src/ui/pitch/three/host.ts\" line: 57}]"
+    },
+    {
+      "type": "warning",
+      "text": "[JavaScript Warning: \"WebGL context was lost.\" {file: \"http://localhost:5199/src/ui/pitch/three/host.ts\" line: 57}]"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Blocking Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Transition Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Suspense Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Idle Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Render"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Commit"
+    },
+    {
+      "type": "timeStamp",
+      "text": "MatchScreen"
+    },
+    {
+      "type": "timeStamp",
+      "text": "EntranceOverlay"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Remaining Effects"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Blocking Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Transition Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Suspense Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Idle Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Render"
+    },
+    {
+      "type": "timeStamp",
+      "text": "EntranceOverlay"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Blocking Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Transition Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Suspense Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Idle Track"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Event: click"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Render"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Commit"
+    },
+    {
+      "type": "timeStamp",
+      "text": "MatchScreen"
+    },
+    {
+      "type": "timeStamp",
+      "text": "AnalysisBoard"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PitchView"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PitchMarkings"
+    },
+    {
+      "type": "timeStamp",
+      "text": "AnalysisLayer"
+    },
+    {
+      "type": "timeStamp",
+      "text": "TeamShape"
+    },
+    {
+      "type": "timeStamp",
+      "text": "TeamShape"
+    },
+    {
+      "type": "timeStamp",
+      "text": "SideDots"
+    },
+    {
+      "type": "timeStamp",
+      "text": "SideDots"
+    },
+    {
+      "type": "timeStamp",
+      "text": "ChoreoLayer"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PitchView"
+    },
+    {
+      "type": "timeStamp",
+      "text": "Legend"
+    },
+    {
+      "type": "timeStamp",
+      "text": "PlanBadge"
+    },
+    {
+      "type": "timeStamp",
+      "text": "SpeedToggle"
+    },
+    {
+      "type": "timeStamp",
+      "text": "SettingsMenu"
+    },
+    {
+      "type": "timeStamp",
+      "text": "ShoutBar"
+    }
+  ],
+  "consoleTotal": 87973
+}
