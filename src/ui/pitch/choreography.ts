@@ -17,8 +17,8 @@ import { slotCoords } from './formations'
 import {
   BUILDUP_VARIANT_COUNT,
   FINISH_VARIANT_COUNT,
-  LANE_COUNT,
   buildScene,
+  pickLane,
   type BallArc,
   type OffsideLimit,
   type SceneFinish,
@@ -225,7 +225,10 @@ export function buildSequence(event: MatchEvent, homeState: SideState, awayState
   const defending = isHome ? awayState : homeState
   // 세트피스(코너)·반칙은 오프사이드 규칙이 적용되지 않는다 — 상한을 걸지 않는다.
   const off = finish === 'corner' || finish === 'foul' ? undefined : offsideFor(defending, isHome)
-  const scene = buildScene(pattern, finish, laneFor(event), variantsFor(event), off)
+  const scene = buildScene(
+    pattern, finish, laneFor(event, attacking, isHome),
+    variantsFor(event, focusDirFor(attacking, isHome)), off,
+  )
   // ★ 주인공을 슬롯 0에 꽂는 것은 그 선수가 **공격 팀의 필드 플레이어**일 때만이다.
   //   save의 playerId는 막은 팀의 GK다 — 넘기면 골키퍼가 슈터로 배정된다(실측).
   const ids = pickByRole(attacking, scene.roles, primaryOf(event, attacking))
@@ -266,9 +269,33 @@ function primaryOf(event: MatchEvent, attacking: SideState): string | undefined 
  *   teamId가 레인을 가르면 같은 사건의 홈·원정 x가 서로 미러가 아니게 된다
  *   (실측: 홈 x + 원정 x = 92.99, 규약은 100 — `choreography.test.ts`의 미러 계약).
  *   실제 경기에서는 두 팀의 `playerId`가 다르므로 teamId 없이도 레인은 갈린다.
+ *
+ * ★ 2026-08-01(7라운드 ②) 균일 추첨 → **attackFocus 가중 추첨**(`scenes.pickLane`).
+ *   레인은 곧 전개 측면(y)이므로, 워룸의 `공격방향`이 화면에 나타나는 자리가 바로 여기다.
+ *   해시 자체는 그대로 두고 `% LANE_COUNT`만 `% 100 → 가중 누적 탐색`으로 바꿨다 —
+ *   균형(balanced)의 가중치가 전부 1이라 기본값에서는 여전히 균일 분포다.
+ *
+ *   원정 팀은 x만 미러되므로 같은 y가 반대쪽 측면이 된다 → `mirror`로 뒤집는다.
  */
-function laneFor(event: MatchEvent): number {
-  return hash(`lane|${event.minute}:${event.type}:${event.playerId ?? ''}`) % LANE_COUNT
+function laneFor(event: MatchEvent, attacking: SideState, isHome: boolean): number {
+  const u = hash(`lane|${event.minute}:${event.type}:${event.playerId ?? ''}`) % 100
+  return pickLane(attacking.tactics.instructions.attackFocus, u, !isHome)
+}
+
+/**
+ * 워룸의 `공격방향` → 저술 프레임의 평행 이동 부호(`scenes.FOCUS_SHIFT`).
+ *
+ * 좌우의 정본은 **y가 작을수록 공격 팀의 왼쪽**이다(작전판 `AnalysisLayer.focusBand`,
+ * 점유 흐름 `flow.FLOW_PATTERNS`가 이미 그렇게 쓴다). 원정은 x만 미러되므로
+ * (`buildSequence`의 `fx`) 같은 y가 반대쪽 측면이 된다 → 부호를 뒤집는다.
+ *
+ * `center`가 0인 이유: 중앙 집중은 옆으로 미는 지시가 아니라 **폭을 좁히는** 지시이고,
+ * 그쪽은 레인 가중치(`scenes.LANE_WEIGHTS.center`가 압축 레인 60%)가 이미 표현한다.
+ */
+function focusDirFor(attacking: SideState, isHome: boolean): -1 | 0 | 1 {
+  const f = attacking.tactics.instructions.attackFocus
+  const base = f === 'left' ? -1 : f === 'right' ? 1 : 0
+  return (isHome ? base : -base) as -1 | 0 | 1
 }
 
 /**
@@ -279,9 +306,10 @@ function laneFor(event: MatchEvent): number {
  *   하든 x는 서로 미러(합 100)여야 하는데, teamId가 변형을 가르면 슈팅 지점 x부터 달라져
  *   미러가 깨진다. 레인(y축)은 teamId를 포함해도 x에 영향이 없으므로 그대로 둔다.
  */
-function variantsFor(event: MatchEvent): SceneVariants {
+function variantsFor(event: MatchEvent, focusDir: -1 | 0 | 1): SceneVariants {
   const core = `${event.minute}:${event.type}:${event.playerId ?? ''}`
   return {
+    focusDir,
     // 계열 추첨값 0~99 — scenes.BUILDUP_WEIGHTS가 이 값을 계열로 바꾼다. 전술이 분포를
     // 기울이므로 같은 전술에서도 장면마다 다른 계열이 나온다(5라운드 피드백 ③).
     family: hash(`fam|${core}`) % 100,
@@ -302,5 +330,7 @@ export function sceneKeyFor(event: MatchEvent, homeState: SideState, awayState: 
   const pattern: AttackPattern = attacking.tactics.attackPattern ?? 'balanced'
   const defending = isHome ? awayState : homeState
   const off = finish === 'corner' || finish === 'foul' ? undefined : offsideFor(defending, isHome)
-  return `${isHome ? 'H' : 'A'}/${buildScene(pattern, finish, laneFor(event), variantsFor(event), off).key}`
+  const lane = laneFor(event, attacking, isHome)
+  const v = variantsFor(event, focusDirFor(attacking, isHome))
+  return `${isHome ? 'H' : 'A'}/${buildScene(pattern, finish, lane, v, off).key}`
 }

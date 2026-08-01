@@ -32,7 +32,7 @@
 // 좌표계: home-프레임(좌→우 공격) 0~100. y는 "아래 전개"(y>50)로 저술하고
 // 레인 변형이 위/아래·중앙으로 접는다. away 미러(100-x)는 choreography가 마지막에 한다.
 // 랜덤·시간 의존 없음(결정론).
-import type { AttackPattern } from '../../engine/types'
+import type { AttackPattern, Instructions } from '../../engine/types'
 import { PITCH_H, PITCH_W } from './geometry'
 
 /** 볼 궤적 종류(구간 시작 스텝에 붙는다). movement.BallArcKind가 이 타입을 재사용한다. */
@@ -939,10 +939,104 @@ const LANES: { s: 1 | -1; k: number; label: string }[] = [
 ]
 export const LANE_COUNT = LANES.length
 
+/**
+ * attackFocus → 레인 **분포**(가중치, 합은 자유 — 합으로 정규화한다).
+ *
+ * ★ 2026-08-01 신설(7라운드 ②). 사용자 지적: "공격 방향을 바꾸면 해당 공격 방향에 맞는
+ *   시뮬레이션도 같이 나오게 해줘 — 실제 경기에 반영되는 걸 볼 수 있게."
+ *   워룸의 `공격방향`(좌/중앙/우/균형)은 그때까지 **화면에 전혀 나타나지 않았다**.
+ *   `choreography.laneFor`가 레인 6종을 해시로 **균일 추첨**했기 때문이다.
+ *
+ * 문법은 {@link BUILDUP_WEIGHTS}와 같다 — **고정이 아니라 기울임**. 좌측을 고르면 좌측
+ * 레인이 최빈이 되되 나머지도 나온다. 고정하면 90분 내내 같은 그림이 되어 5라운드에
+ * 지적받은 "패턴이 모두 똑같아"로 되돌아간다.
+ *
+ * 두 축은 **직교한다**: `attackPattern`은 빌드업 **계열**(중앙 침투/크로스/중거리)을,
+ * `attackFocus`는 그 계열을 **어느 레인에 접느냐**를 정한다. 레인은 y만 건드리고
+ * (`laneY`) 계열은 x 진행과 역할 배치를 정하므로 곱해도 모순이 없다 — `중거리 + 좌측`은
+ * "왼쪽 하프스페이스에서 때리는 중거리 슛"이라는 실재하는 그림이다.
+ *
+ * 좌/우의 정본: 이 프로젝트의 화면은 y가 작을수록 위쪽이고, **자기 골문을 등지고 선
+ * 공격 팀 기준으로 위쪽이 왼쪽**이다. 작전판의 공격 집중 밴드(`AnalysisLayer.focusBand`:
+ * left → y 0~30)와 점유 흐름의 패턴 라벨(`flow.FLOW_PATTERNS`: '좌측 전개' y 18~38)이
+ * 이미 그렇게 정해 두었고, 여기서도 그것을 따른다. LANES의 s=-1('위')이 곧 좌측이다.
+ */
+export const LANE_WEIGHTS: Record<Instructions['attackFocus'], readonly number[]> = {
+  // 균형 — 균일. 개편 전(`hash % LANE_COUNT`)과 **분포가 같다**(어느 레인도 편애하지
+  // 않는다). 같은 이벤트가 가는 레인 번호는 추첨 방식이 바뀌면서 재배치됐지만, 레인은
+  // 좌우·폭 변형일 뿐이라 화면의 다양성은 그대로다.
+  balanced: [1, 1, 1, 1, 1, 1],
+  //         우wide 좌wide 우mid 좌mid 우중앙 좌중앙
+  left: [10, 45, 7, 25, 5, 8],
+  right: [45, 10, 25, 7, 8, 5],
+  // 중앙 — 압축 레인(k=0.35)을 60%로. 좌우는 대칭이다.
+  center: [8, 8, 12, 12, 30, 30],
+}
+
+/**
+ * 분포에서 레인 하나를 뽑는다. `u`는 0~99의 결정론 해시값(choreography가 준다).
+ *
+ * @param mirror 공격 팀이 **원정**이면 true. 안무는 x만 미러하고 y는 그대로 두므로
+ *   (choreography.buildSequence의 `fx`), 진행 방향이 뒤집힌 원정 팀에게는 같은 y가 반대쪽
+ *   측면이 된다. 레인 쌍(0↔1, 2↔3, 4↔5)이 정확한 상하 미러이므로 인덱스 하위 1비트만
+ *   뒤집으면 된다.
+ *
+ * ★ **가중치를 뒤집지 않고 결과 인덱스를 뒤집는다.** 두 방식은 같아 보이지만 다르다:
+ *   누적 합 탐색은 열 순서에 의존하므로, 가중치를 섞으면 같은 u가 짝이 아닌 레인으로
+ *   간다. 그러면 홈과 원정이 정확한 y 거울이 아니게 되고, 슛 거리 역산(`finishStations`의
+ *   gz·gx)이 갈려 **x 미러 계약(홈 x + 원정 x = 100)이 깨진다.** 결과를 뒤집으면
+ *   |y−50| 열이 완전히 같아 x가 그대로 미러다.
+ */
+export function pickLane(focus: Instructions['attackFocus'], u: number, mirror: boolean): number {
+  const w = LANE_WEIGHTS[focus] ?? LANE_WEIGHTS.balanced
+  let sum = 0
+  for (let i = 0; i < LANE_COUNT; i++) sum += w[i]
+  const r = mod(u, 100) * (sum / 100)
+  let acc = 0
+  let lane = LANE_COUNT - 1
+  for (let i = 0; i < LANE_COUNT; i++) {
+    acc += w[i]
+    if (r < acc) { lane = i; break }
+  }
+  return mirror ? lane ^ 1 : lane
+}
+
 /** 저술 y(아래 전개 기준) → 레인 y. */
 function laneY(y: number, lane: number): number {
   const L = LANES[((lane % LANE_COUNT) + LANE_COUNT) % LANE_COUNT]
   return clamp(50 + (y - 50) * L.s * L.k)
+}
+
+/**
+ * 공격 방향이 빌드업 전체를 옆으로 미는 폭(0~100 프레임). 9 ≈ **6.1 m**.
+ *
+ * 왜 레인 기울이기만으로는 부족한가(실측): 레인은 저술 y를 **압축만** 한다(k ≤ 1).
+ * 그런데 `central`·`through`·`outside` 계열은 애초에 y 34~68에 저술돼 있어서, 레인을
+ * 아무리 넓은 쪽으로 뽑아도 볼 평균 y가 중앙을 크게 벗어나지 않는다. 레인 가중치만
+ * 넣었을 때 실측은 좌측 지시에서 "왼쪽 전개" 33.5% / "오른쪽 전개" 8.0%였다 —
+ * 방향은 맞지만 **대부분의 장면이 여전히 중앙**이었다.
+ *
+ * 실제 축구의 `공격 방향`은 폭을 넓히는 지시가 아니라 팀 전체의 **좌우 무게중심을 옮기는**
+ * 지시다. 그래서 레인(폭)과 별개로 평행 이동을 준다. 이동은 **빌드업 스테이션에만**
+ * 적용한다 — 마무리는 문전에서 일어나야 하고, `finishStations`가 이미 슈팅 지점 y를
+ * 38~62로, 골문 통과점을 골대 안으로 클램프한다. 결과적으로 "왼쪽에서 전개해 문전에서
+ * 마무리"라는 정상적인 그림이 된다.
+ *
+ * 좌우 미러 계약은 깨지지 않는다: 원정은 레인도(`pickLane`의 mirror) 이동도 함께
+ * 뒤집히므로 저술 프레임에서 정확한 y 미러가 되고, |y−50|이 같으면 `finishStations`의
+ * 슛 거리 역산(gz·gx)이 같아 x가 그대로 미러다.
+ */
+export const FOCUS_SHIFT = 9
+
+/** 빌드업 스테이션을 공격 방향으로 민다. dir: -1 좌 / 0 없음 / +1 우. */
+function mapFocus(stations: Station[], dir: -1 | 0 | 1): Station[] {
+  if (dir === 0) return stations
+  const shift = (y: number) => clamp(y + dir * FOCUS_SHIFT, 3, 97)
+  return stations.map(s => ({
+    ...s,
+    movers: s.movers.map(([x, y]) => [x, shift(y)] as [number, number]),
+    ...(s.ball ? { ball: [s.ball[0], shift(s.ball[1])] as [number, number] } : {}),
+  }))
 }
 
 /** 스테이션에 레인 변형을 적용한다. **시간 역산 전에** 해야 거리가 레인을 반영한다. */
@@ -1083,6 +1177,12 @@ export interface SceneVariants {
   buildup?: number
   /** 마무리 변형(득점 루트) 0~4. */
   finish?: number
+  /**
+   * 공격 방향의 평행 이동 부호 — **저술 프레임 기준** -1 좌 / 0 없음 / +1 우
+   * ({@link FOCUS_SHIFT}). 해시 변형이 아니라 유저 지시에서 곧바로 온다
+   * (`choreography.focusDirFor`). 원정은 호출부가 뒤집어서 넘긴다.
+   */
+  focusDir?: -1 | 0 | 1
 }
 
 /**
@@ -1150,7 +1250,8 @@ export function buildScene(
   // 찬스는 "마무리 없이 박스까지"다 — 빌드업을 한 스테이션 줄여 dwell 안에 들어오게 한다.
   // 드리블 돌파도 같은 이유로 한 스테이션을 줄인다: 뒤에 드리블 터치 2개가 붙기 때문이다.
   const trim = finish === 'chance' || !!FINISH_VARIANTS[fv].solo
-  const build = onside(mapLane(trim ? bv.stations.slice(1) : bv.stations, lane), offside)
+  const fd = variants.focusDir ?? 0
+  const build = onside(mapFocus(mapLane(trim ? bv.stations.slice(1) : bv.stations, lane), fd), offside)
   const last = build[build.length - 1]
   const launch = last.movers[last.carrier] as [number, number]
   const { stations: fin, deliverArc } =
@@ -1161,7 +1262,8 @@ export function buildScene(
   const points = timeline(stations, dwell)
   return {
     points,
-    roles: bv.roles.map(([x, y]) => [x, laneY(y, lane)] as [number, number]),
+    // 역할 원형도 함께 민다 — 왼쪽에서 전개하는 장면의 배역은 왼쪽 선수가 맡아야 한다.
+    roles: bv.roles.map(([x, y]) => [x, clamp(laneY(y, lane) + fd * FOCUS_SHIFT, 3, 97)] as [number, number]),
     key: `${family.id}.${bv.vid}/${finish}.${FINISH_VARIANTS[fv].vid}/L${mod(lane, LANE_COUNT)}`,
     durationMs: points[points.length - 1].t * dwell,
   }

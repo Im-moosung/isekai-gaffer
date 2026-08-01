@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { MatchEvent, MatchState } from '../../../../engine/types'
+import type { AttackPattern, MatchEvent, MatchState } from '../../../../engine/types'
 import { createMatch } from '../../../../engine/simulate'
 import { makeTestTeam } from '../../../../engine/fixtures/testTeams'
 import { buildSequence, type ChoreoStep } from '../../choreography'
@@ -17,7 +17,10 @@ import {
   GK_DIVE_REACH, GK_HAND_HEIGHT, GK_BEATEN_LATE_MS, DIVE_LAY_U, A_SEPARATE, HEADER_MIN_Y,
   type FrameInput,
 } from '../movement'
-import { buildScene, HEADER_BALL_Y, SCENE_DWELL_MS } from '../../scenes'
+import {
+  buildScene, HEADER_BALL_Y, SCENE_DWELL_MS, LANE_COUNT,
+  BUILDUP_VARIANT_COUNT, FINISH_VARIANT_COUNT, type Scene, type SceneFinish,
+} from '../../scenes'
 import { buildFlowSequence } from '../../flow'
 import { createCameraRig, type CameraShot } from '../camera'
 
@@ -55,6 +58,20 @@ function distToLineupSegments(bx: number, bz: number): number {
     }
   }
   return best
+}
+
+/** 장면(슬롯 좌표) → 안무 시퀀스(실제 선수 id). 라이브러리 전수 검사용. */
+function sceneToChoreo(scene: Scene): ChoreoStep[] {
+  const id = (slot: number) => base.home.tactics.lineup[9 - slot].playerId
+  return scene.points.map(p => ({
+    t: p.t,
+    ball: { x: p.ball[0], y: p.ball[1] },
+    movers: p.movers.map((m, i) => ({ playerId: id(i), x: m[0], y: m[1] })),
+    ...(p.arc ? { arc: p.arc } : {}),
+    ...(p.carrier != null && p.carrier >= 0 ? { carrier: id(p.carrier) } : {}),
+    ...(p.endY != null ? { endY: p.endY } : {}),
+    ...(p.contact ? { contact: true as const } : {}),
+  }))
 }
 
 /** 정지 볼을 원하는 0~100 좌표에 고정하는 더미 시퀀스(무버 없음). */
@@ -610,6 +627,79 @@ describe('액션 판정', () => {
     // 드리블 구간은 뜨지 않는다(볼이 발밑에 붙어 굴러간다).
     const carry = scene.points.filter((p, i) => p.carrier === 0 && i + 1 < scene.points.length && scene.points[i + 1].carrier === 0)
     for (const c of carry) expect(c.arc ?? 'ground').toBe('ground')
+  })
+
+  // ── 7라운드 ① 드리블 중 유령 킥 ────────────────────────────────────────
+  // 사용자 지적: "슛이나 패스를 실제로 하지 않는데 공을 가져가면서 슛·패스 모션을 계속 한다."
+  // 원인은 kickEvents가 "캐리어 + 볼 1 m 이동"만 보고 킥을 낸 것이다. 드리블은 스테이션마다
+  // 볼이 6~15 m 전진하므로 몰고 가는 내내 풀스윙이 반복 재생됐다(개편 전 실측: 전 조합
+  // 4,512킥 중 28.5%가 드리블 터치, 장면의 83.4%가 한 번 이상 포함).
+  it('★ 킥은 **소유권이 넘어가는 순간**에만 난다 — 전 조합에서 드리블 터치 킥 0', () => {
+    const patterns: AttackPattern[] = ['balanced', 'cross', 'through', 'longshot']
+    const finishes: SceneFinish[] = ['goal', 'save', 'miss', 'shot', 'chance']
+    let checked = 0
+    let bad = 0
+    let badKey = ''
+    for (const pattern of patterns) {
+      for (const finish of finishes) {
+        for (let lane = 0; lane < LANE_COUNT; lane++) {
+          for (let b = 0; b < BUILDUP_VARIANT_COUNT; b++) {
+            for (let f = 0; f < FINISH_VARIANT_COUNT; f++) {
+              const scene = buildScene(pattern, finish, lane, { buildup: b, finish: f })
+              const seq = sceneToChoreo(scene)
+              for (const k of kickEvents(seq)) {
+                checked++
+                if (seq[k.stepIndex + 1]?.carrier === k.playerId) { bad++; badKey ||= scene.key }
+              }
+            }
+          }
+        }
+      }
+    }
+    expect(checked, '검사한 킥 수').toBeGreaterThan(3000)
+    expect(bad, `드리블 터치를 킥으로 낸 조합: ${badKey}`).toBe(0)
+  })
+
+  it('★ 드리블 돌파 루트: 몰고 가는 동안 킥·헤더 포즈가 한 프레임도 없다', () => {
+    // 개편 전 실측: 슈터가 3.2 s 소유하는 동안 1.53 s(48%)가 킥 포즈였고
+    // 600 ms짜리 풀스윙이 세 번 연속 재생됐다.
+    const scene = buildScene('balanced', 'goal', 0, { finish: 4 })
+    const seq = sceneToChoreo(scene)
+    // 슬롯 0 = 슈터(sceneToChoreo가 lineup[9]에 꽂는다).
+    const shooter = homeId(9)
+    const dwellMs = SCENE_DWELL_MS.goal
+    const e = ev('goal', { playerId: shooter })
+    // 마지막 킥(= 슛)의 시각. 여기서만 발이 나가야 한다.
+    const kicks = kickEvents(seq)
+    expect(kicks.length, '킥은 배달 + 슛 두 번뿐이다').toBeLessThanOrEqual(3)
+    const tShot = kicks[kicks.length - 1].tImpact
+    const openFrom = tShot - (KICK_BACKSWING_MS / dwellMs)
+    const openTo = tShot + (KICK_FOLLOW_MS / dwellMs)
+
+    let prev: FrameState | null = null
+    let posedOutside = 0
+    let posedInside = 0
+    let carryFrames = 0
+    for (let i = 0; i <= 600; i++) {
+      const t = i / 600
+      const f: FrameState = computeFrame(input({
+        sequence: seq, sequenceSide: 'home', t, event: e, dwellMs,
+        prev, dt: prev ? dwellMs / 600 / 1000 : 0, cut: !prev,
+      }))
+      prev = f
+      // 이 시각의 소유자.
+      let carrier: string | null = null
+      for (const s of seq) if (s.t <= t) carrier = s.carrier ?? null
+      if (carrier !== shooter) continue
+      carryFrames++
+      const kicking = find(f, shooter).action === 'kick' || find(f, shooter).action === 'header'
+      if (!kicking) continue
+      if (t >= openFrom && t <= openTo) posedInside++
+      else posedOutside++
+    }
+    expect(carryFrames, '슈터가 공을 가진 프레임').toBeGreaterThan(100)
+    expect(posedOutside, '임팩트 창 **밖**의 킥 포즈 프레임').toBe(0)
+    expect(posedInside, '임팩트 창 안에서는 실제로 찬다').toBeGreaterThan(0)
   })
 
   it('save 이벤트에서 **막은 팀의** GK가 dive한다', () => {

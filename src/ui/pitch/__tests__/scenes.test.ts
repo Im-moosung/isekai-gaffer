@@ -1,12 +1,13 @@
 // 장면 라이브러리(빌드업 × 마무리 × 레인) 계약 — "전술이 화면에 보인다"를 고정한다.
 import { describe, it, expect } from 'vitest'
-import type { AttackPattern, MatchEvent, MatchEventType } from '../../../engine/types'
+import type { AttackPattern, Instructions, MatchEvent, MatchEventType } from '../../../engine/types'
 import { makeTestTeam } from '../../../engine/fixtures/testTeams'
 import { createMatch } from '../../../engine/simulate'
 import {
   buildScene, sceneLibrarySize, LANE_COUNT, buildupLabel, BUILDUP_BY_PATTERN,
   pickBuildup, FINISH_ROUTE_LABELS,
   BUILDUP_VARIANT_COUNT, FINISH_VARIANT_COUNT, SCENE_DWELL_MS, SEGMENT_SPEED,
+  LANE_WEIGHTS, pickLane,
   CARRIER_RUN_SPEED, SUPPORT_RUN_SPEED, FOOT_OFFSET_M, TOUCH_MS,
   MAX_SHOT_DIST_M,
   type ScenePoint, type SceneFinish,
@@ -624,7 +625,12 @@ describe('오프사이드 — 마무리 배역은 최종 2번째 수비 뒤에 �
     return s
   }
 
-  it('라인 10~90 전 구간 × 포메이션 전종 × 패턴 4종에서 위반 0', () => {
+  // ★ 2026-08-01(7라운드 ②) 공격 방향 축을 검사에 추가했다. 평행 이동(scenes.FOCUS_SHIFT)은
+  //   y만 건드리지만, 이동한 y가 슛 지점 역산을 거쳐 x로 돌아오므로(finishStations의 gz·gx)
+  //   상한 검증을 반드시 다시 돌려야 한다.
+  const FOCI: Instructions['attackFocus'][] = ['left', 'center', 'right', 'balanced']
+
+  it('라인 10~90 전 구간 × 포메이션 전종 × 패턴 4종 × 공격방향 4종에서 위반 0', () => {
     let checked = 0
     let worst = -Infinity
     let worstTag = ''
@@ -633,6 +639,8 @@ describe('오프사이드 — 마무리 배역은 최종 2번째 수비 뒤에 �
         const st = withDefLine(formation, lh)
         // 규칙상의 상한(마진 없이) — 저술이 이 값을 넘으면 오프사이드다.
         const line = offsideLineFor(st.away, true)
+        for (const focus of FOCI) {
+        st.home.tactics.instructions = { ...st.home.tactics.instructions, attackFocus: focus }
         for (const pattern of PATTERNS) {
           st.home.tactics.attackPattern = pattern
           for (const minute of [3, 17, 34, 58, 77]) {
@@ -649,14 +657,15 @@ describe('오프사이드 — 마무리 배역은 최종 2번째 수비 뒤에 �
                 const cap = Math.max(line, p.ball.x, 50)
                 checked++
                 const gap = m.x - cap
-                if (gap > worst) { worst = gap; worstTag = `${formation}/lh${lh}/${pattern}/${minute}:${type}/k${k}` }
+                if (gap > worst) { worst = gap; worstTag = `${formation}/lh${lh}/${focus}/${pattern}/${minute}:${type}/k${k}` }
               }
             }
           }
         }
+        }
       }
     }
-    expect(checked, '검사 프레임 수').toBeGreaterThan(5000)
+    expect(checked, '검사 프레임 수').toBeGreaterThan(20000)
     expect(worst, `최악: ${worstTag}`).toBeLessThanOrEqual(0)
   })
 
@@ -672,5 +681,115 @@ describe('오프사이드 — 마무리 배역은 최종 2번째 수비 뒤에 �
       return seq[seq.length - 2].ball.x
     }
     expect(shotX(90)).toBeLessThan(shotX(10))
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ★ 공격 방향 (2026-08-01 7라운드 피드백 ②)
+// 사용자 지적: "공격 방향을 바꾸면 해당 공격 방향에 맞는 시뮬레이션도 같이 나오게 해줘 —
+// 실제 경기에 반영되는 걸 볼 수 있게." 워룸의 `공격방향`은 그때까지 화면에 전혀
+// 나타나지 않았다(레인이 균일 추첨이었다).
+// 좌우의 정본: **y가 작을수록 공격 팀의 왼쪽**(AnalysisLayer.focusBand · flow.FLOW_PATTERNS).
+// ─────────────────────────────────────────────────────────────────────────────
+describe('공격 방향 — 레인 분포와 평행 이동', () => {
+  const FOCI: Instructions['attackFocus'][] = ['left', 'center', 'right', 'balanced']
+
+  it('균형은 **균일 분포**다 — 기본값에서는 어느 레인도 편애하지 않는다', () => {
+    for (const mirror of [false, true]) {
+      const hist = new Array(LANE_COUNT).fill(0)
+      for (let u = 0; u < 100; u++) hist[pickLane('balanced', u, mirror)]++
+      // 6칸 × 100 추첨 → 각 칸이 16 또는 17이어야 한다(정확히 균일).
+      for (const n of hist) expect(n).toBeGreaterThanOrEqual(16)
+      for (const n of hist) expect(n).toBeLessThanOrEqual(17)
+    }
+  })
+
+  it('★ 원정은 홈의 정확한 상하 거울이다 — x 미러 계약이 여기에 걸려 있다', () => {
+    for (const focus of FOCI) {
+      for (let u = 0; u < 100; u++) {
+        // 레인 쌍 (0,1) (2,3) (4,5)가 상하 미러다. 하위 1비트만 뒤집혀야 |y-50| 열이
+        // 같아지고, 그래야 finishStations의 슛 거리 역산이 같아 x가 미러로 남는다.
+        expect(pickLane(focus, u, true), `${focus}/u${u}`).toBe(pickLane(focus, u, false) ^ 1)
+      }
+    }
+    // 좌·우 가중치는 서로의 거울이다(한쪽 지시만 세게 먹으면 안 된다).
+    for (let i = 0; i < LANE_COUNT; i++) expect(LANE_WEIGHTS.left[i]).toBe(LANE_WEIGHTS.right[i ^ 1])
+    // 중앙은 좌우 대칭이므로 미러가 자기 자신과 짝을 이룬다.
+    expect(LANE_WEIGHTS.center[0]).toBe(LANE_WEIGHTS.center[1])
+    expect(LANE_WEIGHTS.center[4]).toBe(LANE_WEIGHTS.center[5])
+  })
+
+  it('좌측은 위(y<50) 레인이, 우측은 아래 레인이 최빈이다 — 고정이 아니라 기울임', () => {
+    for (const [focus, wantOdd] of [['left', true], ['right', false]] as const) {
+      const hist = new Array(LANE_COUNT).fill(0)
+      for (let u = 0; u < 100; u++) hist[pickLane(focus, u, false)]++
+      const odd = hist[1] + hist[3] + hist[5]
+      expect(wantOdd ? odd : 100 - odd, focus).toBeGreaterThanOrEqual(70)
+      // 반대쪽도 사라지지 않는다(90분 내내 같은 그림이 되면 안 된다).
+      expect(wantOdd ? 100 - odd : odd, focus).toBeGreaterThanOrEqual(10)
+      // 여섯 레인 전부 도달 가능하다.
+      for (let i = 0; i < LANE_COUNT; i++) expect(hist[i], `${focus}/L${i}`).toBeGreaterThan(0)
+    }
+    expect(FOCI).toHaveLength(4)
+  })
+
+  it('평행 이동은 빌드업 볼을 지시한 쪽으로 옮긴다(좌우 대칭)', () => {
+    const meanY = (dir: -1 | 0 | 1) => {
+      let sum = 0
+      let n = 0
+      for (const p of PATTERNS) {
+        for (let lane = 0; lane < LANE_COUNT; lane++) {
+          const s = buildScene(p, 'goal', lane, { buildup: 0, finish: 0, focusDir: dir })
+          for (const pt of s.points) { sum += pt.ball[1] - 50; n++ }
+        }
+      }
+      return sum / n
+    }
+    const L = meanY(-1), C = meanY(0), R = meanY(1)
+    expect(L).toBeLessThan(C - 3)
+    expect(R).toBeGreaterThan(C + 3)
+    // 대칭 — 한쪽만 세게 먹으면 좌우 지시의 체감이 달라진다.
+    expect(Math.abs((L - C) + (R - C))).toBeLessThan(0.5)
+  })
+
+  it('평행 이동해도 마무리는 문전이다 — 슛 지점과 골문 통과점의 계약이 산다', () => {
+    for (const dir of [-1, 0, 1] as const) {
+      for (const p of PATTERNS) {
+        for (let lane = 0; lane < LANE_COUNT; lane++) {
+          for (let f = 0; f < FINISH_VARIANT_COUNT; f++) {
+            const s = buildScene(p, 'goal', lane, { buildup: 0, finish: f, focusDir: dir })
+            const shot = shotOf(s.points)!
+            // 슛 지점은 박스 폭 안(저술 계약 38~62).
+            expect(shot.ball[1], `${s.key}/F${dir}`).toBeGreaterThanOrEqual(37)
+            expect(shot.ball[1], `${s.key}/F${dir}`).toBeLessThanOrEqual(63)
+            // 골 종점은 골문 안.
+            const zM = (Math.abs(endOf(s.points).ball[1] - 50) / 100) * PITCH_H
+            expect(zM, `${s.key}/F${dir}`).toBeLessThan(GOAL_HALF_M)
+          }
+        }
+      }
+    }
+  })
+
+  it('공격 방향과 공격 패턴은 직교한다 — 어떤 조합도 장면을 깨지 않는다', () => {
+    for (const p of PATTERNS) {
+      for (const dir of [-1, 0, 1] as const) {
+        for (const finish of ['goal', 'save', 'miss', 'shot', 'chance'] as SceneFinish[]) {
+          for (let lane = 0; lane < LANE_COUNT; lane++) {
+            const s = buildScene(p, finish, lane, { buildup: 1, finish: 2, focusDir: dir })
+            // 키프레임 계약: 첫 t=0, 단조 증가, 마지막 ≤ 0.8.
+            expect(s.points[0].t, s.key).toBe(0)
+            for (let i = 1; i < s.points.length; i++) {
+              expect(s.points[i].t, `${s.key}#${i}`).toBeGreaterThan(s.points[i - 1].t)
+            }
+            expect(s.points[s.points.length - 1].t, `${s.key}/F${dir}`).toBeLessThanOrEqual(0.8)
+            for (const pt of s.points) {
+              expect(pt.ball[1], s.key).toBeGreaterThanOrEqual(0)
+              expect(pt.ball[1], s.key).toBeLessThanOrEqual(100)
+            }
+          }
+        }
+      }
+    }
   })
 })

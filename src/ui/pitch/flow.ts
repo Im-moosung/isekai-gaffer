@@ -11,7 +11,7 @@
 // 애니메이션이 되므로, 하이라이트 사이 구간은 2D가 담당한다.
 //
 // 결정론: Math.random·Date 금지. 변형은 (분, 시드) 해시로만.
-import type { MatchState, SideState } from '../../engine/types'
+import type { Instructions, MatchState, SideState } from '../../engine/types'
 import type { ChoreoStep } from './choreography'
 import { slotCoords } from './formations'
 import { PITCH_H, PITCH_W } from './geometry'
@@ -41,6 +41,65 @@ const FLOW_PATTERNS: { label: string; roles: [number, number][] }[] = [
   { label: '우측 오버랩', roles: [[24, 85], [48, 60], [76, 62], [80, 50]] },
   { label: '후퇴 순환', roles: [[40, 50], [22, 38], [24, 15], [50, 15]] },
 ]
+
+/** 좌우가 뒤집히면 라벨의 방향 낱말도 뒤집는다 — 캡션이 화면과 어긋나면 안 된다. */
+function flipLabel(label: string): string {
+  return label.replace(/좌측|우측/g, m => (m === '좌측' ? '우측' : '좌측'))
+}
+
+// ── 공격 방향 접기 ────────────────────────────────────────────────────────
+/*
+ * 워룸의 `공격방향`을 **무사건 분에도** 보이게 하는 접기 변환.
+ *
+ * ★ 2026-08-01 신설(7라운드 ②). 하이라이트는 레인 분포와 평행 이동으로 기울였지만
+ *   (`scenes.LANE_WEIGHTS` · `scenes.FOCUS_SHIFT`), 90분 중 50~60분은 이 점유 흐름이
+ *   차지한다. 여기가 균일 추첨으로 남아 있으면 "좌측으로 바꿨는데 화면은 그대로"가
+ *   경기 시간의 절반 이상 동안 유지된다.
+ *
+ * **원형을 고르는 방식이 아니라 접는 방식으로 한 이유.** 처음에는 계열 가중치처럼
+ * "왼쪽 원형에 가중치를 준다"로 짰는데, 실측(seed 42, 홈 점유 101분)에서 원형 6종의
+ * 평균 볼 y 오프셋이 −24.6 / −11.3 / −5.9 / −5.9 / +5.9 / +26.0이었다 —
+ * **6종 중 4종이 왼쪽**이고, 라벨('전방 순환'은 중립처럼 보인다)과도 어긋난다.
+ * 이런 집합에서는 가중치를 아무리 줘도 오른쪽 지시가 왼쪽 지시만큼 강해질 수 없다.
+ * 그래서 원형 추첨은 균일하게 두고(해시 그대로), **뽑힌 원형을 목표 측면으로 접는다**.
+ * 어떤 집합이든 좌우가 대칭이 되고, 기본값(균형)의 기존 좌편향도 함께 사라진다.
+ *
+ * 좌우의 정본은 `scenes.LANE_WEIGHTS`의 주석과 같다: **y가 작을수록 공격 팀의 왼쪽**.
+ * 원정 팀은 x만 미러되므로(`fx`) 의미가 뒤집힌다.
+ */
+/** 이 원형이 저술상 어느 쪽으로 전개하는가 — 역할 y 평균의 부호. */
+function authoredSide(roles: [number, number][]): 1 | -1 {
+  const mean = roles.reduce((a, r) => a + r[1], 0) / roles.length
+  return mean >= 50 ? 1 : -1
+}
+
+/** 목표 측면을 뽑을 때 쓰는 가중치(백분율) — 고정이 아니라 기울임이다. */
+const FOCUS_SIDE_PCT: Record<Instructions['attackFocus'], number> = {
+  left: 25, // 오른쪽이 나올 확률
+  right: 75,
+  center: 50,
+  balanced: 50,
+}
+/** 중앙 집중일 때 전개 폭을 좁히는 계수 — `scenes.LANES`의 압축 레인과 같은 문법. */
+const CENTER_FOLD = 0.5
+
+/**
+ * 원형의 역할 좌표를 공격 방향으로 접는다.
+ * @returns 접은 역할 좌표와, 좌우가 뒤집혔는지(라벨을 맞추는 데 쓴다).
+ */
+function foldRoles(
+  roles: [number, number][],
+  focus: Instructions['attackFocus'],
+  u: number,
+  mirror: boolean,
+): { roles: [number, number][]; flipped: boolean } {
+  let pct = FOCUS_SIDE_PCT[focus] ?? 50
+  if (mirror) pct = 100 - pct
+  const want: 1 | -1 = (u % 100) < pct ? 1 : -1
+  const flipped = want !== authoredSide(roles)
+  const k = (focus === 'center' ? CENTER_FOLD : 1) * (flipped ? -1 : 1)
+  return { roles: roles.map(([x, y]) => [x, clamp(50 + (y - 50) * k)] as [number, number]), flipped }
+}
 
 /**
  * 무사건 분 dwell(ms) — **playback.NO_EVENT_DWELL_MS의 정본**.
@@ -106,8 +165,16 @@ export function buildFlowSequence(
   const st = side === 'home' ? state.home : state.away
   const pi = hash(`flowpat:${seed}:${minute}:${side}`) % FLOW_PATTERNS.length
   const pattern = FLOW_PATTERNS[pi]
-  const chain = pickChain(st, pattern.roles)
-  if (chain.length === 0) return { seq: [], side, label: pattern.label }
+  // 공격 방향으로 접는다 — 어느 원형이 뽑혔든 좌우 지시가 대칭으로 먹는다.
+  const folded = foldRoles(
+    pattern.roles,
+    st.tactics.instructions.attackFocus,
+    hash(`flowside:${seed}:${minute}:${side}`) % 100,
+    side === 'away',
+  )
+  const label = folded.flipped ? flipLabel(pattern.label) : pattern.label
+  const chain = pickChain(st, folded.roles)
+  if (chain.length === 0) return { seq: [], side, label }
 
   // away는 x 미러. ★ 모멘텀 드리프트를 공에 더하지 않는다 — 그러면 공이 도트에서
   // 떨어져 보인다. 흐름은 "누가 점유하는가"(possessingSide)와 캡션이 이미 말한다.
@@ -155,5 +222,5 @@ export function buildFlowSequence(
       ms += step
     }
   }
-  return { seq, side, label: pattern.label }
+  return { seq, side, label }
 }
