@@ -169,7 +169,7 @@ export function speak(
       if (!opts.important) return
       mp3.stopAllClips()
     }
-    if (mp3.playLine(line, { speed: opts.speed ?? 1 })) return
+    if (mp3.playLine(line, { speed: opts.speed ?? 1, live: true })) return
   }
   if (!available) return
   const synth = getSynth()
@@ -203,7 +203,7 @@ export function speakAside(
 ): void {
   if (!ttsOn || !line) return
   // 곁들임도 mp3 우선. 선점하지 않고 큐 꼬리에 붙인다(캐스터 문장을 자르지 않는다).
-  if (mp3.hasClips(line) && mp3.playLine(line, { speed: opts.speed ?? 1, queued: true })) return
+  if (mp3.hasClips(line) && mp3.playLine(line, { speed: opts.speed ?? 1, queued: true, live: true })) return
   if (!available) return
   const synth = getSynth()
   if (!synth) return
@@ -262,10 +262,21 @@ export function speakScripted(
 export function beginScript(speeches: readonly string[]): boolean {
   scriptMp3 = mp3.canSpeakAll(speeches)
   if (scriptMp3) mp3.prefetch(speeches)
+  // ★ 입장 연출이 도는 동안 **경기 중 중계 조각**도 받아 둔다. 대본이 mp3로
+  //   덮이든 아니든 부른다 — 두 경로는 별개고, 여기가 킥오프 전에 유저 제스처
+  //   뒤로 도는 유일한 지점이다(commentary-mp3.warmLive 주석 참조).
+  mp3.warmLive()
   return scriptMp3
 }
 
-/** 대본 종료. 다음 {@link beginScript}까지 대본 mp3는 꺼진다. */
+/**
+ * 대본 종료. 다음 {@link beginScript}까지 **대본** mp3는 꺼진다.
+ *
+ * ★ 경기 중 중계에는 영향이 없다. `scriptMp3`는 {@link speakScripted} 한 곳만 보고,
+ *   {@link speak}·{@link speakAside}는 언제나 `mp3.hasClips`로 스스로 판정한다.
+ *   (2026-08-02: "경기 중은 mp3가 없으니 여기서 꺼야 한다"던 MatchScreen 주석은
+ *    이제 사실이 아니다 — 조각이 생겼고, 끄는 것도 아니었다.)
+ */
 export function endScript(): void {
   scriptMp3 = false
 }

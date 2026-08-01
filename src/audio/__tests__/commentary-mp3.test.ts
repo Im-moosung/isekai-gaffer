@@ -321,6 +321,146 @@ describe('commentary-tts 통합 — mp3 우선, speechSynthesis 폴백', () => {
   })
 })
 
+// ── 경기 중 중계 — 임의 개수 조각 ──────────────────────────────
+// 입장 소개는 이음매가 1개(도입 + 이름)라 쉼표 한 번 자르면 끝이었다. 경기 중계는
+// `여기서, / 전반 4분, / {이름}, / 슛이 골문을 벗어납니다.` 처럼 넷까지 간다.
+// 조각 목록은 이음매가 적게 나오도록 설계됐고(tools/tts/live-corpus.mjs),
+// 런타임은 그 설계를 **최소 조각 수**로 복원해야 한다.
+const LIVE_INDEX = {
+  v: 1,
+  gapMs: 90,
+  liveGapMs: 40,
+  clips: {
+    '여기서,': 'l/f1',
+    '전반 4분,': 'l/m4',
+    '손흥민,': 'l/n1',
+    '슛이 골문을 벗어납니다.': 'l/b1',
+    // 통문장 — 조각으로도 덮이지만 **한 조각**이 이겨야 한다.
+    '전반 4분, 손흥민, 슛이 골문을 벗어납니다.': 'l/whole',
+    '대한민국': 'l/t1',
+    '대한민국 진영에서 반칙이 나옵니다.': 'l/t2',
+  },
+  warm: ['l/f1', 'l/m4', 'l/n1', 'l/b1'],
+}
+
+describe('임의 개수 조각 분해', () => {
+  it('조각 넷을 순서대로 돌려준다', async () => {
+    const { mp3 } = await setup()
+    // 통문장을 뺀 조회표 — 조각으로만 덮는 경로를 본다.
+    const { '전반 4분, 손흥민, 슛이 골문을 벗어납니다.': _whole, ...clips } = LIVE_INDEX.clips
+    mp3.__setClipIndex({ ...LIVE_INDEX, clips })
+    expect(mp3.resolveClips('여기서, 전반 4분, 손흥민, 슛이 골문을 벗어납니다.'))
+      .toEqual(['l/f1', 'l/m4', 'l/n1', 'l/b1'])
+  })
+
+  it('덮는 방법이 여럿이면 **조각 수가 적은** 쪽을 고른다', async () => {
+    const { mp3 } = await setup()
+    mp3.__setClipIndex(LIVE_INDEX)
+    // 조각 셋으로도 덮이지만 통문장 하나가 있다 → 이음매 0.
+    expect(mp3.resolveClips('전반 4분, 손흥민, 슛이 골문을 벗어납니다.')).toEqual(['l/whole'])
+    // 팀명도 마찬가지 — `대한민국` + 본문(둘)보다 통으로 구운 것(하나)이 이긴다.
+    expect(mp3.resolveClips('대한민국 진영에서 반칙이 나옵니다.')).toEqual(['l/t2'])
+  })
+
+  it('조각 사이 공백은 공짜로 건너뛴다(조회표 키는 trim된 정본이다)', async () => {
+    const { mp3 } = await setup()
+    mp3.__setClipIndex(LIVE_INDEX)
+    expect(mp3.resolveClips('여기서, 손흥민, 슛이 골문을 벗어납니다.'))
+      .toEqual(['l/f1', 'l/n1', 'l/b1'])
+  })
+
+  it('한 조각이라도 없으면 그 문장만 null — 경기 중은 문장 단위 폴백이다', async () => {
+    const { mp3 } = await setup()
+    mp3.__setClipIndex(LIVE_INDEX)
+    expect(mp3.resolveClips('여기서, 이강인, 슛이 골문을 벗어납니다.')).toBeNull()
+    // 옆 문장은 멀쩡하다(대본의 전부 아니면 전무와 다른 계약).
+    expect(mp3.resolveClips('대한민국 진영에서 반칙이 나옵니다.')).toEqual(['l/t2'])
+  })
+})
+
+describe('문장 안 이음매 — 무음과 재생 속도', () => {
+  async function ready() {
+    const r = await setup({ index: LIVE_INDEX })
+    r.sfx.init()
+    r.mp3.loadClipIndex()
+    await flush()
+    r.mp3.prefetch(['여기서, 손흥민, 슛이 골문을 벗어납니다.'])
+    await flush()
+    r.ctx.sources.length = 0
+    return r
+  }
+
+  it('live 발화는 대본보다 짧은 무음을 쓴다', async () => {
+    const { mp3, ctx } = await ready()
+    mp3.playLine('여기서, 손흥민, 슛이 골문을 벗어납니다.', { live: true })
+    const [a, b] = ctx.sources
+    expect(b.started! - a.started!).toBeCloseTo(CLIP_SEC + LIVE_INDEX.liveGapMs / 1000, 5)
+
+    ctx.sources.length = 0
+    mp3.playLine('여기서, 손흥민, 슛이 골문을 벗어납니다.')
+    const [c, d] = ctx.sources
+    expect(d.started! - c.started!).toBeCloseTo(CLIP_SEC + LIVE_INDEX.gapMs / 1000, 5)
+  })
+
+  it('무음도 재생 속도로 나뉜다 — 2배속에서 문장이 두 배로 짧아진다', async () => {
+    const { mp3, ctx } = await ready()
+    mp3.playLine('여기서, 손흥민, 슛이 골문을 벗어납니다.', { live: true, speed: 2 })
+    const [a, , c] = ctx.sources
+    expect(ctx.sources).toHaveLength(3)
+    const gap = LIVE_INDEX.liveGapMs / 1000
+    expect(c.started! - a.started!).toBeCloseTo(((CLIP_SEC + gap) * 2) / 2, 5)
+  })
+})
+
+describe('미리 받기 — 조각의 첫 등장이 폴백이 되지 않게', () => {
+  it('warm 목록을 빈도 순으로 받아 두고, 두 번 부르지 않는다', async () => {
+    const { sfx, mp3 } = await setup({ index: LIVE_INDEX })
+    sfx.init()
+    mp3.loadClipIndex()
+    await flush()
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>
+    fetchMock.mockClear()
+    mp3.warmLive()
+    await flush()
+    const got = fetchMock.mock.calls.map(c => String(c[0])).filter(u => u.includes('/tts/l/'))
+    expect(got).toHaveLength(LIVE_INDEX.warm.length)
+    for (const k of LIVE_INDEX.warm) expect(got.some(u => u.includes(k))).toBe(true)
+
+    // 두 번째 호출은 아무것도 더 받지 않는다.
+    fetchMock.mockClear()
+    mp3.warmLive()
+    await flush()
+    expect(fetchMock.mock.calls).toHaveLength(0)
+  })
+
+  it('유저 제스처 전(오디오 버스 없음)에는 아무 일도 하지 않는다 — 다음에 다시 시도한다', async () => {
+    const { sfx, mp3 } = await setup({ index: LIVE_INDEX })
+    mp3.loadClipIndex()
+    await flush()
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>
+    fetchMock.mockClear()
+    mp3.warmLive() // 버스가 아직 없다
+    await flush()
+    expect(fetchMock.mock.calls.filter(c => String(c[0]).includes('/tts/l/'))).toHaveLength(0)
+    sfx.init()
+    mp3.warmLive()
+    await flush()
+    expect(fetchMock.mock.calls.filter(c => String(c[0]).includes('/tts/l/')).length).toBeGreaterThan(0)
+  })
+
+  it('beginScript가 경기 중 조각 받기를 깨운다(대본이 덮이지 않아도)', async () => {
+    const { sfx, mp3, tts } = await setup({ index: LIVE_INDEX })
+    sfx.init()
+    mp3.loadClipIndex()
+    await flush()
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>
+    fetchMock.mockClear()
+    expect(tts.beginScript(['덮이지 않는 대본 한 줄'])).toBe(false)
+    await flush()
+    expect(fetchMock.mock.calls.filter(c => String(c[0]).includes('/tts/l/')).length).toBeGreaterThan(0)
+  })
+})
+
 describe('빌드 산출물 계약', () => {
   beforeEach(() => { vi.unstubAllGlobals() })
   it('매니페스트가 내는 조회표 모양을 그대로 읽는다', async () => {

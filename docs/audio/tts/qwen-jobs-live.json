@@ -1,0 +1,5456 @@
+{
+ "schemaVersion": 1,
+ "purpose": "이세계 감독 — **경기 중 중계** TTS 조각. Qwen3-TTS 1.7B Base 음성 복제(ICL)로 생성.",
+ "source": {
+  "plan": "docs/audio/tts/live-plan.json",
+  "design": "tools/tts/live-corpus.mjs — 토큰 열 분해 + 빈도 가중 탐욕 합치기",
+  "rewrite": "docs/audio/tts/name-rewrite.json (commentary.ts 발화 문자열에 선적용해야 한다)",
+  "corpusUtterances": 91215,
+  "avgSeamsPerUtterance": 0.662,
+  "coverage": 1
+ },
+ "voices": {
+  "caster": {
+   "id": "C3",
+   "alias": "정석",
+   "speed": 1.2,
+   "ko": "캐스터"
+  },
+  "analyst": {
+   "id": "A3",
+   "alias": "열정",
+   "speed": 1.5,
+   "ko": "해설위원"
+  }
+ },
+ "seed": 20260806,
+ "carriers": {
+  "head": "{text} …… 지금 좋습니다.",
+  "tail": "이 선수는 …… {text}",
+  "note": "`cut`이 캐리어를 정한다. plain은 캐리어 없이 직접 생성한다. 잘라내기는 tools/qwen-tts/process.py."
+ },
+ "audio": {
+  "format": "wav",
+  "note": "모노 24kHz. 라우드니스(−16 LUFS)·mp3 인코딩은 tools/tts/live-package.py가 한다."
+ },
+ "counts": {
+  "planned": 877,
+  "reused": 105,
+  "jobs": 772,
+  "byRole": {
+   "caster": 680,
+   "analyst": 92
+  },
+  "byCut": {
+   "head": 274,
+   "tail": 290,
+   "plain": 208
+  }
+ },
+ "jobs": [
+  {
+   "key": "l/ca9bfc61b3",
+   "text": "마테이 코바르시,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/082e3971b3",
+   "text": "데니스 비신스키,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/bcc64db637",
+   "text": "라울 랑헬,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/166d5691e3",
+   "text": "호르헤 산체스,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/c6be817b92",
+   "text": "오베드 바르가스,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/f0aeb6dd3b",
+   "text": "라울 히메네스,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/ba52d041c7",
+   "text": "로웬 윌리엄스,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/880d2b45b6",
+   "text": "쿨리소 무다우,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/0372ce3f40",
+   "text": "오스윈 아폴리스,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/15da8b3eb7",
+   "text": "타펠로 마세코,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/fe8f8cc9d7",
+   "text": "에르난 갈린데스,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/402f7f06b9",
+   "text": "앙헬로 프레시아도,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/1f8e51c874",
+   "text": "곤살로 플라타,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/aa1fb30bf9",
+   "text": "에네르 발렌시아,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/071780932d",
+   "text": "데인 세인트클레어,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/2f1911f4da",
+   "text": "앨리스테어 존스턴,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/04713f34e2",
+   "text": "타종 뷰캐넌,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/302a88a0c5",
+   "text": "조너선 데이비드,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/aedfd3d31d",
+   "text": "조던 픽포드,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/0e2d22ebc8",
+   "text": "리스 제임스,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/b06ea2c914",
+   "text": "부카요 사카,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/266c9f682a",
+   "text": "해리 케인,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/43651b51e8",
+   "text": "외르얀 뉠란,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/1ce10751d0",
+   "text": "율리안 뤼에르손,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/2bba169570",
+   "text": "오스카르 보브,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/85bae43a50",
+   "text": "엘링 홀란,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/f73d53bf68",
+   "text": "에밀리아노 마르티네스,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/d65b8f7e18",
+   "text": "나우엘 몰리나,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/6d5dff1b23",
+   "text": "엔소 페르난데스,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/f07ccf3317",
+   "text": "훌리안 알바레스,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/ee94d7e889",
+   "text": "야신 부누,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/5837a44f9c",
+   "text": "아슈라프 하키미,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/a8aba8017d",
+   "text": "네일 엘 아이나위,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/65deaad60f",
+   "text": "수피안 라히미,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/f2f8042700",
+   "text": "마이크 메냥,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/98f01612e7",
+   "text": "쥘 쿤데,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/364c8de0d4",
+   "text": "바랑 자이르에메리,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/d348dad8c8",
+   "text": "킬리안 음바페,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/31dca90d8f",
+   "text": "우나이 시몬,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/243b289cfd",
+   "text": "마르코스 요렌테,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/9190c4d9bd",
+   "text": "라민 야말,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/beddc992d2",
+   "text": "미켈 오야르사발,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/166cf9e7be",
+   "text": "전반 1분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/703c1afe22",
+   "text": "전반 2분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/d087e3db4a",
+   "text": "전반 3분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/d0dd864d3a",
+   "text": "전반 4분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/4b0edcdb38",
+   "text": "전반 5분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/fd5ac64ce3",
+   "text": "전반 6분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/aa32faf8bb",
+   "text": "전반 7분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/ca7e4f026e",
+   "text": "전반 8분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/3b36b066ef",
+   "text": "전반 9분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/5c856a15fc",
+   "text": "전반 10분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/8ad3bf39c1",
+   "text": "전반 11분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/539da3223a",
+   "text": "전반 12분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/487e588864",
+   "text": "전반 13분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/41d7e77cd2",
+   "text": "전반 14분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/dc8a1a0f4a",
+   "text": "전반 15분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/39fe6aa4c7",
+   "text": "전반 16분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/189e409815",
+   "text": "전반 17분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/9427a4f164",
+   "text": "전반 18분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/66a3aaf6c7",
+   "text": "전반 19분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/c1da9b1fe9",
+   "text": "전반 20분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/976384668e",
+   "text": "전반 21분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/f6ec2d5b6c",
+   "text": "전반 22분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/ba22be42a3",
+   "text": "전반 23분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/97e988f14e",
+   "text": "전반 24분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/9e44134118",
+   "text": "전반 25분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/2ac64a6021",
+   "text": "전반 26분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/b8d3975b4f",
+   "text": "전반 27분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/ad727918fc",
+   "text": "전반 28분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/e4dcbf3da6",
+   "text": "전반 29분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/63e7c3c6dd",
+   "text": "전반 30분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/99b89977a8",
+   "text": "전반 31분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/f96fec6d92",
+   "text": "전반 32분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/641b554625",
+   "text": "전반 33분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/bb6fe7bf6d",
+   "text": "전반 34분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/3dcdb779a3",
+   "text": "전반 35분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/1af6eff9af",
+   "text": "전반 36분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/5c28682da7",
+   "text": "전반 37분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/f31dad1823",
+   "text": "전반 38분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/4c0afd2f8d",
+   "text": "전반 39분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/3e2f95fef5",
+   "text": "전반 40분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/c81d587ae1",
+   "text": "전반 41분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/3ddeb5dd76",
+   "text": "전반 42분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/e164ed1336",
+   "text": "전반 43분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/365bf2e1cb",
+   "text": "전반 44분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/daf0ef4ff6",
+   "text": "전반 45분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/1d653120b3",
+   "text": "후반 46분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/742bbc25c0",
+   "text": "후반 47분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/995f9fe34e",
+   "text": "후반 48분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/198b9aab8a",
+   "text": "후반 49분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/0853c19019",
+   "text": "후반 50분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/7d06ca94e6",
+   "text": "후반 51분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/3482b6e0d0",
+   "text": "후반 52분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/f4a85e1291",
+   "text": "후반 53분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/916caead6e",
+   "text": "후반 54분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/e953a546d8",
+   "text": "후반 55분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/99f9bd0e2c",
+   "text": "후반 56분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/f052e6e3c1",
+   "text": "후반 57분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/e820ff05c3",
+   "text": "후반 58분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/3171ed29c4",
+   "text": "후반 59분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/ccef696496",
+   "text": "후반 60분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/9ece238a03",
+   "text": "후반 61분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/ae460d0ccc",
+   "text": "후반 62분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/ada3fb07a5",
+   "text": "후반 63분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/3be6d7761d",
+   "text": "후반 64분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/4f9aaa847e",
+   "text": "후반 65분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/b4c4198b52",
+   "text": "후반 66분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/e0978b23cd",
+   "text": "후반 67분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/b8494372ea",
+   "text": "후반 68분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/8b3458c0c8",
+   "text": "후반 69분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/9962e1e2ed",
+   "text": "후반 70분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/63251ed608",
+   "text": "후반 71분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/b6bfe52489",
+   "text": "후반 72분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/a2f045c1a9",
+   "text": "후반 73분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/44670d9fc0",
+   "text": "후반 74분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/ab3900ba1b",
+   "text": "후반 75분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/fde681c984",
+   "text": "후반 76분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/766b3db2f8",
+   "text": "후반 77분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/e150280f52",
+   "text": "후반 78분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/612b9122d5",
+   "text": "후반 79분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/cb2949a487",
+   "text": "후반 80분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/10f6ad15b8",
+   "text": "후반 81분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/db87e08dd2",
+   "text": "후반 82분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/d6f24b5e77",
+   "text": "후반 83분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/90dee302a5",
+   "text": "후반 84분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/418a878158",
+   "text": "후반 85분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/18a1afbb20",
+   "text": "후반 86분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/5171e0c7ce",
+   "text": "후반 87분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/03bf72a058",
+   "text": "후반 88분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/24c2eacad5",
+   "text": "후반 89분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/2c95aab906",
+   "text": "후반 90분,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/a3add12d8e",
+   "text": "후반 추가시간,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/c697db1f7b",
+   "text": "아,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/967266991a",
+   "text": "자,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/9a1b5e610e",
+   "text": "네,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/570e0b0d8c",
+   "text": "그런데,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/1c076beb38",
+   "text": "여기서,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/1c05a91bad",
+   "text": "늦게 들어갔습니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/2cc5b160ed",
+   "text": "반칙입니다. 흐름이 끊깁니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/6555fb9683",
+   "text": "상대를 넘어뜨립니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/4b979c8c29",
+   "text": "대한민국 진영에서 반칙이 나옵니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/2d34e217da",
+   "text": "체코 진영에서 반칙이 나옵니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/0ba8074625",
+   "text": "멕시코 진영에서 반칙이 나옵니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/807ba70ea8",
+   "text": "남아프리카공화국 진영에서 반칙이 나옵니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/d800235e60",
+   "text": "에콰도르 진영에서 반칙이 나옵니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/96b833bb1d",
+   "text": "잉글랜드 진영에서 반칙이 나옵니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/ccc50b0333",
+   "text": "노르웨이 진영에서 반칙이 나옵니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/1c292497b4",
+   "text": "아르헨티나 진영에서 반칙이 나옵니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/8155643ee4",
+   "text": "스페인 진영에서 반칙이 나옵니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/c4398e342d",
+   "text": "캐나다 진영에서 반칙이 나옵니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/55f5ac14a0",
+   "text": "모로코 진영에서 반칙이 나옵니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/4f88a323c0",
+   "text": "프랑스 진영에서 반칙이 나옵니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/8b1f047306",
+   "text": "네, 슛 선택은 맞았습니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/384214b287",
+   "text": "이런 게 쌓이면 후회로 남습니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/6f7cffb87b",
+   "text": "급했습니다. 한 박자만 참았으면요.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/69abe6ebdd",
+   "text": "조금만 더 눕혀 찼으면 좋았을 텐데요.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/e58ac7637d",
+   "text": "네, 이런 선방이 승점을 지킵니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/0eedde056e",
+   "text": "주심, 휘슬을 붑니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/6794383caa",
+   "text": "각을 좁힌 게 컸어요.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/d9fb3c94f0",
+   "text": "파울입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/d422eaaf7a",
+   "text": "이런 장면 하나가 수비를 편하게 하죠.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/cd41079347",
+   "text": "골키퍼, 자리 선정이 좋았습니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/a16b6c42b7",
+   "text": "반칙이 잦네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/c188122614",
+   "text": "오늘 벌써 첫 번째 파울입니다. 카드가 나올 수 있어요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/3033bca7c8",
+   "text": "오늘 벌써 두 번째 파울입니다. 카드가 나올 수 있어요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/0bd7400c40",
+   "text": "오늘 벌써 세 번째 파울입니다. 카드가 나올 수 있어요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/575358dad3",
+   "text": "오늘 벌써 네 번째 파울입니다. 카드가 나올 수 있어요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/ca296b4a93",
+   "text": "오늘 벌써 다섯 번째 파울입니다. 카드가 나올 수 있어요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/71e735d96a",
+   "text": "오늘 벌써 여섯 번째 파울입니다. 카드가 나올 수 있어요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/338bc1b5b0",
+   "text": "오늘 벌써 일곱 번째 파울입니다. 카드가 나올 수 있어요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/82fd9f1ce9",
+   "text": "오늘 벌써 여덟 번째 파울입니다. 카드가 나올 수 있어요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/42ce19f17b",
+   "text": "오늘 벌써 아홉 번째 파울입니다. 카드가 나올 수 있어요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/965b653a8a",
+   "text": "오늘 벌써 열 번째 파울입니다. 카드가 나올 수 있어요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/dab776a3cb",
+   "text": "오늘 벌써 여러 번째 파울입니다. 카드가 나올 수 있어요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/45db1e8fb6",
+   "text": "슛이 골문을 벗어납니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/3f8145e529",
+   "text": "골문 옆으로 흐릅니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/cdf013f593",
+   "text": "마무리가 아쉽습니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/cbad9deb23",
+   "text": "조금 높았죠.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/2a76eb53fd",
+   "text": "고개를 떨굽니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/e8a27bd50d",
+   "text": "또",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/de47620dd4",
+   "text": "빗나갑니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/85bf7f10ee",
+   "text": "또 막아냅니다!",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/be3f546f3a",
+   "text": "오늘 첫 번째 선방입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/2acf764faf",
+   "text": "오늘 두 번째 선방입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/3b8975e81e",
+   "text": "오늘 세 번째 선방입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/defc5718e6",
+   "text": "오늘 네 번째 선방입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/7668e4dae0",
+   "text": "오늘 다섯 번째 선방입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/2ce40053e0",
+   "text": "오늘 여섯 번째 선방입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/3304b51e72",
+   "text": "오늘 일곱 번째 선방입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/4ed0870447",
+   "text": "오늘 여덟 번째 선방입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/32eb864ce1",
+   "text": "오늘 아홉 번째 선방입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/cfcaf8d08c",
+   "text": "오늘 열 번째 선방입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/f12be35d77",
+   "text": "오늘 여러 번째 선방입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/14a131ad89",
+   "text": "연속 선방!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/6eaf8c74f8",
+   "text": "벽입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/5ef809c7c5",
+   "text": "이번에도 막습니다!",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/0b5ee02426",
+   "text": "대한민국의 코너킥입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/5c8dc70615",
+   "text": "체코의 코너킥입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/c6b9474237",
+   "text": "멕시코의 코너킥입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/b203ed07cd",
+   "text": "남아프리카공화국의 코너킥입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/553eb79a27",
+   "text": "에콰도르의 코너킥입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/f55bd3c5bd",
+   "text": "잉글랜드의 코너킥입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/444420fa6b",
+   "text": "노르웨이의 코너킥입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/7a1740e1cc",
+   "text": "아르헨티나의 코너킥입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/2fe4132ab9",
+   "text": "스페인의 코너킥입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/7d902d405f",
+   "text": "캐나다의 코너킥입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/bdabb2d1ac",
+   "text": "모로코의 코너킥입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/6cef277444",
+   "text": "프랑스의 코너킥입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/afae653108",
+   "text": "코너킥.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/523262ecce",
+   "text": "대한민국, 세트피스 기회를 잡네요.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/4a6e384dae",
+   "text": "체코, 세트피스 기회를 잡네요.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/7e7fdf683a",
+   "text": "멕시코, 세트피스 기회를 잡네요.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/609c0a838d",
+   "text": "남아프리카공화국, 세트피스 기회를 잡네요.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/5c25c9891b",
+   "text": "에콰도르, 세트피스 기회를 잡네요.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/b5c9134173",
+   "text": "잉글랜드, 세트피스 기회를 잡네요.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/19218b4318",
+   "text": "노르웨이, 세트피스 기회를 잡네요.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/6b11b1c10e",
+   "text": "아르헨티나, 세트피스 기회를 잡네요.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/0d5f66f70e",
+   "text": "스페인, 세트피스 기회를 잡네요.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/2a1ef93432",
+   "text": "캐나다, 세트피스 기회를 잡네요.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/7119025869",
+   "text": "모로코, 세트피스 기회를 잡네요.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/eee560efc9",
+   "text": "프랑스, 세트피스 기회를 잡네요.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/ebd83b6cb6",
+   "text": "대한민국, 코너에 공을 올립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/0c21ccbaa9",
+   "text": "체코, 코너에 공을 올립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/eca6458861",
+   "text": "멕시코, 코너에 공을 올립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/d8dbb465b1",
+   "text": "남아프리카공화국, 코너에 공을 올립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/651141424d",
+   "text": "에콰도르, 코너에 공을 올립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/454710b5a7",
+   "text": "잉글랜드, 코너에 공을 올립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/e3460a711f",
+   "text": "노르웨이, 코너에 공을 올립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/fb24dd7c60",
+   "text": "아르헨티나, 코너에 공을 올립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/b788d5a405",
+   "text": "스페인, 코너에 공을 올립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/d2bc866a09",
+   "text": "캐나다, 코너에 공을 올립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/efb4d0bb32",
+   "text": "모로코, 코너에 공을 올립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/901da1017a",
+   "text": "프랑스, 코너에 공을 올립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/c05695eac4",
+   "text": "대한민국이 기회를 살리지 못합니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/5b08b8cfd4",
+   "text": "남아프리카공화국이 기회를 살리지 못합니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/23bfe15727",
+   "text": "스페인이 기회를 살리지 못합니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/cf572dcbfe",
+   "text": "김승규!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/b6c3bbb059",
+   "text": "김민재!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/caced9627e",
+   "text": "이한범!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/854a68aa39",
+   "text": "김태현!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/ae513c1b0c",
+   "text": "설영우!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/1a5f34b690",
+   "text": "백승호!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/c2e481ed4b",
+   "text": "손흥민!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/fe485bb0f5",
+   "text": "이재성!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/2c8645462d",
+   "text": "이강인!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/3a93111c63",
+   "text": "오현규!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/d0e80794e7",
+   "text": "황인범!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/d2e87e7b91",
+   "text": "조현우!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/0dde781964",
+   "text": "송범근!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/4bf1c3c6f7",
+   "text": "박진섭!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/cd6b5ec3ee",
+   "text": "조위제!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/a7d88a0b28",
+   "text": "이태석!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/ac25b2ab7b",
+   "text": "김문환!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/470fc233aa",
+   "text": "옌스 카스트로프!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/24ec46ccf4",
+   "text": "이기혁!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/1aa118164f",
+   "text": "엄지성!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/0a96f4c8ad",
+   "text": "배준호!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/b67a42fcac",
+   "text": "양현준!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/fbf3bfce02",
+   "text": "황희찬!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/29eb1d1ea1",
+   "text": "조규성!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/9580c85ce0",
+   "text": "김진규!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/644fcc4daf",
+   "text": "이동경!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/77a01ebf3b",
+   "text": "마테이 코바르시!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/3b97524f50",
+   "text": "다비트 지마!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/d031542df2",
+   "text": "로빈 흐라나치!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/067faeab89",
+   "text": "라디슬라프 크레이치!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/7638131b78",
+   "text": "루카시 프로보트!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/4b09c3a4f4",
+   "text": "토마시 소우체크!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/8b8dc938f8",
+   "text": "미할 사딜레크!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/d0e6b0d80a",
+   "text": "블라디미르 다리다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/e58b46391e",
+   "text": "데니스 비신스키!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/c45822514d",
+   "text": "파트리크 시크!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/c5580614c8",
+   "text": "아담 흘로제크!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/c9749f6ba2",
+   "text": "라울 랑헬!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/242af27e4a",
+   "text": "세사르 몬테스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/0e356f6b84",
+   "text": "요한 바스케스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/20866c8e19",
+   "text": "헤수스 가야르도!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/186c39d6c2",
+   "text": "호르헤 산체스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/0a5497b4e8",
+   "text": "에드손 알바레스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/a7843666dc",
+   "text": "루이스 로모!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/4d40b818ed",
+   "text": "오베드 바르가스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/fbbc14d642",
+   "text": "알렉시스 베가!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/95c7bc355d",
+   "text": "훌리안 키뇨네스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/2acf76e92f",
+   "text": "라울 히메네스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/d456500f66",
+   "text": "로웬 윌리엄스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/7bef0243d5",
+   "text": "은코시나티 시비시!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/7eedc68eca",
+   "text": "음베케젤리 음보카지!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/807e765b82",
+   "text": "오브리 모디바!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/02be728145",
+   "text": "쿨리소 무다우!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/a3c6e9b6c3",
+   "text": "스페펠로 시톨레!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/2b9b59f17b",
+   "text": "탈렌테 음바타!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/badcfeb723",
+   "text": "체팡 모레미!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/09bf483489",
+   "text": "렐레보힐레 모포켕!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/71b099c96e",
+   "text": "오스윈 아폴리스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/1c479ebef6",
+   "text": "타펠로 마세코!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/dd56cb7ae5",
+   "text": "에르난 갈린데스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/bbbd7a237d",
+   "text": "피에로 인카피에!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/1cb76a41d0",
+   "text": "윌리안 파초!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/89c88abfcf",
+   "text": "페르비스 에스투피냔!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/b8b9a5bda5",
+   "text": "앙헬로 프레시아도!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/c267012a50",
+   "text": "모이세스 카이세도!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/2833e09cf9",
+   "text": "조르디 알시바르!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/e8d96a406d",
+   "text": "닐손 앙굴로!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/44b774a187",
+   "text": "켄드리 파에스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/e4526f1e54",
+   "text": "곤살로 플라타!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/8ebf54ef44",
+   "text": "에네르 발렌시아!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/f08343f2b3",
+   "text": "데인 세인트클레어!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/321a3a6b66",
+   "text": "데릭 코넬리우스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/9c10359149",
+   "text": "모이즈 봄비토!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/7d116cc3b5",
+   "text": "알폰소 데이비스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/d658a080f1",
+   "text": "앨리스테어 존스턴!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/75150940b0",
+   "text": "이스마엘 코네!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/ba8ea0fe5b",
+   "text": "스티븐 에우스타키우!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/7d74be28f3",
+   "text": "제이컵 섀펠버그!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/84c4b1ce43",
+   "text": "조너선 오소리오!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/2f144fe1dc",
+   "text": "타종 뷰캐넌!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/21b9361b1c",
+   "text": "조너선 데이비드!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/8634e282b9",
+   "text": "조던 픽포드!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/be66b251fe",
+   "text": "존 스톤스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/9cf2a0aed6",
+   "text": "마크 게이!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/46c4583ed7",
+   "text": "니코 오라일리!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/a1333338e1",
+   "text": "리스 제임스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/d6921b80bd",
+   "text": "데클란 라이스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/a694cf3ddc",
+   "text": "엘리엇 앤더슨!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/096b81d50b",
+   "text": "마커스 래시퍼드!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/40b5d4f5ea",
+   "text": "주드 벨링엄!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/4119b0a87d",
+   "text": "부카요 사카!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/258b813e01",
+   "text": "해리 케인!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/3c431185fa",
+   "text": "외르얀 뉠란!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/a7e6748b72",
+   "text": "크리스토페르 아예르!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/024cc5511e",
+   "text": "레오 외스티고르!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/48a2809c78",
+   "text": "다비드 묄레르 볼페!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/7412a5a145",
+   "text": "율리안 뤼에르손!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/5523ccd731",
+   "text": "파트리크 베르그!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/05c8abfd04",
+   "text": "안토니오 누사!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/ac4a5f122d",
+   "text": "산데르 베르게!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/4b3b0f8d9e",
+   "text": "프레드리크 아우르스네스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/325712a2c8",
+   "text": "오스카르 보브!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/f3aca1d22b",
+   "text": "엘링 홀란!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/7b0e7ee7ef",
+   "text": "에밀리아노 마르티네스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/d2f7e8c14c",
+   "text": "크리스티안 로메로!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/b59559d0c4",
+   "text": "리산드로 마르티네스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/004a199a10",
+   "text": "니콜라스 타글리아피코!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/3825332161",
+   "text": "나우엘 몰리나!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/4877b9e65a",
+   "text": "레안드로 파레데스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/c124d876db",
+   "text": "알렉시스 맥 알리스터!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/ae573af6f1",
+   "text": "엔소 페르난데스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/3a9847ce49",
+   "text": "니콜라스 곤살레스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/bb3f717476",
+   "text": "리오넬 메시!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/b5d50f83ac",
+   "text": "훌리안 알바레스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/f2fdf4eb04",
+   "text": "야신 부누!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/1eb5917fc2",
+   "text": "이사 디오프!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/be4719b9e1",
+   "text": "샤디 리아드!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/a1fd604421",
+   "text": "아나스 살라흐에딘!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/b827cee5f0",
+   "text": "아슈라프 하키미!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/5c309f12aa",
+   "text": "소피안 암라바트!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/b4c9530cc8",
+   "text": "아제딘 우나히!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/3dbfcb184c",
+   "text": "네일 엘 아이나위!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/44ce427014",
+   "text": "아민 스바이!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/0c1b36c618",
+   "text": "셈스딘 탈비!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/9a8c8e7075",
+   "text": "수피안 라히미!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/8e02828f09",
+   "text": "마이크 메냥!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/a79105517a",
+   "text": "윌리앙 살리바!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/1d4ae61994",
+   "text": "다요 우파메카노!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/f58afd472c",
+   "text": "테오 에르난데스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/8cbe5bb53e",
+   "text": "쥘 쿤데!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/4f3e9099ba",
+   "text": "오렐리앵 추아메니!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/173362ae47",
+   "text": "아드리앵 라비오!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/054e431e86",
+   "text": "바랑 자이르에메리!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/84e500b13b",
+   "text": "브래들리 바르콜라!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/3ce5fd9d4a",
+   "text": "우스만 뎀벨레!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/bc41d6580c",
+   "text": "킬리안 음바페!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/aa98bab83b",
+   "text": "우나이 시몬!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/8f24ab1624",
+   "text": "아이메릭 라포르트!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/0090da2e03",
+   "text": "파우 쿠바르시!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/c4395fcc55",
+   "text": "마르크 쿠쿠레야!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/09833561b7",
+   "text": "마르코스 요렌테!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/b3d0577697",
+   "text": "로드리!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/9030037d6e",
+   "text": "마르틴 수비멘디!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/892e071aef",
+   "text": "니코 윌리엄스!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/22a8c996bc",
+   "text": "다니 올모!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/2775393fc5",
+   "text": "라민 야말!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/d24930b28f",
+   "text": "미켈 오야르사발!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/4c65a30a3a",
+   "text": "중원 싸움이 팽팽합니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/2c6f14ba2d",
+   "text": "양 팀 모두 쉽게 내주지 않습니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/fa448aa8c8",
+   "text": "네, 한 번의 실수가 경기를 가를 분위기입니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/b725e13b81",
+   "text": "경고를 안고 뛰면 발이 안 나갑니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/e992fe1b78",
+   "text": "네, 발이 먼저 들어갔습니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/043f742080",
+   "text": "영 대",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/636e10ee0b",
+   "text": "일 대",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/cec6f147ba",
+   "text": "이 대",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/1ed1048053",
+   "text": "삼 대",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/86c1efea4b",
+   "text": "사 대",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/e494f0ad24",
+   "text": "오 대",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/133c21532a",
+   "text": "육 대",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/5a2d3bef46",
+   "text": "칠 대",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/b14b572c56",
+   "text": "팔 대",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/9ed96db49a",
+   "text": "구 대",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/01a065bd61",
+   "text": "십 대",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/ae1df62e07",
+   "text": "벤치가 교체를 고민하게 되죠.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/57948caa68",
+   "text": "연속 코너킥입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/bcc89da20d",
+   "text": "계속 두드립니다. 또 코너킥.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/ef93199aa2",
+   "text": "첫 번째 코너킥.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/7c32dc959b",
+   "text": "두 번째 코너킥.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/c63a0ce221",
+   "text": "세 번째 코너킥.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/04234c2a38",
+   "text": "네 번째 코너킥.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/ed6ab1995d",
+   "text": "다섯 번째 코너킥.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/e0a938adb7",
+   "text": "여섯 번째 코너킥.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/f12f2647bb",
+   "text": "일곱 번째 코너킥.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/2269d1c39a",
+   "text": "여덟 번째 코너킥.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/f74a539d29",
+   "text": "아홉 번째 코너킥.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/83224c0aa7",
+   "text": "열 번째 코너킥.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/8127e4022c",
+   "text": "여러 번째 코너킥.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/82312eb7ef",
+   "text": "대한민국, 완전히 몰아붙이네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/6af033fa92",
+   "text": "체코, 완전히 몰아붙이네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/a9b665ab2c",
+   "text": "멕시코, 완전히 몰아붙이네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/a688d27699",
+   "text": "남아프리카공화국, 완전히 몰아붙이네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/0ef666eba7",
+   "text": "에콰도르, 완전히 몰아붙이네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/2e31ce8aba",
+   "text": "잉글랜드, 완전히 몰아붙이네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/9752e1b696",
+   "text": "노르웨이, 완전히 몰아붙이네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/c4709e71d5",
+   "text": "아르헨티나, 완전히 몰아붙이네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/6f0c888aed",
+   "text": "스페인, 완전히 몰아붙이네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/10e93a6310",
+   "text": "캐나다, 완전히 몰아붙이네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/8616f1302b",
+   "text": "모로코, 완전히 몰아붙이네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/f1edd07127",
+   "text": "프랑스, 완전히 몰아붙이네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/0757dd9e73",
+   "text": "결정적인 순간을 누가 잡았느냐로 갈렸습니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/5ed15eca09",
+   "text": "자, 파울입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/7566c2bb60",
+   "text": "아, 파울입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/e5267fc9d0",
+   "text": "네, 파울입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/c7335c3acb",
+   "text": "그런데, 파울입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/8c4d3b8afe",
+   "text": "여기서, 파울입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/4696dfb81b",
+   "text": "체코가 기회를 살리지 못합니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/f2f7892fba",
+   "text": "멕시코가 기회를 살리지 못합니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/c64e465a32",
+   "text": "에콰도르가 기회를 살리지 못합니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/0e4071dd18",
+   "text": "잉글랜드가 기회를 살리지 못합니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/bfac65bbd1",
+   "text": "노르웨이가 기회를 살리지 못합니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/b2a40a1354",
+   "text": "아르헨티나가 기회를 살리지 못합니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/0fcfd4c310",
+   "text": "캐나다가 기회를 살리지 못합니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/4ed94206d9",
+   "text": "모로코가 기회를 살리지 못합니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/3406a96f15",
+   "text": "프랑스가 기회를 살리지 못합니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/d502c25c37",
+   "text": "라커룸에서 어떤 이야기가 나오느냐가 후반을 가릅니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/588f6bbf35",
+   "text": "여기서 경고를 받습니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/470ce40727",
+   "text": "옐로카드.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/329eebecee",
+   "text": "주심이 경고를 줍니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/dcda40dba1",
+   "text": "네, 두 팀 다 준비한 걸 꺼낸 경기였습니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/14850fc471",
+   "text": "대한민국이 코너킥을 얻어냅니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/2f90c19566",
+   "text": "남아프리카공화국이 코너킥을 얻어냅니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/68f16a5736",
+   "text": "스페인이 코너킥을 얻어냅니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/8b277fea0d",
+   "text": "경고를 피하지 못합니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/a002a8fa32",
+   "text": "자, 주심, 휘슬을 붑니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/a384413d51",
+   "text": "아, 주심, 휘슬을 붑니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/c7aa1dd2ff",
+   "text": "네, 주심, 휘슬을 붑니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/780cec9f51",
+   "text": "그런데, 주심, 휘슬을 붑니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/00eec8d3f1",
+   "text": "여기서, 주심, 휘슬을 붑니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/4f12e8995f",
+   "text": "대한민국",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/04f7cc4bf6",
+   "text": "체코",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/b0e06d098e",
+   "text": "멕시코",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/717af464ce",
+   "text": "남아프리카공화국",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/efa5972b75",
+   "text": "에콰도르",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/5ed88d1404",
+   "text": "잉글랜드",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/4a61b39be9",
+   "text": "노르웨이",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/114af6464a",
+   "text": "아르헨티나",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/4c059d4552",
+   "text": "스페인",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/55045089b3",
+   "text": "캐나다",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/16bb937044",
+   "text": "모로코",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/1e48802bad",
+   "text": "프랑스",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/49025b6edd",
+   "text": "영입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/07a929945a",
+   "text": "일입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/9130213c9e",
+   "text": "이입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/204ea768d4",
+   "text": "삼입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/8e34c0785c",
+   "text": "사입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/fd8e7d377d",
+   "text": "오입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/14fa0455d5",
+   "text": "육입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/f91e630cab",
+   "text": "칠입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/a51fd64b7f",
+   "text": "팔입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/a6a6271afd",
+   "text": "구입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/f8e2919eb1",
+   "text": "십입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/5a5da2973f",
+   "text": "체코가",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/06b11165c6",
+   "text": "멕시코가",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/d6be77c75f",
+   "text": "에콰도르가",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/3b765867b2",
+   "text": "잉글랜드가",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/80863920b5",
+   "text": "노르웨이가",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/280bccf29a",
+   "text": "아르헨티나가",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/78ebf1e3cb",
+   "text": "캐나다가",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/bf1438ee03",
+   "text": "모로코가",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/f7aa26d480",
+   "text": "프랑스가",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/2f0de10851",
+   "text": "대한민국,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/c48a66168f",
+   "text": "체코,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/fdac2a2948",
+   "text": "멕시코,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/51e8a837ac",
+   "text": "남아프리카공화국,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/7fc95b385b",
+   "text": "에콰도르,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/daccc4a989",
+   "text": "잉글랜드,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/bf5f0bfc37",
+   "text": "노르웨이,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/1d0271a67f",
+   "text": "아르헨티나,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/8d9a957a8c",
+   "text": "스페인,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/87cf33fd56",
+   "text": "캐나다,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/6235bf7240",
+   "text": "모로코,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/9be9c7d6c9",
+   "text": "프랑스,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/6bdbb3ce2f",
+   "text": "세트피스 하나가 경기를 가릅니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/0a84520ff7",
+   "text": "네, 후반 십오 분이 분수령이 될 겁니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/7732eb4e42",
+   "text": "네, 선제골의 무게가 큽니다. 이제 상대가 나와야 하죠.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/171d121254",
+   "text": "전반에 아낀 체력을 후반 어디에 쓸지 정해야 합니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/b1e0a6002e",
+   "text": "먼저 넣은 쪽이 경기를 끌고 갑니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/c37213c59f",
+   "text": "네, 두 번째 볼 싸움을 봐야죠.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/5598e3b952",
+   "text": "이 한 골로 경기 운영이 편해집니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/4f331c4a27",
+   "text": "선방!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/121e097962",
+   "text": "세이브!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/f4f40c6d62",
+   "text": "코너킥을 얻어냅니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/7cd6b62c64",
+   "text": "손끝으로 걷어냅니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/0d33e20a33",
+   "text": "골!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/be2a871026",
+   "text": "이걸 막아내네요.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/ba234ee0ec",
+   "text": "막아냅니다!",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/214f03ac16",
+   "text": "골키퍼, 몸을 날립니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/ad958bc68e",
+   "text": "골문을 지킵니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/8ec4211f8b",
+   "text": "자, 또",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/dbecbcc0c0",
+   "text": "아, 또",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/abd63143c7",
+   "text": "네, 또",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/dce72d5c90",
+   "text": "그런데, 또",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/1d1a72c316",
+   "text": "여기서, 또",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/290f78306c",
+   "text": "제가 보기엔 후반 중반의 십 분이 승부처였습니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/f9cf47860f",
+   "text": "자, 빗나갑니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/805bf48359",
+   "text": "아, 빗나갑니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/21416d70d5",
+   "text": "네, 빗나갑니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/33fa00be08",
+   "text": "그런데, 빗나갑니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/0c077c9ff9",
+   "text": "여기서, 빗나갑니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/534594753f",
+   "text": "이 골 하나로 경기 양상이 또 바뀝니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/ff1db947b8",
+   "text": "여기서 경기가 끝납니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/961ea156ed",
+   "text": "전반이 끝났습니다. 스코어는",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/75f5768ed6",
+   "text": "전반 종료.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/11c592df9d",
+   "text": "종료 휘슬. 최종 스코어",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/13c7cea307",
+   "text": "네, 마무리가 침착했습니다. 서두르면 안 들어가거든요.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/7e73e0afc4",
+   "text": "경기 종료!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/a1bb6ecba7",
+   "text": "하프타임을 알리는 휘슬입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/febb6f8689",
+   "text": "점수 차가 벌어지면 뒤진 쪽이 라인을 올려야 하죠.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/4757168d5c",
+   "text": "상대 진영에서만 경기를 하고 있습니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/a6bc79b3c9",
+   "text": "계속 몰아붙입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/7740287be3",
+   "text": "이건 완전히 새 경기입니다. 따라잡힌 쪽이 흔들리거든요.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/bb1915f0b0",
+   "text": "네, 이 시점의 동점골은 넣은 쪽에 힘이 확 실립니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/4b87ba1894",
+   "text": "특별한 장면 없이 시간이 흐릅니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/fffa522bf7",
+   "text": "선제골!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/15122c7208",
+   "text": "먼저 앞서 나갑니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/75dad44a71",
+   "text": "네, 이 흐름이면 한 골은 시간문제로 보입니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/116d2935c7",
+   "text": "남은 시간을 생각하면 뒤집기가 쉽지 않습니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/47a616cdb8",
+   "text": "대한민국은",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/e0965d9f66",
+   "text": "남아프리카공화국은",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/eb9849de9b",
+   "text": "스페인은",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/18870bdcec",
+   "text": "균형이 깨집니다! 선취점은 대한민국입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/9286e475fd",
+   "text": "균형이 깨집니다! 선취점은 체코입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/f16e81922c",
+   "text": "균형이 깨집니다! 선취점은 멕시코입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/df0c22ec16",
+   "text": "균형이 깨집니다! 선취점은 남아프리카공화국입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/5fb2b28dae",
+   "text": "균형이 깨집니다! 선취점은 에콰도르입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/1d60bc30f6",
+   "text": "균형이 깨집니다! 선취점은 잉글랜드입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/a3f568e048",
+   "text": "균형이 깨집니다! 선취점은 노르웨이입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/86d64269ac",
+   "text": "균형이 깨집니다! 선취점은 아르헨티나입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/aa4dfbe942",
+   "text": "균형이 깨집니다! 선취점은 스페인입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/391136b3d5",
+   "text": "균형이 깨집니다! 선취점은 캐나다입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/3dd6dd0bd0",
+   "text": "균형이 깨집니다! 선취점은 모로코입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/021e0bff39",
+   "text": "균형이 깨집니다! 선취점은 프랑스입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/1684d4f861",
+   "text": "앞서 있던 팀엔 뼈아프죠. 다시 만들어야 합니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/c5edc85c64",
+   "text": "첫 골을 신고합니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/50c5997802",
+   "text": "대한민국이 공을 굴립니다. 시작합니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/14b0808081",
+   "text": "남아프리카공화국이 공을 굴립니다. 시작합니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/9c25c49250",
+   "text": "스페인이 공을 굴립니다. 시작합니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/e3f8663f2e",
+   "text": "양 팀 다 숨을 고르고 있습니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/f1f96172c0",
+   "text": "중원에서 공방이 이어집니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/f491812732",
+   "text": "귀중한 선제골입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/9ca08fbc92",
+   "text": "경기가 시작됩니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/97e336322b",
+   "text": "킥오프!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/8cbb379d24",
+   "text": "대",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/ad2c382da6",
+   "text": "90분의 승부가 시작됩니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/7738441ee2",
+   "text": "대한민국의 킥오프, 경기가 열립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/bb782660bf",
+   "text": "체코의 킥오프, 경기가 열립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/4f9e9b84db",
+   "text": "멕시코의 킥오프, 경기가 열립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/fcedc1cc97",
+   "text": "남아프리카공화국의 킥오프, 경기가 열립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/a61878e6bc",
+   "text": "에콰도르의 킥오프, 경기가 열립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/6c67eb7607",
+   "text": "잉글랜드의 킥오프, 경기가 열립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/11b21e4ac9",
+   "text": "노르웨이의 킥오프, 경기가 열립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/e068751a0a",
+   "text": "아르헨티나의 킥오프, 경기가 열립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/167f143d92",
+   "text": "스페인의 킥오프, 경기가 열립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/af0afe9736",
+   "text": "캐나다의 킥오프, 경기가 열립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/6d49b431be",
+   "text": "모로코의 킥오프, 경기가 열립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/35a3a35ae9",
+   "text": "프랑스의 킥오프, 경기가 열립니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/d0fad2f757",
+   "text": "잠시 소강 상태입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/dd57e6e368",
+   "text": "경기가 다소 잠잠해졌습니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/e961371768",
+   "text": "네, 이럴 때 한 번의 전환이 경기를 가릅니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/e8a24f23b7",
+   "text": "주심의 휘슬, 경기 시작입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/c76836c19f",
+   "text": "탐색전이 길어지고 있습니다. 먼저 움직이는 쪽이 위험을 안죠.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/25189cffd4",
+   "text": "이제 벤치는 다음 경기를 생각할 겁니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/89db378a8e",
+   "text": "체코는",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/0f5ca69cb0",
+   "text": "멕시코는",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/6c3f0fb464",
+   "text": "에콰도르는",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/d8e2a975f4",
+   "text": "잉글랜드는",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/11a9ae5cf3",
+   "text": "노르웨이는",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/fe1f768825",
+   "text": "아르헨티나는",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/c8979dbe85",
+   "text": "캐나다는",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/22125fcb38",
+   "text": "모로코는",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/578969c1c0",
+   "text": "프랑스는",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/441a35cc24",
+   "text": "네, 사실상 여기서 갈렸다고 봅니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/966a3622fd",
+   "text": "영.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/7ad74b38a2",
+   "text": "일.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/222012e2aa",
+   "text": "이.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/e4cc76306a",
+   "text": "삼.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/783da7844a",
+   "text": "사.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/9115b72779",
+   "text": "오.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/b74bda6d50",
+   "text": "육.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/c125966a3b",
+   "text": "칠.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/3176d313bf",
+   "text": "팔.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/05552142ac",
+   "text": "구.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/2e98121fd4",
+   "text": "십.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/5f680286c9",
+   "text": "대한민국이",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/6cf147e2b6",
+   "text": "남아프리카공화국이",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/46425a159f",
+   "text": "스페인이",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/35c3f8b7f1",
+   "text": "이거 몇 골이 날지 모르겠는데요.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/04f0901841",
+   "text": "완전히 난타전입니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/83da995b72",
+   "text": "멀티골! 오늘 첫 번째 골입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/3d0c3ef5f4",
+   "text": "멀티골! 오늘 두 번째 골입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/960575f3c7",
+   "text": "멀티골! 오늘 세 번째 골입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/538f4e7748",
+   "text": "멀티골! 오늘 네 번째 골입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/b5a1004113",
+   "text": "멀티골! 오늘 다섯 번째 골입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/75b9450e3e",
+   "text": "멀티골! 오늘 여섯 번째 골입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/77c9540726",
+   "text": "멀티골! 오늘 일곱 번째 골입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/9a02613b1e",
+   "text": "멀티골! 오늘 여덟 번째 골입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/d731f64288",
+   "text": "멀티골! 오늘 아홉 번째 골입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/9a6db11aa6",
+   "text": "멀티골! 오늘 열 번째 골입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/1a82915493",
+   "text": "멀티골! 오늘 여러 번째 골입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/4bd5ec1484",
+   "text": "정신없이 오갑니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/bad01bb8e0",
+   "text": "대한민국은 숨 쉴 틈을 안 주고 있습니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/23a5874c97",
+   "text": "남아프리카공화국은 숨 쉴 틈을 안 주고 있습니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/65c7f62df9",
+   "text": "스페인은 숨 쉴 틈을 안 주고 있습니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/f00fd8a2e9",
+   "text": "한 골 차가 되면 지키는 쪽이 훨씬 불편해집니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/fa89b9fc85",
+   "text": "완전히 내려섰습니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/069245fdb9",
+   "text": "골입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/3fda8eff1b",
+   "text": "체코는 숨 쉴 틈을 안 주고 있습니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/e02365976c",
+   "text": "멕시코는 숨 쉴 틈을 안 주고 있습니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/8a555d6cc5",
+   "text": "에콰도르는 숨 쉴 틈을 안 주고 있습니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/738793fc99",
+   "text": "잉글랜드는 숨 쉴 틈을 안 주고 있습니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/9f793d6f50",
+   "text": "노르웨이는 숨 쉴 틈을 안 주고 있습니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/8b394008b4",
+   "text": "아르헨티나는 숨 쉴 틈을 안 주고 있습니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/3372558987",
+   "text": "캐나다는 숨 쉴 틈을 안 주고 있습니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/a5367e3b5a",
+   "text": "모로코는 숨 쉴 틈을 안 주고 있습니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/db9bb88eef",
+   "text": "프랑스는 숨 쉴 틈을 안 주고 있습니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/b9c67ffd86",
+   "text": "네, 아직 시간이 있습니다. 다음 십 분이 중요해요.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/4f67a97bbe",
+   "text": "네, 경기 계획을 통째로 다시 짜야 하는 상황입니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/11ebd9a566",
+   "text": "열 명이 다 자기 진영에 서 있습니다.",
+   "role": "caster",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/45945f758e",
+   "text": "추가골!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/48e80bdc47",
+   "text": "대한민국, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/157e731cc3",
+   "text": "체코, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/17d02e57b7",
+   "text": "멕시코, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/a13d0035fb",
+   "text": "남아프리카공화국, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/2db5301a7c",
+   "text": "에콰도르, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/5b77da71db",
+   "text": "잉글랜드, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/9b18f79f53",
+   "text": "노르웨이, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/5575a8ed03",
+   "text": "아르헨티나, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/5d6da019f9",
+   "text": "스페인, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/df0dcfa25e",
+   "text": "캐나다, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/07640d1448",
+   "text": "모로코, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/f69a0617d2",
+   "text": "프랑스, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/160fdf2ac3",
+   "text": "이거 큽니다. 완전히 새 경기가 됐습니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/6e175f1691",
+   "text": "수적 열세는 체력에서 먼저 옵니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/94da0ecce0",
+   "text": "동점골! 원점입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/f96fd19f7a",
+   "text": "또 한 골! 오늘 두 골째입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/a7d73a26e1",
+   "text": "한 골 더 달아납니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/166888939d",
+   "text": "따라붙습니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/e19327ac90",
+   "text": "영!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/0aea3e3f31",
+   "text": "일!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/dc6b693b8b",
+   "text": "이!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/ea52934270",
+   "text": "삼!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/d4685a7fe0",
+   "text": "사!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/5d045ff125",
+   "text": "오!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/44a72e48e2",
+   "text": "육!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/e827957f9f",
+   "text": "칠!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/9f301d54e0",
+   "text": "팔!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/39c1b08d96",
+   "text": "구!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/b86dae5403",
+   "text": "십!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/dbb45a8ede",
+   "text": "역전은 다릅니다. 앞섰던 팀 라인이 내려가거든요.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/024c0bac16",
+   "text": "경기를 다시 원점으로 돌립니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/f25a6392b3",
+   "text": "네, 이 골 하나로 두 팀의 계획이 통째로 바뀝니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/1dd394f1ef",
+   "text": "여기서 그라운드를 떠납니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/5227c4a484",
+   "text": "체코는 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/aa86f80f66",
+   "text": "멕시코는 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/c0c761a56f",
+   "text": "에콰도르는 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/f1fd34ec77",
+   "text": "잉글랜드는 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/d58c74285f",
+   "text": "노르웨이는 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/66e6ac51bb",
+   "text": "아르헨티나는 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/658a8aba78",
+   "text": "캐나다는 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/eb9beed6da",
+   "text": "모로코는 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/4416840e72",
+   "text": "프랑스는 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/83172263eb",
+   "text": "대한민국은 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/db74083bdc",
+   "text": "남아프리카공화국은 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/5b5f9bb8e8",
+   "text": "스페인은 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/01dc4b2796",
+   "text": "점수가 벌어집니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/779b6dc107",
+   "text": "대한민국, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/cda9520421",
+   "text": "체코, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/95d990c955",
+   "text": "멕시코, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/ab807ef77a",
+   "text": "남아프리카공화국, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/19e6bb79d8",
+   "text": "에콰도르, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/597b6ee9a0",
+   "text": "잉글랜드, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/9d9fc8590a",
+   "text": "노르웨이, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/c21f1e1bac",
+   "text": "아르헨티나, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/eb17e0c247",
+   "text": "스페인, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/2e562153cc",
+   "text": "캐나다, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/e820fd0864",
+   "text": "모로코, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/150023e64b",
+   "text": "프랑스, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/c40c058a5d",
+   "text": "퇴장!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/346a9499e7",
+   "text": "수적 열세에 놓입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/2c12be5346",
+   "text": "한 골 따라붙습니다! 희망이 생깁니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/26400a0b38",
+   "text": "순식간에 두 골입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/0bb09d8065",
+   "text": "추격골입니다! 아직 끝나지 않았습니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/9c805d0f4a",
+   "text": "레드카드! 퇴장입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/52583bb7ee",
+   "text": "승부에 쐐기를 박는 골입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/d1c9181f2b",
+   "text": "또 들어갔습니다. 수비가 흔들리네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/d726eeee9f",
+   "text": "연속 실점입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/5264cb3df4",
+   "text": "쐐기를 박습니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/59a8633a34",
+   "text": "골로 간격을 좁힙니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/fde995572e",
+   "text": "골입니다. 이걸로 사실상 승부는 결정됐습니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/27b34ed226",
+   "text": "해트트릭! 오늘 경기 공은",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/f176295f98",
+   "text": "다시 앞서 나갑니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/03aa56da0b",
+   "text": "쐐기골입니다. 이제 뒤집기는 어려워 보이네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/1e7fb04df1",
+   "text": "해트트릭!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/ddc7222911",
+   "text": "리드를 되찾습니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/c07299bab2",
+   "text": "균형을 깨는 골입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/156f907d51",
+   "text": "또 한 골! 오늘 두 골째입니다! 또 들어갔습니다. 수비가 흔들리네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/21a7e4dea0",
+   "text": "끌려가던",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/7eae953433",
+   "text": "드디어 앞서 나갑니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/e22540f0af",
+   "text": "뒤집었습니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/b063558cc7",
+   "text": "이 선수가 챙겨 갑니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/54f6592453",
+   "text": "또 한 골! 오늘 두 골째입니다! 연속 실점입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/2bef2f0a2f",
+   "text": "골! 역전입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/2fcd11176e",
+   "text": "골입니다! 순식간에 두 골입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/c5b94933c5",
+   "text": "골입니다! 또 들어갔습니다. 수비가 흔들리네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/6afa1c136c",
+   "text": "해트트릭입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/d6196fb2a9",
+   "text": "네, 끝까지 포기하지 않은 결과죠.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/2acb2ed5a8",
+   "text": "경기를 뒤집습니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/01bfff116d",
+   "text": "역전! 역전골입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/151bf9d774",
+   "text": "늦었지만 다음 경기 분위기를 만드는 골입니다.",
+   "role": "analyst",
+   "kind": "plain",
+   "cut": "plain"
+  },
+  {
+   "key": "l/86cab0fc12",
+   "text": "점수가 벌어집니다. 또 들어갔습니다. 수비가 흔들리네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/c9a23facb3",
+   "text": "점수가 벌어집니다. 순식간에 두 골입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/8ff67f5f62",
+   "text": "또 한 골! 오늘 두 골째입니다! 순식간에 두 골입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/c26eb71e5c",
+   "text": "점수가 벌어집니다. 연속 실점입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/dd05d58d63",
+   "text": "골! 극장골입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/946a3fb84a",
+   "text": "골입니다! 연속 실점입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/cdfb4378d2",
+   "text": "해트트릭입니다! 또 들어갔습니다. 수비가 흔들리네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/13b09640a0",
+   "text": "다 끝난 경기를 되돌립니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/1584a9bef4",
+   "text": "극장골입니다!",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/463f375031",
+   "text": "만회골입니다. 조금 늦었지만 의미는 있습니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/38f9acc470",
+   "text": "승부에 쐐기를 박는 골입니다. 또 들어갔습니다. 수비가 흔들리네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/bb74f3b056",
+   "text": "영패는 면했습니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/d0680cac04",
+   "text": "골입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/e56877f356",
+   "text": "골입니다. 이걸로 사실상 승부는 결정됐습니다. 연속 실점입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/b8f38a56f3",
+   "text": "해트트릭입니다! 순식간에 두 골입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/53cfdaa4a1",
+   "text": "경기를 뒤집습니다! 연속 실점입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/8b586072e9",
+   "text": "이 선수가 챙겨 갑니다! 연속 실점입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/3c859dd416",
+   "text": "이게 됩니까! 경기 종료 직전,",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "head"
+  },
+  {
+   "key": "l/bd112bf65e",
+   "text": "이 선수가 챙겨 갑니다! 순식간에 두 골입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/5c5f37ded7",
+   "text": "골입니다. 이걸로 사실상 승부는 결정됐습니다. 순식간에 두 골입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/7e699d0b3f",
+   "text": "쐐기골입니다. 이제 뒤집기는 어려워 보이네요. 또 들어갔습니다. 수비가 흔들리네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/0b0813314c",
+   "text": "승부에 쐐기를 박는 골입니다. 순식간에 두 골입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/6068189145",
+   "text": "쐐기골입니다. 이제 뒤집기는 어려워 보이네요. 순식간에 두 골입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/ece4a6af73",
+   "text": "이거 큽니다. 완전히 새 경기가 됐습니다! 연속 실점입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/edb50d9f7b",
+   "text": "이 선수가 챙겨 갑니다! 또 들어갔습니다. 수비가 흔들리네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/a2cd1e79cd",
+   "text": "다시 앞서 나갑니다! 또 들어갔습니다. 수비가 흔들리네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/ec69ee383c",
+   "text": "한 골 만회합니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/6f266091c1",
+   "text": "골입니다. 이걸로 사실상 승부는 결정됐습니다. 또 들어갔습니다. 수비가 흔들리네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/3b29dee6cb",
+   "text": "쐐기골입니다. 이제 뒤집기는 어려워 보이네요. 연속 실점입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/97c87d1cdc",
+   "text": "리드를 되찾습니다! 연속 실점입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/adaee7a0e6",
+   "text": "경기를 뒤집습니다! 순식간에 두 골입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/b6d21204d5",
+   "text": "승부에 쐐기를 박는 골입니다. 연속 실점입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/de0c3887bb",
+   "text": "리드를 되찾습니다! 또 들어갔습니다. 수비가 흔들리네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/9c9d246402",
+   "text": "이거 큽니다. 완전히 새 경기가 됐습니다! 또 들어갔습니다. 수비가 흔들리네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/c8a526748a",
+   "text": "경기를 뒤집습니다! 또 들어갔습니다. 수비가 흔들리네요.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  },
+  {
+   "key": "l/d14a3c9866",
+   "text": "다시 앞서 나갑니다! 연속 실점입니다.",
+   "role": "caster",
+   "kind": "frag",
+   "cut": "tail"
+  }
+ ]
+}

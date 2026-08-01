@@ -1,0 +1,27 @@
+{
+  // ★ Vercel이 `api/`의 서버리스 함수를 **자기 설정으로** 타입체크한다. 우리 루트
+  //   tsconfig.json은 참조(references)만 담은 솔루션 파일이라 Vercel이 그 아래
+  //   tsconfig.api.json을 찾지 못하고 기본값(node16 계열 + node 타입 없음)으로 떨어진다.
+  //   그래서 빌드 로그에 이런 잡음이 쌓였다(2026-08-02 실측):
+  //     TS2835 Relative import paths need explicit file extensions ... '../src/ai/prompts.js'
+  //     TS2591 Cannot find name 'process'
+  //   지금은 경고로 지나가 배포가 성공하지만, Vercel이 어느 시점에 이를 에러로 승격하면
+  //   그때부터 배포가 죽는다. 마감 직전에 그러면 치명적이라 지금 못 박는다.
+  //
+  //   이 파일은 api/ 바로 옆에 있어 Vercel이 확실히 집는다. 내용은 tsconfig.api.json과
+  //   같아야 한다 — 한쪽만 고치면 로컬은 통과하고 배포만 깨지는 조합이 다시 생긴다.
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "resolveJsonModule": true
+  },
+  "include": [".", "../src/ai/prompts.ts", "../src/ai/requestGuard.ts"]
+}
