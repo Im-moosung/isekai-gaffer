@@ -14,6 +14,7 @@ import { buildSystemPrompt, buildUserPrompt } from '../src/ai/prompts'
 import { validateNarrateRequest, firstForwardedIp, rateLimitCheck } from '../src/ai/requestGuard'
 
 // 모델 상수 — 배포 시점에 최신 모델로 교체 가능하도록 분리한다.
+const OPENAI_MODEL = 'gpt-5-nano'
 const GEMINI_MODEL = 'gemini-2.5-flash-lite' // 배포 시 gemini-3.5(-flash-lite) 계열로 교체 가능
 const ANTHROPIC_MODEL = 'claude-haiku-4-5'
 
@@ -55,7 +56,9 @@ export default async function handler(req: Request): Promise<Response> {
   if (!parsed.ok) return json({ error: parsed.error }, parsed.status)
   const { task, context } = parsed
 
-  const provider = (process.env.AI_PROVIDER ?? 'gemini').toLowerCase()
+  // 기본 프로바이더는 openai다(2026-08-02 사용자 지정). AI_PROVIDER로 갈아탈 수 있게
+  // 남겨 두는 이유: 심사 기간에 한 곳이 죽어도 환경변수 하나로 옮길 수 있어야 한다.
+  const provider = (process.env.AI_PROVIDER ?? 'openai').toLowerCase()
   const system = buildSystemPrompt()
   const user = buildUserPrompt(task, context)
 
@@ -67,10 +70,14 @@ export default async function handler(req: Request): Promise<Response> {
       const key = process.env.ANTHROPIC_API_KEY
       if (!key) return json({ error: 'ANTHROPIC_API_KEY 미설정' }, 503)
       text = await callAnthropic(key, system, user, controller.signal)
-    } else {
+    } else if (provider === 'gemini') {
       const key = process.env.GEMINI_API_KEY
       if (!key) return json({ error: 'GEMINI_API_KEY 미설정' }, 503)
       text = await callGemini(key, system, user, controller.signal)
+    } else {
+      const key = process.env.OPENAI_API_KEY
+      if (!key) return json({ error: 'OPENAI_API_KEY 미설정' }, 503)
+      text = await callOpenAI(key, system, user, controller.signal)
     }
     if (!text || text.trim().length === 0) return json({ error: 'empty response' }, 502)
     return json({ text }, 200)
@@ -89,6 +96,7 @@ async function callGemini(
   signal: AbortSignal,
 ): Promise<string | null> {
   // 키는 쿼리스트링(?key=) 대신 x-goog-api-key 헤더로 전달한다 —
+  // (아래 OpenAI 구현과 같은 이유 — 아래 callOpenAI 주석 참조)
   // URL은 로그·프록시·리퍼러에 남기 쉬워 크리덴셜이 노출될 수 있다.
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`
   const res = await fetch(url, {
@@ -106,6 +114,51 @@ async function callGemini(
     candidates?: { content?: { parts?: { text?: string }[] } }[]
   }
   return data.candidates?.[0]?.content?.parts?.[0]?.text ?? null
+}
+
+/**
+ * OpenAI Responses API — 기본 프로바이더.
+ *
+ * ★ `max_output_tokens`는 **추론 토큰까지 포함**한다. gpt-5 계열은 답을 내기 전에
+ *   추론을 돌리므로, 400을 그대로 주면 추론이 예산을 다 쓰고 본문이 비어 돌아올 수
+ *   있다(status `incomplete`). 서사는 짧은 한국어 몇 문장이라 추론이 필요 없으므로
+ *   `reasoning.effort: 'low'`로 낮추고 예산을 넉넉히 준다.
+ *
+ * ★ 키는 Authorization 헤더로만 보낸다 — URL은 로그·프록시·리퍼러에 남는다.
+ */
+async function callOpenAI(
+  key: string,
+  system: string,
+  user: string,
+  signal: AbortSignal,
+): Promise<string | null> {
+  const res = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
+    signal,
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      instructions: system,
+      input: user,
+      max_output_tokens: MAX_TOKENS * 4,
+      reasoning: { effort: 'low' },
+    }),
+  })
+  if (!res.ok) return null
+  const data = (await res.json()) as {
+    output_text?: string
+    output?: { content?: { type?: string; text?: string }[] }[]
+  }
+  // SDK의 output_text 편의 필드가 있으면 그것을 쓰고, 없으면 output[]에서 직접 모은다.
+  if (typeof data.output_text === 'string' && data.output_text.trim()) return data.output_text
+  const parts: string[] = []
+  for (const item of data.output ?? []) {
+    for (const c of item.content ?? []) {
+      if (c.type === 'output_text' && typeof c.text === 'string') parts.push(c.text)
+    }
+  }
+  const joined = parts.join('').trim()
+  return joined.length > 0 ? joined : null
 }
 
 /** Anthropic Messages API. */
