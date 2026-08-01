@@ -10,6 +10,9 @@ docs/screenshots/
 docs/audit/shots/
 docs/audit/*.json
 
+# TTS 중간 산출물 — 원본 wav(요청 1회의 체크포인트)와 조각. 배포물은 public/tts/**다.
+out/
+
 # 파이썬 도구 캐시
 __pycache__/
 *.pyc

@@ -13,6 +13,14 @@
 //     한 개뿐이라(macOS '유나') 보이스 교체로는 구분이 불가능하다. pitch를 벌리면
 //     같은 보이스도 두 사람처럼 들린다 — 투입 대비 효과가 가장 큰 한 줄이다.
 
+//  7) **mp3 우선, speechSynthesis 폴백**(2026-08-01). 빌드 타임에 구운 Gemini TTS
+//     클립이 있으면 그걸 내고, 없으면 아래 speechSynthesis 경로가 그대로 받는다.
+//     한 줄도 지우지 않았다 — 클립은 일부 팀만 덮으므로 폴백이 정상 경로다.
+//     · 판정은 `mp3.playLine()`이 돌려주는 boolean 하나다(동기).
+//     · 음소거·재생 속도·순서 보존 계약은 두 경로가 똑같이 지킨다.
+//     · 클립 소스: `tools/tts/*` + `docs/audio/tts/README.md`.
+import * as mp3 from './commentary-mp3'
+
 const TTS_KEY = 'rematch-tts'
 
 // ── 화자·강도별 음성 프로파일 (§5.7) ──────────────────────────
@@ -76,6 +84,8 @@ let voice: SpeechSynthesisVoice | null = null
 let voiceInitStarted = false
 // ttsOn = 유저 토글(localStorage 진실원). available과 독립 — 켜져 있어도 미지원이면 no-op.
 let ttsOn = readStoredTts()
+/** 지금 진행 중인 대본(입장 소개)을 mp3로 낼 수 있는가. {@link beginScript}가 정한다. */
+let scriptMp3 = false
 
 // ── speechSynthesis 접근(미지원이면 null) ─────────────────────
 function getSynth(): SpeechSynthesis | null {
@@ -114,6 +124,8 @@ function makeUtterance(line: string, role: SpeechRole, speed: number): SpeechSyn
 export function initVoice(): void {
   if (voiceInitStarted) return
   voiceInitStarted = true
+  // mp3 조회표도 여기서 한 번 읽는다. 없으면(=아직 안 구웠다) 조용히 폴백으로 남는다.
+  mp3.loadClipIndex()
   const synth = getSynth()
   if (!synth) {
     available = false
@@ -150,7 +162,16 @@ export function initVoice(): void {
 export function speak(
   line: string, opts: { important?: boolean; speed?: number; role?: SpeechRole; intensity?: number } = {},
 ): void {
-  if (!available || !ttsOn || !line) return
+  if (!ttsOn || !line) return
+  // mp3가 있으면 mp3. 선점(important) 규칙은 두 경로에 함께 적용한다.
+  if (mp3.hasClips(line)) {
+    if (mp3.clipsSpeaking()) {
+      if (!opts.important) return
+      mp3.stopAllClips()
+    }
+    if (mp3.playLine(line, { speed: opts.speed ?? 1 })) return
+  }
+  if (!available) return
   const synth = getSynth()
   if (!synth) return
   try {
@@ -180,7 +201,10 @@ export function speak(
 export function speakAside(
   line: string, opts: { speed?: number; role?: SpeechRole } = {},
 ): void {
-  if (!available || !ttsOn || !line) return
+  if (!ttsOn || !line) return
+  // 곁들임도 mp3 우선. 선점하지 않고 큐 꼬리에 붙인다(캐스터 문장을 자르지 않는다).
+  if (mp3.hasClips(line) && mp3.playLine(line, { speed: opts.speed ?? 1, queued: true })) return
+  if (!available) return
   const synth = getSynth()
   if (!synth) return
   try {
@@ -210,7 +234,12 @@ export function speakAside(
 export function speakScripted(
   line: string, opts: { speed?: number; role?: SpeechRole } = {},
 ): void {
-  if (!available || !ttsOn || !line) return
+  if (!ttsOn || !line) return
+  // 대본은 큐 꼬리에 이어 붙인다 — mp3 실길이가 추정과 달라도 **순서는 보존**된다.
+  // ★ scriptMp3는 {@link beginScript}가 **대본 전체**를 덮는다고 확인했을 때만 켜진다.
+  //   스물 몇 줄 중 몇 줄만 mp3로 나오면 한 사람이 줄마다 목소리를 바꾸는 소리가 난다.
+  if (scriptMp3 && mp3.playLine(line, { speed: opts.speed ?? 1, queued: true })) return
+  if (!available) return
   const synth = getSynth()
   if (!synth) return
   try {
@@ -221,15 +250,37 @@ export function speakScripted(
   }
 }
 
+/**
+ * **대본 시작 선언**(입장 소개). 대본 전체가 mp3로 덮이는지 한 번에 판정하고,
+ * 덮이면 클립을 미리 받아 둔다(시작 시각이 정해진 발화는 네트워크를 기다릴 수 없다).
+ *
+ * ★ 전부 아니면 전무다. 한 줄이라도 클립이 없으면 대본 전체를 speechSynthesis로
+ *   낸다 — 반쯤 mp3인 라인업 소개는 목소리가 줄마다 바뀌는 소리가 난다.
+ *
+ * @returns mp3로 낼 것인가(호출부 로깅·테스트용).
+ */
+export function beginScript(speeches: readonly string[]): boolean {
+  scriptMp3 = mp3.canSpeakAll(speeches)
+  if (scriptMp3) mp3.prefetch(speeches)
+  return scriptMp3
+}
+
+/** 대본 종료. 다음 {@link beginScript}까지 대본 mp3는 꺼진다. */
+export function endScript(): void {
+  scriptMp3 = false
+}
+
 /** 지금 speak()가 실제로 소리를 낼 수 있는 상태인가(보이스 확보 + 토글 ON).
  *  재생 체류 시간을 발화 길이만큼 늘릴지 판정하는 데 쓴다 — 해설이 꺼져 있으면
  *  늘릴 이유가 없다(무음인데 화면만 느려지면 안 된다). */
 export function willSpeak(): boolean {
-  return available && ttsOn
+  // mp3 경로가 살아 있으면 보이스가 없어도(ko-KR 미탑재 브라우저) 소리는 난다.
+  return ttsOn && (available || mp3.clipsReady())
 }
 
 /** 진행 중인 모든 발화를 취소한다(pause·모드 전환·언마운트). 미지원이면 no-op. */
 export function stopAll(): void {
+  mp3.stopAllClips()
   const synth = getSynth()
   if (!synth) return
   try {
@@ -247,6 +298,10 @@ export function stopAll(): void {
  * 버리는 조작이 아니다. cancel하면 재개할 때 그 분의 해설이 통째로 사라지고
  * (분당 1회 발화라 다시 부르지 않는다) 화면과 소리가 어긋난다.
  * 작전판 진입(감독 타임)은 반대로 {@link stopAll}이 맞다 — 그때는 관전을 떠난다.
+ *
+ * ★ mp3 경로에는 걸지 않는다. Web Audio의 `AudioBufferSourceNode`는 한 번 멈추면
+ *   이어 재생할 수 없고(끊으면 그 문장은 사라진다), mp3 조각은 0.5~2초라 일시정지
+ *   버튼을 누른 뒤 그만큼만 더 들리고 끝난다 — 얼리지 않아도 어긋나지 않는다.
  */
 export function pauseSpeech(): void {
   const synth = getSynth()
