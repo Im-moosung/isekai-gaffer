@@ -32,7 +32,7 @@
 // 좌표계: home-프레임(좌→우 공격) 0~100. y는 "아래 전개"(y>50)로 저술하고
 // 레인 변형이 위/아래·중앙으로 접는다. away 미러(100-x)는 choreography가 마지막에 한다.
 // 랜덤·시간 의존 없음(결정론).
-import type { AttackPattern, Instructions } from '../../engine/types'
+import type { AttackPattern, BoxLoad, Instructions, SetPieceRoute } from '../../engine/types'
 import { PITCH_H, PITCH_W } from './geometry'
 
 /** 볼 궤적 종류(구간 시작 스텝에 붙는다). movement.BallArcKind가 이 타입을 재사용한다. */
@@ -1298,15 +1298,215 @@ function finishStations(
   }
 }
 
-// ── 세트피스·반칙: 빌드업이 없는 독립 장면 ───────────────────────────────
-/** 코너 — 깃발에서 문전으로. 레인 미러가 곧 좌/우 코너다. */
-const CORNER_STATIONS: Station[] = [
-  { movers: [[86, 74], [90, 52], [98, 95]], carrier: 2, arc: 'cross' },
-  { movers: [[89, 58], [90, 47], [93, 80]], carrier: 1, arc: 'ground' },
-  { movers: [[91, 57], [93, 49], [90, 72]], carrier: 1 },
+// ── 세트피스 루틴: 코너 깃발에서 시작해 **엔진이 정한 결과**로 끝난다 ─────
+/*
+ * ★ 2026-08-02(11라운드) 신설. 사용자 지적: "시뮬레이션이 전부 필드 플레이만 한다."
+ *
+ * 진단은 지적보다 나빴다. 엔진은 이미 세트피스로 골을 넣고 있고(`simulate.resolveSetPiece`,
+ * 이벤트에 `detail:'setpiece'`), 그 골은 3D 하이라이트로 재생된다 — 그런데 `finishFor`가
+ * `detail`을 읽지 않아 **코너 골이 측면 빌드업 장면으로 그려지고 있었다**. 즉 화면에
+ * 없었던 게 아니라 **틀린 그림이 나가고 있었다**. 아래 루틴이 그 자리를 채운다.
+ *
+ * 유저 선택이 화면에 보여야 한다(이 저장소의 반복 원칙, `fd437b6`·`5fb59a2`):
+ *  - **루트**(니어/파/짧게) → 공이 실제로 그쪽으로 간다. 니어는 코너 쪽 포스트,
+ *    파는 반대 포스트, 짧게는 깃발 옆으로 빼서 되돌린 뒤 **발로** 마무리한다
+ *    (니어·파는 크로스 → 헤더).
+ *  - **박스 인원**(적게/표준/많이) → 박스에 들어가는 **사람 수가 다르다**(2/3/5명).
+ *
+ * 마킹(존/맨투맨)은 여기서 그리지 않는다 — 안무 무버는 공격 팀만이고 수비 도트는
+ * 정적 `tacticalCoords`에 있다. 수비 무버 축을 여는 일은 렌더러 세 종의 계약을 바꾸는
+ * 별도 작업이라 이번 범위에서 뺐다(보고서 참조).
+ */
+
+/** 코너 루트별 마무리 지점 — 코너 깃발 쪽을 +로 본 좌우 비율(골문 중앙 기준). */
+const ROUTE_LATERAL: Record<SetPieceRoute, number> = {
+  near: 0.60,   // 코너와 같은 쪽 포스트로 찔러 넣는다
+  far: -0.55,   // 반대쪽 포스트로 넘긴다
+  short: 0.15,  // 되돌린 공을 문전 정면에서 때린다
+}
+
+/**
+ * 마무리 지점의 골문까지 거리(m).
+ *
+ * 세이브만 따로 두는 이유는 오픈플레이의 {@link SAVE_MIN_M}과 같다 — **GK 접촉 계약**이다.
+ * 접촉점(골라인 앞 {@link SAVE_CONTACT_M})까지 GK가 몸을 보내려면 공이 뜨는 지점이
+ * 충분히 멀어야 한다. 8 m 헤더를 세이브로 그리면 다이브가 시작되기 전에 공이 골라인에
+ * 닿는다. 그래서 세이브만 박스 위쪽 가장자리에서 뜬다(실제로도 코너 세이브의 상당수가
+ * 세컨볼·문전 밖 슛이다).
+ */
+const SP_SHOT_DIST_M: Record<'save' | 'other', number> = { save: 16.4, other: 10.6 }
+/** 짧은 코너는 되돌린 공을 박스 정면에서 때린다 — 그만큼 멀다. */
+const SP_SHORT_EXTRA_M = 3.4
+
+/**
+ * 박스 안 러너의 저술 자리(코너가 **아래**(y>50)일 때 기준). 앞에서부터 채운다.
+ * 파포스트 → 스폿 → 니어포스트 → 아크 → 니어 뒤 순으로, 인원을 늘릴수록 박스가 찬다.
+ */
+const SP_RUNNERS: [number, number][] = [
+  [91.5, 44],  // 파포스트
+  [88, 51],    // 페널티 스폿
+  [93.5, 57],  // 니어포스트
+  [84.5, 47],  // 아크 앞(세컨볼)
+  [89.5, 61],  // 니어 뒤
 ]
-/** 코너 역할 원형 — 키 큰 중앙 수비·스트라이커·키커. */
-const CORNER_ROLES: [number, number][] = [[80, 50], [22, 38], [70, 84]]
+/** 박스 투입 인원 → 러너 수. 총 무버 = 마무리 배역 1 + 키커 1 + 러너. */
+const SP_RUNNER_COUNT: Record<BoxLoad, number> = { light: 2, normal: 3, heavy: 5 }
+
+/**
+ * 코너 깃발에 선 키커(저술 프레임: 코너는 아래쪽).
+ *
+ * ★ x가 97인 이유는 저술이 아니라 **도트가 갈 수 있는 끝**이다. `shape.separateDots`가
+ *   마지막에 좌표를 피치 안(x 2~97 · y 4~96)으로 클램프하므로, 99에 세우면 도트가 2 units
+ *   = 2.10 m 끌려오고 그 어긋남이 곧 "공은 깃발에 있는데 선수는 딴 데"가 된다
+ *   (`highlight-dots.test.tsx`의 고스트 무버 계약이 정확히 이 값을 잡았다).
+ */
+const SP_FLAG: [number, number] = [97, 96]
+/**
+ * 짧은 코너를 받는 자리 — 깃발 옆, 박스 밖. 그리고 **그 자리에 남는다**(아래 SP_SHORT_STAY).
+ * 짧게 준 뒤 받은 사람까지 박스로 들여보내면 한 구간에 24 m를 달려야 해서 배달이
+ * 슬로모션이 된다(dwell 계약 위반). 짧은 코너를 준 선수는 실제로도 그 자리에 남는다.
+ */
+const SP_SHORT_RECV: [number, number] = [93, 80]
+/** 짧은 코너를 되돌려 준 뒤 그 선수가 서 있는 자리(바이라인 근처). */
+const SP_SHORT_STAY: [number, number] = [95, 74]
+
+/**
+ * 세트피스 역할 원형 — 순서가 곧 무버 슬롯이다.
+ *  0 마무리 배역(엔진이 정한 득점자가 강제로 꽂힌다)
+ *  1 키커(엔진이 정한 세트피스 전담이 `assistId`로 꽂힌다)
+ *  2~ 박스로 올라가는 사람들. **중앙 수비가 먼저**다 — 코너에 CB가 올라가는 것이 축구다.
+ */
+const SP_ROLES: [number, number][] = [
+  [78, 50], [66, 84], [22, 42], [22, 58], [52, 50], [80, 36], [46, 78],
+]
+
+/** 세트피스 연출에 필요한 유저 지시(작전판 세트피스 탭에서 그대로 온다). */
+export interface SetPiecePresentation { route: SetPieceRoute; boxLoad: BoxLoad }
+/** 지시가 없을 때의 표준 — 엔진 기본값(`types.SetPiecePlan` 주석)과 같은 far/normal. */
+export const DEFAULT_SET_PIECE: SetPiecePresentation = { route: 'far', boxLoad: 'normal' }
+
+/**
+ * 코너 루틴 한 벌. `finish`가 'corner'면 마무리 없이 배달까지만(2D 작전판용),
+ * 그 밖에는 엔진 결과({@link FinishId})로 끝난다.
+ */
+function setPieceScene(finish: SceneFinish, plan: SetPiecePresentation, lane: number): Scene {
+  const l = lane % 2
+  const short = plan.route === 'short'
+  const kind: SceneFinish = finish
+  // ── 마무리 지점: 거리와 좌우 비율에서 역산한다(오픈플레이 finishStations와 같은 규약).
+  const dist = (kind === 'save' ? SP_SHOT_DIST_M.save : SP_SHOT_DIST_M.other) + (short ? SP_SHORT_EXTRA_M : 0)
+  const gz = dist * ROUTE_LATERAL[plan.route]
+  const gx = Math.sqrt(Math.max(1, dist * dist - gz * gz))
+  const sx = clamp(100 - (gx / PITCH_W) * 100, 0, MAX_SHOT_X)
+  const sy = clamp(offsetY(gz), 38, 62)
+  // 마무리 배역의 **출발 자리** — 박스 밖에서 달려 들어온다. 이 주행이 곧 "코너에서
+  // 사람이 뛰어든다"는 그림이고, 시간 역산이 크로스 체공과 이 주행 중 긴 쪽을 택한다.
+  // 목표 지점의 **반대편에서** 가로질러 들어온다 — 직선으로 서 있다 받으면 그냥 서 있는 그림이다.
+  // 10 units(≈10.5 m)를 달리게 두는 이유는 페이싱이다: 시간 역산이 배달 구간을 "공 체공"과
+  // "받을 사람의 주행" 중 긴 쪽으로 잡으므로, 이 주행이 곧 코너 크로스의 체공 시간이 된다.
+  const from: [number, number] = [clamp(sx - 10), clamp(sy - Math.sign(gz || 1) * 4, 34, 66)]
+
+  /**
+   * 러너를 마무리 배역에서 **떼어 놓는다**. 루트마다 마무리 지점이 옮겨 다니는데 러너
+   * 자리는 고정이라, 파포스트 루트에서는 득점자와 파포스트 러너가 1.8 m 안에 겹쳤다
+   * (`highlight-dots.test.tsx`의 고스트 무버 계약이 잡았다 — 도트 가독성 분리가 무버를
+   * 안무 좌표에서 2.1 m 밀어냈다). 겹치면 바깥으로 밀되 방향은 유지한다.
+   */
+  const SP_MIN_SEP_M = 3.4
+  const spread = (rs: [number, number][], ax: number, ay: number): [number, number][] =>
+    rs.map(([rx, ry]) => {
+      const dx = ((rx - ax) / 100) * PITCH_W
+      const dy = ((ry - ay) / 100) * PITCH_H
+      const len = Math.hypot(dx, dy)
+      if (len >= SP_MIN_SEP_M) return [rx, ry] as [number, number]
+      // 완전히 겹치면(len≈0) 골문 반대쪽으로 뺀다 — 방향이 없으면 만들어 준다.
+      const ux = len > 1e-6 ? dx / len : -1
+      const uy = len > 1e-6 ? dy / len : 0
+      return [
+        clamp(ax + ((ux * SP_MIN_SEP_M) / PITCH_W) * 100, 0, MAX_SHOT_X),
+        clamp(ay + ((uy * SP_MIN_SEP_M) / PITCH_H) * 100, 30, 70),
+      ] as [number, number]
+    })
+
+  const placed = SP_RUNNERS.slice(0, SP_RUNNER_COUNT[plan.boxLoad])
+  // 짧은 코너는 첫 러너가 **받아서 되돌려 주는 사람**을 겸한다 — 박스에 들어가지 않는다.
+  const runners = spread(placed.map((r, i) => (short && i === 0 ? SP_SHORT_STAY : r)), sx, sy)
+  const startRunners: [number, number][] = spread(
+    runners.map((r, i) => (short && i === 0 ? SP_SHORT_RECV : ([clamp(r[0] - 3), r[1]] as [number, number]))),
+    from[0], from[1],
+  )
+
+  const at = (scorer: [number, number], rs: [number, number][], carrier: number, arc?: BallArc, extra?: Partial<Station>): Station =>
+    ({ movers: [scorer, SP_FLAG, ...rs], carrier, ...(arc ? { arc } : {}), ...extra })
+
+  const stations: Station[] = []
+  if (short) {
+    // ① 깃발에서 옆으로 짧게 → ② 되돌린 낮은 공 → ③ 발 마무리.
+    stations.push(at(from, startRunners, 1, 'ground'))
+    // 되돌리는 공은 **낮은 크로스**다. 20 m 넘는 거리를 13 m/s 지면으로 굴리면 그 한 구간이
+    // 1.9 s를 먹어 코너 dwell(3.7 s) 계약을 통째로 깬다(실측 t=1.45).
+    stations.push(at([clamp(from[0] + 2), from[1]], runners, 2, 'cross'))
+  } else {
+    // 깃발에서 곧바로 문전으로 올린다. 크로스가 아니면 헤더가 성립하지 않는다.
+    stations.push(at(from, startRunners, 1, 'cross'))
+  }
+  if (kind === 'corner') {
+    // 2D 작전판용 — 배달까지만. 문전에 공이 도착하고 장면이 끝난다.
+    stations.push(at([sx, sy], runners, 0))
+    const pts = timeline(mapLane(stations, l), SCENE_DWELL_MS.corner)
+    return {
+      points: pts,
+      roles: SP_ROLES.slice(0, 2 + runners.length).map(([x, y]) => [x, laneY(y, l)] as [number, number]),
+      key: `sp.${plan.route}.${plan.boxLoad}/corner/L${l}`,
+      durationMs: pts[pts.length - 1].t * SCENE_DWELL_MS.corner,
+    }
+  }
+  // 마무리 스테이션. 니어·파는 헤더(공이 머리 높이로 도착 → 무브먼트가 헤더 포즈를 쓴다),
+  // 짧은 코너는 발 마무리다. 헤딩은 언제나 원터치다.
+  stations.push(at([sx, sy], runners, 0, 'shot', short ? { oneTouch: true } : { oneTouch: true, endY: HEADER_BALL_Y }))
+
+  // ── 결과 지점. 오픈플레이 finishStations와 같은 기하를 쓴다(계약을 나눠 갖는다).
+  const sideSign: 1 | -1 = gz >= 0 ? 1 : -1
+  const netRunners = runners
+  const endAt = (ball: [number, number], endY?: number): Station =>
+    ({ movers: [[sx, sy], SP_FLAG, ...netRunners], carrier: -1, ball, ...(endY != null ? { endY } : {}) })
+  switch (kind) {
+    case 'goal':
+      // 골라인 **위**(x=100)에서 끝난다 — 그래야 무브먼트가 골망까지 밀어 넣는다.
+      stations.push(endAt([100, clamp(50 + sideSign * (56 - 50) * POST_INSET, 44, 56)]))
+      break
+    case 'save':
+      // GK가 **닿는다**. 접촉점은 골라인 앞 SAVE_CONTACT_M 띠 — 세이브 계약의 정본이다.
+      stations.push({ ...endAt([clamp(100 - (SAVE_CONTACT_M / PITCH_W) * 100), clamp(50 + sideSign * 6 * 0.4, 44, 56)]), contact: true })
+      break
+    case 'miss': {
+      // 실측 분포(MISS_WIDE_M·MISS_OVER_M)를 그대로 쓴다. 코너 헤더는 빗맞으면 위로
+      // 뜨는 쪽이 많아 레인으로 두 분위수를 훑는다.
+      const g = MISS_WIDE_M[mod(l + 2, MISS_WIDE_M.length)]
+      const h = MISS_OVER_M[mod(l + 1, MISS_OVER_M.length)]
+      stations.push(endAt([99, clamp(offsetY(sideSign * (GOAL_HALF_M + g)))], CROSSBAR_M + h))
+      break
+    }
+    case 'shot':
+      stations.push(endAt([95, clamp(50 + sideSign * 5 * 0.3, 45, 55)]))
+      break
+    default:
+      // 'chance' — 마무리 없이 문전까지. 위 shot 스테이션이 곧 마지막이다.
+      stations.pop()
+      stations.push(at([sx, sy], runners, 0))
+      break
+  }
+  const dwell = SCENE_DWELL_MS[kind]
+  const points = timeline(mapLane(stations, l), dwell)
+  return {
+    points,
+    roles: SP_ROLES.slice(0, 2 + runners.length).map(([x, y]) => [x, laneY(y, l)] as [number, number]),
+    key: `sp.${plan.route}.${plan.boxLoad}/${kind}/L${l}`,
+    durationMs: points[points.length - 1].t * dwell,
+  }
+}
+
+// ── 반칙: 빌드업이 없는 독립 장면 ────────────────────────────────────────
 
 /** 반칙 — 중원 충돌 후 정지. */
 const FOUL_STATIONS: Station[] = [
@@ -1590,6 +1790,12 @@ export interface SceneVariants {
    * 미지정이면 0 — 즉 **박스 안**이다(박스 밖 전용 계열은 그래도 밖에서 때린다).
    */
   zone?: number
+  /**
+   * **세트피스 지시**(작전판 세트피스 탭). 주면 빌드업 대신 코너 루틴을 쓴다 —
+   * 엔진이 `detail:'setpiece'`를 붙인 사건과 `corner` 사건이 여기로 온다.
+   * 해시 변형이 아니라 유저 지시에서 곧바로 온다(`choreography.setPiecePlanFor`).
+   */
+  setPiece?: SetPiecePresentation
 }
 
 /**
@@ -1628,17 +1834,10 @@ export function buildScene(
   variants: SceneVariants = {},
   offside?: OffsideLimit,
 ): Scene {
-  if (finish === 'corner') {
-    // 코너는 좌/우만 의미가 있다(중앙 압축 레인은 코너 깃발을 중앙으로 끌어와 말이 안 된다).
-    const l = lane % 2
-    const points = timeline(mapLane(CORNER_STATIONS, l), SCENE_DWELL_MS.corner)
-    return {
-      points,
-      roles: CORNER_ROLES.map(([x, y]) => [x, laneY(y, l)] as [number, number]),
-      key: `corner/L${l}`,
-      durationMs: points[points.length - 1].t * SCENE_DWELL_MS.corner,
-    }
-  }
+  // 세트피스 — 코너 사건이거나, 엔진이 `detail:'setpiece'`를 붙인 슛이다.
+  // 코너는 좌/우만 의미가 있다(중앙 압축 레인은 코너 깃발을 중앙으로 끌어와 말이 안 된다).
+  if (finish === 'corner') return setPieceScene('corner', variants.setPiece ?? DEFAULT_SET_PIECE, lane)
+  if (variants.setPiece) return setPieceScene(finish, variants.setPiece, lane)
   if (finish === 'foul') {
     const l = lane % 2
     const points = timeline(mapLane(FOUL_STATIONS, l), SCENE_DWELL_MS.foul)

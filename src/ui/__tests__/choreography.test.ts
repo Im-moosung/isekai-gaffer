@@ -44,8 +44,53 @@ describe('buildSequence — 스텝 수(볼 이동 구간 = 스테이션 - 1)', (
     expect(seq('chance').some(s => s.arc === 'shot')).toBe(false)
     expect(moves(seq('chance'))).toBeGreaterThanOrEqual(2)
   })
-  it('corner는 세트피스 — 빌드업 없이 2구간', () => {
-    expect(moves(seq('corner'))).toBe(2)
+  /**
+   * ★ 2026-08-02(11라운드) 코너 계약을 다시 쓴다. 예전 저술은 문전 근처 3스테이션(=2구간)
+   *   이었는데, 그건 코너가 아니라 "박스 안 짧은 패스 두 번"이었다. 지금은 **깃발에서
+   *   문전으로 한 번** 올린다 — 니어·파는 1구간, 짧은 코너만 옆으로 뺐다 되돌리는 2구간이다.
+   *   즉 구간 수 자체가 유저가 고른 루트를 말한다.
+   */
+  it('코너는 깃발에서 문전으로 한 번 — 짧은 코너만 2구간', () => {
+    const withPlan = (route: 'near' | 'far' | 'short') => {
+      const st = structuredClone(state)
+      st.home.tactics.setPiece = { route, boxLoad: 'normal' }
+      return buildSequence(ev('corner'), st.home, st.away)
+    }
+    expect(moves(withPlan('near'))).toBe(1)
+    expect(moves(withPlan('far'))).toBe(1)
+    expect(moves(withPlan('short'))).toBe(2)
+  })
+  it('세트피스 골은 코너 루틴으로 그린다 — 오픈플레이 빌드업이 아니다', () => {
+    // 엔진이 `detail:'setpiece'`를 붙인 골은 코너에서 나온 골이다. 이 표식을 읽지 않던
+    // 동안 그 골은 **측면 빌드업 장면**으로 재생됐다(사용자 지적의 정체).
+    const open = seq('goal')
+    const sp = seq('goal', { detail: 'setpiece' })
+    expect(moves(open)).toBe(4)
+    expect(moves(sp)).toBe(2)          // 깃발 → 문전(헤더) → 골문
+    // 공이 코너 깃발에서 출발한다 — 오픈플레이 골은 중원에서 출발한다.
+    expect(sp[0].ball.x).toBeGreaterThan(92)
+    expect(open[0].ball.x).toBeLessThan(80)
+  })
+  it('박스 인원을 늘리면 화면에 사람이 더 들어간다', () => {
+    const count = (boxLoad: 'light' | 'normal' | 'heavy') => {
+      const st = structuredClone(state)
+      st.home.tactics.setPiece = { route: 'far', boxLoad }
+      return buildSequence(ev('goal', { detail: 'setpiece' }), st.home, st.away)[0].movers.length
+    }
+    expect(count('light')).toBeLessThan(count('normal'))
+    expect(count('normal')).toBeLessThan(count('heavy'))
+  })
+  it('코너 루트를 바꾸면 공이 실제로 그쪽으로 간다', () => {
+    const headY = (route: 'near' | 'far') => {
+      const st = structuredClone(state)
+      st.home.tactics.setPiece = { route, boxLoad: 'normal' }
+      const s = buildSequence(ev('goal', { detail: 'setpiece' }), st.home, st.away)
+      // 마무리 배역(슬롯 0)이 공을 잡는 스테이션 = 헤더 지점.
+      return s.find(p => p.carrier === p.movers[0].playerId)!.movers[0].y
+    }
+    // 니어와 파는 골문 중앙을 사이에 두고 갈린다(레인 0 = 아래쪽 코너).
+    expect(Math.abs(headY('near') - headY('far'))).toBeGreaterThan(8)
+    expect((headY('near') - 50) * (headY('far') - 50)).toBeLessThan(0)
   })
   it('foul은 정지 근사(2 키프레임)', () => {
     expect(seq('foul')).toHaveLength(2)

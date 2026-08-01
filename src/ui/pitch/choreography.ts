@@ -16,6 +16,7 @@ import type { AttackPattern, MatchEvent, SideState } from '../../engine/types'
 import { slotCoords } from './formations'
 import {
   BUILDUP_VARIANT_COUNT,
+  DEFAULT_SET_PIECE,
   FINISH_VARIANT_COUNT,
   buildScene,
   pickLane,
@@ -23,6 +24,7 @@ import {
   type OffsideLimit,
   type SceneFinish,
   type SceneVariants,
+  type SetPiecePresentation,
 } from './scenes'
 import { backlineIndices, tacticalCoords } from './shape'
 
@@ -177,7 +179,7 @@ function offsideFor(defending: SideState, attackingIsHome: boolean): OffsideLimi
  * GK(슬롯 0)는 제외 — 필드 장면의 무버는 GK가 아니다. 이미 뽑힌 선수는 건너뛴다.
  * 같은 거리면 슬롯 인덱스가 큰 쪽(더 공격적)을 택해 결정론을 유지한다.
  */
-function pickByRole(side: SideState, roles: [number, number][], primary?: string): string[] {
+function pickByRole(side: SideState, roles: [number, number][], primary?: string, secondary?: string): string[] {
   const { formation, lineup } = side.tactics
   const sentOff = new Set(side.sentOff)
   const taken = new Set<string>()
@@ -186,6 +188,12 @@ function pickByRole(side: SideState, roles: [number, number][], primary?: string
   if (primary && lineup.some(s => s.playerId === primary)) {
     out.push(primary)
     taken.add(primary)
+  }
+  // 세트피스의 슬롯 1(키커)도 엔진이 정한다. primary가 없으면 슬롯 0이 비므로 넣지 않는다 —
+  // 그 경우 키커가 마무리 배역 자리로 밀려 그림이 어긋난다.
+  if (secondary && out.length === 1 && !taken.has(secondary) && lineup.some(s => s.playerId === secondary)) {
+    out.push(secondary)
+    taken.add(secondary)
   }
   for (const [rx, ry] of roles) {
     if (out.length >= roles.length) break
@@ -223,15 +231,21 @@ export function buildSequence(event: MatchEvent, homeState: SideState, awayState
   const attacking = isHome ? homeState : awayState
   const pattern: AttackPattern = attacking.tactics.attackPattern ?? 'balanced'
   const defending = isHome ? awayState : homeState
+  const plan = setPiecePlanFor(event, attacking)
   // 세트피스(코너)·반칙은 오프사이드 규칙이 적용되지 않는다 — 상한을 걸지 않는다.
-  const off = finish === 'corner' || finish === 'foul' ? undefined : offsideFor(defending, isHome)
+  // ★ 코너킥에는 오프사이드가 **없다**(경기 규칙 11조 예외). `detail:'setpiece'`가 붙은
+  //   골·세이브·미스도 코너에서 나온 것이므로 같은 예외를 받는다.
+  const off = plan || finish === 'foul' ? undefined : offsideFor(defending, isHome)
   const scene = buildScene(
     pattern, finish, laneFor(event, attacking, isHome),
-    variantsFor(event, focusDirFor(attacking, isHome)), off,
+    { ...variantsFor(event, focusDirFor(attacking, isHome)), ...(plan ? { setPiece: plan } : {}) }, off,
   )
   // ★ 주인공을 슬롯 0에 꽂는 것은 그 선수가 **공격 팀의 필드 플레이어**일 때만이다.
   //   save의 playerId는 막은 팀의 GK다 — 넘기면 골키퍼가 슈터로 배정된다(실측).
-  const ids = pickByRole(attacking, scene.roles, primaryOf(event, attacking))
+  // 세트피스는 **키커도 엔진이 정했다**(`simulate.setPieceTaker` → 이벤트 `assistId`).
+  // 슬롯 1이 깃발 앞에 서는 사람이므로 그 자리에 그대로 꽂는다 — 그러지 않으면 화면의
+  // 키커와 통계의 어시스트가 다른 사람이 된다.
+  const ids = pickByRole(attacking, scene.roles, primaryOf(event, attacking), plan ? kickerOf(event, attacking) : undefined)
 
   // away면 x 미러(100-x). y는 불변.
   const fx = (x: number) => (isHome ? x : 100 - x)
@@ -259,6 +273,31 @@ function primaryOf(event: MatchEvent, attacking: SideState): string | undefined 
   if (!id) return undefined
   const i = attacking.tactics.lineup.findIndex(s => s.playerId === id)
   return i > 0 ? id : undefined
+}
+
+/** 슬롯 1(키커)에 꽂을 선수 — 세트피스 이벤트의 `assistId`가 곧 코너 키커다. */
+function kickerOf(event: MatchEvent, attacking: SideState): string | undefined {
+  const id = event.assistId
+  if (!id || id === event.playerId) return undefined
+  const i = attacking.tactics.lineup.findIndex(s => s.playerId === id)
+  return i > 0 ? id : undefined
+}
+
+/**
+ * 이 이벤트를 **코너 루틴으로 그려야 하는가** — 그렇다면 유저가 고른 세트피스 지시.
+ *
+ * 판정 근거는 두 가지뿐이다:
+ *  - `type === 'corner'` — 코너를 얻은 사건 자체(2D 작전판이 받는다).
+ *  - `detail === 'setpiece'` — 엔진이 코너에서 만든 슛의 결과(골·세이브·미스).
+ *    `simulate.resolveSetPiece`가 세 이벤트 모두에 이 표식을 붙인다.
+ *
+ * ★ 이 판정이 없던 동안 코너 골은 **측면 빌드업 장면**으로 재생됐다. 사용자가
+ *   "전부 필드 플레이만"이라고 한 것이 이 그림이다.
+ */
+function setPiecePlanFor(event: MatchEvent, attacking: SideState): SetPiecePresentation | null {
+  if (event.type !== 'corner' && event.detail !== 'setpiece') return null
+  const sp = attacking.tactics.setPiece
+  return { route: sp?.route ?? DEFAULT_SET_PIECE.route, boxLoad: sp?.boxLoad ?? DEFAULT_SET_PIECE.boxLoad }
 }
 
 /**
@@ -332,8 +371,9 @@ export function sceneKeyFor(event: MatchEvent, homeState: SideState, awayState: 
   const attacking = isHome ? homeState : awayState
   const pattern: AttackPattern = attacking.tactics.attackPattern ?? 'balanced'
   const defending = isHome ? awayState : homeState
-  const off = finish === 'corner' || finish === 'foul' ? undefined : offsideFor(defending, isHome)
+  const plan = setPiecePlanFor(event, attacking)
+  const off = plan || finish === 'foul' ? undefined : offsideFor(defending, isHome)
   const lane = laneFor(event, attacking, isHome)
-  const v = variantsFor(event, focusDirFor(attacking, isHome))
+  const v = { ...variantsFor(event, focusDirFor(attacking, isHome)), ...(plan ? { setPiece: plan } : {}) }
   return `${isHome ? 'H' : 'A'}/${buildScene(pattern, finish, lane, v, off).key}`
 }
