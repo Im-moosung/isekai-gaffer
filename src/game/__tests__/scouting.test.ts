@@ -33,7 +33,11 @@ function appliedPlan(opp: TeamId): Partial<TacticState> {
 describe('recommendPlan', () => {
   it('점유 강팀(스페인) 상대로는 라인을 내리고 수비적 멘탈리티를 권한다', () => {
     const r = recommendPlan(loadTeam('kor'), loadTeam('esp'))
-    expect(r.patch.mentality).toBe('defensive')
+    // ★ 2026-08-01: 'defensive' → 'very-defensive'. 추천 로직은 그대로이고 **상대가 세졌다.**
+    //   `9992bca`가 12개 팀의 squad 배열을 등번호순에서 signatureXI 순서로 고쳤는데,
+    //   `pickBestXI`가 동점 시 배열 순서를 따르던 탓에 스페인이 실제 XI(시몬·야말·페드리급)를
+    //   내보내지 못하고 있었다. 진짜 스페인을 만나니 권고가 한 단계 더 내려간다.
+    expect(r.patch.mentality).toBe('very-defensive')
     expect(r.patch.instructions!.lineHeight).toBeLessThanOrEqual(35)
     expect(r.reasons.length).toBeGreaterThan(0)
   })

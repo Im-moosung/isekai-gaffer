@@ -155,17 +155,23 @@ describe('TacticsCenter — 킥오프 전 워룸', () => {
   })
 
   it('[추천 적용]이 4축 슬라이더 위치까지 실제로 옮긴다', () => {
-    // 실팀(스페인 점유 78·라인 62·압박 68)이라야 지시 축 권고가 실제로 움직인다.
-    // 라인 20 = 스페인의 후방 전개 지표 78(GK 빌드업 78·점유 78)에서 파생된 값이다
-    // — 기준 72를 넘으면 압박이 벗겨지므로 추천이 라인·압박을 함께 하한(20)까지 내린다.
+    // 실팀(스페인)이라야 지시 축 권고가 실제로 움직인다. 라인·압박 값은 스페인의
+    // 후방 전개 지표(GK 빌드업·점유)에서 파생된다 — 기준 72를 넘으면 압박이 벗겨지므로
+    // 추천이 라인·압박을 함께 내린다.
+    //
+    // ★ 2026-08-01: 기대값 20 → 24. 로직 불변, **상대 수치가 바뀌었다.**
+    //   `9992bca`가 squad 배열을 signatureXI 순서로 고쳐 스페인이 실제 XI를 내보내게
+    //   됐고, 그 결과 후방 전개 지표가 재계산되어 파생값이 하한 20에서 24로 올라왔다.
+    //   숫자를 박아 두는 대신 "하한 근처"만 검사하면 이 결합이 느슨해지지만, 이 테스트의
+    //   목적이 "슬라이더가 실제로 그 값으로 움직였는가"라 정확값을 유지한다.
     store().reset()
     store().startMatch(loadTeam('kor'), loadTeam('esp'), 20260724)
     const { getByRole } = render(<TacticsCenter onKickoff={() => {}} />)
     fireEvent.click(getByRole('button', { name: /추천 적용/ }))
-    expect((getByRole('slider', { name: '라인' }) as HTMLInputElement).value).toBe('20')
-    expect(store().engine!.home.tactics.instructions.lineHeight).toBe(20)
+    expect((getByRole('slider', { name: '라인' }) as HTMLInputElement).value).toBe('24')
+    expect(store().engine!.home.tactics.instructions.lineHeight).toBe(24)
     // 압박도 함께 내려간다 — 기존엔 우리 프로필(62) 그대로라 상대 무관이었다.
-    expect(store().engine!.home.tactics.instructions.pressing).toBe(20)
+    expect(store().engine!.home.tactics.instructions.pressing).toBe(24)
   })
 
   // 태세는 FIFA 랭킹이 아니라 상대의 후방 전개 지표(trapFactor)가 정한다 — 랭킹으로 정하면
@@ -176,7 +182,9 @@ describe('TacticsCenter — 킥오프 전 워룸', () => {
     store().startMatch(loadTeam('kor'), loadTeam('esp'), 20260724)
     const { getByRole, container } = render(<TacticsCenter onKickoff={() => {}} />)
     fireEvent.click(getByRole('button', { name: /추천 적용/ }))
-    expect(store().engine!.home.tactics.mentality).toBe('defensive')
+    // ★ 2026-08-01: 'defensive' → 'very-defensive'. 로직 불변, **상대가 세졌다**
+    //   (`9992bca` — squad 배열이 등번호순이라 스페인이 실제 XI를 못 내보내고 있었다).
+    expect(store().engine!.home.tactics.mentality).toBe('very-defensive')
     expect(container.querySelector('.tc-summary')!.textContent).toContain('수비')
   })
 

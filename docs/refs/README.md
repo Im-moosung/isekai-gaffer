@@ -40,6 +40,15 @@ CanvasTexture로 경기 화면을 절차 생성할 때의 실루엣, 색면, 킷
 | [`stadium/crowd-distant-color-pattern.png`](stadium/crowd-distant-color-pattern.png) | 원거리 관중석 색 패턴 | 얼굴 없는 작은 블록, 약 70%의 어두운 질량, 드문 빨강·파랑·흰색·황색 점 |
 | [`stadium/adboards-fictional-brands.png`](stadium/adboards-fictional-brands.png) | 가상 LED 광고판 | 단순 아이콘, 굵은 대문자, 높은 명도 대비. `VOROQ`, `NIMUVA`, `KELZOX`, `TARVIO`는 이 참조용 임의 조어다. |
 
+### 경기 후 기자회견 UI
+
+| 파일 | 참조 대상 | 디자인 핵심 |
+|---|---|---|
+| [`press-conference-ui/post-match-press-conference-screen.png`](press-conference-ui/post-match-press-conference-screen.png) | 경기 종료 후 기자 질문·답변 선택 화면 | 왼쪽은 얼굴 없는 감독 실루엣과 익명 기자들, 오른쪽은 질문 카드와 3개 선택지. 선택 상태는 레드 글로우, 보조 UI는 시안 라인으로 구분한다. |
+| [`press-conference-ui/press-conference-newspaper-result.png`](press-conference-ui/press-conference-newspaper-result.png) | 기자회견 종료 후 신문 기사 결과 화면 | 아이보리 신문 지면을 주 초점으로 두고, 가장자리의 감독은 후면 실루엣으로만 처리한다. 큰 헤드라인·경기 사진·인용문·다음 경기 버튼 순서로 결과를 읽게 한다. |
+
+두 화면은 게임에 바로 삽입하는 완성 UI가 아니라, 웹에서 재현할 레이아웃·색 대비·감정 톤을 정하는 디자인 참조다. 감독과 기자는 모두 익명 처리했으며, 실존 인물·구단·엠블럼·상표·공식 대회 로고를 사용하지 않았다.
+
 ### 축소 QA
 
 | 파일 | 확인 목적 | 셀/선수 높이 |

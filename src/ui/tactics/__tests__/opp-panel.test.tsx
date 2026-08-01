@@ -83,7 +83,15 @@ describe('OppPanel', () => {
 
 // 감사 결함 ⑧: 고정 브리핑 문안이 오늘의 XI와 어긋난다.
 // 체코 styleNotes는 "소우체크·시크·호리 등 … 슐츠 외 중앙 창의성이 부족해…"인데
-// 실제 선발 XI에는 소우체크도 슐츠도 없다. 문안을 다시 쓰지 않고 사실만 정정한다.
+// 그때는 실제 선발 XI에 소우체크도 슐츠도 없었다. 문안을 다시 쓰지 않고 사실만 정정한다.
+//
+// ★ 2026-08-01 정정: 이 테스트의 옛 기대값(`bench`에 소우체크)은 **버그를 인코딩하고
+//   있었다.** `positionFitness`가 자질을 안 보고 슬롯/포지션만 맞으면 1.0을 주는 탓에
+//   `pickBestXI`의 정렬이 동점투성이가 되고, 안정 정렬이 **squad 배열 순서**를 그대로
+//   따랐다. 12개 팀 JSON이 전부 등번호순이라 12팀 전부가 뎁스 차트가 아니라 등번호로
+//   XI를 짜고 있었다(`9992bca`). 소우체크는 styleNotes가 강점으로 지목한 선수인데
+//   등번호 때문에 벤치였던 것이다. 배열을 signatureXI 순서로 고치니 선발이 됐다.
+//   즉 "브리핑이 부른 이름과 XI가 어긋난다"는 이 감사 결함의 절반은 데이터 정렬 문제였다.
 describe('briefingRoster — 브리핑 이름 × 오늘의 XI', () => {
   it('체코 브리핑이 부른 이름을 선발/벤치로 정확히 가른다', () => {
     const cze = loadTeam('cze')
@@ -92,8 +100,9 @@ describe('briefingRoster — 브리핑 이름 × 오늘의 XI', () => {
     const { starters, bench } = briefingRoster(notes, cze.squad, xi.lineup.map(l => l.playerId))
     // 문안이 부른 네 명이 빠짐없이 분류된다.
     expect([...starters, ...bench].sort()).toEqual(['소우체크', '슐츠', '시크', '호리'].sort())
-    // 감사가 지적한 두 명은 벤치다.
-    expect(bench).toContain('소우체크')
+    // styleNotes가 강점으로 지목한 소우체크는 이제 선발이다(위 정정 참조).
+    expect(starters).toContain('소우체크')
+    // 슐츠는 여전히 벤치 — 문안이 "슐츠 외 중앙 창의성이 부족"이라 부른 대조군이다.
     expect(bench).toContain('슐츠')
   })
 
