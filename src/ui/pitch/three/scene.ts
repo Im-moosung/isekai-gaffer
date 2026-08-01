@@ -23,6 +23,8 @@ import { buildExterior, type ExteriorBundle } from './exterior'
 import { buildCornerFlags, buildGoal } from './props'
 import { kitInk } from './pose'
 import { ENTRANCE_BANNER_AWAY, ENTRANCE_BANNER_HOME } from './entrance'
+import { loadFlagImage } from '../../flags/flags'
+import type { TeamId } from '../../../data/loader'
 import {
   AD_PANEL_ASPECT,
   AD_TEXTS,
@@ -68,10 +70,17 @@ export interface BuildSceneOptions {
    * 외부 요소 중 유일하게 오버드로우 비용이 있는 항목이라 따로 열어 둔다.
    */
   lightShafts?: boolean
-  /** 입장 배너에 새길 팀 이름(한국어). 없으면 배너를 만들지 않는다. */
+  /** 입장 배너 캡션에 새길 국가 이름(한국어). 없으면 배너를 만들지 않는다. */
   homeLabel?: string
-  /** 어웨이 팀 이름(한국어). */
+  /** 어웨이 국가 이름(한국어). */
   awayLabel?: string
+  /**
+   * 입장 배너에 펼칠 국기의 팀 id. 주면 `public/flags/<iso>.svg`를 **비동기로** 받아
+   * 배너 텍스처를 국기로 다시 그린다. 없으면 팀 색 폴백 도안으로 남는다.
+   */
+  homeTeamId?: TeamId
+  /** 어웨이 국기의 팀 id. */
+  awayTeamId?: TeamId
   /** 피치 텍스처 해상도(px/m). 기본 20 → 2100×1360. 저사양은 12 권장. */
   pxPerMeter?: number
   /** renderer.capabilities.getMaxAnisotropy() 값. 기본 16. */
@@ -376,10 +385,15 @@ export function buildScene(THREE: ThreeAPI, opts: BuildSceneOptions = {}): Scene
   }
 
   /**
-   * ── 입장 배너(스토리보드 컷1의 "국기") ─────────────────────────
-   * 피치에 눕힌 팀 색 천 두 장. **실제 국기가 아니다** — 프로젝트 규칙이 공식
-   * 엠블럼·로고를 금지하므로 팀 색 + 팀명의 절차 배너(tifo)로 대체했다
+   * ── 입장 배너(스토리보드 컷1의 "태극기 / 상대편 국기") ──────────
+   * 피치에 눕힌 **국기 천** 두 장. 2026-08-01 정정 전에는 "실제 국기가 아니다"라며
+   * 팀 색 tifo를 깔았는데, 스펙 §9.1이 금지한 것은 엠블럼·크레스트·공식 로고이고
+   * 국기는 오히려 그 조항이 **지정한** 식별 수단이었다
    * (근거는 textures.makeBannerCanvas · entrance.ENTRANCE_BANNER_HOME 주석).
+   *
+   * 국기 SVG 디코드는 비동기라 **두 단계**로 간다: 먼저 팀 색 폴백 캔버스로 텍스처를
+   * 만들어 씬을 즉시 완성하고, 이미지가 도착하면 같은 자리에 국기 캔버스를 그려
+   * 텍스처 이미지를 교체한다. 로드가 실패하면 폴백이 그대로 남는다(연출은 안 멈춘다).
    * 기본은 숨김이고 입장 연출이 켠다.
    */
   const bannerGroup = new THREE.Group()
@@ -388,8 +402,20 @@ export function buildScene(THREE: ThreeAPI, opts: BuildSceneOptions = {}): Scene
   pitchGroup.add(bannerGroup)
   const addBanner = (
     spec: { x: number; z: number; w: number; h: number }, color: number, label: string,
+    teamId?: TeamId,
   ): void => {
     const tex = toTexture(THREE, makeBannerCanvas(color, kitInk(color), label), { aniso })
+    if (tex && teamId) {
+      // 국기 도착 시 캔버스를 통째로 갈아끼운다. 새 캔버스를 만들어 `tex.image`에 꽂는
+      // 편이 기존 캔버스에 덧그리는 것보다 안전하다 — 폴백 도안이 국기 밑에 남지 않는다.
+      void loadFlagImage(teamId).then(img => {
+        if (!img) return
+        const next = makeBannerCanvas(color, kitInk(color), label, img)
+        if (!next) return
+        tex.image = next
+        tex.needsUpdate = true
+      })
+    }
     if (tex) {
       // ★ 180° 회전 보정(u·v 둘 다 뒤집는다). 평면을 -90°로 눕히면
       //   · u(+X)는 **화면 왼쪽**을 향하고(방송 카메라가 -Z라 화면 오른쪽이 -X — ends.ts),
@@ -416,8 +442,8 @@ export function buildScene(THREE: ThreeAPI, opts: BuildSceneOptions = {}): Scene
     mesh.renderOrder = 1
     bannerGroup.add(mesh)
   }
-  if (opts.homeLabel) addBanner(ENTRANCE_BANNER_HOME, homeColor, opts.homeLabel)
-  if (opts.awayLabel) addBanner(ENTRANCE_BANNER_AWAY, awayColor, opts.awayLabel)
+  if (opts.homeLabel) addBanner(ENTRANCE_BANNER_HOME, homeColor, opts.homeLabel, opts.homeTeamId)
+  if (opts.awayLabel) addBanner(ENTRANCE_BANNER_AWAY, awayColor, opts.awayLabel, opts.awayTeamId)
   const setEntranceBanners = (visible: boolean): void => {
     bannerGroup.visible = visible && bannerGroup.children.length > 0
   }

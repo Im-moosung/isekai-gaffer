@@ -815,61 +815,121 @@ export function makeFlagCanvas(w = 128, h = 96): HTMLCanvasElement | null {
   return canvas
 }
 
-// ── 입장 배너(피치에 펼치는 팀 색 천) ───────────────────────────
+// ── 입장 배너(피치에 펼치는 국기 천) ────────────────────────────
 /**
- * 입장 연출에서 피치에 펼치는 **팀 배너** 텍스처.
+ * 입장 연출에서 피치에 펼치는 **국기 배너** 텍스처.
  *
- * ★ 실제 국기를 그리지 않는다. 프로젝트 규칙이 공식 엠블럼·로고 사용을 금지하고
- *   (docs/proposal/proposal-draft.md 고지 절), 국기는 그중에서도 가장 다투기 쉬운
- *   자산이다. 대신 원정 응원석이 펼치는 **대형 천(tifo)** 의 문법을 쓴다 —
- *   팀 색 바탕 + 사선 색면 + 팀명. "그 팀의 자리"라는 의미는 그대로 전달되면서
- *   어떤 실존 국기·엠블럼과도 닮지 않는다.
+ * ★ 2026-08-01 정정 — 예전 이 자리에는 *"실제 국기를 그리지 않는다"* 는 주석과 함께
+ *   팀 색 tifo 도안이 있었다. **오독이었다.** 설계 스펙 §9.1이 금지한 것은
+ *   **협회 엠블럼·대표팀 크레스트·FIFA/월드컵 공식 로고**이고, 같은 문장이 팀 식별
+ *   수단으로 **지정한** 것이 국기(퍼블릭 도메인) + 국가명 텍스트다
+ *   (2026-07-23-worldcup-manager-sim-design.md:182). 사용자 스토리보드도 "태극기"라고
+ *   적었다. 그래서 도안을 국기로 되돌린다 — 금지 목록은 그대로 유효하다(엠블럼·크레스트·
+ *   공식 로고는 여전히 안 쓴다).
  *
- * @param base  팀 색(0xRRGGBB)
+ * 국기 자체는 **호출부가 비동기로 로드해 넘긴다**(`src/ui/flags/flags.ts`). 캔버스에
+ * SVG를 그리려면 `<img>` 디코드를 기다려야 하는데 이 함수는 동기 계약을 지켜야 하기
+ * 때문이다. 그래서 호출부는 보통 두 번 부른다: 먼저 `flag=null`로 폴백 천을 만들어
+ * 텍스처를 띄우고, 이미지가 도착하면 같은 캔버스에 다시 그린 뒤 `needsUpdate`를 세운다.
+ *
+ * 배너는 잔디에 눕혀 원근으로 보이므로 **천 단서**(가로 주름 음영 + 가장자리 박음질 +
+ * 비네트)를 얹는다. 없으면 국기가 잔디에 붙인 스티커로 읽힌다.
+ *
+ * @param base  팀 색(0xRRGGBB) — 국기 로드 실패 시 폴백 바탕이자 캡션 띠의 액센트.
  * @param ink   글자색(팀 색 대비로 호출부가 고른다 — {@link kitInk})
- * @param label 팀 한국어 이름
+ * @param label 국가 한국어 이름 — 국기 아래 캡션 띠. §9.1의 "국기 + 국가명 텍스트".
+ * @param flag  디코드가 끝난 국기 이미지. null이면 팀 색 폴백 도안.
  */
 export function makeBannerCanvas(
-  base: number, ink: number, label: string, w = 512, h = 320,
+  base: number, ink: number, label: string,
+  flag: CanvasImageSource | null = null,
+  w = 512, h = 384,
 ): HTMLCanvasElement | null {
   const c = makeCanvas(w, h)
   if (!c) return null
   const { ctx, canvas } = c
   const css = (v: number) => `#${(v >>> 0).toString(16).padStart(6, '0')}`
-  ctx.fillStyle = css(base)
-  ctx.fillRect(0, 0, w, h)
-  // 사선 색면 두 줄 — 천의 방향감을 만든다(단색이면 3D에서 색종이로 보인다).
+  ctx.clearRect(0, 0, w, h)
+
+  if (flag) {
+    // 국기가 배너를 가득 채운다. 자산은 전부 4:3(viewBox 640×480)이고 캔버스도 4:3이라
+    // 비율 왜곡이 없다 — 국기는 늘리면 안 되는 도안이다.
+    ctx.drawImage(flag, 0, 0, w, h)
+  } else {
+    // 폴백: 로드 실패·오프라인. 팀 색 단색 + 사선 색면(예전 tifo 도안의 최소형).
+    ctx.fillStyle = css(base)
+    ctx.fillRect(0, 0, w, h)
+    ctx.save()
+    ctx.globalAlpha = 0.16
+    ctx.fillStyle = css(ink)
+    for (const off of [-0.35, 0.25]) {
+      ctx.beginPath()
+      ctx.moveTo(w * off, h)
+      ctx.lineTo(w * (off + 0.34), h)
+      ctx.lineTo(w * (off + 0.78), 0)
+      ctx.lineTo(w * (off + 0.44), 0)
+      ctx.closePath()
+      ctx.fill()
+    }
+    ctx.restore()
+  }
+
+  // ── 천 단서 1: 가로 주름 음영 ────────────────────────────────
+  // 결정론 규칙(Math.random 금지)에 맞춰 사인 두 개의 합으로만 만든다. 진폭이 작아야
+  // 국기 색이 왜곡되지 않는다 — 0.10을 넘기면 흰 바탕(체코·잉글랜드)이 회색으로 뜬다.
   ctx.save()
-  ctx.globalAlpha = 0.16
-  ctx.fillStyle = css(ink)
-  for (const off of [-0.35, 0.25]) {
-    ctx.beginPath()
-    ctx.moveTo(w * off, h)
-    ctx.lineTo(w * (off + 0.34), h)
-    ctx.lineTo(w * (off + 0.78), 0)
-    ctx.lineTo(w * (off + 0.44), 0)
-    ctx.closePath()
-    ctx.fill()
+  for (let y = 0; y < h; y++) {
+    const t = y / h
+    const wave = Math.sin(t * Math.PI * 7.5) * 0.6 + Math.sin(t * Math.PI * 17 + 1.1) * 0.4
+    const a = wave * 0.055
+    ctx.fillStyle = a >= 0 ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${-a})`
+    ctx.fillRect(0, y, w, 1)
   }
   ctx.restore()
-  // 테두리 — 실제 배너는 가장자리를 박음질한다. 3D 원경에서 형태를 잡아 준다.
-  ctx.strokeStyle = css(ink)
-  ctx.globalAlpha = 0.55
-  ctx.lineWidth = Math.max(4, h * 0.028)
-  ctx.strokeRect(ctx.lineWidth, ctx.lineWidth, w - ctx.lineWidth * 2, h - ctx.lineWidth * 2)
-  ctx.globalAlpha = 1
-  // 팀명 — 한 줄. 폭에 맞춰 자동으로 줄인다(긴 팀명도 잘리지 않게).
-  ctx.fillStyle = css(ink)
+
+  // ── 천 단서 2: 가장자리 비네트 ───────────────────────────────
+  // 눕힌 천은 가장자리가 잔디에 닿아 어두워진다. 3D 원경에서 배너의 사각형 윤곽을 잡아 준다.
+  ctx.save()
+  const vig = ctx.createLinearGradient(0, 0, 0, h)
+  vig.addColorStop(0, 'rgba(0,0,0,0.22)')
+  vig.addColorStop(0.14, 'rgba(0,0,0,0)')
+  vig.addColorStop(0.86, 'rgba(0,0,0,0)')
+  vig.addColorStop(1, 'rgba(0,0,0,0.22)')
+  ctx.fillStyle = vig
+  ctx.fillRect(0, 0, w, h)
+  ctx.restore()
+
+  // ── 캡션 띠: 국가명 ─────────────────────────────────────────
+  // §9.1은 "국기 + 국가명 텍스트"를 함께 요구한다. 국기 도안을 덮지 않도록 하단
+  // 18%에만 반투명 먹띠를 깔고 그 위에 흰 글자를 얹는다(어떤 국기 색 위에서도 읽힌다).
+  const capH = Math.round(h * 0.18)
+  const capY = h - capH
+  ctx.save()
+  ctx.fillStyle = 'rgba(10,13,20,0.72)'
+  ctx.fillRect(0, capY, w, capH)
+  // 띠 상단에 팀 색 하이라이트 한 줄 — 홈/어웨이를 색으로도 구분하게 한다.
+  ctx.fillStyle = css(base)
+  ctx.fillRect(0, capY, w, Math.max(2, Math.round(h * 0.012)))
+  ctx.fillStyle = '#ffffff'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  let size = Math.round(h * 0.3)
+  let size = Math.round(capH * 0.62)
   ctx.font = `800 ${size}px system-ui, sans-serif`
-  const max = w * 0.78
+  const max = w * 0.86
   while (size > 12 && ctx.measureText(label).width > max) {
-    size -= 4
+    size -= 2
     ctx.font = `800 ${size}px system-ui, sans-serif`
   }
-  ctx.fillText(label, w / 2, h / 2)
+  ctx.fillText(label, w / 2, capY + capH / 2 + Math.round(h * 0.004))
+  ctx.restore()
+
+  // ── 천 단서 3: 박음질 테두리 ────────────────────────────────
+  // 실제 대형 천은 가장자리를 접어 박는다. 흰 실선 한 줄이면 원경에서 "천 조각"이 된다.
+  ctx.save()
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)'
+  ctx.lineWidth = Math.max(3, h * 0.016)
+  ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, w - ctx.lineWidth, h - ctx.lineWidth)
+  ctx.restore()
   return canvas
 }
 

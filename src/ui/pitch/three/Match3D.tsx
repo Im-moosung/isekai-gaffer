@@ -17,6 +17,7 @@ import type { ChoreoStep } from '../choreography'
 import { createCameraRig } from './camera'
 import { entranceCameraMode, entranceFrame, type EntranceScript } from './entrance'
 import { endsSwapped } from '../ends'
+import { flagTeamId } from '../../flags/flags'
 import { FLASH_CONCEDED, FLASH_SCORED, createBall, flashQuad, goalBurst, type GoalBurst } from './fx3d'
 import { bindResize, createRendererHost, webgl2Available } from './host'
 import { DIVE_LAY_U, KICK_IMPACT_T, computeFrame } from './movement'
@@ -209,9 +210,13 @@ export function Match3D(props: Match3DProps) {
       const bundle = buildScene(THREE, {
         homeColor,
         awayColor,
-        // 입장 배너(스토리보드 컷1) — 팀명을 새긴 팀 색 천. 실제 국기는 쓰지 않는다.
+        // 입장 배너(스토리보드 컷1) — 피치에 펼치는 국기 + 국가명 캡션.
+        // 2026-08-01 정정 전에는 "국기를 쓰지 않는다"며 팀 색 천을 깔았다. 스펙 §9.1이
+        // 금지한 것은 엠블럼·크레스트·공식 로고이고 국기는 그 조항이 지정한 식별 수단이다.
         homeLabel: propsRef.current.state.home.team.name.ko,
         awayLabel: propsRef.current.state.away.team.name.ko,
+        homeTeamId: flagTeamId(propsRef.current.state.home.team.id),
+        awayTeamId: flagTeamId(propsRef.current.state.away.team.id),
         crowdCount: CROWD_FULL,
         pxPerMeter: PX_PER_M,
         maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),

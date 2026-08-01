@@ -137,13 +137,19 @@ const HOME_LINE_CX = -12
 const AWAY_LINE_CX = 12
 
 /**
- * 피치에 펼치는 팀 배너(스토리보드의 "국기").
+ * 피치에 펼치는 **국기 배너**(스토리보드 컷1의 "태극기 / 상대편 국기").
  *
- * ★ 실제 국기 이미지를 쓰지 않는다. 프로젝트 규칙이 공식 엠블럼·로고 사용을 금지하고
- *   (docs/proposal/proposal-draft.md 고지 절), 국기는 그중에서도 가장 다투기 쉬운 자산이다.
- *   대신 **팀 색 기반 절차 배너 + 팀명**으로 대체한다 — 원정 응원석이 펼치는 대형 배너
- *   (tifo)의 문법이라 "그 팀의 자리"라는 의미는 그대로 전달되면서, 어떤 실존 국기·엠블럼도
- *   모사하지 않는다. 색은 이미 데이터에 있는 팀 색(--bc-home/--bc-away)에서 나온다.
+ * ★ 2026-08-01 정정 — 여기에는 *"실제 국기 이미지를 쓰지 않는다"* 는 주석과 팀 색 tifo
+ *   도안이 있었다. **오독이었다.** 설계 스펙 §9.1이 금지한 것은 협회 엠블럼·대표팀
+ *   크레스트·FIFA/월드컵 공식 로고이고, 같은 문장이 팀 식별 수단으로 **지정한** 것이
+ *   국기(퍼블릭 도메인) + 국가명 텍스트다
+ *   (docs/superpowers/specs/2026-07-23-worldcup-manager-sim-design.md:182).
+ *   사용자 스토리보드에도 "태극기"라고 적혀 있었다. 자산은 `public/flags/*.svg`,
+ *   출처·라이선스는 docs/assets-licenses.md §국기가 정본이다.
+ *
+ * 크기는 **4:3**이다(16×12 m). 국기 도안은 비율을 바꾸면 안 되고 자산이 전부 4:3
+ * (viewBox 640×480)이라, 배너 면과 텍스처 비율을 맞춰 늘어남을 원천 차단한다.
+ * 예전 20×12(5:3)에서 폭만 줄인 것이라 좌우 여백은 그대로 남는다.
  *
  * 좌표는 두 팀의 줄보다 **피치 안쪽(+Z)** 이다 — 카메라가 -Z에 있으므로 화면에서
  * 배너가 선수들 위(뒤)에 깔린다. 스토리보드 컷1의 배치 그대로다.
@@ -158,8 +164,8 @@ export interface EntranceBanner {
   /** 세로(Z) 길이(m). */
   h: number
 }
-export const ENTRANCE_BANNER_HOME: EntranceBanner = { x: -20, z: 6, w: 20, h: 12 }
-export const ENTRANCE_BANNER_AWAY: EntranceBanner = { x: 20, z: 6, w: 20, h: 12 }
+export const ENTRANCE_BANNER_HOME: EntranceBanner = { x: -20, z: 6, w: 16, h: 12 }
+export const ENTRANCE_BANNER_AWAY: EntranceBanner = { x: 20, z: 6, w: 16, h: 12 }
 
 /** 심판 3인 — 주심 + 부심 2인. 스토리보드 컷1의 "심판 심판 심판". */
 export const REFEREE_IDS = ['referee', 'referee-ar1', 'referee-ar2'] as const
