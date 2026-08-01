@@ -1,0 +1,58 @@
+/* 랜딩 소리 안내(.landing__sound) — 자동재생 정책을 **설명하고 제스처를 받아내는** 한 조각.
+   왜 필요한가: 브라우저는 유저 제스처 전에 오디오 컨텍스트를 열어 주지 않는다. 그래서
+   첫 방문의 랜딩은 반드시 무음이고, 아무 신호가 없으면 유저는 "왜 소리가 안 나지"라고
+   생각한다(실제 사용자 지적 2026-08-01). 정책을 우회하지 않고, 정책을 말한다.
+   ★ 새 음소거 토글이 아니다 — 켜지면 사라진다. 음소거 상태에서는 아예 뜨지 않는다. */
+.landing__sound {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 7px 14px 7px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(8, 14, 24, 0.55);
+  backdrop-filter: blur(6px);
+  color: var(--s-text, #e8edf6);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.25;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background 0.18s ease, opacity 0.4s ease;
+}
+.landing__sound:hover {
+  border-color: rgba(255, 255, 255, 0.36);
+  background: rgba(8, 14, 24, 0.72);
+}
+.landing__sound-icon {
+  flex: none;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--brand, #3b82f6);
+}
+.landing__sound-text { display: block; font-weight: 700; }
+/* 정책 설명은 각주 톤 — 읽히되 CTA를 이기지 않는다. */
+.landing__sound-note {
+  display: block;
+  margin-top: 2px;
+  font-weight: 400;
+  font-size: 11.5px;
+  color: var(--s-text-dim, #9fb0cc);
+}
+
+/* 켜진 뒤: 같은 자리에서 "됐다"만 말하고 스스로 사라진다(2.6s). 남겨 두면 컨트롤이 된다. */
+.landing__sound--on {
+  cursor: default;
+  border-color: color-mix(in srgb, var(--brand, #3b82f6) 55%, transparent);
+  animation: landing-sound-out 2.6s ease-in forwards;
+}
+@keyframes landing-sound-out {
+  0%, 62% { opacity: 1; }
+  100% { opacity: 0; }
+}
+/* 모션 최소화에서는 페이드 대신 그대로 있다가 타이머가 걷어 간다. */
+@media (prefers-reduced-motion: reduce) {
+  .landing__sound--on { animation: none; }
+  .landing__sound { transition: none; }
+}
