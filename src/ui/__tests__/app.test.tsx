@@ -2,6 +2,7 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
 import { render, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import { useCampaignStore } from '../../game/campaignStore'
+import { SEED_MIN, SEED_MAX } from '../../game/seed'
 import type { DecisionEntry } from '../../engine/types'
 
 // MatchScreen을 경량 목으로 대체 — 경기 재생(타이머·결정 오버레이) 대신 즉시 onMatchEnd를
@@ -90,6 +91,37 @@ describe('App 랜딩 스모크', () => {
     expect(queryByRole('button', { name: '라인업 확정' })).toBeNull()
     // MatchScreen이 목이므로 경기 종료 버튼이 곧바로 보인다.
     expect(getByRole('button', { name: '경기 종료(목)' })).toBeTruthy()
+  })
+})
+
+// 시드 발급 — 예전에는 App.tsx 상수 20260724가 모든 플레이어의 1경기를 같은 판으로 묶었다.
+// 이제는 판마다 새로 뽑고, 주소에 ?seed=가 있으면 그 판을 그대로 다시 연다.
+describe('App 캠페인 시드 발급', () => {
+  afterEach(() => window.history.replaceState({}, '', '/'))
+
+  it('[캠페인 시작]마다 6자리 시드를 새로 뽑는다(상수 20260724가 아니다)', () => {
+    const { getByRole } = render(<App />)
+    fireEvent.click(getByRole('button', { name: '캠페인 시작' }))
+    const seed = useCampaignStore.getState().seed
+    expect(seed).toBeGreaterThanOrEqual(SEED_MIN)
+    expect(seed).toBeLessThanOrEqual(SEED_MAX)
+    expect(seed).not.toBe(20260724)
+  })
+
+  it('주소에 ?seed=가 있으면 그 판으로 시작한다(친구와 같은 판 = 링크 하나)', () => {
+    window.history.replaceState({}, '', '/?seed=246810')
+    const { getByRole } = render(<App />)
+    fireEvent.click(getByRole('button', { name: '캠페인 시작' }))
+    expect(useCampaignStore.getState().seed).toBe(246810)
+  })
+
+  it('?seed=가 잘못됐으면 조용히 새 판을 뽑는다', () => {
+    window.history.replaceState({}, '', '/?seed=nope')
+    const { getByRole } = render(<App />)
+    fireEvent.click(getByRole('button', { name: '캠페인 시작' }))
+    const seed = useCampaignStore.getState().seed
+    expect(seed).toBeGreaterThanOrEqual(SEED_MIN)
+    expect(seed).toBeLessThanOrEqual(SEED_MAX)
   })
 })
 

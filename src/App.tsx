@@ -12,14 +12,21 @@ import { PressConference } from './ui/press/PressConference'
 import { NewspaperCard } from './ui/press/NewspaperCard'
 import { useCampaignStore } from './game/campaignStore'
 import type { MatchRecord } from './game/campaignStore'
+import { newCampaignSeed, seedFromLocation } from './game/seed'
 import type { Headline } from './game/pressconf'
 import { loadTeam } from './data/loader'
 import { GROUP_MATCHES, type GroupMatch } from './data/groupStage'
 import './App.css'
 
-// 재현성을 위해 시드 고정 (Math.random·Date 미사용).
-const DEMO_SEED = 20260724
-const CAMPAIGN_SEED = 20260724
+// 시드는 **판을 시작할 때 한 번** 뽑는다(src/game/seed.ts). 그 뒤로는 전부 결정론이다 —
+// 같은 시드로 시작하면 90분 전체가 사건 하나까지 똑같이 재현된다(설계 §99 계약 유지).
+//
+// 예전에는 여기 상수 20260724가 박혀 있었고, 그래서 **모든 플레이어의 1경기(체코전)가
+// 같은 시드**였다. 실측하면 전술 9종 중 8종이 "1' 우리 슛 빗나감 → 2' 체코 골"로 시작했다
+// (최종 스코어는 3-2/2-2/3-1로 갈리니 전술은 먹히고 있었다 — 갈리지 않은 건 초반 대본이다).
+// 첫 경험이 전원 동일한 실점으로 고정돼 있었던 것이고, 그건 밸런스가 아니라 첫인상 문제다.
+// 주소에 ?seed=123456이 있으면 그 판을 그대로 다시 연다(엔딩 화면의 [링크 복사]가 만드는 주소).
+const pickCampaignSeed = () => seedFromLocation() ?? newCampaignSeed()
 
 type Mode = 'landing' | 'demo' | 'campaign'
 
@@ -38,7 +45,7 @@ function App() {
 
   return (
     <LandingScreen
-      onCampaign={() => { resetCampaign(); startCampaign(CAMPAIGN_SEED); setMode('campaign') }}
+      onCampaign={() => { resetCampaign(); startCampaign(pickCampaignSeed()); setMode('campaign') }}
       onDemo={() => setMode('demo')}
     />
   )
@@ -53,6 +60,10 @@ function DemoFlow({ onExit }: { onExit(): void }) {
   // 킥오프 전 설계는 MatchScreen의 'pre' 전술 센터가 담당한다(라인업 단독 화면 폐지).
   // useMemo로 참조를 고정해야 MatchScreen의 초기화 effect가 매 렌더 재실행되지 않는다.
   const initial = useMemo(() => pickBestXI(teams.home), [teams.home])
+  // 데모도 매 진입마다 시드를 새로 뽑는다 — [바로 지휘하기]는 심사자가 가장 먼저 누르는 버튼이라
+  // 두 번 눌렀을 때 같은 90분이 재생되면 "시뮬이 아니라 녹화"로 읽힌다.
+  // 마운트당 한 번만 뽑아야 MatchScreen의 초기화 effect가 매 렌더 재실행되지 않는다.
+  const demoSeed = useMemo(() => newCampaignSeed(), [])
 
   const [result, setResult] = useState<PostMatch | null>(null)
   const [headline, setHeadline] = useState<Headline | null>(null)
@@ -64,12 +75,12 @@ function DemoFlow({ onExit }: { onExit(): void }) {
             화면의 높이 예산과 충돌해 스테이지 하단을 화면 밖으로 밀어냈다(M-10). */}
         <p className="demo-note" role="note">
           <span className="badge">데모</span>
-          리더보드 미반영
+          리더보드 미반영 · 시드 {demoSeed}
         </p>
         <MatchScreen
           home={teams.home}
           away={teams.away}
-          seed={DEMO_SEED}
+          seed={demoSeed}
           initialTactics={initial}
           onMatchEnd={(score, _stamina, shootout, decisions) => {
             // 데모에는 캠페인 기록이 없으므로 임시 MatchRecord를 중립값으로 구성한다

@@ -35,6 +35,32 @@ function playChampion() {
   for (let i = 0; i < 5; i++) win()
 }
 
+// 시드가 판마다 달라졌으므로(2026-08-01) 엔딩 화면이 시드를 유저에게 돌려줘야 한다.
+// 이게 없으면 "매번 다른 랜덤"일 뿐이고, 결정론 엔진을 만든 의미가 사라진다.
+describe('EndingScreen 시드 표시', () => {
+  it('이 판의 시드를 숫자와 ?seed= 안내로 보여준다', () => {
+    store().startCampaign(246810)
+    win(); win(); win()
+    for (let i = 0; i < 5; i++) win()
+    const { container } = render(<EndingScreen onRestart={() => {}} />)
+    const seedCard = container.querySelector('.end-seed')!
+    expect(seedCard).toBeTruthy()
+    expect(seedCard.querySelector('.end-seed__val')!.textContent).toBe('246810')
+    expect(seedCard.textContent).toContain('?seed=246810')
+  })
+
+  it('클립보드가 없는 환경에서는 [링크 복사]를 그리지 않는다(눌러도 안 되는 버튼 금지)', () => {
+    store().startCampaign(246810)
+    win(); win(); win()
+    for (let i = 0; i < 5; i++) win()
+    // jsdom 기본에는 navigator.clipboard가 없다 — 비보안 컨텍스트와 같은 조건.
+    const { container } = render(<EndingScreen onRestart={() => {}} />)
+    if (!navigator.clipboard) {
+      expect(container.querySelector('.end-seed__copy')).toBeNull()
+    }
+  })
+})
+
 describe('EndingScreen 리더보드 등록 플로우', () => {
   it('점수 브레이크다운 표와 합계를 렌더한다', () => {
     playChampion()

@@ -5,6 +5,7 @@ import { loadAllTeams } from '../../data/loader'
 import { computeScore, submitScore, topScores } from '../../online/leaderboard'
 import type { LeaderboardMode, LeaderboardRow, ScoreBreakdown } from '../../online/leaderboard'
 import { sanitizeNickname } from '../../online/nickname'
+import { shareUrlForSeed } from '../../game/seed'
 import { buildEpilogue } from '../../game/pressconf'
 import { narrate } from '../../ai/aiClient'
 import * as bgm from '../../audio/bgm'
@@ -121,6 +122,51 @@ function headlineFor(
   }
 }
 
+/**
+ * 이 판의 시드 카드 — 시드를 **유저에게 돌려주는** 자리다.
+ *
+ * 시드가 매 판 달라지면(2026-08-01) 결정론 엔진의 값어치는 "내 판을 다시 열 수 있는가"에 달린다.
+ * 그래서 여정이 끝난 화면에 시드를 적고, 그대로 링크로 복사할 수 있게 둔다.
+ * 리더보드가 "모두 같은 시드"가 아니라 "기록된 시드 + 재현 가능한 리플레이"로 성립하는 근거다.
+ *
+ * 클립보드가 없는 환경(비보안 컨텍스트·구형 브라우저·jsdom)에서는 버튼을 아예 그리지 않는다 —
+ * 눌러도 아무 일이 없는 버튼보다 없는 편이 낫고, 시드 숫자는 언제나 화면에 남는다.
+ */
+function SeedCard({ seed }: { seed: number }) {
+  const [copied, setCopied] = useState(false)
+  const shareUrl = useMemo(() => shareUrlForSeed(seed), [seed])
+  const clipboard = (globalThis as { navigator?: { clipboard?: { writeText?(t: string): Promise<void> } } })
+    .navigator?.clipboard
+  const canCopy = shareUrl !== null && typeof clipboard?.writeText === 'function'
+
+  return (
+    <section className="section end-seed" aria-label="이 판의 시드">
+      <div className="section__head">
+        <h2 className="section__title">이 판의 시드</h2>
+      </div>
+      <p className="end-seed__val num">{seed}</p>
+      <p className="end-seed__note">
+        같은 시드로 시작하면 이 대회가 사건 하나까지 그대로 재현된다.
+        주소 끝에 <code>?seed={seed}</code>를 붙이면 친구도 같은 판을 지휘한다.
+      </p>
+      {canCopy && (
+        <button
+          type="button"
+          className="btn btn--secondary end-seed__copy"
+          onClick={() => {
+            const write = clipboard?.writeText
+            if (!write || !shareUrl) return
+            const done = write.call(clipboard, shareUrl)
+            done.then(() => setCopied(true)).catch(() => { /* 조용히 실패 — 시드 숫자는 화면에 남는다 */ })
+          }}
+        >
+          {copied ? '복사됨' : '링크 복사'}
+        </button>
+      )}
+    </section>
+  )
+}
+
 interface Tally { w: number; d: number; l: number; gf: number; ga: number }
 
 function tally(records: MatchRecord[]): Tally {
@@ -147,6 +193,7 @@ export function EndingScreen({ onRestart }: { onRestart(): void }) {
   const ending = useCampaignStore(s => s.ending)
   const records = useCampaignStore(s => s.records)
   const groupRank = useCampaignStore(s => s.groupRank)
+  const seed = useCampaignStore(s => s.seed)
 
   const [nickname, setNickname] = useState('')
   const [busy, setBusy] = useState(false)
@@ -310,6 +357,8 @@ export function EndingScreen({ onRestart }: { onRestart(): void }) {
               </tbody>
             </table>
           </section>
+
+          <SeedCard seed={seed} />
 
           <section className="section" aria-label="리더보드">
             <div className="section__head">
