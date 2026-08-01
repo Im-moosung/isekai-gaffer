@@ -1,6 +1,6 @@
 import {
   interventionLevel, nextBreakMinute, useMatchStore,
-  SHOUT_COOLDOWN, TOUCHLINE_RANK_STEP,
+  INTERVENTION_COOLDOWN, TOUCHLINE_RANK_STEP,
 } from '../../game/matchStore'
 import { MENTALITIES, ATTACK_PATTERNS, BOX_LOADS, SET_PIECE_ROUTES } from '../../engine/tactics'
 import { counterRiskScale } from '../../engine/simulate'
@@ -73,7 +73,7 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
   const pauseReason = useMatchStore(s => s.pauseReason)
   const engine = useMatchStore(s => s.engine)
   const schedule = useMatchStore(s => s.schedule)
-  const lastShoutMinute = useMatchStore(s => s.lastShoutMinute)
+  const lastInterventionMinute = useMatchStore(s => s.lastInterventionMinute)
   const touchlineWindow = useMatchStore(s => s.touchlineWindow)
   const submitCommand = useMatchStore(s => s.submitCommand)
 
@@ -101,8 +101,8 @@ export function TacticsExtras({ side }: { side: 'home' | 'away' }) {
   // ── 개입 자원 상태 ────────────────────────────────────────────────
   // 같은 분에 열린 창 안이면 추가 비용이 없다(ConsolePanel과 같은 규칙).
   const windowOpen = !!touchlineWindow && touchlineWindow.minute === minute && touchlineWindow.side === side
-  const cooldownLeft = touchline && !windowOpen && lastShoutMinute !== null
-    ? Math.max(0, SHOUT_COOLDOWN - (minute - lastShoutMinute))
+  const cooldownLeft = touchline && !windowOpen && lastInterventionMinute !== null
+    ? Math.max(0, INTERVENTION_COOLDOWN - (minute - lastInterventionMinute))
     : 0
   const onCooldown = cooldownLeft > 0
   /** 터치라인에서 열리는 축의 공통 활성 조건. */

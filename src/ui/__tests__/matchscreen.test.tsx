@@ -386,19 +386,20 @@ describe('MatchScreen — 자유 개입 자원 표시(감독 타임)', () => {
     expect(pod(c).textContent).toContain(reason)
   })
 
-  it('쿨다운 중에는 버튼이 죽고 **남은 분**이 화면에 있다(외침과 같은 시계)', () => {
+  it('쿨다운 중에는 버튼이 죽고 **남은 분**이 화면에 있다(외침과는 다른 시계)', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
     kickoffNow(getByRole)
     step(3)
     const minute = store().engine!.minute
-    act(() => { useMatchStore.setState({ lastShoutMinute: minute }) })
+    act(() => { useMatchStore.setState({ lastInterventionMinute: minute }) })
     const c = container as HTMLElement
     const st = freeInterventionState(0, minute, store().engine!.minute)
     expect(st.cooldownLeft).toBeGreaterThan(0)
     expect(timeBtn(c).disabled).toBe(true)
     expect(pod(c).textContent).toContain(String(st.cooldownLeft))
     expect(pod(c).textContent).toContain(st.blockedReason!)
-    // 링도 함께 뜬다 — ShoutBar와 같은 시각 언어(같은 자원임을 말한다).
+    // 링도 함께 뜬다 — ShoutBar와 같은 시각 언어다. 다만 재는 시계는 다르다
+    // (개입 10분 · 외침 5분). 링은 "언제 돌아오는가"를 말하고, 어느 자원인지는 옆 라벨이 말한다.
     expect(c.querySelector('.ms-controls .sb-ring')).toBeTruthy()
   })
 

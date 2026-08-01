@@ -231,12 +231,18 @@
   background: color-mix(in srgb, var(--brand) 10%, var(--s-scrim-strong));
 }
 
-/* 하단 바 — 오버레이. 외침·티커가 캔버스를 잘라먹지 않는다. */
+/* 하단 바 — 오버레이. 외침·티커가 캔버스를 잘라먹지 않는다.
+   ★ furniture 중에서도 **한 칸 위**다. 2D 작전판은 자기 캡션("12' 파울 — …")을 같은
+     z-furniture 층에 그리는데, DOM 순서상 그쪽이 나중이라 하단 바 위로 올라탔다
+     (실측 docs/audit/shots/r9-shout-*: 외침 결과 배너 글자를 캡션이 뚫고 나왔다).
+     보드는 이미 furniture 띠를 비우도록 세이프 에어리어를 갖고 있으므로, 겹치는
+     경우의 우선순위는 furniture가 갖는 것이 맞다. */
 .ms-root--live .ms-bottombar {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
+  z-index: calc(var(--z-furniture) + 1);
   background: var(--s-scrim-strong);
   backdrop-filter: blur(14px);
 }
@@ -465,6 +471,7 @@
 
 /* ── 하단 액션 바 — 외침 + 중계 티커 ────────────────────────────────── */
 .ms-bottombar {
+  /* 외침 결과 배너(.sb-banner)의 기준 상자 — sticky가 이미 위치 상자를 만든다. */
   position: sticky;
   bottom: 0;
   z-index: var(--z-furniture);
@@ -509,6 +516,57 @@
   font-size: var(--fs-xs);
   color: var(--t-low);
   white-space: nowrap;
+}
+
+/* 외침 결과 배너 — 팀토크 배너(.tt-banner) 문법을 그대로 입고, 자리와 수명만 다르다.
+   ★ 바 **위로 띄운다**(absolute). 바 안에 흘려 넣으면 외침 버튼 4개를 밀어내 하단
+     레이아웃이 외칠 때마다 요동친다 — 방송 화면에서 가장 피해야 할 움직임이고,
+     그 흔들림 때문에 다음 외침 버튼을 잘못 누르게 된다.
+   ★ 기준 상자는 외침 바가 아니라 **하단 바 전체**이고, 거기서 가운데 정렬한다.
+     실측(docs/audit/shots/r9-shout-*)에서 바 왼쪽에 붙였더니 좌하단 라이브 스탯 HUD와
+     정확히 겹쳐 글자가 서로를 뚫고 나왔다. 화면 가운데 아래는 방송이 로어서드를 두는
+     자리이기도 하다 — 좌(스탯)·우(티커) 어느 쪽도 밀어내지 않는 유일한 빈 곳이다.
+   ★ 가로 한 줄로 눕히는 것은 .tt-banner--done과 같은 이유다(세로로 길면 경기를 가린다). */
+.sb-banner {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(100% + var(--sp-2));
+  /* 라이브 스탯 HUD보다 위다 — 3.8초짜리 알림이 반투명하게 섞이면 둘 다 못 읽는다. */
+  z-index: calc(var(--z-furniture) + 1);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  margin: 0;
+  padding: var(--sp-2) var(--sp-3);
+  max-width: min(560px, 92vw);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+}
+/* 배경은 다른 방송 furniture와 같은 스크림을 쓴다 — 캔버스 위 텍스트의 대비를 구조로
+   보장하는 규칙(.ms-root--live 주석 ③)이 이 배너에도 그대로 적용된다.
+   좋고 나쁨의 신호는 배경 틴트가 아니라 테두리 색과 글자 색(tt-banner--up/--down)이 나른다. */
+.tt-banner.sb-banner {
+  /* **완전 불투명**이어야 한다. 다른 방송 furniture가 쓰는 --s-scrim-strong은 88%라
+     12%가 새는데, 이 배너는 2D 작전판의 캡션 위에 겹쳐 뜨는 유일한 요소여서 그 12%가
+     글자 대 글자로 보인다(실측 r9-shout-1). 3.8초짜리 알림은 새는 것보다 덮는 게 낫다. */
+  background: var(--s-1);
+}
+.sb-banner .tt-banner__text {
+  font-size: var(--fs-md);
+}
+.sb-banner .tt-reactions {
+  margin: 0;
+}
+/* 성향 문구는 부가 설명이라 주 문장과 같은 줄에 섞이면 읽는 순서가 꼬인다. */
+.sb-banner .tt-banner__note {
+  flex-basis: 100%;
+  margin: 0;
+}
+.sb-banner__cost {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--warn, var(--t-mid));
 }
 
 /* ── 풀타임 리포트 ─────────────────────────────────────────────────── */

@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, lazy, Suspense, Component, type ReactNode } from 'react'
 import type { Team, TacticState, MatchEvent, DecisionEntry, SideStats } from '../../engine/types'
 import {
-  useMatchStore, freeInterventionState, MAX_FREE_INTERVENTIONS, SHOUT_COOLDOWN,
+  useMatchStore, freeInterventionState, MAX_FREE_INTERVENTIONS, INTERVENTION_COOLDOWN,
 } from '../../game/matchStore'
 import type { MomentKind } from '../../game/matchSession'
 import { teamCardTally } from '../../game/playerStats'
@@ -99,8 +99,10 @@ const MODE_TRANSITION_MS = 600
 // 동적 순간 유형별 방송 배너 문구(제안 시). matchSession.DecisionMoment.title과 별개로,
 // 배너에서는 감독에게 말 거는 어투로 노출한다(스펙 §17.2 방송 배너).
 // broadcast 모드(재생 중)에서만 노출 — 정지·하프타임 안내는 작전판이 담당한다.
-// 쿨다운 링 기하 — ShoutBar와 **같은 값**을 쓴다. 감독 타임과 외침은 하나의 10분 시계를
-// 공유하므로(matchStore.lastShoutMinute) 링이 다르게 생기면 다른 자원으로 읽힌다.
+// 쿨다운 링 기하 — ShoutBar와 **같은 모양**을 쓴다. 다만 재는 시계는 서로 다르다
+// (감독 타임 10분 · 외침 5분 — 2026-08-01 분리). 모양이 같아도 되는 이유는 링이 말하는
+// 것이 "이 버튼이 언제 돌아오는가"이지 "어느 자원인가"가 아니기 때문이고, 어느 자원인지는
+// 링 옆의 라벨(개입 N/5 · 외침 바)이 말한다.
 const RING_R = 8
 const RING_C = 2 * Math.PI * RING_R
 
@@ -198,7 +200,7 @@ export function MatchScreen({
   // 자유 개입(감독 타임) 자원 — 잔량·쿨다운·막힘 사유를 store의 순수 함수 하나로 받는다.
   // 판정을 화면에서 다시 조립하면 store가 거부하는데 버튼은 살아 있는 조합이 생긴다.
   const freeInterventionsUsed = useMatchStore(s => s.freeInterventionsUsed)
-  const lastShoutMinute = useMatchStore(s => s.lastShoutMinute)
+  const lastInterventionMinute = useMatchStore(s => s.lastInterventionMinute)
   const startMatch = useMatchStore(s => s.startMatch)
   const kickoff = useMatchStore(s => s.kickoff)
   const advanceMinute = useMatchStore(s => s.advanceMinute)
@@ -305,7 +307,7 @@ export function MatchScreen({
     [decisionLog, home.id],
   )
 
-  const freeIntervention = freeInterventionState(freeInterventionsUsed, lastShoutMinute, engine?.minute ?? 0)
+  const freeIntervention = freeInterventionState(freeInterventionsUsed, lastInterventionMinute, engine?.minute ?? 0)
 
   // 재생 중 = playing. 시간 정지(카운트다운 없음)는 phase가 playing이 아닐 때.
   const replaying = phase === 'playing'
@@ -903,7 +905,12 @@ export function MatchScreen({
           제어 그룹은 스테이지 안(.ms-controls)으로 내려갔다: 데스크톱에서는 우상단에
           같이 떠 있지만, 390에서는 피치 아래 흐름 요소가 되어야 하기 때문이다
           (좁은 화면에서 7개 컨트롤을 피치 위에 얹으면 경기가 안 보인다). ── */}
-      {chromeOn && (
+      {/* ★ 풀타임에는 스코어버그를 내린다(감사 R6-B). 리포트가 "경기 종료 KOR 3:2 CZE"를
+          크게 보여 주는데 그 위에 라이브 스코어버그가 같은 점수를 한 번 더 띄우고 있었다 —
+          같은 사실을 두 번 말하는 화면이고, 아래는 정작 비어 있었다.
+          CSS(:has)로 감추지 않은 이유: 스코어버그가 **유일하게** 들고 있던 정보인 대회명이
+          함께 사라진다. 그래서 대회명을 리포트 헤더로 옮기고 여기서는 통째로 내린다. */}
+      {chromeOn && !finished && (
         <header className="ms-topbar">
           <Scorebug
             home={home}
@@ -1113,7 +1120,7 @@ export function MatchScreen({
               </button>
             )}
             {/* ── 감독 타임 = **희소 자원**. 잔량과 쿨다운이 항상 보여야 한다 ──
-                자유 개입은 5회 + 외침과 공유하는 10분 쿨다운이다. 계획해서 쓰라고 만든
+                자유 개입은 5회 + 10분 쿨다운이다(외침은 여기서 세지 않는다). 계획해서 쓰라고 만든
                 제약인데 잔량이 안 보이면 계획이 불가능하다 — 그래서 부가 정보가 아니라
                 버튼과 한 묶음이다.
 
@@ -1143,7 +1150,7 @@ export function MatchScreen({
                         cx="10"
                         cy="10"
                         r={RING_R}
-                        strokeDasharray={`${(Math.min(1, freeIntervention.cooldownLeft / SHOUT_COOLDOWN) * RING_C).toFixed(2)} ${RING_C.toFixed(2)}`}
+                        strokeDasharray={`${(Math.min(1, freeIntervention.cooldownLeft / INTERVENTION_COOLDOWN) * RING_C).toFixed(2)} ${RING_C.toFixed(2)}`}
                       />
                     </svg>
                   )}
@@ -1202,7 +1209,9 @@ export function MatchScreen({
             ) : (
               <>
                 <header className="ms-report__head">
-                  <span className="eyebrow">경기 종료</span>
+                  {/* 대회명은 스코어버그에서 물려받은 것이다(위 R6-B 주석) — 결과 화면에서도
+                      "무슨 대회의 경기였는가"는 남아야 한다. */}
+                  <span className="eyebrow">{context} · 경기 종료</span>
                   <div className="ms-final">
                     <span className="ms-final__team">
                       <span className="kit-strip kit-strip--us" aria-hidden="true" />

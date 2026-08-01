@@ -6,6 +6,7 @@ import type {
   Mentality, SetPieceMarking, SetPieceRoute, TacticState, Team,
 } from '../engine/types'
 import { MENTALITIES } from '../engine/tactics'
+import { createRng } from '../engine/rng'
 import { breakSchedule, detectMoment, type DecisionMoment, type HydrationSchedule } from './matchSession'
 import { decideAwayActions } from './oppAi'
 import { subbedOffIds } from './playerStats'
@@ -125,8 +126,59 @@ const BOOST_MINUTES = 8
 
 /** 터치라인 외침 4종 — [독려][더 뛰어][침착][칭찬]. */
 export type ShoutType = 'urge' | 'work' | 'calm' | 'praise'
-/** 외침 쿨다운(분) — 마지막 외침 이후 이 분이 지나야 재외침 가능. */
-export const SHOUT_COOLDOWN = 10
+
+// ── 외침은 개입이 아니다 (2026-08-01 재판정, 사용자 지시) ─────────────────
+//
+// 어제까지 외침은 자유 개입 5회·10분 쿨다운을 **감독 타임과 공유**했다(8b6a86e).
+// 근거는 *"둘 다 터치라인에서 선수들의 주의를 끄는 같은 행위"*였고, 그 근거가 틀렸다.
+// 사용자: *"이런 감독이 소리치는 거에 5 개입으로 보는 게 더 이상해."*
+//
+// **무엇이 다른가 — 남는가 아닌가.**
+//  · 외침("더 뛰어!")은 사기·체력에 **일시적 자극**을 준다. 경기를 세우지 않고, 감독은
+//    터치라인에 선 채 90분 내내 소리친다. 실제 축구에서 이건 자원이 아니라 습관이다.
+//  · 감독 타임은 경기를 **세우고** 작전판을 열어 팀의 상태를 **영구히** 바꾼다.
+//    랜딩이 약속한 "다섯 번의 개입"의 실체가 이것이다.
+// 자원 회계는 "얼마나 오래 남는가"를 따라가야 한다. 한 마디 지르는 것과 판을 여는 것을
+// 같은 통장에서 빼면, 유저는 지르는 것이 아까워서 지르지 않게 된다 — 실제로 그랬다.
+//
+// **그래서 터치라인 지시(라인·압박·템포·공격방향 슬라이더)는 어느 쪽인가 — 개입이다.**
+// 세 가지 근거가 같은 곳을 가리킨다:
+//  ① **결과가 남는다.** 슬라이더가 옮긴 값은 그 뒤 모든 분의 시뮬레이션에 들어간다.
+//     외침의 사기 보정처럼 잦아들지 않는다. 위 기준(남는가)이 그대로 적용된다.
+//  ② **경기를 세워야만 도달한다.** submitCommand는 INTERVENTION_PHASES에서만 통과하고,
+//     터치라인 등급이 붙는 phase는 paused-user·paused-moment — 둘 다 **이미 개입을 한 번
+//     쓴 뒤**다. 여기에 외침 시계를 걸면 "개입을 썼는데 그 안에서 아무 말도 못 한다"가 된다.
+//  ③ **조작이 다르다.** 소리치는 것은 버튼 하나고, 지시는 슬라이더를 보며 수치를 고르는
+//     일이다. 유저가 화면을 열어 값을 읽고 있다면 그건 이미 감독 타임이다.
+//
+// 결론: **두 개의 시계**를 둔다. 나누면 "외쳤는데 감독 타임은 되는" 상태가 생기지만
+// 그건 모순이 아니라 **의도**다 — 셋이 같은 것이라는 전제가 기각됐기 때문이다.
+
+/** 외침 쿨다운(분) — 자유 개입 횟수와 **무관**하고, 이 시계만 지키면 몇 번이든 외친다.
+ *  5분: 90분에 최대 18회. "언제 지를까"를 계획하게 만들지 않을 만큼 흔하고,
+ *  매 분 연타로 사기를 펌프질할 수는 없을 만큼은 드물다. */
+export const SHOUT_COOLDOWN = 5
+
+/** 자유 개입(감독 타임·터치라인 지시 창) 쿨다운(분). 외침과 **다른 시계**다. */
+export const INTERVENTION_COOLDOWN = 10
+
+/** 지금 외칠 수 있는가 — 쿨다운·사유를 한 번에 답한다(freeInterventionState의 외침판).
+ *  순수 함수라 UI와 store가 같은 판정을 쓴다. 자유 개입 잔량은 **보지 않는다** — 그것이
+ *  이 분리의 요점이다. */
+export function shoutState(
+  lastShoutMinute: number | null,
+  minute: number,
+): { cooldownLeft: number; canShout: boolean; blockedReason: string | null } {
+  const cooldownLeft = lastShoutMinute === null
+    ? 0
+    : Math.max(0, SHOUT_COOLDOWN - (minute - lastShoutMinute))
+  return cooldownLeft > 0
+    ? {
+        cooldownLeft, canShout: false,
+        blockedReason: `목이 쉰다 — ${cooldownLeft}분 뒤에 다시 외칠 수 있습니다(개입 횟수와는 무관합니다).`,
+      }
+    : { cooldownLeft: 0, canShout: true, blockedReason: null }
+}
 
 /** 외침 효과 결정론 테이블 — 스코어 상황 × 외침 (사기·체력 delta, 전원 일괄).
  *  랜덤 없이 상황·유형만으로 정해진다(재현성). 부적합 조합은 역효과:
@@ -141,6 +193,109 @@ export const SHOUT_TABLE: Record<ScoreSituation, Record<ShoutType, { morale: num
 /** 외침 한국어 라벨(버튼·로그용). */
 export const SHOUT_LABEL: Record<ShoutType, string> = {
   urge: '독려', work: '더 뛰어', calm: '침착', praise: '칭찬',
+}
+
+// ── 외침의 결과를 보여 준다 (2026-08-01, 사용자 지시) ────────────────────
+// *"실제 바뀌는 결과도 팝업으로 잠깐 보여지고 사라지게… 누가 얼마나 올랐는지…
+//   매번 같은 거 선택하고 같은 선수들이 영향을 받는 게 아니라 이건 랜덤하게."*
+//
+// **결정론과 다양성을 어떻게 양립시켰는가** — 이 프로젝트는 `Math.random()`을 금지한다
+// (리더보드·리플레이가 시드 재현에 의존한다). 그래서 무작위성의 출처를 **시드 파생**으로
+// 옮긴다: `createRng(seed·소수 + 분·소수 + 외침 종류)`.
+//  · 같은 시드 · 같은 분 · 같은 외침 → **언제나 같은 결과**(재현 계약).
+//  · 그런데 유저에게는 매번 다르다 — 외침 쿨다운이 5분이라 두 번째 외침은 반드시 다른
+//    분이고, 분이 스트림을 통째로 갈아 치운다. 여기에 대상 가중치가 그 순간의 사기·체력·
+//    카드·득점을 읽으므로, 같은 분이라도 경기 상황이 다르면 다른 사람이 뽑힌다.
+// 즉 다양성은 난수가 아니라 **경기 상태의 다양성**에서 나온다. 그게 이 게임이 팔려는
+// 것이기도 하다 — 같은 말도 다른 라커룸에서는 다르게 먹힌다.
+//
+// **왜 완전 무작위로 뽑지 않는가**: 아무나 뽑으면 유저는 팝업을 두 번 보고 읽기를 그만둔다.
+// 대상 선정을 **상태와 연결**하면 패턴을 발견할 수 있다("더 뛰어는 체력 남은 선수에게
+// 잘 먹히는구나"). 다만 결정적이면 다시 "매번 같다"로 돌아가므로, 상태는 **가중치**로만
+// 쓰고 뽑기 자체는 rng.weighted에 맡긴다 — 경향은 보이되 명단은 고정되지 않는다.
+
+/** 외침이 특히 닿은 선수 한 명. */
+export interface ShoutTarget {
+  playerId: string
+  name: string
+  /** 이 선수의 사기가 **실제로** 움직인 양(팀 일괄분 + 추가분, 0~100 클램프 반영 후). */
+  morale: number
+}
+
+/** 외침 직후 UI가 잠깐 띄우는 결과. 팀토크 결과 배너(TeamTalkResult)와 같은 문법이다. */
+export interface ShoutResult {
+  type: ShoutType
+  situation: ScoreSituation
+  /** 전원에게 걸린 기본 사기 delta(SHOUT_TABLE). */
+  teamMorale: number
+  /** 전원에게 걸린 기본 체력 delta(SHOUT_TABLE). 0이면 체력은 건드리지 않았다. */
+  teamStamina: number
+  /** 특히 반응한 선수 2~3명 — "누가 얼마나"의 실체. */
+  targets: ShoutTarget[]
+  /** 역효과(팀 사기가 내려갔다) — 배너가 색을 뒤집는 근거. */
+  backfire: boolean
+  /** 이 외침이 **누구에게** 잘 닿는지 한 줄. 유저가 패턴을 발견하는 통로다. */
+  affinity: string
+}
+
+/** 외침별 대상 성향 문구 — 가중치 규칙(shoutTargets)과 **같은 사실**을 말해야 한다. */
+const SHOUT_AFFINITY: Record<ShoutType, string> = {
+  urge: '가라앉은 선수에게 먼저 닿습니다',
+  work: '체력이 남은 선수가 먼저 반응합니다',
+  calm: '경고를 받은 선수부터 가라앉힙니다',
+  praise: '오늘 해낸 선수에게 먼저 닿습니다',
+}
+
+/** 외침 종류별 시드 오프셋 — 같은 분에 종류만 바꿔도 다른 스트림이 되게 한다(서로소 소수). */
+const SHOUT_SEED: Record<ShoutType, number> = { urge: 3, work: 5, calm: 7, praise: 11 }
+
+/**
+ * 이 외침이 특히 닿을 선수 2~3명을 고른다 — **가중 추첨**이고, 가중치는 현재 상태에서 온다.
+ * 후보는 퇴장을 뺀 선발 11인이다(벤치는 소리를 듣지만 경기에 없다).
+ *
+ * 가중치는 전부 하한 0.2를 둔다. 0을 주면 그 선수는 영영 뽑히지 않아 "매번 같은 사람들"이
+ * 되고, 그것이 사용자가 지적한 바로 그 증상이다. 하한은 경향과 다양성을 함께 남긴다.
+ */
+function shoutTargets(
+  engine: MatchState, type: ShoutType, rng: ReturnType<typeof createRng>,
+): string[] {
+  const side = engine.home
+  const ids = side.tactics.lineup
+    .map(l => l.playerId)
+    .filter(id => !side.sentOff.includes(id) && id in side.moraleByPlayer)
+  if (ids.length === 0) return []
+  // 이 경기에서 경고를 받은 선수 / 공격포인트를 낸 선수 — 침착·칭찬의 가중치 원천.
+  const booked = new Set(engine.events.filter(e => e.type === 'yellow' && e.playerId).map(e => e.playerId!))
+  const scored = new Set(
+    engine.events
+      .filter(e => e.type === 'goal' && e.teamId === side.team.id)
+      .flatMap(e => [e.playerId, e.assistId].filter(Boolean) as string[]),
+  )
+  const items = ids.map(id => {
+    const morale = side.moraleByPlayer[id] ?? 70
+    const stamina = side.staminaByPlayer[id] ?? 100
+    let w: number
+    switch (type) {
+      // 독려는 일으켜 세우는 말이다 — 이미 펄펄 나는 선수에게는 할 말이 아니다.
+      case 'urge': w = (100 - morale) / 20; break
+      // 뛸 수 있는 다리가 남아 있어야 "더 뛰어"가 명령이 된다. 지친 선수에겐 잔소리다.
+      case 'work': w = stamina / 20; break
+      // 진정시킬 대상은 흥분한 선수다. 카드를 받은 선수가 가장 뚜렷한 신호(×4).
+      case 'calm': w = (morale / 25) * (booked.has(id) ? 4 : 1); break
+      // 칭찬은 근거가 있어야 한다 — 오늘 골·어시스트를 낸 선수(×4).
+      case 'praise': w = (morale / 25) * (scored.has(id) ? 4 : 1); break
+    }
+    return { item: id, w: Math.max(0.2, w) }
+  })
+  const want = Math.min(items.length, rng.int(2, 3))
+  const picked: string[] = []
+  const pool = [...items]
+  for (let i = 0; i < want && pool.length > 0; i++) {
+    const id = rng.weighted(pool)
+    picked.push(id)
+    pool.splice(pool.findIndex(p => p.item === id), 1)
+  }
+  return picked
 }
 
 /** 팀 관점(side)에서 현재 스코어 상황을 판정한다. */
@@ -442,9 +597,10 @@ export function tacticsDiff(before: TacticState, after: TacticState): string[] {
 // 반대로 하이드레이션·하프타임은 **규칙이 주는 것**이라 세지 않는다 — "하프타임 들어갔다고
 // 내 개입이 깎였다"는 감각은 설계 의도가 아니다.
 //
-// 왜 쿨다운을 새로 만들지 않는가: 외침·터치라인 지시와 **같은 10분 시계**(lastShoutMinute)를
-// 쓴다. 셋 다 "터치라인에서 선수들의 주의를 끄는" 같은 행위이고, 시계를 나누면 "외쳤는데
-// 감독 타임은 되고, 그 감독 타임 안에서 지시는 쿨다운에 걸리는" 모순이 생긴다.
+// 쿨다운 시계: **터치라인 지시와 공유하고, 외침과는 공유하지 않는다**(2026-08-01 재판정).
+// lastInterventionMinute 하나가 감독 타임 진입과 터치라인 지시 창을 함께 잰다 — 둘은 실제로
+// 같은 행위다(경기를 세우고 팀 상태를 바꾼다). 외침은 다른 시계를 쓴다. 근거는 SHOUT_COOLDOWN
+// 위의 논증이고, 사용자 지시(2026-08-01)가 이 판정의 정본이다.
 
 /** 자유 개입(감독 타임) 총량. 랜딩 "90분과 다섯 번의 개입"의 실체다. */
 export const MAX_FREE_INTERVENTIONS = 5
@@ -455,13 +611,13 @@ export const MAX_FREE_INTERVENTIONS = 5
  *  풀리고, 소진은 영영 풀리지 않는다). 둘 다 막혔으면 더 오래 막는 쪽(소진)을 말한다. */
 export function freeInterventionState(
   used: number,
-  lastShoutMinute: number | null,
+  lastInterventionMinute: number | null,
   minute: number,
 ): { left: number; cooldownLeft: number; canPause: boolean; blockedReason: string | null } {
   const left = Math.max(0, MAX_FREE_INTERVENTIONS - used)
-  const cooldownLeft = lastShoutMinute === null
+  const cooldownLeft = lastInterventionMinute === null
     ? 0
-    : Math.max(0, SHOUT_COOLDOWN - (minute - lastShoutMinute))
+    : Math.max(0, INTERVENTION_COOLDOWN - (minute - lastInterventionMinute))
   if (left === 0) {
     return {
       left, cooldownLeft, canPause: false,
@@ -471,7 +627,7 @@ export function freeInterventionState(
   if (cooldownLeft > 0) {
     return {
       left, cooldownLeft, canPause: false,
-      blockedReason: `개입 쿨다운 — ${cooldownLeft}분 뒤에 감독 타임을 쓸 수 있습니다(외침·터치라인 지시와 같은 시계).`,
+      blockedReason: `개입 쿨다운 — ${cooldownLeft}분 뒤에 감독 타임을 쓸 수 있습니다(터치라인 지시와 같은 시계 · 외침은 별개입니다).`,
     }
   }
   return { left, cooldownLeft: 0, canPause: true, blockedReason: null }
@@ -576,9 +732,11 @@ export interface MatchUIState {
   boostUntil: number
   /** 하프타임 팀토크 1회 제한 플래그. */
   talked: boolean
-  /** 마지막 터치라인 개입 분(쿨다운 계산·진행 표시용). null이면 아직 없음.
-   *  외침·터치라인 지시·감독 타임 진입이 **같은 시계**를 쓴다(TOUCHLINE_AXES 주석). */
+  /** 마지막 **외침** 분(외침 쿨다운 전용 시계). null이면 아직 없음.
+   *  개입 시계(lastInterventionMinute)와 **분리돼 있다** — SHOUT_COOLDOWN 주석의 논증. */
   lastShoutMinute: number | null
+  /** 마지막 **자유 개입** 분(감독 타임 진입·터치라인 지시 창). 개입 쿨다운 전용 시계. */
+  lastInterventionMinute: number | null
   /** 쓴 자유 개입 횟수(감독 타임 + 순간 제안 수락). MAX_FREE_INTERVENTIONS가 상한. */
   freeInterventionsUsed: number
   /** 열려 있는 터치라인 지시 창. 같은 분의 여러 지시를 **한 번의 개입**으로 묶는다.
@@ -619,9 +777,11 @@ export interface MatchUIState {
   /** 하프타임 팀토크 — 결정론 사기 보정 후 즉시 효과 결과 반환.
    *  opts.expectation: 상대 기대치(FIFA 랭킹 차) 보정, opts.repeated: 지난 경기와 같은 톤이면 효과 반감. */
   applyTeamTalk(side: 'home' | 'away', tone: TeamTalkTone, opts?: { expectation?: Expectation; repeated?: boolean }): TeamTalkResult
-  /** 터치라인 외침 — playing 중 즉시(정지 없음). 10분 쿨다운·결정론 사기/체력 보정·로그.
-   *  홈(감독) 전용. 쿨다운 중이거나 재생 중이 아니면 throw. */
-  shout(type: ShoutType): void
+  /** 터치라인 외침 — playing 중 즉시(정지 없음). **자유 개입 5회를 쓰지 않는다.**
+   *  SHOUT_COOLDOWN(5분) 시계만 지키면 몇 번이든 외친다. 결정론 사기/체력 보정 + 시드 파생
+   *  RNG로 고른 대상 2~3명의 추가 보정 + 로그. 홈(감독) 전용.
+   *  쿨다운 중이거나 재생 중이 아니면 throw. 화면이 잠깐 띄울 결과를 돌려준다. */
+  shout(type: ShoutType): ShoutResult
   logShootoutSetup(summary: string): void
   reset(): void
 }
@@ -637,6 +797,7 @@ const initial = {
   boostUntil: 0,
   talked: false,
   lastShoutMinute: null as number | null,
+  lastInterventionMinute: null as number | null,
   freeInterventionsUsed: 0,
   touchlineWindow: null as { minute: number; side: 'home' | 'away'; tactics: TacticState } | null,
   decisionLog: [] as DecisionEntry[],
@@ -758,20 +919,20 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     set({ engine: next, ...expiry, ...opp })
   },
   pauseByUser: () => {
-    const { engine, phase, freeInterventionsUsed, lastShoutMinute } = get()
+    const { engine, phase, freeInterventionsUsed, lastInterventionMinute } = get()
     if (!engine) throw new Error('경기 미시작')
     if (phase !== 'playing') return
     // store가 최종 방어선이다 — UI가 버튼을 죽이는 것만으로는 부족하다.
     // 막혔을 때 throw하지 않고 조용히 거절하는 이유: 이 액션은 화면 버튼의 onClick에
     // 그대로 물려 있어 throw가 곧 렌더 경로의 예외가 된다. 사유는 화면이
     // freeInterventionState(같은 판정)로 미리 읽어 표시한다.
-    if (!freeInterventionState(freeInterventionsUsed, lastShoutMinute, engine.minute).canPause) return
+    if (!freeInterventionState(freeInterventionsUsed, lastInterventionMinute, engine.minute).canPause) return
     // 감독 타임 진입 자체가 창을 연다 — 한 번 불러 세운 동안 내리는 지시는 한 번의 개입이다.
     // 그래서 이 안에서의 터치라인 지시는 추가 비용이 없다(touchlineWindow 주석).
     set({
       phase: 'paused-user', pauseReason: { kind: 'user' },
       freeInterventionsUsed: freeInterventionsUsed + 1,
-      lastShoutMinute: engine.minute,
+      lastInterventionMinute: engine.minute,
       touchlineWindow: { minute: engine.minute, side: 'home', tactics: structuredClone(engine.home.tactics) },
     })
   },
@@ -809,17 +970,17 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     })
   },
   acceptMoment: () => {
-    const { engine, phase, momentPrompt, freeInterventionsUsed, lastShoutMinute } = get()
+    const { engine, phase, momentPrompt, freeInterventionsUsed, lastInterventionMinute } = get()
     if (phase !== 'playing') throw new Error('재생 중이 아님')
     if (!momentPrompt) throw new Error('제안된 순간이 없음')
     // 순간 제안 수락도 자유 개입이다 — 배너가 문자 그대로 "감독 타임을 쓰시겠습니까?"라고
     // 묻는다. 세지 않으면 [흘려보낸다]가 대가 없는 선택이 되어 버튼이 장식이 된다.
-    if (engine && !freeInterventionState(freeInterventionsUsed, lastShoutMinute, engine.minute).canPause) return
+    if (engine && !freeInterventionState(freeInterventionsUsed, lastInterventionMinute, engine.minute).canPause) return
     const minute = engine?.minute ?? 0
     set({
       phase: 'paused-moment', pauseReason: { kind: 'moment', moment: momentPrompt },
       freeInterventionsUsed: freeInterventionsUsed + 1,
-      lastShoutMinute: minute,
+      lastInterventionMinute: minute,
       ...(engine ? { touchlineWindow: { minute, side: 'home' as const, tactics: structuredClone(engine.home.tactics) } } : {}),
     })
   },
@@ -859,9 +1020,9 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
       // 자원 소모는 **창을 새로 여는 경우에만**. 같은 창 안의 추가 지시는 한 번의 개입이다.
       // 아무것도 바뀌지 않는 재전송도 무료다(슬라이더가 같은 값을 되돌려 놓는 경우).
       if (touchlineChanged.length > 0 && !openWindow) {
-        const last = get().lastShoutMinute
-        if (last !== null && engine.minute - last < SHOUT_COOLDOWN) {
-          throw new Error(`터치라인 지시 쿨다운 — ${SHOUT_COOLDOWN - (engine.minute - last)}분 뒤에 다시 외칠 수 있습니다.`)
+        const last = get().lastInterventionMinute
+        if (last !== null && engine.minute - last < INTERVENTION_COOLDOWN) {
+          throw new Error(`터치라인 지시 쿨다운 — ${INTERVENTION_COOLDOWN - (engine.minute - last)}분 뒤에 다시 지시할 수 있습니다(외침은 지금도 가능합니다).`)
         }
       }
     }
@@ -924,7 +1085,7 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
       ...(structChanged ? { adaptUntil: engine.minute + ADAPT_MINUTES } : {}),
       ...(opensWindow
         ? {
-            lastShoutMinute: engine.minute,
+            lastInterventionMinute: engine.minute,
             touchlineWindow: { minute: engine.minute, side, tactics: structuredClone(engine[side].tactics) },
           }
         : {}),
@@ -969,25 +1130,46 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     if (!engine) throw new Error('경기 미시작')
     if (phase !== 'playing') throw new Error('외침은 재생 중에만 가능')
     const minute = engine.minute
-    if (lastShoutMinute !== null && minute - lastShoutMinute < SHOUT_COOLDOWN) {
-      throw new Error('외침 쿨다운 중')
-    }
+    // 자유 개입 잔량은 보지 않는다 — 외침은 개입이 아니다(SHOUT_COOLDOWN 주석의 논증).
+    if (!shoutState(lastShoutMinute, minute).canShout) throw new Error('외침 쿨다운 중')
     const situation = scoreSituation(engine.score, 'home')
     const { morale, stamina } = SHOUT_TABLE[situation][type]
     // ★ 단순화: 엔진 전달 없이 홈 사기/체력을 직접 보정(applyTeamTalk 방식). 정지 없음.
     const next = structuredClone(engine)
     const m = next.home.moraleByPlayer
+    const beforeMorale = { ...m }
     for (const id of Object.keys(m)) m[id] = Math.max(0, Math.min(100, m[id] + morale))
     if (stamina !== 0) {
       const s = next.home.staminaByPlayer
       for (const id of Object.keys(s)) s[id] = Math.max(0, Math.min(100, s[id] + stamina))
     }
+    // 시드 파생 RNG — Math.random 금지 계약을 지키면서 매번 다른 사람이 뽑히게 하는 장치.
+    // 소수를 곱해 시드·분·종류가 서로의 스트림을 침범하지 않게 한다.
+    const rng = createRng(engine.seed * 10007 + minute * 131 + SHOUT_SEED[type])
+    // 대상 선정은 **보정 전 상태**를 본다(engine). 보정 후를 보면 일괄분이 이미 섞여 들어가
+    // "가라앉은 선수"의 정의가 외침 종류에 따라 흔들린다.
+    const picks = shoutTargets(engine, type, rng)
+    // 추가분의 부호는 팀 delta를 따른다 — 역효과라면 특히 세게 반응한 쪽이 더 상한다.
+    const sign = morale >= 0 ? 1 : -1
+    const targets: ShoutTarget[] = picks.map(id => {
+      m[id] = Math.max(0, Math.min(100, m[id] + sign * rng.int(2, 5)))
+      return {
+        playerId: id,
+        name: next.home.team.squad.find(p => p.id === id)?.name.ko ?? id,
+        // 화면에는 **실제로 움직인 양**을 적는다. 사기 99인 선수에게 +8을 표시하면 거짓말이다.
+        morale: m[id] - (beforeMorale[id] ?? m[id]),
+      }
+    })
     const entry: DecisionEntry = {
       minute, kind: 'teamtalk',
       summary: `${minute}' 외침: ${SHOUT_LABEL[type]}`,
-      detail: { shout: type, situation, morale, stamina },
+      detail: { shout: type, situation, morale, stamina, targets: targets.map(t => t.playerId) },
     }
     set({ engine: next, lastShoutMinute: minute, decisionLog: [...decisionLog, entry] })
+    return {
+      type, situation, teamMorale: morale, teamStamina: stamina, targets,
+      backfire: morale < 0, affinity: SHOUT_AFFINITY[type],
+    }
   },
   logShootoutSetup: (summary) => {
     const { engine, decisionLog } = get()

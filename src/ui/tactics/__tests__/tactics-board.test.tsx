@@ -110,7 +110,7 @@ describe('TacticsBoard — 확장 전술 지시(Task 5)', () => {
       const eng = structuredClone(store().engine!)
       eng.minute = 87; eng.score = [0, 1]
       // 쿨다운 중 = 개입 자원이 막힌 상태. 엔진 조건은 충족돼 있다.
-      useMatchStore.setState({ engine: eng, lastShoutMinute: 85, touchlineWindow: null })
+      useMatchStore.setState({ engine: eng, lastInterventionMinute: 85, touchlineWindow: null })
     })
     const btn = getByRole('button', { name: 'GK 전진' }) as HTMLButtonElement
     expect(btn.disabled).toBe(true)
@@ -560,7 +560,7 @@ describe('TacticsBoard — 터치라인 지시 개방(사용자 지시 ③)', ()
     fireEvent.change(getByLabelText('압박'), { target: { value: String(cur + 10) } })
     fireEvent.click(getByRole('button', { name: '터치라인 지시' }))
     expect(store().engine!.home.tactics.instructions.pressing).toBe(cur + 10)
-    expect(store().lastShoutMinute).toBe(store().engine!.minute)
+    expect(store().lastInterventionMinute).toBe(store().engine!.minute)
     expect(store().touchlineWindow!.minute).toBe(store().engine!.minute)
     // 같은 창 안이므로 슬라이더는 계속 열려 있고,
     const el = getByLabelText('압박') as HTMLInputElement
@@ -579,7 +579,7 @@ describe('TacticsBoard — 터치라인 지시 개방(사용자 지시 ③)', ()
     const { getByRole, getByLabelText, container } = mountAt('paused-user')
     fireEvent.click(getByRole('tab', { name: /전술/ }))
     act(() => {
-      useMatchStore.setState({ lastShoutMinute: store().engine!.minute, touchlineWindow: null })
+      useMatchStore.setState({ lastInterventionMinute: store().engine!.minute, touchlineWindow: null })
     })
     expect((getByLabelText('압박') as HTMLInputElement).disabled).toBe(true)
     expect(container.querySelector('.cs-touchline')!.textContent).toContain('쿨다운')

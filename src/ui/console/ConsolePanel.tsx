@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import {
   interventionLevel, touchlineOrderError, useMatchStore,
-  SHOUT_COOLDOWN, TOUCHLINE_STEP,
+  INTERVENTION_COOLDOWN, TOUCHLINE_STEP,
 } from '../../game/matchStore'
 import type { Instructions } from '../../engine/types'
 import '../shell/shell.css'
@@ -35,8 +35,8 @@ const FOCUS: { value: Instructions['attackFocus']; label: string }[] = [
  *  ★ 개입 등급 2층을 축 단위로 반영한다(2026-08-01 확장 개방):
  *   · 전원 소집('full') — 4축 전부, 폭 제한 없음.
  *   · 터치라인('touchline') — **4축 전부 열린다.** 수치 3축은 한 번에 ±TOUCHLINE_STEP,
- *     공격방향은 범주 축이라 폭 제한이 없다. 개입 자원(10분 시계)은 외침과 공유하고,
- *     같은 분에 열린 창(touchlineWindow) 안에서는 추가 비용이 없다.
+ *     공격방향은 범주 축이라 폭 제한이 없다. 개입 자원(10분 시계)은 감독 타임과 공유하고
+ *     (외침은 별도의 5분 시계다), 같은 분에 열린 창(touchlineWindow) 안에서는 추가 비용이 없다.
  *  판정 규칙은 store의 touchlineOrderError가 정본이다. 화면이 따로 판정하면
  *  "누를 수는 있는데 store가 거부하는" 조합이 생긴다.
  *
@@ -49,7 +49,7 @@ export function ConsolePanel({ side, onPreview }: {
   const phase = useMatchStore(s => s.phase)
   const pauseReason = useMatchStore(s => s.pauseReason)
   const engine = useMatchStore(s => s.engine)
-  const lastShoutMinute = useMatchStore(s => s.lastShoutMinute)
+  const lastInterventionMinute = useMatchStore(s => s.lastInterventionMinute)
   const touchlineWindow = useMatchStore(s => s.touchlineWindow)
   const submitCommand = useMatchStore(s => s.submitCommand)
 
@@ -64,13 +64,14 @@ export function ConsolePanel({ side, onPreview }: {
   const full = level === 'full'
   const touchline = level === 'touchline'
 
-  // 터치라인 지시는 외침·감독 타임 진입과 같은 자원을 쓴다(matchStore.TOUCHLINE_AXES 주석).
+  // 터치라인 지시는 **감독 타임과 같은 자원**을 쓴다 — 외침과는 시계가 다르다
+  // (2026-08-01 재판정, matchStore.SHOUT_COOLDOWN 위의 논증).
   // 단 **같은 분에 창이 열려 있으면** 그 창 안의 지시는 한 번의 개입으로 묶여 무료다
   // (IFAB 교체 기회가 같은 분의 복수 교체를 한 기회로 묶는 것과 같은 문법).
   const minute = engine?.minute ?? 0
   const windowOpen = !!touchlineWindow && touchlineWindow.minute === minute && touchlineWindow.side === side
-  const cooldownLeft = touchline && !windowOpen && lastShoutMinute !== null
-    ? Math.max(0, SHOUT_COOLDOWN - (minute - lastShoutMinute))
+  const cooldownLeft = touchline && !windowOpen && lastInterventionMinute !== null
+    ? Math.max(0, INTERVENTION_COOLDOWN - (minute - lastInterventionMinute))
     : 0
   const onCooldown = cooldownLeft > 0
 
@@ -193,10 +194,10 @@ export function ConsolePanel({ side, onPreview }: {
       {touchline && (
         <p className="cs-touchline" role="status">
           {onCooldown
-            ? <>터치라인 지시 쿨다운 — <b>{cooldownLeft}분</b> 뒤에 다시 외칠 수 있습니다(외침·감독 타임과 같은 시계).</>
+            ? <>터치라인 지시 쿨다운 — <b>{cooldownLeft}분</b> 뒤에 다시 지시할 수 있습니다(감독 타임과 같은 시계 · <b>외침은 지금도 됩니다</b>).</>
             : windowOpen
               ? <>이번 개입 안에서는 <b>추가 비용 없이</b> 계속 지시할 수 있습니다 — 다만 폭은 개입 시작 시점 기준 ±{TOUCHLINE_STEP}입니다.</>
-              : <>경기 중에도 <b>라인·압박·템포·공격방향</b>을 소리쳐 전달합니다 — 수치 축은 한 번에 ±{TOUCHLINE_STEP}, 외침과 쿨다운({SHOUT_COOLDOWN}분)을 공유합니다.</>}
+              : <>경기 중에도 <b>라인·압박·템포·공격방향</b>을 소리쳐 전달합니다 — 수치 축은 한 번에 ±{TOUCHLINE_STEP}, 감독 타임과 쿨다운({INTERVENTION_COOLDOWN}분)을 공유합니다(외침은 별개).</>}
         </p>
       )}
       <div className="cs-axes">

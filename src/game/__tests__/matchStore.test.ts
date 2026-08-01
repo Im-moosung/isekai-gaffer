@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import {
-  useMatchStore, TEAM_TALK_TABLE, scoreSituation, SHOUT_TABLE, SHOUT_COOLDOWN,
+  useMatchStore, TEAM_TALK_TABLE, scoreSituation, SHOUT_TABLE, SHOUT_COOLDOWN, INTERVENTION_COOLDOWN, shoutState,
   teamExpectation, recommendedTone, EXPECTATION_ADJUST, computeDeviation,
   interventionLevel, nextBreakMinute, touchlineNotice, touchlineOrderError,
   touchlineTacticsError, tacticsDiff, freeInterventionState, MAX_FREE_INTERVENTIONS,
@@ -350,22 +350,34 @@ describe('터치라인 외침 (shout)', () => {
     const before = { ...store().engine!.home.moraleByPlayer }
     const situation = scoreSituation(store().engine!.score, 'home')
     const m = store().engine!.minute
-    store().shout('urge')
+    const res = store().shout('urge')
     expect(store().phase).toBe('playing') // 정지 없음
     expect(store().lastShoutMinute).toBe(m)
+    // 외침은 **자유 개입이 아니다** — 개입 시계도 잔량도 건드리지 않는다(2026-08-01 분리).
+    expect(store().lastInterventionMinute).toBeNull()
+    expect(store().freeInterventionsUsed).toBe(0)
     const delta = SHOUT_TABLE[situation].urge.morale
+    const picked = new Set(res.targets.map(t => t.playerId))
     for (const id of Object.keys(before)) {
-      expect(store().engine!.home.moraleByPlayer[id]).toBe(Math.max(0, Math.min(100, before[id] + delta)))
+      const now = store().engine!.home.moraleByPlayer[id]
+      if (picked.has(id)) {
+        // 뽑힌 선수는 일괄분 **위에** 추가분을 더 받는다(같은 부호).
+        expect(now).toBeGreaterThan(before[id])
+        expect(now - before[id]).toBeGreaterThanOrEqual(delta)
+      } else {
+        expect(now).toBe(Math.max(0, Math.min(100, before[id] + delta)))
+      }
     }
     const log = store().decisionLog
     expect(log[log.length - 1].summary).toBe(`${m}' 외침: 독려`)
   })
 
-  it('10분 쿨다운: 외침 직후 재외침은 throw, 쿨다운 경과 후 허용', () => {
+  it('5분 쿨다운: 외침 직후 재외침은 throw, 쿨다운 경과 후 허용', () => {
     playTo(20)
     store().shout('calm')
     const first = store().lastShoutMinute!
-    expect(SHOUT_COOLDOWN).toBe(10)
+    // 개입(10분)의 절반이다 — 외침은 자원이 아니라 습관이라는 판정의 수치적 실체.
+    expect(SHOUT_COOLDOWN).toBe(5)
     // 쿨다운 내(경과<10) 재외침 throw
     let guard = 0
     while (store().engine!.minute - first < SHOUT_COOLDOWN - 1 && guard++ < 30) {
@@ -395,6 +407,81 @@ describe('터치라인 외침 (shout)', () => {
     expect(store().lastShoutMinute).not.toBeNull()
     store().reset()
     expect(store().lastShoutMinute).toBeNull()
+  })
+
+  // ── 외침 결과(사용자 지시 ②) — "누가 얼마나" + 매번 다르게, 그러나 재현 가능하게 ──
+  //
+  // 이 두 요구는 겉으로 충돌한다. 무작위여야 하는데 리플레이·리더보드는 재현을 요구한다.
+  // 해법은 무작위성의 출처를 **시드 파생**으로 옮긴 것이고(matchStore의 SHOUT_SEED 주석),
+  // 아래 두 테스트가 그 계약의 양쪽 끝을 못박는다.
+
+  it('결정론 계약 — 같은 시드·같은 분·같은 외침이면 대상과 증감이 완전히 같다', () => {
+    const run = () => {
+      store().reset()
+      store().startMatch(a, b, 777)
+      store().kickoff()
+      let guard = 0
+      while (store().engine!.minute < 30 && guard++ < 80) {
+        if (store().momentPrompt) store().dismissMoment()
+        if (store().phase === 'playing') store().advanceMinute()
+        else store().confirmTactics()
+      }
+      return store().phase === 'playing' ? store().shout('work') : null
+    }
+    const first = run()
+    const second = run()
+    expect(first).not.toBeNull()
+    // Math.random을 쓰면 여기서 갈린다 — 이 단언이 결정론 계약의 자물쇠다.
+    expect(second).toEqual(first)
+    expect(first!.targets.length).toBeGreaterThanOrEqual(2)
+    for (const t of first!.targets) {
+      expect(t.name).not.toBe('') // 이름이 있어야 "누가"가 성립한다
+      expect(t.morale).not.toBe(0) // 얼마나 — 0이면 보여 줄 이유가 없다
+    }
+  })
+
+  it('그런데 유저에게는 매번 다르다 — 분이 바뀌면 대상 명단도 바뀐다', () => {
+    store().startMatch(a, b, 20260801)
+    store().kickoff()
+    const seen: string[] = []
+    let guard = 0
+    // 쿨다운(5분)을 지키며 여러 번 외친다 — 실제 플레이와 같은 리듬이다.
+    while (seen.length < 4 && guard++ < 120) {
+      if (store().momentPrompt) store().dismissMoment()
+      if (store().phase !== 'playing') { store().confirmTactics(); continue }
+      if (shoutState(store().lastShoutMinute, store().engine!.minute).canShout) {
+        seen.push(store().shout('urge').targets.map(t => t.playerId).sort().join('|'))
+      }
+      store().advanceMinute()
+    }
+    expect(seen.length).toBeGreaterThanOrEqual(3)
+    // 같은 명단만 반복되면 사용자가 지적한 바로 그 증상("매번 같은 선수들")이다.
+    expect(new Set(seen).size).toBeGreaterThan(1)
+  })
+
+  it('대상 선정은 상태를 따른다 — [더 뛰어]는 다리가 남은 선수에게 간다', () => {
+    store().startMatch(a, b, 4242)
+    store().kickoff()
+    store().advanceMinute()
+    // 절반은 방전, 절반은 생생하게 만들어 놓고 외친다.
+    const eng = structuredClone(store().engine!)
+    const ids = eng.home.tactics.lineup.map(l => l.playerId)
+    const fresh = new Set(ids.slice(0, 5))
+    for (const id of ids) eng.home.staminaByPlayer[id] = fresh.has(id) ? 95 : 12
+    useMatchStore.setState({ engine: eng })
+    // 가중치는 확률이지 규칙이 아니다(하한 0.2) — 여러 분에 걸쳐 경향을 본다.
+    let hit = 0, total = 0, guard = 0
+    while (total < 6 && guard++ < 150) {
+      if (store().momentPrompt) store().dismissMoment()
+      if (store().phase !== 'playing') { store().confirmTactics(); continue }
+      if (shoutState(store().lastShoutMinute, store().engine!.minute).canShout) {
+        const r = store().shout('work')
+        for (const t of r.targets) { total++; if (fresh.has(t.playerId)) hit++ }
+      }
+      store().advanceMinute()
+    }
+    // 무작위였다면 기대치는 5/11 ≈ 0.45다. 체력 가중이 걸려 있으면 그보다 확실히 높다.
+    expect(hit / total).toBeGreaterThan(0.6)
   })
 })
 
@@ -840,7 +927,7 @@ describe('개입 권한 2등급 — 전원 소집 vs 터치라인', () => {
     toManagerTime()
     const at = store().engine!.minute
     expect(store().touchlineWindow?.minute).toBe(at)
-    expect(store().lastShoutMinute).toBe(at)
+    expect(store().lastInterventionMinute).toBe(at)
     const cur = tac().instructions
     store().submitCommand('home', { type: 'instructions', instructions: { ...cur, pressing: cur.pressing + 10 } })
     // 두 번째·세 번째 지시도 그대로 통과한다(같은 개입이므로).
@@ -848,7 +935,7 @@ describe('개입 권한 2등급 — 전원 소집 vs 터치라인', () => {
     store().submitCommand('home', { type: 'formation', tactics: { ...tac(), mentality: 'attacking' } })
     expect(tac().attackPattern).toBe('cross')
     expect(tac().mentality).toBe('attacking')
-    expect(store().lastShoutMinute).toBe(at)
+    expect(store().lastInterventionMinute).toBe(at)
   })
 
   it('창 안에서 여러 번 눌러도 폭 제한은 창 스냅샷 기준이다(우회 차단)', () => {
@@ -862,11 +949,11 @@ describe('개입 권한 2등급 — 전원 소집 vs 터치라인', () => {
     expect(tac().instructions.pressing).toBe(cur.pressing + 15)
   })
 
-  it('창이 없으면 터치라인 지시가 쿨다운을 새로 소모한다(외침과 같은 시계)', () => {
+  it('창이 없으면 터치라인 지시가 쿨다운을 새로 소모한다(감독 타임과 같은 시계)', () => {
     toTouchlineWithoutWindow()
     const cur = tac().instructions
     store().submitCommand('home', { type: 'instructions', instructions: { ...cur, pressing: cur.pressing + 10 } })
-    expect(store().lastShoutMinute).toBe(store().engine!.minute)
+    expect(store().lastInterventionMinute).toBe(store().engine!.minute)
     // 창을 지우고 같은 분에 새 지시를 시도하면 쿨다운에 걸린다.
     useMatchStore.setState({ touchlineWindow: null })
     expect(() => store().submitCommand('home', {
@@ -877,23 +964,32 @@ describe('개입 권한 2등급 — 전원 소집 vs 터치라인', () => {
   it('값이 그대로면 창도 쿨다운도 소모하지 않는다', () => {
     toTouchlineWithoutWindow()
     store().submitCommand('home', { type: 'instructions', instructions: { ...tac().instructions } })
-    expect(store().lastShoutMinute).toBeNull()
+    expect(store().lastInterventionMinute).toBeNull()
     expect(store().touchlineWindow).toBeNull()
   })
 
-  it('외침만으로는 창이 열리지 않는다 — 외치고 나서 전 축을 공짜로 바꿀 수 없다', () => {
+  // ★ 2026-08-01 계약 반전 — 외침은 개입 시계를 **건드리지 않는다**.
+  //   예전에는 "외치면 터치라인 지시 쿨다운도 같이 돈다"였고, 그 전제(둘은 같은 행위다)가
+  //   기각됐다. 지금 지켜야 할 것은 반대다: 외쳤다는 이유로 지시가 막히면 안 되고,
+  //   그렇다고 외침이 창을 여는 것도 아니다(창은 개입의 산물이다).
+  it('외침은 창을 열지도, 개입 시계를 돌리지도 않는다', () => {
     store().startMatch(a, b, 42)
     store().kickoff()
     store().advanceMinute()
     store().shout('urge')
     const at = store().engine!.minute
     expect(store().lastShoutMinute).toBe(at)
+    expect(store().lastInterventionMinute).toBeNull()
     expect(store().touchlineWindow).toBeNull()
-    // 같은 분에 터치라인 등급으로 들어가도(창 없음) 쿨다운에 걸린다.
+    // 같은 분에 터치라인 등급으로 들어가면(창 없음) 지시는 그대로 통과한다 —
+    // 외침이 개입 자원을 소모하지 않았기 때문이다. 그리고 그 지시가 창을 연다.
     useMatchStore.setState({ phase: 'paused-user', pauseReason: { kind: 'user' } })
-    expect(() => store().submitCommand('home', {
-      type: 'instructions', instructions: { ...tac().instructions, pressing: tac().instructions.pressing + 5 },
-    })).toThrow('쿨다운')
+    const before = tac().instructions.pressing
+    store().submitCommand('home', {
+      type: 'instructions', instructions: { ...tac().instructions, pressing: before + 5 },
+    })
+    expect(tac().instructions.pressing).toBe(before + 5)
+    expect(store().lastInterventionMinute).toBe(at)
   })
 
   it('터치라인 지시는 결정 로그를 남긴다(기자회견 근거) — 확장 축까지 한 줄로', () => {
@@ -1005,7 +1101,7 @@ describe('개입 권한 2등급 — 전원 소집 vs 터치라인', () => {
   })
 })
 
-describe('자유 개입 자원 — 5회 + 10분 쿨다운(외침과 같은 시계)', () => {
+describe('자유 개입 자원 — 5회 + 10분 쿨다운(외침과는 다른 시계)', () => {
   it('freeInterventionState: 잔량·쿨다운·사유를 한 번에 답한다', () => {
     const fresh = freeInterventionState(0, null, 10)
     expect(fresh.left).toBe(MAX_FREE_INTERVENTIONS)
@@ -1014,10 +1110,12 @@ describe('자유 개입 자원 — 5회 + 10분 쿨다운(외침과 같은 시�
     expect(fresh.blockedReason).toBeNull()
 
     const cooling = freeInterventionState(1, 25, 30)
-    expect(cooling.cooldownLeft).toBe(SHOUT_COOLDOWN - 5)
+    expect(cooling.cooldownLeft).toBe(INTERVENTION_COOLDOWN - 5)
     expect(cooling.canPause).toBe(false)
     expect(cooling.blockedReason).toContain('쿨다운')
-    expect(cooling.blockedReason).toContain(String(SHOUT_COOLDOWN - 5))
+    expect(cooling.blockedReason).toContain(String(INTERVENTION_COOLDOWN - 5))
+    // 개입 시계는 외침 시계의 두 배다 — 둘이 같은 값이면 분리가 화면에서 안 보인다.
+    expect(INTERVENTION_COOLDOWN).toBe(SHOUT_COOLDOWN * 2)
 
     const spent = freeInterventionState(MAX_FREE_INTERVENTIONS, null, 30)
     expect(spent.left).toBe(0)
@@ -1047,7 +1145,7 @@ describe('자유 개입 자원 — 5회 + 10분 쿨다운(외침과 같은 시�
     expect(store().phase).toBe('playing')
     expect(store().freeInterventionsUsed).toBe(1)
     // 소진 상태를 직접 만들어도 store가 최종 방어선이다.
-    useMatchStore.setState({ freeInterventionsUsed: MAX_FREE_INTERVENTIONS, lastShoutMinute: null })
+    useMatchStore.setState({ freeInterventionsUsed: MAX_FREE_INTERVENTIONS, lastInterventionMinute: null })
     store().pauseByUser()
     expect(store().phase).toBe('playing')
   })
@@ -1076,7 +1174,7 @@ describe('자유 개입 자원 — 5회 + 10분 쿨다운(외침과 같은 시�
     store().acceptMoment()
     expect(store().phase).toBe('paused-moment')
     expect(store().freeInterventionsUsed).toBe(1)
-    expect(store().lastShoutMinute).toBe(20)
+    expect(store().lastInterventionMinute).toBe(20)
     // 진입이 창도 연다 — 그 안의 지시는 추가 비용이 없다.
     expect(store().touchlineWindow?.minute).toBe(20)
   })
@@ -1092,6 +1190,7 @@ describe('자유 개입 자원 — 5회 + 10분 쿨다운(외침과 같은 시�
     expect(store().freeInterventionsUsed).toBe(0)
     expect(store().touchlineWindow).toBeNull()
     expect(store().lastShoutMinute).toBeNull()
+    expect(store().lastInterventionMinute).toBeNull()
     store().reset()
     expect(store().freeInterventionsUsed).toBe(0)
     expect(store().touchlineWindow).toBeNull()

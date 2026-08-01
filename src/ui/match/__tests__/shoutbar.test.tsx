@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, fireEvent, cleanup, act } from '@testing-library/react'
 import { useMatchStore } from '../../../game/matchStore'
 import { ShoutBar } from '../ShoutBar'
@@ -64,5 +64,45 @@ describe('ShoutBar — 터치라인 외침', () => {
     act(() => { useMatchStore.setState({ phase: 'halftime' }) })
     const { container } = render(<ShoutBar />)
     expect(container.querySelector('.sb-root')).toBeNull()
+  })
+
+  // ── 외침은 개입이 아니다(사용자 지시 ①) ────────────────────────────────
+  it('외쳐도 개입 5회는 줄지 않고 감독 타임 시계도 돌지 않는다', () => {
+    playing(25)
+    const { getByRole } = render(<ShoutBar />)
+    fireEvent.click(getByRole('button', { name: '더 뛰어' }))
+    expect(store().freeInterventionsUsed).toBe(0)
+    expect(store().lastInterventionMinute).toBeNull()
+  })
+
+  // ── 외침의 결과를 보여 준다(사용자 지시 ②) ─────────────────────────────
+  it('외친 뒤 결과 배너가 뜨고 "누가 얼마나"를 적는다 — 그리고 스스로 사라진다', () => {
+    vi.useFakeTimers()
+    try {
+      playing(25)
+      const { getByRole, container } = render(<ShoutBar />)
+      expect(container.querySelector('.sb-banner')).toBeNull()
+      fireEvent.click(getByRole('button', { name: '독려' }))
+
+      const banner = container.querySelector('.sb-banner')!
+      expect(banner).toBeTruthy()
+      // 팀토크 배너의 문법을 그대로 입는다 — 새 레이어가 아니다.
+      expect(banner.classList.contains('tt-banner')).toBe(true)
+      expect(banner.textContent).toContain('사기')
+      // 대상 선수가 이름과 수치로 적혀 있다.
+      const names = [...banner.querySelectorAll('.tt-reactions__name')]
+      expect(names.length).toBeGreaterThanOrEqual(2)
+      const squad = store().engine!.home.team.squad
+      for (const n of names) expect(squad.some(p => p.name.ko === n.textContent)).toBe(true)
+      expect(banner.textContent).toMatch(/사기 [+-]\d/)
+      // 대상 선정이 무작위가 아니라는 힌트도 함께 있다(패턴을 찾는 통로).
+      expect(banner.querySelector('.tt-banner__note')!.textContent).toBeTruthy()
+
+      // 경기가 흐르는 중이라 감독이 닫아 줄 짬이 없다 — 스스로 걷힌다.
+      act(() => { vi.advanceTimersByTime(4200) })
+      expect(container.querySelector('.sb-banner')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
