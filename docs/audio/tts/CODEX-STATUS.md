@@ -1,3 +1,9 @@
+## 시연영상 가이드 보이스 86개 큐별 생성 완료
+- 상태: done
+- 산출물: docs/video/vo/ C1-01.wav~C10-02.wav 86개 및 docs/video/vo/report.json
+- 확인 필요: 화면 동작 타이밍에 맞춘 큐별 청취; 숫자 큐는 한글 발음으로 생성(C7-12 조건부 큐 포함)
+- 막힌 것: 없음 (volumedetect max_volume 기준 무음 0, 누락 0, 포맷 오류 0)
+
 ## 극장골 직전·직후 누락 캐스터 3개 처리 완료
 - 상태: done
 - 산출물: docs/audio/tts/qwen-out/l/ 3개 처리(기존 키 1개 교체·신규 2개 추가), report.json·metadata.json 갱신
