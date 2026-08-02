@@ -43,8 +43,8 @@ npm run lint    # 린트
 | 프레임워크 | React 19, TypeScript, Vite |
 | 상태 관리 | Zustand |
 | 인터랙션 | dnd kit (선수 드래그 배치) |
-| 렌더링 | PixiJS (경기 장면), Three.js (랜딩 3D 배경) |
-| 오디오 | Web Audio API (효과음), Web Speech API (한국어 음성 중계) |
+| 렌더링 | Three.js (3D 경기 장면·랜딩 배경), PixiJS (2D 작전판) |
+| 오디오 | Web Audio API (효과음·중계 재생), 사전 생성 mp3 클립 1,024개 (한국어 음성 중계) |
 | 백엔드 | Vercel 서버리스 함수 (AI 프록시), Supabase (리더보드) |
 | 테스트·품질 | Vitest, Testing Library, jsdom, Oxlint |
 
