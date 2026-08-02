@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { DndContext, useDraggable, useDroppable, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
-import type { DragEndEvent } from '@dnd-kit/core'
+import { createPortal } from 'react-dom'
+import { DndContext, DragOverlay, useDraggable, useDroppable, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
+import type { CollisionDetection, DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core'
 import type { Team, TacticState, FormationId, LineupSlot, Player, Position } from '../../engine/types'
 import { slotCoords } from '../pitch/formations'
 import { swapPlayers, substitute, autoFill, fitLevel } from './swap'
@@ -90,6 +91,12 @@ export function LineupEditor({
   const [say, setSay] = useState('')
   // 키보드 이동 후 포커스를 옮길 대상. 같은 id를 연속 요청할 수 있어 카운터를 함께 둔다.
   const [focusReq, setFocusReq] = useState<{ id: string; n: number } | null>(null)
+  // 포인터로 지금 들고 있는 선수와, 지금 그 위에 올라가 있는 대상.
+  // ★ 왜 상태로 올리는가: 드롭 예고("여기 놓으면 무슨 일이 일어나는가")는 **두 선수의 관계**다.
+  // useDroppable의 isOver는 "내 위에 뭔가 있다"까지만 알고 그게 누구인지 모르므로,
+  // 자기 자신 위(거짓 예고)와 벤치↔벤치(불가)를 구분할 수 없다. 관계를 아는 곳은 여기뿐이다.
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [overId, setOverId] = useState<string | null>(null)
 
   // 클릭 드래그 오인 방지: 4px 이동 후에야 드래그 시작(짧은 탭은 선택으로).
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
@@ -212,9 +219,77 @@ export function LineupEditor({
     setFocusReq(prev => ({ id: next, n: (prev?.n ?? 0) + 1 }))
   }
 
+  /** 드롭 예고 — applyMove가 **실제로 무엇을 할지**를 미리 한 단어로 판정한다.
+   *  applyMove와 같은 분기를 쓰되 상태를 바꾸지 않는다(예고와 결과가 갈리면 거짓말이 된다).
+   *
+   *  ★ 'swap'(자리 바꾸기)과 'sub'(교체)를 나누는 이유: 사용자에게 이 둘은 다른 사건이다.
+   *  자리 바꾸기는 11인 명단이 그대로고 위치만 도는 일이고, 교체는 누가 뛰느냐가 바뀌는 일이다.
+   *  같은 색·같은 문구로 말하면 벤치 선수를 끌어다 놓는 순간 "누가 빠졌지"를 되짚게 된다.
+   *  'deny'는 놓아도 아무 일이 없는 자리다 — 조용히 무시하면 "왜 안 되지"가 되므로 명시한다. */
+  type DropKind = 'swap' | 'sub' | 'deny'
+  function dropKind(aId: string, bId: string): DropKind | null {
+    if (aId === bId) return null // 자기 자신 — 예고할 사건이 없다(③)
+    if (banned.has(aId) || banned.has(bId)) return 'deny'
+    if (!byId(aId) || !byId(bId)) return null
+    const aStarter = lineupIds.has(aId)
+    const bStarter = lineupIds.has(bId)
+    if (aStarter && bStarter) return 'swap'
+    if (aStarter !== bStarter) return 'sub'
+    return 'deny' // 둘 다 벤치 — 바꿀 자리가 없다
+  }
+
+  // 지금 커서 아래에서 성립하는 사건. 고스트 자막과 대상 강조가 **같은 값**을 읽는다
+  // — 둘이 어긋나면 커서와 화면이 서로 다른 말을 하게 된다.
+  const overKind = dragId && overId ? dropKind(dragId, overId) : null
+  const dragPlayer = dragId ? byId(dragId) : undefined
+  const overPlayer = overId ? byId(overId) : undefined
+
+  function handleDragStart(e: DragStartEvent) {
+    setDragId(String(e.active.id))
+    setOverId(null)
+  }
+
+  /** 대상 판정 — **지금 이 순간의 화면 좌표**로 커서 아래 선수를 찾는다.
+   *
+   *  ★ dnd-kit 기본 판정(rectIntersection·pointerWithin)을 쓰지 않는 이유는 재현된 결함
+   *  때문이다: 라이브러리는 드래그 시작 시점에 모든 드롭 대상의 사각형을 재어 두고 쓰는데,
+   *  이 화면은 세로로 길어 페이지가 스크롤된 상태에서 드래그가 시작되면 그 사각형이
+   *  실제 위치와 어긋난다(검증 로그: 잰 값 top 959 / 실제 935). 그 결과 커서를 다른 선수
+   *  한가운데에 올려도 아무 반응이 없거나, 엉뚱한 선수가 대상으로 잡혔다 — 사용자가
+   *  신고한 "그렇게 안 되어 있어"의 실체 중 하나다.
+   *
+   *  포커스 레지스트리(nodes)에 모든 칩·카드의 DOM 노드가 이미 등록돼 있으므로,
+   *  매번 실시간 getBoundingClientRect로 재면 스크롤·확대·레이아웃 변화에 전부 면역이다
+   *  (26개 남짓이라 비용도 무시할 수 있다). 겹치면 더 작은 상자를 고른다 — 좁은 피치 칩이
+   *  넓은 벤치 행보다 조준하기 어렵기 때문이다.
+   *
+   *  자기 자신은 후보에서 뺀다(③) — 원래 자리 위에서 "교환" 예고가 뜨면 거짓말이다. */
+  const collisionDetection: CollisionDetection = ({ pointerCoordinates, droppableContainers, active }) => {
+    if (!pointerCoordinates) return []
+    const { x, y } = pointerCoordinates
+    const hits = droppableContainers
+      .filter(c => c.id !== active.id)
+      .map(c => ({ c, r: nodes.current.get(String(c.id))?.getBoundingClientRect() }))
+      .filter((h): h is { c: typeof h.c; r: DOMRect } =>
+        !!h.r && h.r.width > 0 && x >= h.r.left && x <= h.r.right && y >= h.r.top && y <= h.r.bottom)
+      .sort((a, b) => a.r.width * a.r.height - b.r.width * b.r.height)
+    return hits.map(h => ({ id: h.c.id, data: { droppableContainer: h.c, value: h.r.width * h.r.height } }))
+  }
+
+  function handleDragOver(e: DragOverEvent) {
+    setOverId(e.over ? String(e.over.id) : null)
+  }
+
+  function handleDragCancel() {
+    setDragId(null)
+    setOverId(null)
+  }
+
   function handleDragEnd(e: DragEndEvent) {
     const a = e.active?.id
     const b = e.over?.id
+    setDragId(null)
+    setOverId(null)
     reset()
     if (a != null && b != null) setSay(applyMove(String(a), String(b)))
   }
@@ -242,7 +317,17 @@ export function LineupEditor({
   const detailPlayer = detail ? byId(detail) : undefined
 
   return (
-    <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+    <DndContext
+      sensors={sensors}
+      /* ★ 커서가 대상을 정한다(위 collisionDetection 주석 참조). 기본값은 **끌고 있는
+         상자와 겹친 넓이**로 고르는데, 벤치 카드(300×44)와 피치 칩(83×48)은 크기가 크게
+         달라 커서가 A 위에 있어도 귀퉁이만 걸친 B가 대상이 되는 일이 실제로 일어났다. */
+      collisionDetection={collisionDetection}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragCancel={handleDragCancel}
+      onDragEnd={handleDragEnd}
+    >
       <div className={`lu-root${embedded ? ' lu-root--embed' : ''}`}>
         <div className="lu-top">
           <header className="lu-head section__head">
@@ -295,6 +380,8 @@ export function LineupEditor({
                   status={chipInput(slot.playerId)}
                   order={selection.indexOf(slot.playerId)}
                   grabbed={grabbed === slot.playerId}
+                  dragging={dragId === slot.playerId}
+                  cue={overId === slot.playerId ? overKind : null}
                   suspended={banned.has(slot.playerId)}
                   register={register}
                   onClick={() => handleClick(slot.playerId)}
@@ -389,6 +476,8 @@ export function LineupEditor({
                     suspended={banned.has(player.id)}
                     order={selection.indexOf(player.id)}
                     grabbed={grabbed === player.id}
+                    dragging={dragId === player.id}
+                    cue={overId === player.id ? overKind : null}
                     expanded={detail === player.id}
                     register={register}
                     onClick={() => handleClick(player.id)}
@@ -412,7 +501,82 @@ export function LineupEditor({
           </div>
         </section>
       </div>
+
+      {/* 커서를 따라다니는 고스트.
+          ★ 왜 DragOverlay인가: 이전 판은 원본 노드에 translate3d를 걸어 밀었다. 그러면
+          집은 선수가 피치(overflow:hidden)와 벤치 스크롤 컨테이너 **안에 갇힌다** —
+          피치 밖으로 끌면 잘리고, 벤치 목록 위로 올리면 다른 행에 가린다. 오버레이는
+          레이아웃 밖(position:fixed)에 그려지므로 어디로 끌어도 온전히 보인다.
+          ★ body로 포털하는 이유: 조상 어딘가에 transform이 있으면 position:fixed의
+          기준 상자가 그 조상으로 바뀌어 고스트가 커서에서 어긋난다. 전술 센터 안에
+          끼워 넣는 화면이라 조상 사정을 이 컴포넌트가 알 수 없다. */}
+      {createPortal(
+        <DragOverlay dropAnimation={null}>
+          {dragPlayer && (
+            <DragGhost
+              player={dragPlayer}
+              slot={slotOf(dragPlayer.id)}
+              kind={overKind}
+              targetName={overPlayer && overId !== dragId ? overPlayer.name.ko : undefined}
+              targetBenched={overId != null && !lineupIds.has(overId)}
+            />
+          )}
+        </DragOverlay>,
+        document.body,
+      )}
     </DndContext>
+  )
+}
+
+/** 한글 조사 — 이름 끝 글자의 받침 유무로 갈린다("이강인을" / "오현규를").
+ *  선수 이름은 데이터에서 오므로 어느 쪽이 올지 코드가 알 수 없다. ShootoutPanel은 주어를
+ *  생략해 이 문제를 피했지만, 여기서는 **누구와 바뀌는지가 문장의 핵심**이라 이름을 뺄 수 없다.
+ *  한글 음절 블록(U+AC00~U+D7A3)에서 (코드 - 0xAC00) % 28 이 0이면 받침이 없다. */
+function hasFinalConsonant(name: string): boolean {
+  const s = name.trim()
+  const c = s.charCodeAt(s.length - 1)
+  if (Number.isNaN(c) || c < 0xac00 || c > 0xd7a3) return false
+  return (c - 0xac00) % 28 !== 0
+}
+const withWa = (name: string) => `${name}${hasFinalConsonant(name) ? '과' : '와'}`
+const withEul = (name: string) => `${name}${hasFinalConsonant(name) ? '을' : '를'}`
+
+/** 드래그 고스트 — 집은 선수 카드 + **무슨 일이 일어날지 적은 자막**.
+ *
+ *  ★ 자막을 커서에 붙이는 것이 이 작업의 핵심이다. 대상 쪽 테두리만 굵게 하면
+ *  "여기가 대상이다"까지만 전달되고 "놓으면 뭐가 되는가"는 여전히 추측이다. 좁은 피치 칩
+ *  (54~84px)에는 문장이 들어갈 자리가 없고, 칩 밖으로 빼면 피치 경계에서 잘린다.
+ *  오버레이는 잘리지 않고 항상 시선이 가 있는 곳(커서)에 있으므로, 문장을 놓을 자리는
+ *  여기밖에 없다. 대상 강조와 **같은 색**을 써서 둘을 하나의 사건으로 묶는다.
+ *
+ *  살짝 기울이고 키운 것은 "들려 있다"는 무게감이다 — 원본은 자리에 흐리게 남는다. */
+function DragGhost({ player, slot, kind, targetName, targetBenched }: {
+  player: Player
+  slot?: Position
+  kind: 'swap' | 'sub' | 'deny' | null
+  targetName?: string
+  targetBenched: boolean
+}) {
+  const caption = !targetName || !kind
+    ? { tone: 'idle', text: '바꿀 선수 위로 옮기십시오' }
+    : kind === 'swap'
+      ? { tone: 'swap', text: `${withWa(targetName)} 자리 바꾸기` }
+      : kind === 'sub'
+        ? { tone: 'sub', text: targetBenched ? `${withEul(targetName)} 투입` : `${withWa(targetName)} 교체` }
+        : { tone: 'deny', text: '여기에는 놓을 수 없습니다' }
+  return (
+    <div className={`lu-ghost lu-ghost--${caption.tone}`} aria-hidden="true">
+      <div className="lu-ghost__card">
+        <span className="lu-ghost__num num">{player.number}</span>
+        <span className="lu-ghost__name">{player.name.ko}</span>
+        <span className="lu-ghost__pos">{slot ?? player.position}</span>
+      </div>
+      <span className={`lu-ghost__cap lu-ghost__cap--${caption.tone}`}>
+        {caption.tone === 'swap' && <span className="lu-ghost__ico" aria-hidden="true">↔</span>}
+        {caption.tone === 'sub' && <span className="lu-ghost__ico" aria-hidden="true">⇄</span>}
+        {caption.text}
+      </span>
+    </div>
   )
 }
 
@@ -509,15 +673,17 @@ export function LineupScreen({ team, initial, onConfirm }: LineupScreenProps) {
   )
 }
 
-/** 드래그(이동 소스) + 드롭(교환 타깃)을 겸하는 노드용 훅. dnd 변환은 core만으로 수동 계산. */
+/** 드래그(이동 소스) + 드롭(교환 타깃)을 겸하는 노드용 훅.
+ *
+ *  ★ 원본에 transform을 걸지 않는다. 움직이는 것은 오버레이 고스트이고, 원본은 **제자리에
+ *  흐리게 남아** "여기서 빠져나갔다"를 말한다. 예전처럼 원본을 밀면 고스트도 원본도 아닌
+ *  어중간한 물체가 되고, 그마저 부모의 overflow에 잘린다.
+ *  isOver도 쓰지 않는다 — 강조 여부는 부모가 두 선수의 관계를 보고 정한다(dropKind). */
 function useDragDrop(id: string, register: (id: string, el: HTMLElement | null) => void) {
   const drag = useDraggable({ id })
   const drop = useDroppable({ id })
   const setRef = (el: HTMLElement | null) => { drag.setNodeRef(el); drop.setNodeRef(el); register(id, el) }
-  const dragStyle = drag.transform
-    ? { transform: `translate3d(${drag.transform.x}px, ${drag.transform.y}px, 0)`, zIndex: 20 }
-    : undefined
-  return { setRef, attributes: drag.attributes, listeners: drag.listeners, isDragging: drag.isDragging, isOver: drop.isOver, dragStyle }
+  return { setRef, attributes: drag.attributes, listeners: drag.listeners }
 }
 
 /** 체력 임계 — 40 미만 위험 / 70 미만 주의 / 이상 양호.
@@ -558,27 +724,31 @@ function OrderBadge({ order }: { order: number }) {
 interface PickProps {
   order: number
   grabbed: boolean
+  /** 포인터로 지금 들려 있는 본인 — 원본 자리는 비워 보인다. */
+  dragging?: boolean
+  /** 지금 커서 아래에 있을 때 성립하는 사건. null이면 강조하지 않는다(자기 자신 포함). */
+  cue?: 'swap' | 'sub' | 'deny' | null
   register(id: string, el: HTMLElement | null): void
   onClick(): void
   onKeyDown(e: React.KeyboardEvent): void
 }
 
 function PitchChip({
-  player, slot, left, top, stamina, status, suspended, order, grabbed, register, onClick, onKeyDown,
+  player, slot, left, top, stamina, status, suspended, order, grabbed, dragging, cue, register, onClick, onKeyDown,
 }: {
   player: Player; slot: Position; left: number; top: number; stamina?: number
   status?: StatusInput
   suspended?: boolean
 } & PickProps) {
-  const { setRef, attributes, listeners, isDragging, isOver, dragStyle } = useDragDrop(player.id, register)
+  const { setRef, attributes, listeners } = useDragDrop(player.id, register)
   const level = fitLevel(player, slot)
   const staLabel = stamina != null ? ` 체력 ${Math.round(stamina)}` : ''
   const cls = [
     'lu-chip', `lu-chip--${level}`,
     order >= 0 ? 'lu-chip--sel' : '',
     grabbed ? 'lu-chip--grab' : '',
-    isOver ? 'lu-chip--over' : '',
-    isDragging ? 'lu-chip--drag' : '',
+    cue ? `lu-chip--over lu-chip--cue-${cue}` : '',
+    dragging ? 'lu-chip--drag' : '',
     suspended ? 'lu-chip--susp' : '',
   ].filter(Boolean).join(' ')
   return (
@@ -586,7 +756,7 @@ function PitchChip({
       ref={setRef}
       type="button"
       className={cls}
-      style={{ left: `${left}%`, top: `${top}%`, ...dragStyle }}
+      style={{ left: `${left}%`, top: `${top}%` }}
       {...attributes}
       {...listeners}
       aria-label={`${player.name.ko} ${slot} 적합도 ${level}${staLabel}${suspended ? ' 출장정지' : ''}${grabbed ? ' 집음' : ''}`}
@@ -607,7 +777,22 @@ function PitchChip({
       {stamina != null && <MiniStamina value={stamina} />}
       {status && <StatusChips className="lu-chip__sx" input={status} />}
       <OrderBadge order={order} />
+      <DropCue cue={cue} />
     </button>
+  )
+}
+
+/** 드롭 대상 배지 — 대상 위에 얹히는 글자 하나(↔ 자리 바꾸기 / ⇄ 교체 / × 불가).
+ *  테두리 색만으로는 두 사건을 구분할 수 없다(색맹 사용자에게는 아예 같은 표시다).
+ *  글리프는 색과 **중복해서** 같은 말을 하므로 색을 못 봐도 뜻이 남는다.
+ *  선택 순서 배지(--ord)와 같은 자리·같은 크기를 쓴다 — 드래그 중에는 선택 배지가
+ *  뜰 일이 없고(집는 순간 선택이 풀린다), 눈이 이미 그 모서리를 학습한 자리다. */
+function DropCue({ cue }: { cue?: 'swap' | 'sub' | 'deny' | null }) {
+  if (!cue) return null
+  return (
+    <span className={`lu-cue lu-cue--${cue}`} aria-hidden="true">
+      {cue === 'swap' ? '↔' : cue === 'sub' ? '⇄' : '×'}
+    </span>
   )
 }
 
@@ -615,7 +800,7 @@ function PitchChip({
  *  행 자체는 선택·드래그, 오른쪽 [상세]는 목록 안 능력치 카드 토글이다.
  *  버튼 안에 버튼을 넣을 수 없어 형제로 둔다. */
 function BenchRow({
-  player, slotId, stamina, status, suspended, order, grabbed, expanded, register, onClick, onKeyDown, onToggleDetail,
+  player, slotId, stamina, status, suspended, order, grabbed, dragging, cue, expanded, register, onClick, onKeyDown, onToggleDetail,
 }: {
   player: Player; slotId: string; stamina?: number; expanded: boolean
   status?: StatusInput
@@ -623,14 +808,14 @@ function BenchRow({
   suspended?: boolean
   onToggleDetail(): void
 } & PickProps) {
-  const { setRef, attributes, listeners, isDragging, isOver, dragStyle } = useDragDrop(player.id, register)
+  const { setRef, attributes, listeners } = useDragDrop(player.id, register)
   const staLabel = stamina != null ? ` 체력 ${Math.round(stamina)}` : ''
   const cls = [
     'lu-card',
     order >= 0 ? 'lu-card--sel' : '',
     grabbed ? 'lu-card--grab' : '',
-    isOver ? 'lu-card--over' : '',
-    isDragging ? 'lu-card--drag' : '',
+    cue ? `lu-card--over lu-card--cue-${cue}` : '',
+    dragging ? 'lu-card--drag' : '',
     suspended ? 'lu-card--susp' : '',
   ].filter(Boolean).join(' ')
   return (
@@ -639,7 +824,6 @@ function BenchRow({
         ref={setRef}
         type="button"
         className={cls}
-        style={dragStyle}
         {...attributes}
         {...listeners}
         aria-label={`${player.name.ko} ${player.position} 벤치 ${slotId}${staLabel}${suspended ? ' 출장정지' : ''}${grabbed ? ' 집음' : ''}`}
@@ -657,6 +841,7 @@ function BenchRow({
         {stamina != null && <MiniStamina value={stamina} showValue />}
         {status && <StatusChips className="lu-card__sx" input={status} />}
         <OrderBadge order={order} />
+        <DropCue cue={cue} />
       </button>
       <button
         type="button"

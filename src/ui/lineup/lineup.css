@@ -193,8 +193,46 @@
 .lu-chip--bad .lu-chip__slot { background: var(--danger-weak); color: var(--danger); }
 
 .lu-chip--sel { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand); }
-.lu-chip--over { box-shadow: 0 0 0 2px var(--brand); }
-.lu-chip--drag { opacity: 0.9; }
+
+/* ── 드래그 중: 원본 자리 ────────────────────────────────
+   ★ 예전 0.9는 아무 말도 하지 않았다(거의 원본 그대로였다). 선수는 지금 커서에 들려
+   있으므로 원본 자리는 **비어 있다고 말해야** 한다 — 흐리게 + 점선 = "여기 있던 사람이
+   나가 있다". 자리 자체는 지워지지 않는다(어디서 나왔는지 잃으면 되돌릴 곳을 모른다). */
+.lu-chip--drag {
+  opacity: 0.28;
+  border-style: dashed;
+  box-shadow: none;
+}
+
+/* ── 드롭 예고: "여기 놓으면 이렇게 된다" ────────────────
+   테두리 2px 하나였던 것을 세 겹으로 늘린다: (1) 3px 링 + 후광으로 대상을 확정하고,
+   (2) 배경 톤으로 카드 전체를 물들이고, (3) 살짝 키워 "받을 준비가 됐다"를 만든다.
+   확대는 상시 모션이 아니라 **커서가 올라온 동안만 유지되는 상태**다(조작에 대한 반응).
+
+   ★ 자리 바꾸기(파랑)와 교체(초록)를 색으로 가른다: 11인이 그대로인 사건과 명단이
+   바뀌는 사건은 무게가 다르다. 색은 고스트 자막과 짝을 이뤄 한 사건으로 읽힌다. */
+.lu-chip--over {
+  transform: translate(-50%, -50%) scale(1.1);
+  transition: transform var(--dur-1) ease-out, box-shadow var(--dur-1) ease-out;
+  z-index: 3;
+}
+.lu-chip--cue-swap {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 26%, var(--s-1));
+  box-shadow: 0 0 0 3px var(--brand), 0 0 18px var(--brand-weak);
+}
+.lu-chip--cue-sub {
+  border-color: var(--good);
+  background: color-mix(in srgb, var(--good) 24%, var(--s-1));
+  box-shadow: 0 0 0 3px var(--good), 0 0 18px var(--good-line);
+}
+/* 놓아도 아무 일이 없는 자리 — 키우지 않는다(들뜬 대상과 같은 몸짓을 주면 거짓말이다). */
+.lu-chip--cue-deny {
+  transform: translate(-50%, -50%);
+  border-style: dashed;
+  border-color: var(--danger);
+  box-shadow: 0 0 0 2px var(--danger-line);
+}
 /* 키보드로 "집은" 상태 — 마우스의 드래그 중에 대응한다. 점선으로 "떠 있음"을 말하고,
    실선 선택(--sel)과 구분한다. 두 상태가 같은 모양이면 무엇이 집혔는지 알 수 없다. */
 .lu-chip--grab {
@@ -224,6 +262,30 @@
   font-size: var(--fs-xs);
   font-weight: 800;
   line-height: 1;
+}
+
+/* 드롭 예고 배지(↔ 자리 바꾸기 / ⇄ 교체 / × 불가) — 색과 **중복해서** 같은 말을 한다.
+   색만으로 두 사건을 가르면 색각 이상 사용자에게는 구분 자체가 사라진다. */
+.lu-cue {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  line-height: 1;
+}
+.lu-cue--swap { background: var(--brand); color: var(--t-on-brand); }
+.lu-cue--sub { background: var(--good); color: var(--t-on-brand); }
+.lu-cue--deny { background: var(--danger); color: var(--t-on-brand); }
+/* 피치 칩은 폭이 없다 — 선택 순서 배지와 같은 모서리에 띄운다(드래그 중에는 선택이
+   풀려 있어 둘이 겹칠 일이 없다). 벤치 행은 그리드 마지막 칸에 그대로 들어간다. */
+.lu-chip .lu-cue {
+  position: absolute;
+  top: -8px;
+  right: -8px;
 }
 
 /* ── 컨디션 표시(칩·벤치 행) ────────────────────────────
@@ -417,8 +479,35 @@
 }
 .lu-card .lu-sta { width: 64px; }
 .lu-card--sel { border-color: var(--brand); box-shadow: 0 0 0 1px var(--brand) inset; }
-.lu-card--over { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand); }
-.lu-card--drag { opacity: 0.9; }
+/* 벤치 행의 드롭 예고 — 피치 칩과 같은 언어(색 + 링 + 톤 + 배지)를 쓰되, 확대 대신
+   **가로로 살짝 밀어낸다**. 목록 안에서 카드를 키우면 위아래 행이 밀려 목록 전체가
+   출렁이고, 커서 아래 대상이 커서 밖으로 도망간다. 세로로 쌓인 행에서는 들여쓰기가
+   "이 줄이 지금 대상"을 흔들림 없이 말한다. */
+.lu-card--over {
+  transform: translateX(4px);
+  transition: transform var(--dur-1) ease-out, box-shadow var(--dur-1) ease-out;
+}
+.lu-card--cue-swap {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 22%, var(--s-1));
+  box-shadow: 0 0 0 3px var(--brand);
+}
+.lu-card--cue-sub {
+  border-color: var(--good);
+  background: color-mix(in srgb, var(--good) 20%, var(--s-1));
+  box-shadow: 0 0 0 3px var(--good);
+}
+.lu-card--cue-deny {
+  transform: none;
+  border-style: dashed;
+  border-color: var(--danger);
+  box-shadow: 0 0 0 2px var(--danger-line);
+}
+/* 원본 자리 — 칩과 같은 규칙(흐리게 + 점선 = 여기 있던 사람이 나가 있다). */
+.lu-card--drag {
+  opacity: 0.28;
+  border-style: dashed;
+}
 /* 키보드로 집은 상태 — 피치 칩과 같은 언어(점선 + 약한 브랜드 후광). */
 .lu-card--grab {
   border-style: dashed;
@@ -438,6 +527,85 @@
    비판받았다. 행 안에 두면 교체 선택과 충돌하므로 형제 버튼으로 뺀다. */
 .lu-detail { flex: 0 0 auto; }
 .lu-bench__detail { padding: var(--sp-2) 0 0; }
+
+/* ── 드래그 고스트(DragOverlay) ─────────────────────────
+   커서에 붙어 다니는 유일한 물체다. 레이아웃 밖(position:fixed)에 그려지므로 피치의
+   overflow:hidden에도, 벤치 스크롤 컨테이너에도 잘리지 않는다.
+
+   ★ 여기에만 문장을 놓을 수 있다: 피치 칩은 54~84px라 "○○와 자리 바꾸기"가 들어갈
+   자리가 없고, 칩 밖으로 빼면 피치 경계에서 잘린다. 고스트는 항상 시선이 있는 곳
+   (커서)에 있고 잘리지 않는다 — 그래서 "놓으면 무슨 일이 일어나는가"를 여기서 말한다. */
+.lu-ghost {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-1);
+  pointer-events: none;
+  /* 커서 아래로 비켜 놓는다(28px = 피치 칩 절반 높이보다 크다). 커서 자리에 그대로 두면
+     고스트가 **지금 겨냥한 선수의 이름을 덮는다** — "○○와 바꾼다"고 말하면서 정작 ○○를
+     가리는 셈이다. 오른쪽 아래로 내리면 대상은 온전히 보이고 고스트도 계속 커서에 붙는다.
+     살짝 기울이고 키운 것은 "판에서 떼어내 들고 있다"는 무게감이다. 원본은 제자리에 흐리게
+     남아 있으므로 이 기울기가 둘을 구분하는 신호이기도 하다. 과하면 멀미가 난다. */
+  transform: translate(16px, 28px) rotate(-3deg) scale(1.06);
+  transform-origin: 0 0;
+  cursor: grabbing;
+}
+.lu-ghost__card {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
+  border: 2px solid var(--s-line-strong);
+  border-radius: var(--r-md);
+  background: var(--s-2);
+  color: var(--t-hi);
+  font-family: var(--f-ui);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+  box-shadow: var(--shadow-3);
+}
+.lu-ghost__num { font-weight: 800; color: var(--t-mid); }
+.lu-ghost__name { font-weight: 800; }
+.lu-ghost__pos {
+  padding: 1px var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--s-3);
+  color: var(--t-mid);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+}
+/* 고스트 테두리는 대상 강조와 **같은 색**을 쓴다 — 커서와 대상이 하나의 사건으로 묶인다. */
+.lu-ghost--swap .lu-ghost__card { border-color: var(--brand); }
+.lu-ghost--sub .lu-ghost__card { border-color: var(--good); }
+.lu-ghost--deny .lu-ghost__card { border-color: var(--danger); }
+
+/* 자막 — 이 작업의 핵심. 대상 테두리만으로는 "여기가 대상"까지고, 무엇이 될지는 추측이다. */
+.lu-ghost__cap {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 2px var(--sp-2);
+  border-radius: var(--r-pill);
+  font-family: var(--f-ui);
+  font-size: var(--fs-xs);
+  font-weight: 800;
+  line-height: 1.5;
+  white-space: nowrap;
+  box-shadow: var(--shadow-2);
+}
+.lu-ghost__ico { font-size: var(--fs-sm); line-height: 1; }
+.lu-ghost__cap--swap { background: var(--brand); color: var(--t-on-brand); }
+.lu-ghost__cap--sub { background: var(--good); color: var(--t-on-brand); }
+.lu-ghost__cap--deny { background: var(--danger); color: var(--t-on-brand); }
+/* 아직 대상이 없을 때 — 조용히 다음 할 일만 말한다(사건을 예고하지 않는다). */
+.lu-ghost__cap--idle {
+  background: var(--s-scrim-strong);
+  color: var(--t-mid);
+  box-shadow: none;
+}
 
 /* ── 확정(단독 화면) ────────────────────────────────── */
 .lu-foot {
@@ -487,6 +655,23 @@
   .lu-chip--ok .lu-chip__line { border-color: var(--warn-line); }
   .lu-chip--bad .lu-chip__line { border-color: var(--danger-line); }
   .lu-chip--sel .lu-chip__line { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand); }
+  /* 이 폭에서 칩은 테두리도 배경도 없는 원형 토큰이다 — 드롭 예고도 원 안에 걸어야 보인다.
+     (칩 자체에 걸면 투명한 상자에 링이 생겨 선수와 상관없어 보인다.) */
+  .lu-chip--cue-swap .lu-chip__line {
+    border-color: var(--brand);
+    background: color-mix(in srgb, var(--brand) 40%, var(--s-1));
+    box-shadow: 0 0 0 3px var(--brand);
+  }
+  .lu-chip--cue-sub .lu-chip__line {
+    border-color: var(--good);
+    background: color-mix(in srgb, var(--good) 36%, var(--s-1));
+    box-shadow: 0 0 0 3px var(--good);
+  }
+  .lu-chip--cue-deny .lu-chip__line {
+    border-style: dashed;
+    border-color: var(--danger);
+    box-shadow: 0 0 0 2px var(--danger-line);
+  }
   .lu-card { grid-template-columns: 28px 24px minmax(0, 1fr) auto auto auto; }
   /* 바는 접고 수치만 남긴다 — 좁은 폭에서 4px 바는 읽히지 않는데 자리는 먹는다. */
   .lu-card .lu-sta { width: auto; }
