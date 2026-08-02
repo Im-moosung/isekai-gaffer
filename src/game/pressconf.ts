@@ -217,11 +217,135 @@ const OUTCOME_ANSWERS: Record<Outcome, ToneTrio> = {
   },
 }
 
-/** 톤별 전체 문안(결과 칸을 가로질러 합친 것). 헤드라인 역분류·UI 프리뷰용 계약 형태 유지. */
+// ── 답변 풀 — 질문 종류 × 톤 ────────────────────────────────
+// 왜 종류별로도 갈라야 했는가(2026-08-03, 배포본 지적):
+//   질문은 **감독의 결정 로그**에서 나오는데(logQuestionText) 답변은 경기 결과만 보고 뽑혔다.
+//   그래서 「63분에 손흥민을 빼고 황희찬을 투입하셨습니다. 계획된 승부수였습니까?」에
+//   「커피를 몇 잔 마셨는지 세지도 못했네요.」가 붙었다 — 문답이 아니라 두 개의 독백이다.
+//   결과 기반 질문(resultQuestions)만 결과 칸에서 뽑고, 로그 기반 질문은 **그 종류의 답변**을
+//   쓴다.
+//
+// 문안 규약: 결과 칸과 동일([공격적, 겸손, 유머] 순서 계약 · 한 문장 · 존댓말 · 비하 금지 ·
+//   라틴 문자와 숫자 금지). 하나 더 있다 —
+//   · **결과를 단정하지 않는다.** 이 답변들은 승패와 무관하게 붙으므로, "그 교체로 이겼습니다"
+//     같은 문장은 진 경기에서 거짓이 된다. 판단의 **의도**를 말하되 결과는 말하지 않는다.
+type QKind = 'teamtalk' | 'shout' | 'sub' | 'instructions' | 'shootout'
+
+const KIND_ANSWERS: Record<QKind, ToneTrio> = {
+  // 하프타임 라커룸 이야기 — "그 말이 후반의 흐름을 만들었다고 보십니까?"
+  teamtalk: {
+    aggressive: [
+      '라커룸에서 할 말은 해야 후반이 달라집니다.',
+      '그 순간 필요한 말이었고, 저는 망설이지 않습니다.',
+      '하프타임은 감독이 쓰라고 주어진 시간입니다.',
+      '후반에 나온 장면들이 그 말의 답이라고 봅니다.',
+    ],
+    humble: [
+      '제 말보다 선수들이 스스로 다잡은 덕이 큽니다.',
+      '라커룸에서 오간 이야기는 선수들 몫으로 남겨 두겠습니다.',
+      '방향만 짚어 줬을 뿐, 뛴 것은 선수들입니다.',
+      '후반의 흐름을 제 말 덕이라고 하기는 어렵습니다.',
+    ],
+    humor: [
+      '라커룸 벽이 제 목소리를 다 기억하고 있을 겁니다.',
+      '그 짧은 사이에 제 목이 다 쉬어 버렸습니다.',
+      '무슨 말을 했는지는 선수들에게 물어봐 주십시오.',
+      '하프타임에는 제가 제일 바쁜 사람이 됩니다.',
+    ],
+  },
+  // 터치라인 외침 — "그 한마디가 꼭 필요한 순간이었습니까?"
+  shout: {
+    aggressive: [
+      '그 자리에서 바로 잡지 않으면 늦습니다.',
+      '터치라인에서 소리치는 것도 제 일입니다.',
+      '흐름이 넘어가려는 순간이 보여서 외쳤습니다.',
+      '경기 중에 해야 할 말을 아끼지는 않습니다.',
+    ],
+    humble: [
+      '선수들이 제 목소리를 들어준 것이 고마울 뿐입니다.',
+      '멀리서 거들 수 있는 건 그 한마디뿐이었습니다.',
+      '소리쳐 봐야 그 안의 판단은 결국 선수들 몫입니다.',
+      '제 외침이 닿았다면 그것으로 다행입니다.',
+    ],
+    humor: [
+      '관중석까지 들렸다면 사과드리겠습니다.',
+      '제 목소리가 함성을 이길 수는 없더군요.',
+      '팔을 하도 휘저어서 어깨가 다 뻐근합니다.',
+      '중계 마이크에 덜 담겼기를 바랄 뿐입니다.',
+    ],
+  },
+  // 교체 — "계획된 승부수였습니까?"
+  sub: {
+    aggressive: [
+      '그 자리에서 속도를 올려야 한다고 봤습니다.',
+      '준비해 둔 카드였고, 쓸 때가 왔을 뿐입니다.',
+      '기다리다 늦느니 먼저 움직이는 쪽을 택합니다.',
+      '교체로 승부를 걸어야 하는 시간이었습니다.',
+    ],
+    humble: [
+      '나간 선수도 들어간 선수도 제 몫을 해 줬습니다.',
+      '다리가 무거워지는 것이 보여 내린 결정입니다.',
+      '벤치에서 기다린 선수를 믿어 본 선택입니다.',
+      '교체가 통했다면 그건 뛴 선수들 덕입니다.',
+    ],
+    humor: [
+      '벤치에 좋은 선수가 많으면 감독은 고민이 깊어집니다.',
+      '누구를 뺄지 정하는 일이 제일 어렵습니다.',
+      '대기심에게 번호판을 몇 번이나 부탁했는지 모르겠습니다.',
+      '교체 카드를 더 주신다면 다 쓸 것 같습니다.',
+    ],
+  },
+  // 지시 변경 — "어떤 의도였는지 설명해 주시겠습니까?"
+  instructions: {
+    aggressive: [
+      '상대가 우리를 읽기 전에 먼저 바꿔야 합니다.',
+      '그대로 두면 끌려간다고 판단했습니다.',
+      '경기 중에 손대는 것을 두려워하지 않습니다.',
+      '노린 자리가 있었고, 거기를 열려고 바꿨습니다.',
+    ],
+    humble: [
+      '준비한 것이 통하지 않아 다시 맞춰 본 것뿐입니다.',
+      '판단은 제가 했고 실행은 선수들이 해냈습니다.',
+      '더 나은 방법을 찾아보려 한 시도였습니다.',
+      '경기 중에 본 것을 그대로 반영했을 뿐입니다.',
+    ],
+    humor: [
+      '작전판에 그린 그림이 오늘따라 많았습니다.',
+      '가만히 앉아 있질 못해 자꾸 무언가를 바꾸게 됩니다.',
+      '선수들이 제 손짓을 알아봐 준 것만도 다행입니다.',
+      '끝나고 보니 제 수첩이 새까맣게 되어 있더군요.',
+    ],
+  },
+  // 승부차기 키커 순서 — "선정 기준은 무엇이었습니까?"
+  shootout: {
+    aggressive: [
+      '서겠다고 먼저 손든 선수를 앞에 세웠습니다.',
+      '순서까지 미리 정해 두고 들어간 경기였습니다.',
+      '피하려는 선수가 없어 순서를 짜기 어렵지 않았습니다.',
+      '중요한 순번일수록 담대한 선수에게 맡겼습니다.',
+    ],
+    humble: [
+      '그 자리에 서는 용기는 결국 선수들의 것입니다.',
+      '훈련장에서 보여 준 모습을 그대로 믿었습니다.',
+      '누가 서든 쉽지 않은 자리라 조심스러웠습니다.',
+      '제 기준보다 선수들의 뜻을 먼저 물었습니다.',
+    ],
+    humor: [
+      '제 심장이 먼저 순서를 정하려 들더군요.',
+      '그 순간만큼은 저도 눈을 감고 싶었습니다.',
+      '순서를 적은 종이가 손에서 다 젖어 있었습니다.',
+      '이 일은 몇 번을 겪어도 익숙해지지가 않습니다.',
+    ],
+  },
+}
+
+/** 톤별 전체 문안(결과 칸·종류 칸을 가로질러 합친 것). 헤드라인 역분류·UI 프리뷰용 계약 형태 유지.
+ *  ★ 새 문안을 여기에 등록하지 않으면 answerTone이 해시 폴백으로 떨어져 헤드라인 톤이 답변과
+ *    어긋난다 — 결과 칸과 종류 칸 **둘 다** 합쳐야 하는 이유다. */
 export const ANSWER_POOLS: ToneTrio = {
-  aggressive: Object.values(OUTCOME_ANSWERS).flatMap(t => t.aggressive),
-  humble: Object.values(OUTCOME_ANSWERS).flatMap(t => t.humble),
-  humor: Object.values(OUTCOME_ANSWERS).flatMap(t => t.humor),
+  aggressive: [...Object.values(OUTCOME_ANSWERS), ...Object.values(KIND_ANSWERS)].flatMap(t => t.aggressive),
+  humble: [...Object.values(OUTCOME_ANSWERS), ...Object.values(KIND_ANSWERS)].flatMap(t => t.humble),
+  humor: [...Object.values(OUTCOME_ANSWERS), ...Object.values(KIND_ANSWERS)].flatMap(t => t.humor),
 }
 // 역분류는 매 답변마다 도는 경로라 Set으로 굳혀 둔다(문안 중복은 테스트가 막는다).
 const TONE_SETS: readonly Set<string>[] = [
@@ -231,13 +355,19 @@ const TONE_SETS: readonly Set<string>[] = [
 /** 결과 칸에서 [공격적, 겸손, 유머] 한 세트를 뽑는다.
  *  톤마다 pick의 **다른 비트**를 읽는 이유: 셋을 같은 인덱스로 묶으면 조합 수가 풀 길이(넷)로
  *  주저앉는다 — 그게 예전 결함의 절반이었다. 비트만 나눠 써도 결정론은 그대로다. */
-function optionsFor(pick: number, outcome: Outcome): [string, string, string] {
-  const p = OUTCOME_ANSWERS[outcome]
+function pickTrio(pick: number, p: ToneTrio): [string, string, string] {
   return [
     p.aggressive[pick % p.aggressive.length],
     p.humble[(pick >>> 3) % p.humble.length],
     p.humor[(pick >>> 6) % p.humor.length],
   ]
+}
+function optionsFor(pick: number, outcome: Outcome): [string, string, string] {
+  return pickTrio(pick, OUTCOME_ANSWERS[outcome])
+}
+/** 로그 기반 질문의 답변 — 결과가 아니라 **질문 종류**의 칸에서 뽑는다. */
+function optionsForKind(pick: number, kind: QKind): [string, string, string] {
+  return pickTrio(pick, KIND_ANSWERS[kind])
 }
 
 // ── 기자의 입 — 내부 로그를 사람의 말로 옮긴다 ──────────────────
@@ -387,31 +517,47 @@ function axisClause(piece: string): string | null {
   return AXIS_SCENE[axis](before, after)
 }
 
-/** 결정 로그 1건 → 기자 질문. 해석할 수 없으면 null(질문을 만들지 않는다). */
-function logQuestionText(e: DecisionEntry): string | null {
+/** 결정 로그 1건 → 기자 질문(+ 답변을 고를 종류). 해석할 수 없으면 null(질문을 만들지 않는다).
+ *  종류를 함께 돌려주는 이유: 답변이 질문에 실제로 대답해야 하기 때문이다. 예전에는 텍스트만
+ *  돌려주고 답변을 경기 결과로만 골라, 교체 질문에 커피 이야기가 붙었다. */
+function logQuestionText(e: DecisionEntry): { text: string; kind: QKind } | null {
   const when = whenPhrase(e.summary)
   switch (e.kind) {
     case 'teamtalk': {
       // detail이 정본이고, 그 필드가 없던 시절의 로그는 요약의 한국어 라벨로 되짚는다.
       const tone = (typeof e.detail?.tone === 'string' ? TONE_SCENE[e.detail.tone] : undefined)
         ?? TONE_SCENE[TONE_BY_LABEL[/팀토크: (.+)$/.exec(e.summary)?.[1] ?? ''] ?? '']
-      if (tone) return `하프타임 라커룸 이야기가 나옵니다. ${tone} — 그 말이 후반의 흐름을 만들었다고 보십니까?`
+      if (tone) {
+        return {
+          kind: 'teamtalk',
+          text: `하프타임 라커룸 이야기가 나옵니다. ${tone} — 그 말이 후반의 흐름을 만들었다고 보십니까?`,
+        }
+      }
       const shout = (typeof e.detail?.shout === 'string' ? SHOUT_SCENE[e.detail.shout] : undefined)
         ?? SHOUT_SCENE[SHOUT_BY_LABEL[/외침: (.+)$/.exec(e.summary)?.[1] ?? ''] ?? '']
-      if (shout) return `${when} 터치라인에서 ${shout}. 그 한마디가 꼭 필요한 순간이었습니까?`
+      // 라커룸 이야기와 터치라인 외침은 같은 로그 종류지만 **다른 질문**이다 — 답변 칸도 가른다.
+      if (shout) {
+        return { kind: 'shout', text: `${when} 터치라인에서 ${shout}. 그 한마디가 꼭 필요한 순간이었습니까?` }
+      }
       return null
     }
     case 'sub': {
       const m = /교체: (.+) IN, (.+) OUT$/.exec(e.summary)
       if (!m) return null
       const [, inName, outName] = m
-      return `${when} ${josa(outName, '을', '를')} 빼고 ${josa(inName, '을', '를')} 투입하셨습니다. 계획된 승부수였습니까?`
+      return {
+        kind: 'sub',
+        text: `${when} ${josa(outName, '을', '를')} 빼고 ${josa(inName, '을', '를')} 투입하셨습니다. 계획된 승부수였습니까?`,
+      }
     }
     case 'instructions': {
       // 포메이션 변경은 before/after가 구조화돼 있다.
       const before = e.detail?.before, after = e.detail?.after
       if (typeof before === 'string' && typeof after === 'string') {
-        return `${when} 진형을 ${before}에서 ${after}로 바꾸셨습니다. 무엇을 노리신 변화였습니까?`
+        return {
+          kind: 'instructions',
+          text: `${when} 진형을 ${before}에서 ${after}로 바꾸셨습니다. 무엇을 노리신 변화였습니까?`,
+        }
       }
       // detail.changed가 정본이지만, 그 필드가 없던 시절의 로그(저장된 캠페인)도 읽을 수 있게
       // 요약 문자열에서 같은 조각을 뽑는 폴백을 둔다.
@@ -427,11 +573,14 @@ function logQuestionText(e: DecisionEntry): string | null {
       const joined = clauses.length === 1
         ? clauses[0]
         : `${clauses.slice(0, -1).join('고, ')}고, ${clauses[clauses.length - 1]}`
-      return `${when} ${joined}셨습니다. 어떤 의도였는지 설명해 주시겠습니까?`
+      return { kind: 'instructions', text: `${when} ${joined}셨습니다. 어떤 의도였는지 설명해 주시겠습니까?` }
     }
     case 'shootout-setup':
       // 이 로그는 자유 문자열이라 파싱할 구조가 없다. 사실만 말하고 요약은 인용하지 않는다.
-      return '승부차기를 앞두고 키커 순서를 직접 정하셨습니다. 선정 기준은 무엇이었습니까?'
+      return {
+        kind: 'shootout',
+        text: '승부차기를 앞두고 키커 순서를 직접 정하셨습니다. 선정 기준은 무엇이었습니까?',
+      }
   }
 }
 
@@ -541,30 +690,34 @@ export function buildQuestions(record: MatchRecord, log: DecisionEntry[], planDe
     .map((e, idx) => ({ e, idx }))
     .sort((a, b) => KIND_ORDER[a.e.kind] - KIND_ORDER[b.e.kind] || a.idx - b.idx)
 
-  // options가 지정된 항목(플랜 추궁)은 전용 문안을 쓰고, 나머지는 공용 톤 풀에서 뽑는다.
-  const items: { text: string; options?: [string, string, string] }[] = []
+  // 답변의 출처는 세 갈래다:
+  //   options 고정(플랜 추궁 전용 문안) → kind(로그 기반 질문, 종류 칸) → 없음(결과 칸).
+  const items: { text: string; options?: [string, string, string]; kind?: QKind }[] = []
   const seen = new Set<string>()
-  const push = (text: string, options?: [string, string, string]) => {
+  const push = (text: string, from?: { options?: [string, string, string]; kind?: QKind }) => {
     if (seen.has(text)) return
     seen.add(text)
-    items.push(options ? { text, options } : { text })
+    items.push({ text, ...from })
   }
 
   if (planDeviation !== undefined) {
     const pq = planQuestion(planDeviation, outcome !== 'draw' && outcome !== 'loss')
-    if (pq) push(pq.text, PLAN_ANSWERS[pq.branch])
+    if (pq) push(pq.text, { options: PLAN_ANSWERS[pq.branch] })
   }
   for (const { e } of ordered) {
-    const t = logQuestionText(e)
-    if (t) push(t)
+    const q = logQuestionText(e)
+    if (q) push(q.text, { kind: q.kind })
   }
   for (const t of resultQuestions(record)) push(t)
 
-  return items.slice(0, 3).map((q, i) => ({
-    id: `pq${i + 1}`,
-    text: q.text,
-    options: q.options ?? optionsFor(seed + i * 2654435761, outcome),
-  }))
+  return items.slice(0, 3).map((q, i) => {
+    const pick = seed + i * 2654435761
+    return {
+      id: `pq${i + 1}`,
+      text: q.text,
+      options: q.options ?? (q.kind ? optionsForKind(pick, q.kind) : optionsFor(pick, outcome)),
+    }
+  })
 }
 
 // ═══════════════════════════════════════════════════════════

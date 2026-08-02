@@ -633,6 +633,140 @@ describe('답변 톤 역분류(headline과의 계약)', () => {
   })
 })
 
+// ═══════════════════════════════════════════════════════════
+// 답변이 질문에 대답하는가 (2026-08-03 배포본 지적의 회귀선)
+// ═══════════════════════════════════════════════════════════
+// 사고: 질문은 감독의 결정 로그에서 나오는데 답변은 경기 결과만 보고 뽑혀서,
+// 「…황희찬을 투입하셨습니다. 계획된 승부수였습니까?」에 「커피를 몇 잔 마셨는지…」가 붙었다.
+describe('답변 풀은 질문 종류를 안다', () => {
+  /** 로그 1건 종류별 대표 픽스처와, 그 질문을 알아보는 표식. */
+  const KINDS: [string, DecisionEntry, string][] = [
+    ['하프타임 팀토크', teamTalkLog[0], '하프타임 라커룸 이야기가 나옵니다'],
+    ['터치라인 외침', shoutLog[0], '터치라인에서'],
+    ['교체', subLog[0], '투입하셨습니다'],
+    ['지시 변경', instrLog[0], '어떤 의도였는지'],
+    ['승부차기 키커', pkLog[0], '키커 순서를 직접 정하셨습니다'],
+  ]
+
+  /** 여러 시드로 회견을 돌려, 그 종류의 질문에 붙은 답변만 모은다.
+   *  (시드는 상대·단계·스코어로 갈리므로 셋을 회전시킨다.) */
+  function answersFor(entry: DecisionEntry, marker: string): Set<string> {
+    const out = new Set<string>()
+    const scores: [number, number][] = [[4, 0], [2, 0], [2, 1], [1, 1], [0, 3], [1, 2]]
+    for (const o of ['cze', 'mex', 'rsa', 'ecu', 'eng', 'nor', 'arg', 'esp', 'can', 'mar', 'fra']) {
+      for (const s of ['group1', 'group2', 'group3', 'r32', 'r16', 'qf', 'sf'] as CampaignStage[]) {
+        for (const sc of scores) {
+          const r = rec(s, o, sc, { decisions: [entry] })
+          for (const q of buildQuestions(r, r.decisions)) {
+            if (q.text.includes(marker)) for (const a of q.options) out.add(a)
+          }
+        }
+      }
+    }
+    return out
+  }
+
+  const POOLS = new Map(KINDS.map(([name, e, m]) => [name, answersFor(e, m)]))
+
+  it.each(KINDS)('%s 질문은 전용 답변 세트를 가진다(톤 3종 × 4문장)', name => {
+    expect(POOLS.get(name)!.size).toBe(12)
+  })
+
+  it('종류가 다르면 답변이 하나도 겹치지 않는다', () => {
+    const names = KINDS.map(([n]) => n)
+    for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++) {
+      for (const a of POOLS.get(names[i])!) expect(POOLS.get(names[j])!.has(a)).toBe(false)
+    }
+  })
+
+  it('결과 기반 답변이 로그 질문에 붙지 않는다(사고 재현: 교체 질문 + 커피 이야기)', () => {
+    const r = rec('r16', 'eng', [2, 1], { decisions: subLog })
+    const qs = buildQuestions(r, r.decisions)
+    const subQ = qs.find(q => q.text.includes('투입하셨습니다'))!
+    const resultQs = qs.filter(q => !q.text.includes('투입하셨습니다'))
+    expect(resultQs.length).toBe(2)
+    for (const o of subQ.options) {
+      for (const rq of resultQs) expect(rq.options).not.toContain(o)
+    }
+    // 결과 칸의 대표 문안이 로그 질문에 흘러들지 않는다.
+    for (const [, pool] of POOLS) {
+      for (const bad of ['커피를 몇 잔 마셨는지 세지도 못했네요.', '선수들이 모든 걸 쏟아부은 덕분입니다.']) {
+        expect(pool.has(bad)).toBe(false)
+      }
+    }
+  })
+
+  it('로그 질문의 답변은 그 질문의 낱말로 대답한다', () => {
+    // 완전한 의미 검증은 불가능하지만, 최소한 화제가 맞는지는 표본으로 붙잡는다.
+    const TOPIC: [string, RegExp][] = [
+      ['하프타임 팀토크', /라커룸|하프타임|말|후반|목|짚어/],
+      ['터치라인 외침', /외|목소리|한마디|소리|터치라인|팔|마이크|자리|들렸|말/],
+      ['교체', /교체|선수|벤치|자리|카드|번호판|다리|뺄지/],
+      ['지시 변경', /바꾸|바꿔|맞춰|손대|작전판|노린|판단|방법|반영|손짓|수첩/],
+      ['승부차기 키커', /순서|순번|키커|서겠|자리|서는|심장|눈|종이|일은|훈련장|기준/],
+    ]
+    for (const [name, re] of TOPIC) {
+      for (const a of POOLS.get(name)!) expect(a).toMatch(re)
+    }
+  })
+
+  it('로그 질문의 답변은 승패를 단정하지 않는다(승패 무관하게 붙는 문안이다)', () => {
+    const WIN_WORDS = ['대승', '완승', '완파', '제압', '무너뜨', '이겼습니다', '승리했', '패배했']
+    for (const [, pool] of POOLS) for (const a of pool) {
+      for (const w of WIN_WORDS) expect(a).not.toContain(w)
+    }
+  })
+
+  it('결정론: 같은 (record, log) → 같은 답변', () => {
+    for (const [, e] of KINDS.map(([n, e]) => [n, e] as const)) {
+      for (const r of [rec('qf', 'nor', [3, 1], { decisions: [e] }), rec('r16', 'eng', [0, 2], { decisions: [e] })]) {
+        expect(buildQuestions(r, r.decisions).map(q => q.options))
+          .toEqual(buildQuestions(r, r.decisions).map(q => q.options))
+      }
+    }
+  })
+
+  it('톤 순서 계약: 로그 질문의 답변도 [공격적, 겸손, 유머] 자리에 맞게 등록돼 있다', () => {
+    // 등록되지 않으면 answerTone이 해시 폴백으로 떨어져 헤드라인 톤이 답변과 어긋난다.
+    for (const [, e, marker] of KINDS) {
+      const r = rec('sf', 'arg', [1, 0], { decisions: [e] })
+      const q = buildQuestions(r, r.decisions).find(x => x.text.includes(marker))!
+      expect(ANSWER_POOLS.aggressive).toContain(q.options[0])
+      expect(ANSWER_POOLS.humble).toContain(q.options[1])
+      expect(ANSWER_POOLS.humor).toContain(q.options[2])
+    }
+  })
+
+  // 결과 칸끼리는 같은 문안을 공유해도 된다("팬들의 응원이 큰 힘이 됐습니다."는 여러 승리 칸에
+  // 어울린다). 하지만 종류 칸의 문안은 서로도, 결과 칸과도 겹치면 안 된다 — 겹치는 순간
+  // "질문에 대답한다"는 성질이 무너진다.
+  it('종류 칸의 문안은 서로도, 결과 칸과도 겹치지 않는다', () => {
+    const kindAll = [...POOLS.values()].flatMap(p => [...p])
+    expect(new Set(kindAll).size).toBe(kindAll.length)
+    // 로그가 없는 회견 = 결과 기반 질문뿐이다. 그 답변과 한 줄도 겹쳐서는 안 된다.
+    const resultAll = new Set<string>()
+    for (const o of ['cze', 'mex', 'rsa', 'ecu', 'eng', 'nor', 'arg', 'esp', 'can', 'mar', 'fra']) {
+      for (const s of ['group1', 'group2', 'group3', 'r32', 'r16', 'qf', 'sf', 'final'] as CampaignStage[]) {
+        for (const sc of [[4, 0], [2, 0], [2, 1], [1, 1], [0, 3], [1, 2]] as [number, number][]) {
+          for (const q of buildQuestions(rec(s, o, sc), [])) for (const a of q.options) resultAll.add(a)
+        }
+      }
+    }
+    for (const a of kindAll) expect(resultAll.has(a)).toBe(false)
+  })
+
+  it('새 문안도 발화 안전 규약을 지킨다(금지어·라틴 문자·숫자 없음, 한 문장)', () => {
+    for (const [, pool] of POOLS) for (const a of pool) {
+      for (const w of DEROGATORY_WORDS) expect(a).not.toContain(w)
+      expect(a).not.toMatch(/[A-Za-z0-9]/)
+      expect(a).not.toMatch(/[→…]|\.\.\./)
+      expect(a.endsWith('.')).toBe(true)
+      expect(a.length).toBeGreaterThan(8)
+      expect(a.length).toBeLessThanOrEqual(35)
+    }
+  })
+})
+
 describe('contradictsScore(3층 방어선)', () => {
   const r = rec('group2', 'mex', [2, 5])
   it('없는 스코어를 지어낸 헤드라인을 걸러낸다', () => {

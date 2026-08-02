@@ -15,5 +15,5 @@
     "moduleDetection": "force",
     "resolveJsonModule": true
   },
-  "include": ["api", "src/ai/prompts.ts", "src/ai/requestGuard.ts"]
+  "include": ["api", "src/ai/prompts.ts", "src/ai/requestGuard.ts", "src/ai/safeguard.ts"]
 }

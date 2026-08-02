@@ -12,6 +12,7 @@
 
 import { buildSystemPrompt, buildUserPrompt } from '../src/ai/prompts'
 import { validateNarrateRequest, firstForwardedIp, rateLimitCheck } from '../src/ai/requestGuard'
+import { safeguardFilter } from '../src/ai/safeguard'
 
 // 모델 상수 — 배포 시점에 최신 모델로 교체 가능하도록 분리한다.
 const OPENAI_MODEL = 'gpt-5-nano'
@@ -88,6 +89,10 @@ export default async function handler(req: Request): Promise<Response> {
       text = await callOpenAI(key, system, user, controller.signal)
     }
     if (!text || text.trim().length === 0) return json({ error: 'empty response' }, 502)
+    // 비하·조롱 표현은 **여기서도** 막는다. 클라이언트가 이미 같은 필터를 걸지만,
+    // 걸러진 문장이 네트워크를 타고 브라우저까지 오는 것 자체를 없앤다.
+    // 막히면 클라이언트는 조용히 사전 작성 문안으로 되돌아간다(설계 §7 폴백 원칙).
+    if (!safeguardFilter(text)) return json({ error: 'safeguard' }, 502)
     return json({ text }, 200)
   } catch {
     return json({ error: 'upstream error' }, 502)
