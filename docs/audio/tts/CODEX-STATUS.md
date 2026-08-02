@@ -1,3 +1,9 @@
+## 시연영상 보이스 잘림 30개 재생성 및 86개 음절 속도 QC 완료
+- 상태: done
+- 산출물: docs/video/vo/ redo.tsv 대상 30개 WAV 교체 및 report.json 갱신
+- 확인 필요: 30개 모두 음절당 초 10.0 이하·끝 무음 0.3초 이상; 전체 86개 재검사 통과(C6-04는 기존 음성 뒤 0.32초 무음만 추가)
+- 막힌 것: 없음 (volumedetect max_volume 기준 무음 0)
+
 ## 시연영상 가이드 보이스 86개 큐별 생성 완료
 - 상태: done
 - 산출물: docs/video/vo/ C1-01.wav~C10-02.wav 86개 및 docs/video/vo/report.json
