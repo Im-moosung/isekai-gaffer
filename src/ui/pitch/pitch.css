@@ -245,6 +245,37 @@
 .an-line__tag--home { fill: var(--an-us); }
 .an-line__tag--away { fill: var(--an-them); }
 
+/* ── 팀 무게중심 마커 — 멘탈리티가 보이는 유일한 도형 ────────────
+   빨강(--an-us) = **우리 팀 이야기**(색 규약: 색 = 누구).
+   파선 마름모 = **의도**(형태 규약). 엔진의 멘탈리티는 좌표가 아니라 확률을 움직이므로
+   "지금 평균이 여기 있다"고 실선으로 말할 수 없다 — "이 태세로 여기까지 밀겠다"는 의도다.
+   근거 전문은 AnalysisLayer.tsx의 무게중심 논증에 있다.
+
+   ★ 이동에만 transition이 있다. 이 파일 위쪽의 `--analysis ... { transition: none }`
+     목록은 **라이브 좌표로 20 Hz 갱신되는** 요소들이다(도트·라인·존) — 거기 보간을 걸면
+     화면 전체가 뒤처진다. 무게중심은 전술 좌표에서 나와 감독이 손잡이를 만질 때만 바뀌므로
+     상시 모션이 생기지 않는다. 그 한 번의 이동이 "내가 멘탈리티를 바꿨다"의 신호다. */
+.an-grav { transition: transform 420ms cubic-bezier(0.22, 0.61, 0.36, 1); }
+.an-grav__ring {
+  fill: none;
+  stroke: var(--an-us);
+  stroke-width: 0.42;
+  stroke-dasharray: 1.5 1.2;
+  stroke-linejoin: round;
+  opacity: 0.85;
+}
+.an-grav__tick {
+  stroke: var(--an-us);
+  stroke-width: 0.34;
+  opacity: 0.7;
+}
+/* 변경 강조도 굵기·불투명도 한 단계뿐 — 위치·크기·색은 건드리지 않는다(지시 ③). */
+.an-hl .an-grav__ring { animation: an-hl-grav 700ms ease-out 1; }
+@keyframes an-hl-grav {
+  0% { stroke-width: 1.1; opacity: 1; }
+  100% { stroke-width: 0.42; opacity: 0.85; }
+}
+
 /* 공격 집중 밴드 — 계획이므로 흰색. 채움은 아주 옅게, 경계는 점선(참고선). */
 .an-focus__fill { fill: color-mix(in srgb, var(--an-plan) 4%, transparent); }
 .an-focus__edge {
@@ -319,7 +350,10 @@
   .an-hl .an-line__cap,
   .an-hl .an-press__edge,
   .an-hl .an-focus__edge,
+  .an-hl .an-grav__ring,
   .an-hl .an-lane { animation: none; }
+  /* 무게중심은 **이동이 정보**라 없애지 않는다 — 미끄러지지 않고 새 자리로 즉시 점프한다. */
+  .an-grav { transition: none; }
 }
 
 /* 볼 소유 링 — 공이 지금 누구 발밑에 있는지. 흰색(공과 같은 계열). */

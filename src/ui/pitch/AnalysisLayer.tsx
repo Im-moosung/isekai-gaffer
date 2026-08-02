@@ -14,8 +14,9 @@
 //       점선=참고 경계(공격 집중 밴드), 화살촉=방향 있는 경로.
 //     · **계획은 흰색**. 패스 레인은 팀 소속이 아니라 감독의 계획이다(방송 텔레스트레이션 관례).
 //     · 라임(--bc-accent)은 여기서 쓰지 않는다 — 그 색은 라이브 UI 전용이다.
-import type { AttackPattern, Instructions, MatchState, SideState } from '../../engine/types'
+import type { AttackPattern, Instructions, MatchState, Mentality, SideState } from '../../engine/types'
 import { lineDepth, pressReach } from './shape'
+import type { Coord } from './formations'
 import type { LabelReq } from './labels'
 
 // PitchView와 동일한 viewBox(105×68) 좌표계.
@@ -32,6 +33,9 @@ export { lineDepth, pressReach }
 export interface AnalysisGeom {
   homeLineX: number
   awayLineX: number
+  /** 우리 팀 무게중심(절대 프레임 0~100). **전술 좌표 10명(GK 제외)의 평균**이고
+   *  PitchView가 계산해 넘긴다 — 여기서 좌표를 다시 만들지 않는다(마커-도트 일치 계약). */
+  homeGravity: Coord
 }
 
 // ── 변경 강조 (2026-08-01) ─────────────────────────────────────────
@@ -47,7 +51,58 @@ export interface AnalysisGeom {
 //     highlight를 올린다(TacticsBoard의 정착 지연). 드래그 중에는 아무 펄스도 없다.
 //  3. 강조 수단은 **불투명도·굵기 한 단계**뿐이다. 크기·위치·색을 건드리지 않으므로
 //     "무엇이 바뀌었나"만 말하고 형태 규약(실선=현재/파선=의도)을 흔들지 않는다.
-export type AnalysisAxis = 'lineHeight' | 'pressing' | 'tempo' | 'attackFocus' | 'attackPattern'
+export type AnalysisAxis = 'lineHeight' | 'pressing' | 'tempo' | 'attackFocus' | 'attackPattern' | 'mentality'
+
+// ── 팀 무게중심 마커 (2026-08-02) ──────────────────────────────────
+// 요구(사용자 원문): "사용자가 **멘탈리티를 건드릴 때 눈으로 알 수만 있으면** 돼."
+// 멘탈리티는 감독이 가장 자주 만지는 손잡이인데 보드에 도형이 하나도 없었다 — 문장으로만
+// 말했다. 다섯 축(라인·압박·템포·집중·패턴)은 전부 그림이 있는데 이것만 없었다.
+//
+// ★ 왜 선수 좌표에 멘탈리티를 넣지 않았나(shape.ts를 건드리지 않은 이유):
+//   shape.ts에는 테스트로 고정된 계약이 있다 — "백라인 그룹 평균 x == lineDepth(lineHeight),
+//   정확히 같다". 도트와 수비 라인 마커가 어긋나지 않게 하는 계약이고, 그 파일이 존재하는
+//   이유가 과거 사고("그림이 거짓말을 했다")다. 멘탈리티를 좌표 생성에 끼워 넣으면 라인
+//   슬라이더가 백라인의 유일한 정본이라는 전제가 깨진다. 그래서 무게중심은 **파생 표시**다:
+//   이미 만들어진 전술 좌표의 평균(PitchView.teamGravity)을 받아 여기서 그리기만 한다.
+//
+// ★ 그래서 이 마커는 **실선(현재)이 아니라 파선(의도)**이다. 엔진의 멘탈리티는 좌표가
+//   아니라 확률(찬스 빈도·질·역습 취약성)을 움직인다(engine/tactics.ts MENTALITY_FX).
+//   "지금 선수 평균이 여기 있다"고 실선으로 말하면 그거야말로 거짓말이다. 파선 마름모는
+//   형태 규약 그대로 **"이 태세로 팀 무게중심을 여기까지 밀겠다"는 의도**를 뜻한다.
+//   기준점(전술 좌표 평균)은 진짜 도트에서 나오므로 라인·압박을 만져도 같이 움직인다.
+//
+// ★ 색은 빨강(--an-us) — 색 규약상 "누구"다. 이건 우리 팀 이야기지 감독의 계획 도형
+//   (패스 레인·집중 밴드, 흰색)이 아니다. 형태는 마름모: 원은 도트(선수)와, 사각·띠는
+//   압박 존과 헷갈린다. 보드에서 유일한 마름모라 무엇이 새로 생겼는지 바로 잡힌다.
+//
+// ★ 상대 팀 무게중심은 그리지 않는다. 요구는 "내가 멘탈리티를 건드릴 때"이고, 상대 마커는
+//   감독이 만질 수 없는 값이라 조작 피드백이 아니다 — 도형만 하나 더 늘어 보드가 복잡해진다.
+//
+// ★ 과거 사용자 지시(위 세 가지) 중 ③"강조 수단은 불투명도·굵기뿐, 위치 금지"와의 관계:
+//   ③은 **변경을 강조하는 수단**에 대한 규칙이다. 무게중심의 위치는 강조가 아니라 정보
+//   그 자체(우리 평균이 거기 있다)이므로 값이 바뀌면 자리를 옮기는 게 맞다. 대신 변경
+//   **강조**는 여기서도 굵기·불투명도 한 단계뿐이다(an-hl-grav) — 크기·색은 흔들지 않는다.
+//   ①"새 상시 모션 금지"는 그대로 지킨다: 기준점이 라이브 좌표가 아니라 전술 좌표라
+//   가만히 있으면 마커도 완전히 정지해 있고, 값이 바뀔 때만 CSS transition으로 미끄러진다.
+
+/** 멘탈리티 → 무게중심을 공격 방향으로 미는 양(home-프레임 0~100 ≈ m).
+ *  ±7은 5단계 양 극단이 약 14유닛(≈14.7m) 벌어지는 값 — 한 단계(3.5 ≈ 3.7m)만 움직여도
+ *  마커 지름(6)의 절반 이상이라 눈으로 잡히고, 양 극단에서도 블록 밖으로 튀어나가지 않는다. */
+const MENTALITY_PUSH: Record<Mentality, number> = {
+  'very-defensive': -7,
+  'defensive': -3.5,
+  'balanced': 0,
+  'attacking': 3.5,
+  'very-attacking': 7,
+}
+
+/** 무게중심 마커 좌표(절대 프레임). base는 전술 좌표 평균, push는 멘탈리티.
+ *  @param dir 공격 방향(+1 = home 프레임에서 오른쪽). 우리 팀만 그리므로 사실상 +1이다. */
+export function gravityMark(base: Coord, mentality: Mentality | undefined, dir: 1 | -1 = 1): Coord {
+  const push = MENTALITY_PUSH[mentality ?? 'balanced'] * dir
+  // 피치 밖으로 나가지 않게(마커 반지름 3 + 여백).
+  return { x: Math.max(5, Math.min(95, base.x + push)), y: base.y }
+}
 
 /** 방금 바뀐 축의 강조 요청. */
 export interface AnalysisHighlight {
@@ -141,6 +196,23 @@ function TeamShape({ side, which, lineX, highlight: hl }: {
   )
 }
 
+/** 우리 팀 무게중심 — 파선 마름모(의도) + 중심 십자.
+ *  translate는 **바깥 g**에 건다: 강조는 안쪽 g를 재마운트해 트리거하는데, 이동을 안쪽에
+ *  걸면 재마운트가 CSS transition을 리셋해 마커가 순간이동한다. */
+function GravityMarker({ at, highlight: hl }: { at: Coord; highlight?: AnalysisHighlight }) {
+  const on = hl?.axes.includes('mentality') ? ' an-hl' : ''
+  const k = hl?.tick ?? 0
+  return (
+    <g className="an-grav" style={{ transform: `translate(${sx(at.x)}px, ${sy(at.y)}px)` }}>
+      <g key={`g${on ? k : 0}`} className={`an-gravg${on}`}>
+        <path className="an-grav__ring" d="M 0 -3 L 3 0 L 0 3 L -3 0 Z" />
+        <line className="an-grav__tick" x1={-1} y1={0} x2={1} y2={0} />
+        <line className="an-grav__tick" x1={0} y1={-1} x2={0} y2={1} />
+      </g>
+    </g>
+  )
+}
+
 /** 라인 태그 2개의 배치 요청 — PitchView의 통합 라벨 패스가 자리를 정한다. */
 export function analysisLabels(state: MatchState, geom: AnalysisGeom): LabelReq[] {
   const mk = (which: 'home' | 'away', lineX: number, y: number, value: number): LabelReq => ({
@@ -206,6 +278,8 @@ export function AnalysisLayer({ state, geom, highlight }: {
       )}
       <TeamShape side={state.home} which="home" lineX={geom.homeLineX} highlight={highlight} />
       <TeamShape side={state.away} which="away" lineX={geom.awayLineX} />
+      {/* 우리 팀 무게중심 — 멘탈리티가 이 마커를 앞뒤로 민다(위 논증 참고). */}
+      <GravityMarker at={gravityMark(geom.homeGravity, state.home.tactics.mentality)} highlight={highlight} />
       {/* 패스 레인 — 공격 패턴 4택이 곧 이 화살표다. 색이 아니라 선 스타일로 구분한다. */}
       <g key={`n${laneHl ? k : 0}`} className={`an-lanes${laneHl}`}>
         {lanes.map((l, i) => (

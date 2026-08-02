@@ -106,71 +106,123 @@ export function PressConference({ record, log, teamName, onDone }: Props) {
 
   const opponent = teamNameKo(record.opponentId)
   const stage = STAGE_KO[record.stage] ?? record.stage
-  const shootout = record.shootout ? ` (승부차기 ${record.shootout[0]}-${record.shootout[1]})` : ''
+  const shootout = record.shootout ? `승부차기 ${record.shootout[0]}-${record.shootout[1]}` : ''
   const desk = PRESS_DESK[idx % PRESS_DESK.length]
 
   return (
     <div className="pc-root">
       <div className="pc-stage">
-        {/* 컨텍스트 스트립 — 어느 경기 뒤의 회견인지 화면 안에서 확인된다. */}
-        <header className="pc-strip">
-          <span className="pc-strip__live">
-            <span className="live-dot" aria-hidden /> 기자회견
-          </span>
-          <span className="pc-strip__ctx num">
-            {teamName} {record.score[0]}-{record.score[1]} {opponent}{shootout} · {stage}
-          </span>
-        </header>
+        {/* ── 좌: 회견장 ────────────────────────────────────────────────────
+            제목이 이 화면의 이름을 말하고, 그 뒤로 회견장이 보인다.
+            실루엣은 장식이므로 aria-hidden이고, 좁은 화면에서는 CSS가 물러나게 한다. */}
+        <div className="pc-hero">
+          <PressRoomScene />
+          <div className="pc-hero__head">
+            <p className="pc-hero__eyebrow">
+              <span className="live-dot" aria-hidden /> 공식 기자회견
+            </p>
+            <h1 className="pc-hero__title">경기 후 기자회견</h1>
+            <p className="pc-hero__sub">질문을 선택하세요</p>
+          </div>
+        </div>
 
-        {/* 지난 문답 — 요약 레일. 말풍선이 아니라 회견록 한 줄이다. */}
-        {answers.length > 0 && (
-          <ol className="pc-past" aria-label="지난 문답">
-            {answers.map((ans, i) => (
-              <li key={questions[i].id} className="pc-past__item">
-                <p className="pc-past__q">
-                  <span className="pc-past__mark" aria-hidden>Q.</span>{questions[i].text}
-                </p>
-                <p className="pc-past__a">
-                  <span className="pc-past__mark" aria-hidden>A.</span>{ans}
-                </p>
-              </li>
-            ))}
-          </ol>
-        )}
+        {/* ── 우: 정보 칼럼 ───────────────────────────────────────────────── */}
+        <div className="pc-col">
+          {/* 스코어 바 — 어느 경기 뒤의 회견인지 화면이 스스로 말한다(P-7).
+              팀 색(--team-us/--team-them)은 토큰 규약대로 3px 킷 스트립으로만 쓴다.
+              텍스트에 팀 색을 칠하지 않는다 — 빨간 숫자는 "나쁨"으로 읽힌다. */}
+          <header className="pc-strip" aria-label="최종 스코어">
+            <span className="pc-strip__side pc-strip__side--us">
+              <span className="pc-strip__team">{teamName}</span>
+              <span className="pc-strip__score num">{record.score[0]}</span>
+            </span>
+            <span className="pc-strip__mid">
+              <span className="pc-strip__clock num">90:00</span>
+              <span className="pc-strip__state">경기 종료 · {stage}</span>
+            </span>
+            <span className="pc-strip__side pc-strip__side--them">
+              <span className="pc-strip__score num">{record.score[1]}</span>
+              <span className="pc-strip__team">{opponent}</span>
+            </span>
+            {shootout && <span className="pc-strip__so num">{shootout}</span>}
+          </header>
 
-        <div className="pc-main">
-          {/* 현재 질문(로어서드) + 3택 */}
-          {current && !finishing && (
-            <>
-              <article className="pc-question" key={current.id}>
-                <div className="pc-question__meta">
-                  <span className="pc-question__outlet">{desk.outlet} · {desk.name}</span>
-                  {/* 진행 표시는 막대가 아니라 평문이다 — 로딩바로 오독되지 않는다. */}
-                  <span className="pc-question__count num">
-                    질문 {idx + 1} / {questions.length}
-                  </span>
+          <div className="pc-main">
+            {/* 현재 질문(로어서드) + 3택 */}
+            {current && !finishing && (
+              <>
+                <article className="pc-question" key={current.id}>
+                  <div className="pc-question__meta">
+                    <span className="pc-question__outlet">{desk.outlet} · {desk.name}</span>
+                    {/* 진행 표시는 막대가 아니라 평문이다 — 로딩바로 오독되지 않는다. */}
+                    <span className="pc-question__count num">
+                      질문 {idx + 1} / {questions.length}
+                    </span>
+                    <svg className="pc-question__icon" viewBox="0 0 24 24" aria-hidden focusable="false">
+                      <path
+                        d="M4 4.5h16v12H9.5L5 20.2v-3.7H4z"
+                        fill="currentColor"
+                        opacity="0.9"
+                      />
+                    </svg>
+                  </div>
+                  <p className="pc-question__text">{current.text}</p>
+                </article>
+
+                <div className="pc-answers" role="group" aria-label="답변 선택">
+                  {current.options.map((opt, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      className="pc-answer"
+                      onClick={() => pick(opt)}
+                    >
+                      <span className="pc-answer__icon" aria-hidden>
+                        <svg viewBox="0 0 24 24" focusable="false">
+                          <path d={TONE_PATH[i]} fill="currentColor" />
+                        </svg>
+                      </span>
+                      <span className="pc-answer__body">
+                        <span className="pc-answer__tone">{TONE_LABEL[i]}</span>
+                        <span className="pc-answer__text">{opt}</span>
+                      </span>
+                      <svg className="pc-answer__go" viewBox="0 0 24 24" aria-hidden focusable="false">
+                        <path
+                          d="M9 5l7 7-7 7"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </button>
+                  ))}
                 </div>
-                <p className="pc-question__text">{current.text}</p>
-              </article>
+              </>
+            )}
 
-              <div className="pc-answers" role="group" aria-label="답변 선택">
-                {current.options.map((opt, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    className="pc-answer"
-                    onClick={() => pick(opt)}
-                  >
-                    <span className="pc-answer__tone">{TONE_LABEL[i]}</span>
-                    <span className="pc-answer__text">{opt}</span>
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+            {finishing && (
+              <p className="pc-finishing" role="status">헤드라인 발표 준비 중…</p>
+            )}
+          </div>
 
-          {finishing && (
-            <p className="pc-finishing" role="status">헤드라인 발표 준비 중…</p>
+          {/* 지난 문답 — 요약 레일. 말풍선이 아니라 회견록 한 줄이다.
+              현재 질문 **아래**에 둔다. 지금 해야 할 선택이 늘 맨 위에 오고,
+              레일이 자라도 선택지가 아래로 밀려나지 않는다. */}
+          {answers.length > 0 && (
+            <ol className="pc-past" aria-label="지난 문답">
+              {answers.map((ans, i) => (
+                <li key={questions[i].id} className="pc-past__item">
+                  <p className="pc-past__q">
+                    <span className="pc-past__mark" aria-hidden>Q.</span>{questions[i].text}
+                  </p>
+                  <p className="pc-past__a">
+                    <span className="pc-past__mark" aria-hidden>A.</span>{ans}
+                  </p>
+                </li>
+              ))}
+            </ol>
           )}
         </div>
       </div>

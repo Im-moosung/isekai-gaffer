@@ -81,6 +81,9 @@ export function TacticsCenter({ onKickoff, referenceScore }: {
     tempo: ins?.tempo ?? 50,
     attackFocus: ins?.attackFocus ?? 'balanced',
     attackPattern: engine?.[SIDE].tactics.attackPattern ?? 'balanced',
+    // 멘탈리티도 이제 도형이 있는 축이다(무게중심 마커). 태세 버튼은 이 화면에도 있으므로
+    // 작전판과 같은 규율로 강조해야 한다 — 위 주석의 "같은 훅" 원칙 그대로다.
+    mentality: engine?.[SIDE].tactics.mentality ?? 'balanced',
   })
   const caption = useChangeCaption(engine?.[SIDE].tactics)
 

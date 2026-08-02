@@ -279,6 +279,7 @@ export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels 
   const geom: AnalysisGeom = {
     homeLineX: meanBackline(state.home, homeC, homeOn),
     awayLineX: meanBackline(state.away, awayC, awayOn),
+    homeGravity: teamGravity(state.home, 'home', homeOn),
   }
 
   /**
@@ -294,7 +295,11 @@ export function PitchView({ state, lastEvent, variant = 'broadcast', nameLabels 
   const awayD = swapped ? awayC.map(rot) : awayC
   // 라벨은 화면 좌표에 붙으므로 돌린 값이 필요하다(전술 레이어 자체는 아래에서 그룹째 돌린다).
   const geomD: AnalysisGeom = swapped
-    ? { homeLineX: 100 - geom.homeLineX, awayLineX: 100 - geom.awayLineX }
+    ? {
+      homeLineX: 100 - geom.homeLineX,
+      awayLineX: 100 - geom.awayLineX,
+      homeGravity: rot(geom.homeGravity),
+    }
     : geom
 
   // 블록 길이·폭도 **화면에 있는 도트**에서만 잰다(퇴장 선수를 세면 지표가 거짓말을 한다).
@@ -481,6 +486,35 @@ function meanBackline(side: SideState, coords: Coord[], on: readonly boolean[]):
   const idx = all.filter(i => on[i] !== false)
   const use = idx.length > 0 ? idx : all
   return use.reduce((s, i) => s + coords[i].x, 0) / use.length
+}
+
+/** 팀 무게중심(절대 프레임) — 필드 플레이어 10명의 **전술 좌표** 평균.
+ *
+ *  ★ 왜 라이브 좌표(도트가 실제로 있는 자리)가 아니라 전술 좌표인가:
+ *  라이브 좌표에는 선수별 미세 진동과 **공 위치에 따른 블록 슬라이드**가 얹혀 있다
+ *  (shape.liveTeamCoords의 BALL_PULL). 그 평균은 공을 따라 좌우로 계속 흔들려서,
+ *  마커에 이동 transition을 걸면 **가만히 있어도 혼자 미끄러지는 상시 모션**이 된다
+ *  — 사용자 지시 ①("새 상시 모션을 만들지 않는다")을 정면으로 어긴다. 게다가 그 흔들림
+ *  폭이 멘탈리티 한 단계(3.5)보다 커서 정작 봐야 할 변화가 잡음에 묻힌다.
+ *  전술 좌표 평균은 감독이 손잡이를 만질 때만 바뀐다 — 그게 이 마커가 말해야 하는 것이다.
+ *
+ *  ★ GK는 뺀다 — 골키퍼는 태세와 무관하게 골문에 남아 평균을 뒤로 끌어당긴다.
+ *    블록 지표(shape.blockMetrics)도 같은 이유로 슬롯 0을 뺀다.
+ *  ★ 퇴장 선수도 뺀다 — 화면에 없는 도트가 평균을 끌면 안 된다(meanBackline과 같은 규율). */
+function teamGravity(side: SideState, which: 'home' | 'away', on: readonly boolean[]): Coord {
+  const { formation, lineup, instructions } = side.tactics
+  let sx0 = 0
+  let sy0 = 0
+  let n = 0
+  for (let i = 1; i < lineup.length; i++) {
+    if (on[i] === false) continue
+    const c = tacticalCoords(formation, i, which, instructions)
+    sx0 += c.x
+    sy0 += c.y
+    n++
+  }
+  // 필드 플레이어가 전부 사라지는 경우는 없지만(퇴장 상한), 0으로 나누지 않는다.
+  return n > 0 ? { x: sx0 / n, y: sy0 / n } : { x: 50, y: 50 }
 }
 
 const ZERO = { x: 0, y: 0 }

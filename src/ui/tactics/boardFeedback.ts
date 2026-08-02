@@ -6,7 +6,8 @@ import type { AnalysisAxis, AnalysisHighlight } from '../pitch/AnalysisLayer'
 // 전술 센터(킥오프 전)가 **같은 훅**을 쓴다 — 두 화면이 다른 규율로 움직이면 유저는
 // 같은 조작에서 다른 피드백을 받는다.
 //
-//  ① useAxisHighlight — 보드에 **도형이 있는** 축(라인·압박·템포·공격방향·공격패턴).
+//  ① useAxisHighlight — 보드에 **도형이 있는** 축(라인·압박·템포·공격방향·공격패턴·멘탈리티).
+//     멘탈리티는 2026-08-02에 이 목록에 들어왔다 — 무게중심 마커가 생겼다(AnalysisLayer).
 //     `13adeb8`이 세운 규율 그대로: 정착 후 1회, 드래그 중 펄스 0, 굵기·불투명도만.
 //  ② useChangeCaption — 보드에 **도형이 없는** 축(아래 주석).
 
@@ -16,7 +17,7 @@ import type { AnalysisAxis, AnalysisHighlight } from '../pitch/AnalysisLayer'
 // 네 축이고, 포메이션은 도트의 이동 그 자체다. 그 다섯은 `13adeb8`의 규율 그대로 보드가
 // 직접 보여준다 — 여기서 중복해 말하지 않는다.
 //
-// 그러나 멘탈리티·그룹 적극성·세트피스·페이즈 포메이션·GK 파워플레이는 **보드에 대응하는
+// 그러나 그룹 적극성·세트피스·페이즈 포메이션·GK 파워플레이는 **보드에 대응하는
 // 도형이 없다**(shape.tacticalCoords의 입력은 formation과 instructions뿐이다). 이 축들을
 // 도형으로 그리려면 pitch 레이어의 좌표 변환 자체를 바꿔야 하고, 그건 이 갈래의 소유가
 // 아니다. 그렇다고 아무 변화도 없으면 "눌렀는데 아무 일도 안 일어났다"가 된다.
@@ -49,6 +50,9 @@ const DEFAULT_GI: GroupIntensity = { attack: 0, midfield: 0, defense: 0 }
 export function captionOf(prev: TacticState, next: TacticState): string | null {
   const rows: string[] = []
 
+  // 멘탈리티는 이제 도형(무게중심 마커)도 있지만 문장을 남긴다 — 마커는 "얼마나 앞/뒤로"만
+  // 말하고 다섯 단계 중 어느 이름인지는 못 말한다. 라인 슬라이더가 라인 태그 숫자를 함께
+  // 두는 것과 같은 이유다.
   const pm = prev.mentality ?? 'balanced', nm = next.mentality ?? 'balanced'
   if (pm !== nm) rows.push(`멘탈리티 ${MENTALITY_KO[pm]} → ${MENTALITY_KO[nm]}`)
 
@@ -137,6 +141,9 @@ export interface AxisSnapshot {
   tempo: number
   attackFocus: Instructions['attackFocus']
   attackPattern: string
+  /** 멘탈리티 — 2026-08-02부터 보드에 도형이 있다(무게중심 마커). 옵션인 이유는
+   *  호출자가 아직 안 넘길 수 있어서다(미지정이면 이 축은 강조하지 않는다). */
+  mentality?: string
 }
 
 /** 축 변경 → 보드 강조. **정착(settle) 후 한 번만** 올린다.
@@ -158,7 +165,7 @@ export function useAxisHighlight(snap: AxisSnapshot): AnalysisHighlight | undefi
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    const keys: AnalysisAxis[] = ['lineHeight', 'pressing', 'tempo', 'attackFocus', 'attackPattern']
+    const keys: AnalysisAxis[] = ['lineHeight', 'pressing', 'tempo', 'attackFocus', 'attackPattern', 'mentality']
     let any = false
     for (const k of keys) {
       if (prev.current[k] !== snap[k]) { pending.current.add(k); any = true }
@@ -176,7 +183,7 @@ export function useAxisHighlight(snap: AxisSnapshot): AnalysisHighlight | undefi
     }, SETTLE_MS)
     // snap 객체는 매 렌더 새로 만들어진다 — 의존성은 **값**이어야 한다.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snap.lineHeight, snap.pressing, snap.tempo, snap.attackFocus, snap.attackPattern])
+  }, [snap.lineHeight, snap.pressing, snap.tempo, snap.attackFocus, snap.attackPattern, snap.mentality])
 
   useEffect(() => () => {
     if (settleTimer.current) clearTimeout(settleTimer.current)

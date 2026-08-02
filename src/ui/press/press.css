@@ -10,6 +10,19 @@
    지금 구조는 중계 로어서드다 — 질문은 상단 3px 브랜드 라인을 얹은 카드,
    답변은 톤 칩이 앞서는 선택 리스트, 지난 문답은 접힌 요약 레일.
    색은 전부 토큰에서만 온다.
+
+   [2026-08-02 시안 반영] docs/refs/press-conference-ui — 좌우 2단으로 다시 짰다.
+   왼쪽은 감독 뒷모습 실루엣이 깔린 히어로(제목 + 부제), 오른쪽이 정보 칼럼
+   (스코어 바 → 질문 카드 → 선택지 3장 → 회견록). 시안은 "완성 UI가 아니라
+   레이아웃·색 대비·감정 톤 참조"이므로(docs/refs/README.md) 구조와 분위기만 가져왔다.
+
+   시안과 의도적으로 다른 점 두 가지:
+   1) 선택/포커스가 시안에서는 **빨강**이지만 여기서는 --brand(파랑)다.
+      tokens.css의 계약이 "--danger: 레드카드·실점·부상만", "--brand: 감독의 행동.
+      주 CTA·선택된 옵션·포커스 링"이라고 못 박는다. 답변 선택을 빨강으로 칠하면
+      경기 화면에서 빨강이 뜻하던 것(실점)과 충돌한다. 색 하나에 뜻 하나가 먼저다.
+   2) 시안의 홈=파랑/어웨이=빨강 대신 실제 팀 색(--team-us/--team-them)을 쓴다.
+      대한민국은 빨강이다. 시안의 색은 예시일 뿐 정보가 아니다.
    ========================================================================== */
 
 .pc-root {
@@ -24,7 +37,7 @@
   align-items: safe center;
   padding: var(--sp-5) var(--sp-4);
   background:
-    radial-gradient(120% 80% at 50% -10%, var(--s-2) 0%, transparent 60%),
+    radial-gradient(90% 70% at 18% 12%, #101c30 0%, transparent 62%),
     var(--s-0);
   color: var(--t-hi);
   font-family: var(--f-ui);
@@ -35,33 +48,198 @@
   max-width: var(--w-read);
   display: flex;
   flex-direction: column;
-  gap: var(--sp-4);
+  gap: var(--sp-5);
   align-content: start;
 }
 
-/* ── 컨텍스트 스트립 — 어느 경기 뒤의 회견인지 화면이 스스로 말한다(P-7). ── */
-.pc-strip {
+/* ── 히어로 — 제목 + 회견장 실루엣 ────────────────────────────────────────
+   좁은 화면이 기본값이다. 여기서는 실루엣이 **오른쪽 뒤로 물러나** 제목이
+   깨끗한 바탕 위에 남는다. 실루엣을 제목 뒤에 통째로 깔면 대비가 무너지고,
+   위아래로 쌓으면 세로 공간을 정보에서 빼앗는다. 옆으로 비키는 것이 답이다. */
+.pc-hero {
+  position: relative;
+  isolation: isolate;
+  min-height: 220px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  flex-wrap: wrap;
-  padding-bottom: var(--sp-3);
-  border-bottom: 1px solid var(--s-line);
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
 }
-.pc-strip__live {
+/* SVG는 meet(전체 표시)이므로 확대는 **컨테이너를 히어로보다 크게 잡고 overflow로
+   자르는** 방식으로 낸다. 좁은 화면에서는 인물의 머리·어깨만 보이면 충분하다.
+   가장자리 페이드는 여기(CSS mask-image)가 아니라 SVG 안의 <mask id="pc-edge">가
+   맡는다. 이 상자는 그림보다 크고 그림은 레터박스로 안쪽에 놓이므로, 상자 기준
+   마스크는 페이드가 히어로 밖에서 끝나 직사각형 이음매를 남겼다(PressRoomScene.tsx
+   주석 참조). 페이드는 그림 자신의 좌표계에 있어야 한다. */
+.pc-scene {
+  position: absolute;
+  z-index: -1;
+  right: -4%;
+  bottom: -56px;
+  width: 62%;
+  height: 300px;
+  opacity: 0.52;
+  pointer-events: none;
+}
+/* 제목 뒤 대비는 CSS 스크림이 아니라 SVG 마스크가 지킨다.
+   [왜 CSS 스크림을 버렸는가 — 실측 1600×900]
+   처음에는 .pc-hero::before에 어두운 radial-gradient를 깔았다. 히어로가
+   overflow: hidden이라 스크림은 히어로 네 변에서 **잘린다**. 그런데 스크림은 그
+   변에서 아직 alpha 0.6대였고, 히어로 바깥은 .pc-root의 radial-gradient라 오히려
+   밝았다(rgb 13,23,40 → 5,10,19). 결과는 히어로 크기 그대로의 직사각형 얼룩.
+   그림 자체가 아니라 **그림을 가리려던 장치**가 이음매를 만든 것이다.
+   그래서 어둡게 하는 일도 그림 좌표계 안(PressRoomScene.tsx <mask id="pc-edge">
+   의 상단 페이드)으로 옮겼다. 페이드가 그림에 붙어 있으면 어떤 상자에 담기든
+   이음매가 생길 수 없다. */
+.pc-hero__eyebrow {
   display: inline-flex;
   align-items: center;
   gap: var(--sp-2);
+  margin: 0 0 var(--sp-3);
   font-size: var(--fs-eyebrow);
   font-weight: 800;
   letter-spacing: var(--ls-caps);
   text-transform: uppercase;
+  color: var(--t-mid);
+}
+/* word-break: keep-all — 한글은 기본값(normal)이면 **글자 단위**로 꺾인다.
+   그대로 두면 "경기 후 / 기자회 / 견"처럼 낱말 한가운데가 잘린다(실측 1600×900). */
+.pc-hero__title {
+  margin: 0;
+  max-width: 12ch;
+  font-family: var(--f-display);
+  font-size: var(--fs-display);
+  font-weight: 800;
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-display);
+  color: var(--t-hi);
+  word-break: keep-all;
+}
+/* 시안의 "제목 아래 얇은 파란 밑줄". 장식이 아니라 제목과 부제를 갈라 주는
+   구분선이라 부제 쪽에 붙인다. */
+.pc-hero__sub {
+  margin: var(--sp-4) 0 0;
+  padding-top: var(--sp-4);
+  position: relative;
+  font-size: var(--fs-lg);
+  color: var(--brand);
+}
+.pc-hero__sub::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 72px;
+  height: 2px;
+  background: var(--brand);
+}
+
+/* 플래시는 "은은하게" 이상으로 움직이지 않는다. 눈을 잡아끄는 순간
+   읽어야 할 것은 오른쪽인데 시선이 왼쪽에 묶인다. 8초 주기 밝기 ±10%. */
+.pc-scene__flash {
+  animation: pc-flash 8s var(--ease-io) infinite;
+  transform-origin: center;
+}
+.pc-scene__flash--b {
+  animation-duration: 11s;
+  animation-delay: -3s;
+}
+@keyframes pc-flash {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 1; }
+}
+/* 모션 최소화 — tokens.css의 전역 규칙이 duration만 1ms로 줄이므로 여기서 끈다. */
+@media (prefers-reduced-motion: reduce) {
+  .pc-scene__flash {
+    animation: none;
+  }
+}
+
+/* ── 정보 칼럼 ─────────────────────────────────────────────────────────── */
+.pc-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+/* ── 스코어 바 — 어느 경기 뒤의 회견인지 화면이 스스로 말한다(P-7). ────── */
+.pc-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--s-1);
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-md);
+}
+.pc-strip__side {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+/* 킷 스트립 3px — 팀 색이 허용된 세 자리 중 하나(tokens.css). */
+.pc-strip__side--us {
+  padding-left: var(--sp-3);
+  border-left: 3px solid var(--team-us);
+}
+.pc-strip__side--them {
+  justify-content: flex-end;
+  padding-right: var(--sp-3);
+  border-right: 3px solid var(--team-them);
+}
+.pc-strip__team {
+  overflow: hidden;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  line-height: var(--lh-ui);
+  color: var(--t-mid);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pc-strip__side--us .pc-strip__team {
+  margin-right: auto;
+}
+.pc-strip__side--them .pc-strip__team {
+  margin-left: auto;
+  text-align: right;
+}
+.pc-strip__score {
+  font-size: var(--fs-score);
+  font-weight: 800;
+  line-height: var(--lh-tight);
   color: var(--t-hi);
 }
-.pc-strip__ctx {
+.pc-strip__mid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 var(--sp-3);
+  border-left: 1px solid var(--s-line);
+  border-right: 1px solid var(--s-line);
+  text-align: center;
+}
+.pc-strip__clock {
+  font-size: var(--fs-md);
+  font-weight: 700;
+  color: var(--t-hi);
+}
+.pc-strip__state {
+  font-size: var(--fs-xs);
+  line-height: var(--lh-ui);
+  color: var(--t-low);
+  white-space: nowrap;
+}
+.pc-strip__so {
+  grid-column: 1 / -1;
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--s-line);
+  text-align: center;
   font-size: var(--fs-sm);
-  line-height: var(--lh-md);
   color: var(--t-mid);
 }
 
@@ -116,18 +294,30 @@
   border-top: 3px solid var(--brand);
   border-radius: var(--r-md);
 }
+/* 시안의 메타 행 = 왼쪽 라벨 + 오른쪽 말풍선 아이콘. 여기서는 라벨이
+   "기자 질문"이라는 총칭 대신 실제 매체·기자명이라 정보가 더 많다. */
 .pc-question__meta {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
   gap: var(--sp-3);
-  margin-bottom: var(--sp-2);
+  margin-bottom: var(--sp-3);
+  padding-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--s-line);
 }
 .pc-question__outlet {
+  overflow: hidden;
   font-size: var(--fs-eyebrow);
   font-weight: 800;
   letter-spacing: var(--ls-caps);
   color: var(--t-low);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pc-question__icon {
+  width: 20px;
+  height: 20px;
+  color: var(--brand);
 }
 /* 진행 표시는 막대 3개가 아니라 평문이다(P-6). 방송도 아이콘보다 평문을 쓴다 —
    열혈 시청자는 작은 빨간 사각형을 스캔하지만 일반 시청자는 그러지 않는다. */
@@ -145,8 +335,9 @@
   color: var(--t-hi);
 }
 
-/* ── 답변 선택 — 톤이 선택의 유일한 판단 근거다. 11px 흐린 컬럼이 아니라
-      고정폭 칩으로 앞세운다(P-5). ─────────────────────────────────────── */
+/* ── 답변 선택 — 시안의 "원형 아이콘 + 문장 + 화살표" 행.
+      톤은 여전히 선택의 유일한 판단 근거이므로 아이콘이 라벨을 대체하지 않는다(P-5).
+      아이콘은 행에 리듬을 주고, 라벨은 문장 위 작은 캡션으로 붙는다. ─────── */
 .pc-answers {
   display: flex;
   flex-direction: column;
@@ -154,10 +345,10 @@
 }
 .pc-answer {
   display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--sp-3);
-  min-height: 56px;
+  gap: var(--sp-4);
+  min-height: 72px;
   padding: var(--sp-3) var(--sp-4);
   text-align: left;
   background: var(--s-1);
@@ -169,31 +360,74 @@
   line-height: var(--lh-md);
   cursor: pointer;
   transition: border-color var(--dur-1) var(--ease-out),
-    background var(--dur-1) var(--ease-out);
+    background var(--dur-1) var(--ease-out),
+    box-shadow var(--dur-1) var(--ease-out);
 }
-.pc-answer:hover {
-  border-color: var(--brand-line);
+/* 시안의 붉은 글로우를 브랜드 파랑으로 옮긴 자리(파일 상단 주석 참조).
+   :focus-visible을 hover와 같은 모양으로 묶어 키보드 사용자도 같은 화면을 본다. */
+.pc-answer:hover,
+.pc-answer:focus-visible {
+  border-color: var(--brand);
   background: var(--brand-weak);
+  box-shadow: 0 0 0 1px var(--brand-line), 0 0 20px rgba(59, 130, 246, 0.22);
+  outline: none;
 }
-.pc-answer__tone {
+.pc-answer__icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 28px;
-  padding: 0 var(--sp-2);
+  width: 40px;
+  height: 40px;
+  flex: none;
   background: var(--s-3);
-  border-radius: var(--r-sm);
-  color: var(--t-hi);
-  font-size: var(--fs-sm);
-  font-weight: 800;
-  white-space: nowrap;
+  border: 1px solid var(--s-line);
+  border-radius: var(--r-pill);
+  color: var(--t-mid);
+  transition: background var(--dur-1) var(--ease-out),
+    border-color var(--dur-1) var(--ease-out),
+    color var(--dur-1) var(--ease-out);
 }
-.pc-answer:hover .pc-answer__tone {
+.pc-answer__icon svg {
+  width: 20px;
+  height: 20px;
+}
+.pc-answer:hover .pc-answer__icon,
+.pc-answer:focus-visible .pc-answer__icon {
   background: var(--brand);
+  border-color: var(--brand);
   color: var(--t-on-brand);
+}
+.pc-answer__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.pc-answer__tone {
+  font-size: var(--fs-eyebrow);
+  font-weight: 800;
+  letter-spacing: var(--ls-caps);
+  line-height: var(--lh-ui);
+  color: var(--t-low);
+}
+.pc-answer:hover .pc-answer__tone,
+.pc-answer:focus-visible .pc-answer__tone {
+  color: var(--brand);
 }
 .pc-answer__text {
   min-width: 0;
+  font-weight: 700;
+}
+.pc-answer__go {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  color: var(--t-low);
+  transition: color var(--dur-1) var(--ease-out);
+}
+.pc-answer:hover .pc-answer__go,
+.pc-answer:focus-visible .pc-answer__go {
+  color: var(--brand);
 }
 
 .pc-finishing {
@@ -204,57 +438,89 @@
   color: var(--t-mid);
 }
 
-/* sm — 390px에서 톤 칩이 답변 문장을 76px 잡아먹지 않도록 세로로 쌓는다. */
+/* sm — 390px. 실루엣은 **정보가 아니다**(aria-hidden). 이 폭에서는 문장 뒤로
+   비켜 설 자리가 없어 스코어·질문의 대비를 갉아먹기만 하므로 통째로 내린다.
+   제목·부제는 남으므로 화면의 정체성은 유지된다. */
 @media (max-width: 719px) {
   .pc-root {
     padding: var(--sp-4) var(--sp-3);
   }
+  .pc-scene {
+    display: none;
+  }
+  .pc-hero {
+    min-height: 0;
+  }
+  .pc-hero__title {
+    font-size: var(--fs-h1);
+  }
+  .pc-strip {
+    padding: var(--sp-3);
+  }
+  .pc-strip__mid {
+    padding: 0 var(--sp-2);
+  }
+  /* 390px에서는 팀명 + 큰 숫자 + 가운데 블록이 한 줄에 다 못 들어간다.
+     팀명을 숫자 위로 올려 각 진영을 세로 2단으로 접는다. */
+  .pc-strip__side {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+  .pc-strip__side--them {
+    align-items: flex-end;
+  }
+  .pc-strip__side--them .pc-strip__score {
+    order: 1;
+  }
+  .pc-strip__team {
+    margin: 0;
+  }
   .pc-answer {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--sp-2);
+    gap: var(--sp-3);
+    padding: var(--sp-3);
   }
-  .pc-answer__tone {
-    justify-self: start;
-  }
-  .pc-question__meta {
-    flex-wrap: wrap;
+  .pc-answer__icon {
+    width: 34px;
+    height: 34px;
   }
 }
 
-/* lg 이상 — 읽기 폭(780)은 유지하고 지난 문답만 좌측 레일로 분리한다(P-7).
-   가운데 640px 컬럼 하나가 1440 화면의 55%를 비워두던 문제. */
-@media (min-width: 1200px) {
+/* lg 이상 — 시안의 좌우 2단. 왼쪽은 회견장(제목 + 실루엣), 오른쪽이 정보 칼럼.
+   1000px을 경계로 삼은 이유: 정보 칼럼은 460px 아래로 내려가면 질문 2줄이
+   3~4줄로 늘어져 카드 위계가 무너진다. 460 + 최소 히어로 420 + gap ≈ 940이라
+   여유를 조금 두고 1000에서 갈랐다. */
+@media (min-width: 1000px) {
+  /* 1280 노트북에서 --sp-5(24px)로는 제목이 뷰포트 왼쪽 모서리에 붙는다.
+     stage의 max-width(1440)가 화면보다 넓어 여백을 패딩이 혼자 감당하기 때문. */
+  .pc-root {
+    padding: var(--sp-5) clamp(24px, 4vw, 64px);
+  }
   .pc-stage {
     max-width: var(--w-content);
     display: grid;
-    grid-template-columns: minmax(240px, 320px) minmax(0, var(--w-read));
-    grid-template-areas:
-      'strip strip'
-      'past  main';
-    gap: var(--sp-5);
-    justify-content: center;
+    grid-template-columns: minmax(360px, 1fr) minmax(460px, 620px);
+    gap: var(--sp-7);
+    align-items: center;
   }
-  .pc-strip {
-    grid-area: strip;
+  .pc-hero {
+    /* 실루엣이 설 키. 뷰포트에 묶어 두면 900px 노트북에서 인물이 뭉개진다. */
+    min-height: min(74vh, 660px);
+    justify-content: flex-start;
+    padding-top: var(--sp-6);
   }
-  .pc-past {
-    grid-area: past;
-  }
-  .pc-main {
-    grid-area: main;
-  }
-  /* 첫 질문에는 지난 문답이 없다 — `.pc-past`가 **아예 렌더되지 않는다**
-     (PressConference.tsx: `answers.length > 0 && ...`). 그런데 그리드는 좌측 레일
-     240~320px + gap을 계속 붙들고 있었고, `justify-content: center`가 그 빈 칸까지
-     포함해 가운데를 잡는 바람에 질문 카드가 통째로 오른쪽으로 밀렸다
-     (실측 1600×900: 헤더는 x 237부터인데 질문 카드는 x 583부터 — 왼쪽 346px 공백.
-      docs/audit/shots/r6-1600x900-10-after-fulltime.png).
-     레일이 없으면 한 칸짜리 그리드로 접는다. */
-  .pc-stage:not(:has(.pc-past)) {
-    grid-template-columns: minmax(0, var(--w-read));
-    grid-template-areas:
-      'strip'
-      'main';
+  /* 2단에서는 실루엣이 이 칼럼 전체를 차지한다. 제목은 그림 위에 얹히지만
+     SVG 자체가 상단 26%를 배경색으로 페이드아웃시켜(pc-fade-y) 글자 뒤는
+     사실상 --s-0 단색이다 — 대비가 깎이지 않는다. */
+  /* 2단에서는 실루엣이 칼럼을 통째로 쓴다. 컨테이너를 세로로 조금 넘치게 잡아
+     인물이 화면 아래로 걸어 나가는 것처럼 보이게 하되, 머리 위 여백은 남긴다. */
+  .pc-scene {
+    right: auto;
+    left: -6%;
+    bottom: -40px;
+    width: 112%;
+    height: calc(100% + 40px);
+    opacity: 1;
   }
 }
 

@@ -103,8 +103,12 @@ export function TacticsBoard() {
     tempo: shownIns.tempo,
     attackFocus: shownIns.attackFocus,
     attackPattern: engine?.[SIDE].tactics.attackPattern ?? 'balanced',
+    // 멘탈리티가 2026-08-02에 들어왔다: 보드에 **무게중심 마커**가 생겨 이제 도형이 있는
+    // 축이다(AnalysisLayer의 무게중심 논증). 태세를 바꾸면 마커가 앞뒤로 옮겨 가고,
+    // 정착 후 한 번 굵기·불투명도로 강조된다 — 나머지 다섯 축과 같은 규율이다.
+    mentality: engine?.[SIDE].tactics.mentality ?? 'balanced',
   })
-  // 보드에 도형이 없는 축(멘탈리티·적극성·세트피스·페이즈 대형·GK·포메이션 이름)은
+  // 아직 보드에 도형이 없는 축(적극성·세트피스·페이즈 대형·GK·포메이션 이름)은
   // 문장으로 말한다 — 없는 도형을 지어내지 않는다(boardFeedback.ts 상단 논증).
   const caption = useChangeCaption(engine?.[SIDE].tactics)
 
