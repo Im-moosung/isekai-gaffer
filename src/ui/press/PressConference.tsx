@@ -8,7 +8,7 @@
 // 내장하므로 최악의 경우에도 3초 뒤 반드시 템플릿으로 진행한다 — "3s 대기 후 진행" 방식.
 // 대기 동안에는 "발표 준비 중" 상태를 표시해 화면이 멈춘 것처럼 보이지 않게 한다.
 import { useMemo, useRef, useState } from 'react'
-import { buildQuestions, buildHeadline, describeMatch, contradictsScore } from '../../game/pressconf'
+import { buildQuestions, buildHeadline, describeMatch, contradictsScore, answersTone } from '../../game/pressconf'
 import type { Headline } from '../../game/pressconf'
 import type { MatchRecord } from '../../game/campaignStore'
 import type { DecisionEntry } from '../../engine/types'
@@ -91,9 +91,12 @@ export function PressConference({ record, log, teamName, onDone }: Props) {
     // 맥락은 **판정이 끝난 사실 카드**로 넘긴다. 예전에는 `score: [2,5]`만 줬고, 어느 칸이
     // 우리 득점인지가 데이터에 없어 모델이 2-5 패배를 "5-2 대승"으로 뒤집었다.
     // describeMatch가 승패·양 팀 득점·상대 한글명·스코어 표기를 이름 붙은 필드로 못 박는다.
+    // 톤을 **낱말로 못 박아** 넘긴다. 답변 원문만 주면 모델이 톤을 읽어내지 못하고
+    // 늘 같은 사실 나열("A, B에 2-0 승리로 …")만 쓴다(실플레이 결함 2026-08-03).
     const context = {
       ...describeMatch(record, teamName),
       감독_답변: next,
+      감독_답변_톤: answersTone(next),
     }
     // narrate는 내부 타임아웃으로 반드시 종결된다. 실패·null이면 템플릿 title 유지.
     const ai = await narrate('headline', context).catch(() => null)

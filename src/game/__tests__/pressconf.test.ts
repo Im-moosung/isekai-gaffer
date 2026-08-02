@@ -517,14 +517,22 @@ describe('답변 풀은 경기 결과를 안다', () => {
     ['loss(승부차기)', rec('sf', 'arg', [0, 0], { shootout: [2, 4] })],
   ]
 
-  /** 여러 시드로 같은 결과의 회견을 돌려, 그 결과 칸에서 나올 수 있는 답변을 모은다.
+  /** 개입 기록이 없을 때 나오는 질문("손댈 필요가 없다고 보셨습니까?" 계열).
+   *  이 질문의 답변은 **일부러 결과와 무관하다** — 결과가 아니라 "건드리지 않았다"는
+   *  결정에 답하기 때문이다. 결과별 답변 풀을 비교하는 검사에서는 빼야 한다. */
+  const HANDS_OFF_Q = /손댈 필요가|개입하지 않은 것도|작전판이 조용/
+
+  /** 여러 시드로 같은 결과의 회견을 돌려, 그 **결과 칸**에서 나올 수 있는 답변을 모은다.
    *  (시드는 상대·단계·로그 수로 갈리므로 상대를 바꿔 회전시킨다.) */
   function answersOf(make: (opp: string, stage: CampaignStage) => MatchRecord): Set<string> {
     const out = new Set<string>()
     const opps = ['cze', 'mex', 'rsa', 'ecu', 'eng', 'nor', 'arg', 'esp', 'can', 'mar', 'fra']
     const stages: CampaignStage[] = ['group1', 'group2', 'group3', 'r32', 'r16', 'qf', 'sf', 'final']
     for (const o of opps) for (const s of stages) {
-      for (const q of buildQuestions(make(o, s), [])) for (const a of q.options) out.add(a)
+      for (const q of buildQuestions(make(o, s), [])) {
+        if (HANDS_OFF_Q.test(q.text)) continue
+        for (const a of q.options) out.add(a)
+      }
     }
     return out
   }
@@ -570,6 +578,24 @@ describe('답변 풀은 경기 결과를 안다', () => {
     const win = answersOf((o, s) => rec(s, o, [4, 0]))
     const loss = answersOf((o, s) => rec(s, o, [0, 3]))
     for (const a of loss) expect(win.has(a)).toBe(false)
+  })
+
+  it('개입 없는 경기 질문은 승패와 상관없이 같은 답변을 쓴다(의도된 동작)', () => {
+    // 위 검사에서 이 질문을 뺀 것이 "빠뜨림"이 아니라 "설계"임을 못 박는다.
+    // 뽑히는 문장은 시드(상대·단계·스코어)마다 다르지만, **풀 자체가 같아야** 한다.
+    const poolOf = (score: [number, number]) => {
+      const out = new Set<string>()
+      for (const o of ['cze', 'mex', 'rsa', 'ecu', 'eng', 'nor', 'arg', 'esp']) {
+        for (const s of ['group1', 'group2', 'r16', 'qf', 'sf', 'final'] as CampaignStage[]) {
+          const q = buildQuestions(rec(s, o, score), []).find(x => HANDS_OFF_Q.test(x.text))
+          expect(q).toBeDefined()
+          for (const a of q!.options) out.add(a)
+        }
+      }
+      return [...out].sort()
+    }
+    expect(poolOf([4, 0])).toEqual(poolOf([0, 3]))
+    expect(poolOf([4, 0]).length).toBeGreaterThanOrEqual(9)   // 회전이 실제로 돈다
   })
 
   it('결정론: 같은 입력 두 번 → 같은 답변', () => {

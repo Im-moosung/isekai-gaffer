@@ -229,9 +229,31 @@ const OUTCOME_ANSWERS: Record<Outcome, ToneTrio> = {
 //   라틴 문자와 숫자 금지). 하나 더 있다 —
 //   · **결과를 단정하지 않는다.** 이 답변들은 승패와 무관하게 붙으므로, "그 교체로 이겼습니다"
 //     같은 문장은 진 경기에서 거짓이 된다. 판단의 **의도**를 말하되 결과는 말하지 않는다.
-type QKind = 'teamtalk' | 'shout' | 'sub' | 'instructions' | 'shootout'
+type QKind = 'teamtalk' | 'shout' | 'sub' | 'instructions' | 'shootout' | 'handsOff'
 
 const KIND_ANSWERS: Record<QKind, ToneTrio> = {
+  // 아무 개입도 하지 않은 경기 — "손댈 필요가 없다고 보셨습니까?"
+  // 개입하지 않은 것도 하나의 선택이다. 기자가 그것을 되묻고, 감독이 답할 자리를 준다.
+  handsOff: {
+    aggressive: [
+      '건드리지 않는 것도 결정입니다. 그렇게 판단했습니다.',
+      '준비한 그림이 굴러가는데 손댈 이유가 없었습니다.',
+      '벤치가 조급해지면 그라운드가 먼저 흔들립니다.',
+      '바꿀 필요가 없게 만들어 두는 것이 제 일입니다.',
+    ],
+    humble: [
+      '선수들이 스스로 풀어 가는 것을 지켜봤습니다.',
+      '제가 나설 자리가 아니라고 봤습니다.',
+      '경기를 읽는 눈이 선수들에게 있었습니다.',
+      '지켜보는 것도 쉽지만은 않은 일이더군요.',
+    ],
+    humor: [
+      '오늘은 제 손이 가장 한가한 날이었습니다.',
+      '작전판을 꺼낼 틈도 없이 끝나 버렸네요.',
+      '벤치에 앉아 있느라 다리가 다 저렸습니다.',
+      '해설위원보다 제가 할 말이 없는 날이었습니다.',
+    ],
+  },
   // 하프타임 라커룸 이야기 — "그 말이 후반의 흐름을 만들었다고 보십니까?"
   teamtalk: {
     aggressive: [
@@ -585,6 +607,16 @@ function logQuestionText(e: DecisionEntry): { text: string; kind: QKind } | null
 }
 
 // 결과 기반 질문(로그 부족분 채움). 중립 추궁.
+/** 개입 기록이 하나도 없을 때의 질문. 시드로 변형을 고른다(결정론). */
+function handsOffQuestion(seed: number): string {
+  const qs = [
+    '오늘은 교체도 전술 변경도 없었습니다. 손댈 필요가 없다고 보신 겁니까?',
+    '90분 내내 벤치에서 지켜보셨습니다. 개입하지 않은 것도 계산이었습니까?',
+    '경기 내내 작전판이 조용했습니다. 무엇을 믿고 기다리신 겁니까?',
+  ]
+  return qs[seed % qs.length]
+}
+
 function resultQuestions(r: MatchRecord): string[] {
   const opp = oppName(r.opponentId)
   const out = outcomeOf(r)
@@ -682,13 +714,31 @@ function planQuestion(planDeviation: number, won: boolean): { text: string; bran
 export function buildQuestions(record: MatchRecord, log: DecisionEntry[], planDeviation?: number): PressQuestion[] {
   const seed = recordSeed(record)
   const outcome = outcomeOf(record)
-  // 로그 우선순위 정렬(안정): kind 우선순위 → 원래 등장 순서.
-  const KIND_ORDER: Record<DecisionEntry['kind'], number> = {
-    teamtalk: 0, sub: 1, instructions: 2, 'shootout-setup': 3,
+  // 주제가 겹치지 않게 한 주제당 하나씩 먼저 고른다.
+  //
+  // ★ 왜 이렇게 바뀌었나(2026-08-03, 실플레이 결함): 예전에는 DecisionEntry.kind로만
+  //   정렬했는데, **터치라인 외침과 하프타임 팀토크가 같은 'teamtalk'** 이고 그 kind가
+  //   1순위였다. 외침은 5분마다 쓸 수 있어 한 경기에 십수 번 쌓이므로, 질문 세 자리를
+  //   외침이 전부 차지하고 교체·전술 변경은 영영 묻지 않았다. 기자회견이 "감독의 결정을
+  //   되묻는 자리"인데 가장 사소한 결정만 되묻고 있었던 셈이다.
+  //
+  //   그래서 질문 주제(QKind, 외침과 팀토크가 갈려 있다) 단위로 하나씩 뽑고, 자리가
+  //   남을 때만 같은 주제의 두 번째를 채운다. 외침을 맨 뒤로 민 것은 되돌리기 쉽고
+  //   반복되는 개입이라 이야깃거리가 가장 적기 때문이다.
+  const TOPIC_ORDER: QKind[] = ['teamtalk', 'sub', 'instructions', 'shootout', 'shout']
+  const byTopic = new Map<QKind, { text: string; kind: QKind }[]>()
+  for (const e of log) {
+    const q = logQuestionText(e)
+    if (!q) continue
+    const bucket = byTopic.get(q.kind)
+    if (bucket) bucket.push(q)
+    else byTopic.set(q.kind, [q])
   }
-  const ordered = log
-    .map((e, idx) => ({ e, idx }))
-    .sort((a, b) => KIND_ORDER[a.e.kind] - KIND_ORDER[b.e.kind] || a.idx - b.idx)
+  // 1순위: 주제마다 첫 하나 / 2순위: 남은 것들을 같은 주제 순서로
+  const ordered = [
+    ...TOPIC_ORDER.flatMap(k => byTopic.get(k)?.slice(0, 1) ?? []),
+    ...TOPIC_ORDER.flatMap(k => byTopic.get(k)?.slice(1) ?? []),
+  ]
 
   // 답변의 출처는 세 갈래다:
   //   options 고정(플랜 추궁 전용 문안) → kind(로그 기반 질문, 종류 칸) → 없음(결과 칸).
@@ -704,10 +754,11 @@ export function buildQuestions(record: MatchRecord, log: DecisionEntry[], planDe
     const pq = planQuestion(planDeviation, outcome !== 'draw' && outcome !== 'loss')
     if (pq) push(pq.text, { options: PLAN_ANSWERS[pq.branch] })
   }
-  for (const { e } of ordered) {
-    const q = logQuestionText(e)
-    if (q) push(q.text, { kind: q.kind })
-  }
+  for (const q of ordered) push(q.text, { kind: q.kind })
+  // 90분 동안 아무것도 건드리지 않은 경기 — 그것도 하나의 선택이므로 기자가 되묻는다.
+  // 이 질문이 없으면 개입하지 않은 감독에게는 결과 이야기만 세 번 나와, 게임이 그
+  // 플레이 방식을 알아보지 못하는 것처럼 보인다.
+  if (ordered.length === 0) push(handsOffQuestion(seed), { kind: 'handsOff' })
   for (const t of resultQuestions(record)) push(t)
 
   return items.slice(0, 3).map((q, i) => {
@@ -835,6 +886,15 @@ function resultWord(kor: number, opp: number): '승리' | '무승부' | '패배'
  * 이름을 남기지 않는다. 스코어 표기는 '최종_스코어' 하나로 정본화해 모델이 직접
  * 숫자를 조합하다 뒤집는 경로를 없앤다.
  */
+/** 답변 묶음의 대표 톤. 마지막 답변을 기준으로 삼는다 — 기자회견의 마무리 발언이
+ *  다음 날 지면의 인상을 정하기 때문이고, 템플릿 헤드라인(buildHeadline)도 같은 기준을 쓴다.
+ *  AI 헤드라인에 이 값을 넘기지 않으면 모델은 톤을 알 길이 없어 늘 같은 사실 나열만 쓴다. */
+export const TONE_LABELS = ['공격적', '겸손', '유머'] as const
+export function answersTone(answers: string[]): (typeof TONE_LABELS)[number] {
+  const nonEmpty = answers.filter(a => typeof a === 'string' && a.trim().length > 0)
+  return TONE_LABELS[nonEmpty.length ? answerTone(nonEmpty[nonEmpty.length - 1]) : 0]
+}
+
 export function describeMatch(record: MatchRecord, teamName: string = OUR_TEAM_DEFAULT): Record<string, unknown> {
   const [kor, opp] = record.score
   const oppKo = oppName(record.opponentId)
