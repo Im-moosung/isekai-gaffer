@@ -1,3 +1,39 @@
+## 극장골 직전·직후 누락 캐스터 3개 처리 완료
+- 상태: done
+- 산출물: docs/audio/tts/qwen-out/l/ 3개 처리(기존 키 1개 교체·신규 2개 추가), report.json·metadata.json 갱신
+- 확인 필요: 절정 문구 3개의 감정 고조와 기존 `골! 극장골입니다!` 연결 청취
+- 막힌 것: 없음
+
+## 교체·개입 반응 누락 캐스터 18개 생성 완료
+- 상태: done
+- 산출물: docs/audio/tts/qwen-out/l/ 18개 추가, report.json·metadata.json 갱신
+- 확인 필요: plain 5개·head 3개·tail 10개의 실제 문맥 연결과 교체 중계 억양 청취
+- 막힌 것: 없음
+
+## 전술 변경 후 누락된 고정 중계 41개 생성 완료
+- 상태: done
+- 산출물: docs/audio/tts/qwen-out/l/ 41개 추가, report.json·metadata.json 갱신
+- 확인 필요: 해설 40개·캐스터 1개가 실제 전술 변경 문맥에서 자연스럽게 이어지는지 청취
+- 막힌 것: 없음
+
+## 무음 25개 재생성 및 파형 검증 완료
+- 상태: done
+- 산출물: docs/audio/tts/qwen-out/l/ 25개 교체, report.json·metadata.json 갱신
+- 확인 필요: 직접 생성 2개와 carrier-tail 폴백 23개 청취
+- 막힌 것: 없음
+
+## 경기 중계 744개 생성 및 QC 보정 완료
+- 상태: done
+- 산출물: docs/audio/tts/qwen-out/l/ 744개 WAV, report.json·metadata.json 갱신
+- 확인 필요: 재시도 8개(전부 캐리어 교체)와 QC 16개(전부 직접 생성) 청취; 하한 0.058 미만은 `l/01bfff116d` 1건(0.057875)만 남음
+- 막힌 것: 없음
+
+## 경기 중계 파일럿 100개 생성 완료 · 갱신된 744개 목록 확인
+- 상태: needs-decision
+- 산출물: docs/audio/tts/qwen-out/l/ 99개 WAV (파일럿 작업목록 앞 100개 중 99개 성공)
+- 확인 필요: 기존 219개와 섞은 캐스터 head 조각의 화자·이어 붙임, 외국 이름 발음
+- 막힌 것: l/43651b51e8 `외르얀 뉠란,`은 캐리어 내부 무음이 없어 절단 실패; 본 생성 전 재생성 필요
+
 ## 잘못 분류된 팀 도입 문장 2개를 직접 생성으로 교체
 - 상태: done
 - 산출물: docs/audio/tts/qwen-out/n/02bf69b0cc.wav, n/46dce79383.wav 및 report.json 갱신

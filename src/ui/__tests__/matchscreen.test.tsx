@@ -358,39 +358,86 @@ describe('MatchScreen 모드 분리 — 방송 관전 ↔ 작전 지시', () => 
   })
 })
 
+// ★ 실플레이 신고(2026-08-02): "전술 확정을 누르면 빨간 경고창이 뜨면서 넘어간다."
+//   [전술 확정]은 phase를 즉시 'playing'으로 바꾸지만 작전판 오버레이는 역연출
+//   (MODE_TRANSITION_MS) 동안 마운트된 채 남는다. 그 사이 SubPanel이 리렌더되며
+//   "지금은 개입할 수 없는 시점입니다"를 role="alert" 배너로 띄운 것이 원인이었다.
+//   차단 배너는 유저가 무언가를 시도했을 때의 응답이다 — 닫히는 패널이 스스로 뜨면 안 된다.
+describe('MatchScreen — 전술 확정 시 교체 패널이 경고를 띄우지 않는다', () => {
+  const lockBanner = (c: HTMLElement) => c.querySelector('.cs-sub__locked')
+
+  it('교체 탭을 연 채 [전술 확정]을 눌러도 차단 배너가 나타나지 않는다', () => {
+    const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
+    kickoffNow(getByRole)
+    replayTo('paused-break')
+    fireEvent.click(getByRole('tab', { name: '교체' }))
+    expect(container.querySelector('.cs-sub')).toBeTruthy()
+    expect(lockBanner(container as HTMLElement)).toBeNull()
+
+    fireEvent.click(getByRole('button', { name: '전술 확정' }))
+    expect(store().phase).toBe('playing')
+    // 확정 직후 — 오버레이는 아직 살아 있다. 여기서 배너가 뜨는 것이 신고된 결함이었다.
+    expect(container.querySelector('.cs-sub')).toBeTruthy()
+    expect(lockBanner(container as HTMLElement)).toBeNull()
+    // 역연출이 도는 동안에도 계속 없어야 한다(중간 프레임 포함).
+    act(() => { vi.advanceTimersByTime(300) })
+    expect(lockBanner(container as HTMLElement)).toBeNull()
+    act(() => { vi.advanceTimersByTime(400) })
+    expect(lockBanner(container as HTMLElement)).toBeNull()
+    expect(container.querySelector('.tb-root')).toBeNull()
+  })
+})
+
+// ★ 2026-08-02 계약 뒤집기 — 배지는 **비정상일 때만** 뜬다.
+//   기대값이 바뀐 이유: 예전 계약("킥오프 후 '플랜 유지 · 팀 이해도 +3%'로 나타난다")은
+//   상시 참인 문장을 화면에 못 박는 것이었다. 실플레이에서 유저는 구조를 거의 바꾸지
+//   않으므로 배지가 90분 내내 켜져 있었고, 항상 켜진 표시는 정보량이 0이다
+//   (사용자 신고: "매번 똑같은 말이 붙어 있어. 필요없으면 빼줘").
+//   새 계약: 기본 상태(플랜 유지)와 적응이 끝난 이탈 상태에는 배지가 없고,
+//   구조 변경 직후 적응 지연 구간에만 경고 배지가 뜬다. 근거는 PlanBadge.tsx 주석.
 describe('MatchScreen — 플랜 배지(PlanBadge)', () => {
   const badge = (c: HTMLElement) => c.querySelector('.plan-badge')
 
-  it('킥오프 전엔 배지가 없고, 킥오프 후 "플랜 유지"로 나타난다', () => {
+  it('플랜을 유지하는 동안에는 배지가 없다(상시 긍정 배지 폐지)', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
     expect(badge(container as HTMLElement)).toBeNull()
     kickoffNow(getByRole)
     step(3)
-    const b = badge(container as HTMLElement)!
-    expect(b).toBeTruthy()
-    expect(b.textContent).toContain('플랜 유지')
-    expect(b.textContent).toContain('팀 이해도 +3%')
-    expect(b.className).toContain('plan-badge--ok')
+    expect(badge(container as HTMLElement)).toBeNull()
+    // 문구 자체가 방송 화면에서 사라졌는지도 본다(다른 자리로 새어 나가지 않게).
+    expect(container.textContent).not.toContain('플랜 유지')
   })
 
   // ★ 작전판(오버레이) 진입 중에는 배지가 언마운트된다(T-2) — 배지는 **방송 복귀 후**
   //   상태를 말한다. 그래서 전술을 바꾼 뒤 확정하고 돌아와서 읽는다.
-  // 2026-08-01: "플랜 이탈 N축" 갈래를 없앴다(사용자 지시). 이탈하면 배지가 사라진다 —
-  //   배지의 존재 자체가 "보너스 살아 있음"이다(PlanBadge.tsx 주석의 논증).
-  it('구조(포메이션)를 바꾸면 배지가 사라진다(이탈 추궁 문구를 띄우지 않는다)', () => {
+  it('구조(포메이션)를 바꾸면 적응 지연 구간에만 경고 배지가 뜬다', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
     kickoffNow(getByRole)
     replayTo('paused-break')
     fireEvent.click(getByRole('button', { name: '5-4-1' }))
     fireEvent.click(getByRole('button', { name: '전술 확정' }))
     act(() => { vi.advanceTimersByTime(700) })
-    expect(badge(container as HTMLElement)).toBeNull()
+    const b = badge(container as HTMLElement)!
+    expect(b).toBeTruthy()
+    expect(b.textContent).toContain('팀 적응 중')
+    // 만료 분을 명시한다 — "언제 끝나나"가 이 배지를 보는 유일한 이유다.
+    expect(b.textContent).toContain(`${store().adaptUntil}분까지`)
+    // 추궁 문구는 여전히 띄우지 않는다(2026-08-01 판정 유지).
     expect(container.textContent).not.toContain('플랜 이탈')
     // 집계 자체는 살아 있어야 한다 — 기자회견이 store에서 직접 읽는다.
     expect(store().planDeviation).toBeGreaterThan(0)
+
+    // 적응이 끝나면 배지는 사라진다 — 새 구조에 적응한 뒤에는 할 말이 없다.
+    const until = store().adaptUntil
+    for (let i = 0; i < 400 && store().engine!.minute <= until; i++) {
+      if (store().phase === 'playing') step(1)
+      else act(() => { store().confirmTactics() })
+    }
+    act(() => { vi.advanceTimersByTime(700) })
+    expect(badge(container as HTMLElement)).toBeNull()
   })
 
-  it('지시 미세 조정만으로는 배지가 "플랜 유지"를 유지한다(구조 기준)', () => {
+  it('지시 미세 조정만으로는 배지가 뜨지 않는다(적응 지연은 구조 변경에만 걸린다)', () => {
     const { getByRole, container } = render(<MatchScreen home={home} away={away} seed={20260724} />)
     kickoffNow(getByRole)
     replayTo('paused-break')
@@ -400,7 +447,8 @@ describe('MatchScreen — 플랜 배지(PlanBadge)', () => {
     })
     fireEvent.click(getByRole('button', { name: '전술 확정' }))
     act(() => { vi.advanceTimersByTime(700) })
-    expect(badge(container as HTMLElement)!.textContent).toContain('플랜 유지')
+    expect(store().adaptUntil).toBe(0)
+    expect(badge(container as HTMLElement)).toBeNull()
   })
 })
 

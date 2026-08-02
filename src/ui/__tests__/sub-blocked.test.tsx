@@ -76,12 +76,32 @@ describe('교체 패널 — 차단 사유 고지', () => {
     expect(banner(container)).toContain('투입할 수 있는 벤치 선수가 없습니다')
   })
 
-  it('개입 창이 아니면 언제 열리는지까지 말한다', () => {
+  // ★ 2026-08-02 계약 변경 — 개입 창이 닫힌 것은 **배너로 자발적으로 말하지 않는다**.
+  //   SubPanel은 작전판 안에서만 살고 작전판은 정지 국면에서만 열리므로, !open이 참이
+  //   되는 실제 순간은 [전술 확정] 직후 오버레이가 역연출로 남아 있는 700ms뿐이었다.
+  //   그 사이 빨간 role="alert"가 번쩍여 "확정하면 경고창이 뜨며 넘어간다"로 보였다.
+  //   경고는 유저의 시도에 대한 응답이어야 한다 → 눌렀을 때만, 그것도 조용한 슬롯에.
+  it('개입 창이 아니면 배너 대신 조용한 잠금 표시만 둔다', () => {
     store().startMatch(home, away, 42)
     store().kickoff()
-    const { container } = render(<SubPanel side="home" />)
-    expect(banner(container)).toContain('지금은 개입할 수 없는 시점입니다')
-    expect(banner(container)).toContain('하이드레이션 브레이크')
+    const { container, getByText } = render(<SubPanel side="home" />)
+    expect(container.querySelector('.cs-sub__locked')).toBeNull()
+    expect(getByText('다음 브레이크까지 잠김')).toBeTruthy()
+  })
+
+  it('개입 창이 아닐 때 눌러 보면 언제 열리는지까지 말한다', () => {
+    store().startMatch(home, away, 42)
+    store().kickoff()
+    const { container, getByRole } = render(<SubPanel side="home" />)
+    fireEvent.click(lineupCard(container))
+    expect(errorText(container)).toContain('지금은 개입할 수 없는 시점입니다')
+    expect(errorText(container)).toContain('하이드레이션 브레이크')
+    // 여전히 배너는 뜨지 않는다 — 사유는 안내 슬롯 한 곳에서만 말한다.
+    expect(container.querySelector('.cs-sub__locked')).toBeNull()
+    // [교체 확정]도 같은 사유를 말하고 아무것도 바꾸지 않는다.
+    fireEvent.click(getByRole('button', { name: '교체 확정' }))
+    expect(errorText(container)).toContain('지금은 개입할 수 없는 시점입니다')
+    expect(store().engine!.home.subsUsed).toBe(0)
   })
 
   it('막힌 상태에서 카드는 눌린다(disabled 아님) — 클릭이 배너를 다시 가리킨다', () => {

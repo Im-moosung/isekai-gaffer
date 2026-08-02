@@ -39,7 +39,7 @@ const JSON_OUT = arg('json', 'docs/audio/tts/live-corpus.json')
 
 const server = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' })
 const { loadTeam, TEAM_IDS } = await server.ssrLoadModule('/src/data/loader.ts')
-const { createMatch, simulateSegment } = await server.ssrLoadModule('/src/engine/simulate.ts')
+const { createMatch, simulateSegment, applyCommand, MAX_SUBS } = await server.ssrLoadModule('/src/engine/simulate.ts')
 const { pickBestXI } = await server.ssrLoadModule('/src/engine/lineup.ts')
 const { applyDiscipline } = await server.ssrLoadModule('/src/game/campaignStore.ts')
 const { teamCardTally } = await server.ssrLoadModule('/src/game/playerStats.ts')
@@ -60,12 +60,144 @@ const bump = (sp, s) => corpus[sp].set(s, (corpus[sp].get(s) ?? 0) + 1)
 /** 상대 팀 **선발 XI**(결정론) — 시드에 안 걸린 이름까지 대상에 넣기 위한 집합. */
 const xiNames = new Set()
 
-function playMatch(oppId, seed, homeTactics, sOv, mOv) {
+// ── 감독 행동 대본 ─────────────────────────────────────────
+// ★ 왜 여기서 지시를 바꾸는가(2026-08-02 실사고): 예전 판은 킥오프 전 전술만 주고
+//   `simulateSegment(st0, 90)`으로 90분을 한 번에 돌렸다. 경기 중 감독 행동이 **한 번도**
+//   없었으므로 "지시를 바꾼 뒤에만 나오는 해설"이 코퍼스에 잡히지 않았다 —
+//   `TACTIC_LINES` 28개(12종 × mine/theirs)와 교체 반응 풀(`an.sub`)이 통째로 빠졌고,
+//   그만큼이 클립 없는 문장, 즉 **브라우저 여성 음성**으로 새어 나갔다.
+//   도구가 보고하던 "커버리지 100%"는 분모(=측정 대상)가 좁아서 나온 값이었다.
+//
+//   목표는 재미가 아니라 **문장 풀 전수 도달**이다. 그래서 12종(`TacticKind`)을
+//   한 바퀴 도는 고정 목록을 두고, 경기마다 시작 위치만 돌린다(결정론 — 시드가 같으면
+//   같은 대본이다).
+
+/** `TacticKind` 12종. `readTacticalNotes`가 알아보는 형태로 하나씩 만들어 낸다. */
+const MOVES = [
+  'pressUp', 'pressDown', 'lineUp', 'lineDown', 'tempoUp', 'tempoDown',
+  'focusWing', 'focusCenter', 'backThree', 'backFour', 'formation', 'sub',
+]
+/**
+ * 개입 시각. **12분 간격**인 이유: `tacticalFollow`는 가장 최근의 미언급 노트부터
+ * 보고 유효 기간이 10분(`TACTIC_WINDOW`)이라, 노트를 촘촘히 넣으면 새 노트가 옛 노트를
+ * 계속 덮어써서 옛 노트의 문장이 영영 안 나온다. 창이 겹치지 않게 벌린다.
+ */
+const MOVE_MINUTES = [10, 22, 34, 46, 58, 70, 82]
+
+/** matchStore가 `detail.changed`에 넣는 축 라벨(= `commentary.CHANGED_RE`가 읽는 형식). */
+const AXIS_LABEL = { lineHeight: '라인', pressing: '압박', tempo: '템포', attackFocus: '공격' }
+const FOCUS_KO = { left: '좌', center: '중앙', right: '우', balanced: '균형' }
+const fmtAxis = v => (typeof v === 'number' ? String(v) : (FOCUS_KO[v] ?? v))
+const isBack3 = f => f.startsWith('3') || f.startsWith('5')
+
+/**
+ * 개입 1건을 엔진에 적용하고 감독 개입 기록(`DecisionEntry`)을 돌려준다.
+ * 기록의 모양은 **matchStore.submitCommand와 같아야 한다** — `readTacticalNotes`가
+ * 그 모양만 읽기 때문이다(축 라벨 · `before`/`after` · `kind`).
+ * 적용할 수 없는 개입(교체 한도 초과 등)은 조용히 건너뛴다.
+ */
+function applyMove(st, id, minute, seed) {
+  const cur = st.home.tactics
+  const instr = cur.instructions
+  const axisMove = (key, delta) => {
+    const before = instr[key]
+    const after = Math.max(20, Math.min(90, before + delta))
+    if (after === before) return null
+    const next = { ...instr, [key]: after }
+    return {
+      cmd: { type: 'instructions', instructions: next },
+      entry: { minute, kind: 'instructions', summary: `${minute}' 지시 변경`, detail: { changed: [`${AXIS_LABEL[key]} ${fmtAxis(before)}→${fmtAxis(after)}`] } },
+    }
+  }
+  const focusMove = to => {
+    const before = instr.attackFocus
+    if (before === to) return null
+    const next = { ...instr, attackFocus: to }
+    return {
+      cmd: { type: 'instructions', instructions: next },
+      entry: { minute, kind: 'instructions', summary: `${minute}' 지시 변경`, detail: { changed: [`${AXIS_LABEL.attackFocus} ${fmtAxis(before)}→${fmtAxis(to)}`] } },
+    }
+  }
+  const formMove = to => {
+    const before = cur.formation
+    if (!to || to === before) return null
+    // 포메이션을 바꿔도 **지시는 유지한다** — 작전판도 슬라이더 값을 되돌리지 않는다.
+    const tactics = pickBestXI(kor, to)
+    tactics.instructions = { ...instr }
+    return {
+      cmd: { type: 'formation', tactics },
+      entry: { minute, kind: 'instructions', summary: `${minute}' 포메이션: ${before}→${to}`, detail: { before, after: to } },
+    }
+  }
+  const subMove = () => {
+    if (st.home.subsUsed >= MAX_SUBS) return null
+    const stam = st.home.staminaByPlayer
+    const onPitch = new Set(cur.lineup.map(l => l.playerId))
+    // 나갈 선수: 골키퍼가 아니고 퇴장하지 않은 선발 중 **체력이 가장 낮은** 쪽(동률은 id).
+    const outSlot = cur.lineup
+      .filter(l => l.slot !== 'GK' && !st.home.sentOff.includes(l.playerId))
+      .sort((a, b) => (stam[a.playerId] ?? 100) - (stam[b.playerId] ?? 100) || (a.playerId < b.playerId ? -1 : 1))[0]
+    if (!outSlot) return null
+    // 들어갈 선수: 벤치에서 시드·분 파생 인덱스로 고른다(결정론 · 경기마다 다른 사람).
+    const bench = kor.squad.filter(p => !onPitch.has(p.id) && !subbedOff.has(p.id))
+    if (bench.length === 0) return null
+    const inP = bench[(seed * 13 + minute) % bench.length]
+    return {
+      cmd: { type: 'sub', out: outSlot.playerId, in: inP.id },
+      entry: { minute, kind: 'sub', summary: `${minute}' 교체`, detail: { in: inP.id, out: outSlot.playerId } },
+    }
+  }
+  switch (id) {
+    case 'pressUp': return axisMove('pressing', 25)
+    case 'pressDown': return axisMove('pressing', -25)
+    case 'lineUp': return axisMove('lineHeight', 25)
+    case 'lineDown': return axisMove('lineHeight', -25)
+    case 'tempoUp': return axisMove('tempo', 25)
+    case 'tempoDown': return axisMove('tempo', -25)
+    // 좌·우를 시드로 갈라 둔다 — 둘 다 `focusWing`이지만 발화 뒤에 붙는 장면이 달라진다.
+    case 'focusWing': return focusMove(seed % 2 === 0 ? 'left' : 'right')
+    case 'focusCenter': return focusMove('center')
+    case 'backThree': return formMove(isBack3(cur.formation) ? null : '3-5-2')
+    case 'backFour': return formMove(isBack3(cur.formation) ? '4-4-2' : null)
+    // 같은 계열 안에서 배치만 바꾼다 → `formation`(스리백/포백 전환이 아닌 변경).
+    case 'formation': return formMove(isBack3(cur.formation)
+      ? (cur.formation === '3-5-2' ? '5-4-1' : '3-5-2')
+      : (cur.formation === '4-4-2' ? '4-3-3' : '4-4-2'))
+    case 'sub': return subMove()
+    default: return null
+  }
+}
+
+/** 이 경기에서 이미 교체로 나간 선수(IFAB 제3조 — 재투입 금지). matchStore가 지키는 규칙. */
+let subbedOff = new Set()
+
+function playMatch(oppId, seed, homeTactics, sOv, mOv, matchIndex) {
   const away = teams[oppId]
-  const st0 = createMatch(kor, away, { seed, homeTactics })
-  for (const [id, v] of Object.entries(sOv)) if (id in st0.home.staminaByPlayer) st0.home.staminaByPlayer[id] = v
-  for (const [id, v] of Object.entries(mOv)) if (id in st0.home.moraleByPlayer) st0.home.moraleByPlayer[id] = v
-  const st = simulateSegment(st0, 90)
+  let st = createMatch(kor, away, { seed, homeTactics })
+  for (const [id, v] of Object.entries(sOv)) if (id in st.home.staminaByPlayer) st.home.staminaByPlayer[id] = v
+  for (const [id, v] of Object.entries(mOv)) if (id in st.home.moraleByPlayer) st.home.moraleByPlayer[id] = v
+  subbedOff = new Set()
+  const decisions = []
+  // 경기마다 시작 위치를 한 칸씩 돌려 12종이 전수 등장하게 한다(7슬롯 × 12시작점).
+  const offset = matchIndex % MOVES.length
+  MOVE_MINUTES.forEach((m, i) => {
+    st = simulateSegment(st, m)
+    const mv = applyMove(st, MOVES[(offset + i) % MOVES.length], m, seed)
+    if (!mv) return
+    try {
+      st = applyCommand(st, 'home', mv.cmd)
+    } catch {
+      return // 교체 한도·창 초과 등 — 실제 게임도 여기서 막힌다. 조용히 건너뛴다.
+    }
+    if (mv.cmd.type === 'sub') subbedOff.add(mv.cmd.out)
+    decisions.push(mv.entry)
+    // 선발이 아니었던 교체 투입 선수도 이름 대상에 들어간다.
+    for (const slot of st.home.tactics.lineup) {
+      const p = kor.squad.find(x => x.id === slot.playerId)
+      if (p) xiNames.add(p.name.ko)
+    }
+  })
+  st = simulateSegment(st, 90)
   for (const side of ['home', 'away']) {
     const team = side === 'home' ? kor : away
     for (const slot of st[side].tactics.lineup) {
@@ -73,7 +205,7 @@ function playMatch(oppId, seed, homeTactics, sOv, mOv) {
       if (p) xiNames.add(p.name.ko)
     }
   }
-  for (const l of commentateTimeline(st.events, kor, away, seed, {}, 95)) {
+  for (const l of commentateTimeline(st.events, kor, away, seed, { decisions, managedTeamId: kor.id }, 95)) {
     bump(l.speaker, l.speech)
     if (l.follow) bump(l.follow.speaker, l.follow.speech)
   }
@@ -81,6 +213,9 @@ function playMatch(oppId, seed, homeTactics, sOv, mOv) {
 }
 
 const tiebreak = (seed, stage) => ((seed * 7919 + stage.length * 31) % 2) === 0
+
+/** 전체 실행에서 몇 번째 경기인가 — 감독 행동 대본의 시작 위치를 여기서 돌린다. */
+let matchIndex = 0
 
 function runCampaign(seed) {
   let cautions = {}, bans = {}, fatigue = {}, morale = {}
@@ -92,7 +227,7 @@ function runCampaign(seed) {
     const tactics = pickBestXI(kor, undefined, suspended)
     const sOv = {}, mOv = {}
     for (const p of kor.squad) { sOv[p.id] = startStamina(p.id); mOv[p.id] = startMorale(p.id) }
-    const r = playMatch(oppId, seed * 31 + played, tactics, sOv, mOv)
+    const r = playMatch(oppId, seed * 31 + played, tactics, sOv, mOv, matchIndex++)
     played++
     fatigue = { ...fatigue, ...r.stamina }
     morale = { ...morale, ...r.morale }

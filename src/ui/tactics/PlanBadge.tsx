@@ -1,34 +1,44 @@
 // src/ui/tactics/PlanBadge.tsx
-// 스코어버그 옆 플랜 상태 배지 — **보너스가 살아 있을 때만** 뜬다.
+// 스코어버그 옆 플랜 상태 배지 — **비정상일 때만** 뜬다.
 //
-// ★ 2026-08-01: "플랜 이탈 N축" 갈래를 없앴다(사용자 지시: "플랜 이탈 이런 게 나오는데 없애줘").
-//   왜 갈래 하나만 없애고 배지 자체는 남겼는가:
-//   · 유저가 싫어한 것은 **잔소리**다. 이탈 배지는 이미 내린 결정을 경기 내내 붙들고
-//     "너 계획 어겼다"고 반복하는데, 그 추궁은 경기 후 기자회견이 이미 맡고 있다
-//     (game/pressconf.ts planQuestion). 화면에서 90분 내내 되풀이할 이유가 없다.
-//   · 반대로 '플랜 유지 · 팀 이해도 +3%'는 **실제 엔진 보너스**(engine/simulate.ts
-//     isPlanStructIntact)가 걸려 있다는 유일한 안내다. 이것까지 지우면 유저는 자기가
-//     받고 있는 이득을 화면 어디에서도 알 수 없다. 보상 안내는 잔소리가 아니다.
-//   · 그래서 이탈하면 배지가 **그냥 사라진다**. 배지의 존재 자체가 "보너스 살아 있음"이
-//     되어 판정이 이진으로 단순해지고, 사라진다는 사실이 추궁 없이 상태를 전달한다.
-//     빈 자리는 그대로 비워 둔다 — 자리를 메우려고 다른 상시 표시를 넣으면 방금 없앤
-//     잔소리를 다른 문구로 되살리는 셈이고, 스코어버그 옆은 골·시간이 우선인 자리다.
+// ★ 2026-08-02 뒤집기: '플랜 유지 · 팀 이해도 +3%'(상시 긍정 배지)를 없앴다.
+//   실플레이 신고: "매번 똑같은 말이 붙어 있어. 필요없으면 빼줘."
 //
-//   planDeviation은 store에 그대로 남는다(matchStore의 집계도 손대지 않았다) —
-//   기자회견(ui/press/PressConference.tsx)이 store에서 직접 읽으므로 이 배지와 무관하다.
-import { useMatchStore, isPlanStructIntact } from '../../game/matchStore'
+//   왜 뒤집었는가 — 어제(08-01)의 논증은 "보상 안내는 잔소리가 아니다"였고,
+//   그건 배지가 **가끔 켜진다**는 전제 위에 서 있었다. 실제 플레이는 그 전제를 깼다.
+//   대부분의 유저는 킥오프 구조(포메이션·멘탈리티)를 경기 내내 그대로 두므로 배지는
+//   90분 전부 켜져 있었다. 항상 참인 문장은 정보량이 0이다 — 화면에서 지워도 유저가
+//   잃는 판단이 없고, 대신 스코어버그 옆 자리(골·시간이 우선인 자리)만 먹는다.
+//   보너스 수치(+3%)를 알려야 할 자리는 **결정하는 순간**, 즉 작전판의 플랜 대비
+//   패널(TacticsBoard PlanDiff)이다. 거기서는 유저가 스스로 열어 본 답이라 노이즈가
+//   아니고, 그 문구는 그대로 남겨 뒀다.
+//
+//   그래서 배지가 말하는 것은 하나뿐이다: **구조를 방금 바꿔서 팀이 아직 적응 중**.
+//   이건 상시가 아니라 드물고(구조 변경 직후 ADAPT_MINUTES분), 그 사이 실제로
+//   페널티가 걸려 있으며(matchStore adaptLag → engine), 유저가 화면에서 달리 알 길이
+//   없다 — "바꿨는데 왜 더 안 풀리지"의 답이 여기에 있다.
+//
+//   세 번째 상태(적응이 끝났고 구조는 킥오프 플랜과 다름)에는 **아무 말도 하지 않는다**.
+//   팀은 이미 새 구조에 적응했으니 경고할 것이 없고, "너 계획 어겼다"는 추궁은 경기 후
+//   기자회견이 맡는다(game/pressconf.ts planQuestion). 빈 자리는 그대로 비워 둔다.
+//
+//   엔진 보너스(planIntact)와 집계(planDeviation)는 손대지 않았다 — 이건 표시 문제다.
+import { useMatchStore } from '../../game/matchStore'
 import './plan-badge.css'
 
 export function PlanBadge() {
-  const plan = useMatchStore(s => s.matchPlan)
   const engine = useMatchStore(s => s.engine)
-  if (!plan || !engine) return null
-  // 구조(포메이션·멘탈리티) 유지 여부가 엔진 보너스의 조건이므로 배지도 같은 판정을 쓴다.
-  if (!isPlanStructIntact(plan, engine.home.tactics)) return null
+  // 적응 지연 만료 분. 0이면 이번 경기에서 구조를 바꾼 적이 없다(킥오프 시 0으로 리셋).
+  const adaptUntil = useMatchStore(s => s.adaptUntil)
+  if (!engine) return null
+  // adaptUntil분까지가 지연 구간이다(matchStore advanceMinute의 adaptLag 판정과 같은 경계).
+  // 0 체크를 따로 두는 이유: 킥오프 직후 minute이 0이라 `0 >= 0`이 참이 되어 버린다.
+  if (adaptUntil <= 0 || adaptUntil < engine.minute) return null
   return (
-    <span className="plan-badge plan-badge--ok" role="status">
-      {/* 이모지를 아이콘으로 쓰지 않는다 — 상태는 색과 평문으로 말한다. */}
-      플랜 유지 · 팀 이해도 +3%
+    <span className="plan-badge" role="status">
+      {/* 이모지를 아이콘으로 쓰지 않는다 — 상태는 색과 평문으로 말한다.
+          만료 분을 박아 둔다: "언제 끝나나"가 이 배지를 보는 유일한 이유다. */}
+      구조 변경 — {adaptUntil}분까지 팀 적응 중
     </span>
   )
 }

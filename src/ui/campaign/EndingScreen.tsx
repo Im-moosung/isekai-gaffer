@@ -2,11 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { useCampaignStore } from '../../game/campaignStore'
 import type { CampaignStage, MatchRecord } from '../../game/campaignStore'
 import { loadAllTeams } from '../../data/loader'
-import { computeScore, submitScore, topScores } from '../../online/leaderboard'
-import type { LeaderboardMode, LeaderboardRow, ScoreBreakdown } from '../../online/leaderboard'
+import { computeScore, submitScore } from '../../online/leaderboard'
+import type { ScoreBreakdown } from '../../online/leaderboard'
 import { sanitizeNickname } from '../../online/nickname'
-import { shareUrlForSeed } from '../../game/seed'
-import { buildEpilogue } from '../../game/pressconf'
+import { LeaderboardBoard } from '../leaderboard/LeaderboardBoard'
+import { useLeaderboard } from '../leaderboard/useLeaderboard'
+import { STAGE_LABEL } from '../leaderboard/stage'
+import { buildEpilogue, describeCampaign } from '../../game/pressconf'
 import { narrate } from '../../ai/aiClient'
 import * as bgm from '../../audio/bgm'
 import { AppShell } from '../shell/AppShell'
@@ -51,11 +53,6 @@ function Confetti() {
       ))}
     </div>
   )
-}
-
-const STAGE_LABEL: Record<CampaignStage, string> = {
-  group1: '조별 1차전', group2: '조별 2차전', group3: '조별리그',
-  r32: '32강', r16: '16강', qf: '8강', sf: '4강', final: '준우승', ended: '여정의 끝',
 }
 
 /** 점수 브레이크다운 표에 표시할 항목 순서·라벨. */
@@ -122,50 +119,14 @@ function headlineFor(
   }
 }
 
-/**
- * 이 판의 시드 카드 — 시드를 **유저에게 돌려주는** 자리다.
- *
- * 시드가 매 판 달라지면(2026-08-01) 결정론 엔진의 값어치는 "내 판을 다시 열 수 있는가"에 달린다.
- * 그래서 여정이 끝난 화면에 시드를 적고, 그대로 링크로 복사할 수 있게 둔다.
- * 리더보드가 "모두 같은 시드"가 아니라 "기록된 시드 + 재현 가능한 리플레이"로 성립하는 근거다.
- *
- * 클립보드가 없는 환경(비보안 컨텍스트·구형 브라우저·jsdom)에서는 버튼을 아예 그리지 않는다 —
- * 눌러도 아무 일이 없는 버튼보다 없는 편이 낫고, 시드 숫자는 언제나 화면에 남는다.
- */
-function SeedCard({ seed }: { seed: number }) {
-  const [copied, setCopied] = useState(false)
-  const shareUrl = useMemo(() => shareUrlForSeed(seed), [seed])
-  const clipboard = (globalThis as { navigator?: { clipboard?: { writeText?(t: string): Promise<void> } } })
-    .navigator?.clipboard
-  const canCopy = shareUrl !== null && typeof clipboard?.writeText === 'function'
-
-  return (
-    <section className="section end-seed" aria-label="이 판의 시드">
-      <div className="section__head">
-        <h2 className="section__title">이 판의 시드</h2>
-      </div>
-      <p className="end-seed__val num">{seed}</p>
-      <p className="end-seed__note">
-        같은 시드로 시작하면 이 대회가 사건 하나까지 그대로 재현된다.
-        주소 끝에 <code>?seed={seed}</code>를 붙이면 친구도 같은 판을 지휘한다.
-      </p>
-      {canCopy && (
-        <button
-          type="button"
-          className="btn btn--secondary end-seed__copy"
-          onClick={() => {
-            const write = clipboard?.writeText
-            if (!write || !shareUrl) return
-            const done = write.call(clipboard, shareUrl)
-            done.then(() => setCopied(true)).catch(() => { /* 조용히 실패 — 시드 숫자는 화면에 남는다 */ })
-          }}
-        >
-          {copied ? '복사됨' : '링크 복사'}
-        </button>
-      )}
-    </section>
-  )
-}
+// [2026-08-02 · 사용자 판단] "이 판의 시드" 카드(숫자 · ?seed= 안내 · [링크 복사])를 제거했다.
+// 시드 공유를 제품 기능으로 넣지 않기로 했다 — 엔딩 화면의 자리는 재도전 동기(리더보드 등록)가
+// 쓰는 편이 낫고, 시드 숫자는 대다수 플레이어에게 읽을 이유가 없는 숫자였다.
+//
+// **엔진의 시드 자체는 그대로다.** 결정론 계약(설계 §99)과 밸런스 테스트 전체가 여기 의존한다.
+// 사라진 것은 화면에 시드를 보여주고 공유하게 하던 UI뿐이다.
+// App.tsx의 ?seed= URL 파라미터 처리도 남겨 뒀다(화면에서 안내만 하지 않는다) —
+// 컨트롤이 0개라 유저에게 보이지 않으면서, 버그 재현과 밸런스 검증에는 그대로 쓸모가 있다.
 
 interface Tally { w: number; d: number; l: number; gf: number; ga: number }
 
@@ -189,18 +150,22 @@ function fmtPts(n: number): string {
 }
 
 /** 캠페인 엔딩 화면 — 헤드라인 + 기록 요약 + 점수 브레이크다운 + 리더보드 등록/순위. */
-export function EndingScreen({ onRestart }: { onRestart(): void }) {
+export function EndingScreen({ onRestart, onLeaderboard }: {
+  onRestart(): void
+  /** 독립 리더보드 페이지로 이동. 없으면 진입 버튼을 그리지 않는다(구버전 호출부 방어). */
+  onLeaderboard?(): void
+}) {
   const ending = useCampaignStore(s => s.ending)
   const records = useCampaignStore(s => s.records)
   const groupRank = useCampaignStore(s => s.groupRank)
-  const seed = useCampaignStore(s => s.seed)
 
   const [nickname, setNickname] = useState('')
   const [busy, setBusy] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [myNick, setMyNick] = useState('')
-  const [rows, setRows] = useState<LeaderboardRow[]>([])
-  const [mode, setMode] = useState<LeaderboardMode>('local')
+  // 조회는 등록 이후에만 돈다(enabled=submitted). 훅은 리더보드 페이지와 같은 것을 쓴다 —
+  // 정렬 기준·폴백 처리가 두 화면에서 갈라지지 않게 하는 유일한 방법이다.
+  const board = useLeaderboard(10, submitted)
 
   // computeScore는 순수 함수 — 기록/엔딩 변화 시에만 재계산.
   const breakdown = useMemo<ScoreBreakdown | null>(
@@ -220,11 +185,11 @@ export function EndingScreen({ onRestart }: { onRestart(): void }) {
   useEffect(() => {
     if (!ending) return
     let alive = true
-    narrate('epilogue', {
-      reached: ending.reached,
-      champion: ending.champion,
-      records: records.map(r => ({ stage: r.stage, opponent: r.opponentId, score: r.score, shootout: r.shootout })),
-    })
+    // 기자회견 헤드라인과 같은 결함이 여기에도 있었다: `score: [2,5]`와 코드값 opponentId만
+    // 넘기면 어느 칸이 우리 득점인지가 데이터에 없다. 캠페인 요약은 8경기를 한꺼번에 다루므로
+    // 뒤집히면 여정 전체가 거짓말이 된다 — describeCampaign이 경기별 승패와 통산 전적,
+    // 도달 단계·우승 여부를 판정해서 한국어 필드로 넘긴다.
+    narrate('epilogue', describeCampaign(records, ending))
       .then(text => {
         if (!alive || !text) return
         const lines = text.split('\n').map(s => s.trim()).filter(Boolean)
@@ -250,15 +215,13 @@ export function EndingScreen({ onRestart }: { onRestart(): void }) {
   const diff = t.gf - t.ga
   const diffLabel = diff > 0 ? `+${diff}` : `${diff}`
 
+  // 등록만 여기서 하고, 조회는 useLeaderboard가 맡는다(submitted가 true가 되면 스스로 돈다).
   async function handleSubmit() {
     if (busy || submitted || !breakdown) return
     setBusy(true)
     const nick = sanitizeNickname(nickname)
     setMyNick(nick)
     await submitScore(nick, breakdown)
-    const res = await topScores(10)
-    setRows(res.rows)
-    setMode(res.mode)
     setSubmitted(true)
     setBusy(false)
   }
@@ -278,6 +241,13 @@ export function EndingScreen({ onRestart }: { onRestart(): void }) {
             총점 <span className="num">{breakdown.total}</span>점 ·{' '}
             {ending.champion ? '우승' : STAGE_LABEL[ending.reached]}
           </span>
+          {/* 순서: [리더보드] [처음부터]. 주 CTA(처음부터)를 오른쪽 끝에 두는 규칙은
+              다른 화면과 같고, 리더보드는 그 옆의 보조 행동이다. */}
+          {onLeaderboard && (
+            <button type="button" className="btn btn--secondary btn--lg" onClick={onLeaderboard}>
+              리더보드 보러가기
+            </button>
+          )}
           <button type="button" className="btn btn--primary btn--lg" onClick={onRestart}>
             처음부터
           </button>
@@ -308,6 +278,66 @@ export function EndingScreen({ onRestart }: { onRestart(): void }) {
             </div>
           </dl>
         </div>
+      </section>
+
+      {/* 리더보드 — **히어로 바로 아래, 2열 본문보다 위**다(2026-08-02).
+          예전에는 오른쪽 열의 맨 끝(시드 카드 다음)에 있었고, 실제 플레이에서 유저가
+          닉네임 입력창을 발견하지 못했다. 스크롤 한참 아래에 파묻혀 있었기 때문이다.
+          리더보드 등록은 이 게임의 재도전 동기이므로 엔딩에 들어오자마자 보여야 한다.
+          여정·점수 상세는 "읽을거리"라 아래로 내려가도 손해가 없다. */}
+      <section className="section end-board-panel" aria-label="리더보드">
+        <div className="section__head">
+          <h2 className="section__title">리더보드</h2>
+          {submitted && board.status === 'ready' && board.mode === 'local' && (
+            <span className="badge end-board__badge">이 기기 기록</span>
+          )}
+        </div>
+
+        {!submitted ? (
+          <>
+            <p className="end-submit__lede">
+              닉네임을 남기면 총점 <span className="num">{breakdown.total}</span>점이 순위표에 오른다.
+            </p>
+            <div className="end-submit">
+              <input
+                className="end-nick"
+                type="text"
+                value={nickname}
+                onChange={e => setNickname(e.target.value)}
+                placeholder="닉네임 (2~12자, 미입력 시 익명 감독)"
+                maxLength={12}
+                aria-label="닉네임"
+              />
+              <button
+                type="button"
+                className="btn btn--primary end-register"
+                onClick={handleSubmit}
+                disabled={busy}
+              >
+                {busy ? '등록 중…' : '기록 등록'}
+              </button>
+            </div>
+          </>
+        ) : (
+          <div className="end-board">
+            <h3 className="end-board__title">리더보드 TOP 10</h3>
+            {/* 목록·로딩·비어있음·실패는 전부 공용 컴포넌트가 그린다(리더보드 페이지와 동일). */}
+            <LeaderboardBoard
+              state={board}
+              highlight={r => r.nickname === myNick && r.total === breakdown.total}
+              emptyText="아직 등록된 기록이 없습니다. 방금 등록한 기록이 곧 반영됩니다."
+            />
+            {onLeaderboard && (
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm end-board__more"
+                onClick={onLeaderboard}
+              >
+                전체 순위 보기 →
+              </button>
+            )}
+          </div>
+        )}
       </section>
 
       <div className="end-cols">
@@ -358,60 +388,6 @@ export function EndingScreen({ onRestart }: { onRestart(): void }) {
             </table>
           </section>
 
-          <SeedCard seed={seed} />
-
-          <section className="section" aria-label="리더보드">
-            <div className="section__head">
-              <h2 className="section__title">리더보드</h2>
-              {submitted && mode === 'local' && (
-                <span className="badge end-board__badge">이 기기 기록</span>
-              )}
-            </div>
-
-            {!submitted ? (
-              <div className="end-submit">
-                <input
-                  className="end-nick"
-                  type="text"
-                  value={nickname}
-                  onChange={e => setNickname(e.target.value)}
-                  placeholder="닉네임 (2~12자, 미입력 시 익명 감독)"
-                  maxLength={12}
-                  aria-label="닉네임"
-                />
-                <button
-                  type="button"
-                  className="btn btn--secondary end-register"
-                  onClick={handleSubmit}
-                  disabled={busy}
-                >
-                  {busy ? '등록 중…' : '기록 등록'}
-                </button>
-              </div>
-            ) : (
-              <div className="end-board">
-                <h3 className="end-board__title">리더보드 TOP 10</h3>
-                <ol className="end-board__list">
-                  {rows.map((r, i) => {
-                    const mine = r.nickname === myNick && r.total === breakdown.total
-                    return (
-                      <li
-                        key={`${r.nickname}-${r.total}-${i}`}
-                        className={`end-board__row${mine ? ' end-board__row--me' : ''}`}
-                      >
-                        <span className="end-board__rank num">{i + 1}</span>
-                        <span className="end-board__nick">{r.nickname}</span>
-                        <span className="end-board__reached">
-                          {r.champion ? '우승' : STAGE_LABEL[r.reached]}
-                        </span>
-                        <span className="end-board__pts num">{r.total}</span>
-                      </li>
-                    )
-                  })}
-                </ol>
-              </div>
-            )}
-          </section>
         </div>
       </div>
     </AppShell>

@@ -150,8 +150,23 @@ describe('campaignStore — 캠페인을 통과하는 징계 흐름', () => {
     expect(s().startingMorale('none')).toBe(MORALE_BASELINE)
     s().recordResult([1, 0], {}, undefined, [], { moraleByPlayer: { hi: 100, lo: 40 } })
     // 100 → 70 + 30*0.3 = 79 / 40 → 70 - 30*0.3 = 61
-    expect(s().startingMorale('hi')).toBeCloseTo(79, 6)
-    expect(s().startingMorale('lo')).toBeCloseTo(61, 6)
+    expect(s().startingMorale('hi')).toBe(79)
+    expect(s().startingMorale('lo')).toBe(61)
+  })
+
+  // 감사 결함 ④: ×0.3이 만든 소수가 저장값에 눌어붙어 "사기가 4.999999999999 올랐습니다"로 샜다.
+  it('이월 사기는 언제나 정수다 — ×0.3이 소수를 남기지 않는다', () => {
+    const s = () => useCampaignStore.getState()
+    s().recordResult([1, 0], {}, undefined, [], {
+      moraleByPlayer: { a: 71, b: 73, c: 88, d: 33, e: 0, f: 100 },
+    })
+    for (const id of ['a', 'b', 'c', 'd', 'e', 'f']) {
+      expect(Number.isInteger(s().startingMorale(id))).toBe(true)
+    }
+    // 71 → 70 + 0.3 = 70.3 → 70 (반올림 규약: Math.round)
+    expect(s().startingMorale('a')).toBe(70)
+    // 73 → 70 + 0.9 = 70.9 → 71
+    expect(s().startingMorale('b')).toBe(71)
   })
 
   it('reset은 징계·사기 이월을 함께 지운다', () => {

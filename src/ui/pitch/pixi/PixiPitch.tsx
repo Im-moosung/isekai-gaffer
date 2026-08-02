@@ -6,6 +6,7 @@ import { onPitchMask, sequenceOwner } from '../cast'
 import { PitchView } from '../PitchView'
 import { separateDots, tacticalCoords } from '../shape'
 import { endsSwapped } from '../ends'
+import { moodBadge } from '../mood'
 import { layoutLabels, textWidth, type Box, type LabelReq } from '../labels'
 import {
   PITCH_W, PITCH_H, ZOOM, toWorld, clamp, lerp, clampFocus,
@@ -453,7 +454,8 @@ export function PixiPitch(props: PixiPitchProps) {
             dv.label.scale.set((R * 1.15) / 28)
             // 사기 배지(🔥/😰).
             const morale = sideState.moraleByPlayer[slot.playerId]
-            const badge = morale == null ? '' : morale >= 75 ? '🔥' : morale <= 35 ? '😰' : ''
+            // 문턱 정본은 ../mood 하나뿐이다 — 여기서 다시 쓰면 SVG 작전판과 얼굴이 갈라진다.
+            const badge = moodBadge(morale) ?? ''
             if (badge !== dv.lastMood) { dv.mood.text = badge; dv.lastMood = badge }
             dv.mood.visible = !!badge
             if (badge) {

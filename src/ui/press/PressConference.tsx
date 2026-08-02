@@ -8,12 +8,14 @@
 // 내장하므로 최악의 경우에도 3초 뒤 반드시 템플릿으로 진행한다 — "3s 대기 후 진행" 방식.
 // 대기 동안에는 "발표 준비 중" 상태를 표시해 화면이 멈춘 것처럼 보이지 않게 한다.
 import { useMemo, useRef, useState } from 'react'
-import { buildQuestions, buildHeadline } from '../../game/pressconf'
+import { buildQuestions, buildHeadline, describeMatch, contradictsScore } from '../../game/pressconf'
 import type { Headline } from '../../game/pressconf'
 import type { MatchRecord } from '../../game/campaignStore'
 import type { DecisionEntry } from '../../engine/types'
 import { narrate } from '../../ai/aiClient'
 import { useMatchStore } from '../../game/matchStore'
+import { teamNameKo } from '../../data/loader'
+import { PressRoomScene } from './PressRoomScene'
 import '../shell/shell.css'
 import './press.css'
 
@@ -26,13 +28,21 @@ interface Props {
 
 const TONE_LABEL = ['공격적', '겸손', '유머'] as const
 
-// 상대·라운드 한글 표기(계층 격리: pressconf 내부 상수를 끌어오지 않는다).
-// 컨텍스트 스트립 전용 — 미등록 id는 코드 그대로 노출한다.
-const OPPONENT_KO: Record<string, string> = {
-  cze: '체코', mex: '멕시코', rsa: '남아공',
-  ecu: '에콰도르', eng: '잉글랜드', nor: '노르웨이', arg: '아르헨티나', esp: '스페인',
-  can: '캐나다', mar: '모로코', fra: '프랑스',
-}
+// 톤 아이콘 — 시안의 "원형 아이콘 + 문장 + 화살표" 행 구조를 위한 글리프.
+// 아이콘만으로 톤을 알 수는 없다(칼/방패/웃음은 관습이 약하다). 그래서 아이콘은
+// 라벨을 **대체하지 않고** 옆에 선다 — 톤 라벨은 여전히 선택의 유일한 판단 근거다(P-5).
+const TONE_PATH = [
+  // 번개 — 공격적
+  'M13.5 2.5 6 12.5h4.2L9.5 21.5 17 11h-4.2z',
+  // 방패 — 겸손(선수를 감싼다)
+  'M12 2.5 4.5 5.5v6c0 4.6 3.2 8.6 7.5 10 4.3-1.4 7.5-5.4 7.5-10v-6z',
+  // 미소 — 유머
+  'M12 2.8a9.2 9.2 0 1 0 0 18.4 9.2 9.2 0 0 0 0-18.4M8.2 9.4a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6m7.6 0a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0-2.6M7.4 14.2h9.2a4.9 4.9 0 0 1-9.2 0',
+] as const
+
+// 상대 표기는 팀 JSON의 name.ko(정본)에서 읽는다 — teamNameKo(src/data/loader.ts).
+// 예전에는 "계층 격리"를 이유로 이 파일이 자기 표를 복사해 뒀는데, 격리된 것은 의존성이
+// 아니라 진실이었다(표에 없는 id는 코드값이 그대로 화면에 찍혔다).
 const STAGE_KO: Record<string, string> = {
   group1: '조별리그 1차전', group2: '조별리그 2차전', group3: '조별리그 3차전',
   r32: '32강', r16: '16강', qf: '8강', sf: '4강', final: '결승', ended: '여정의 끝',
@@ -78,21 +88,23 @@ export function PressConference({ record, log, teamName, onDone }: Props) {
     doneRef.current = true
     setFinishing(true)
     const template = buildHeadline(record, next, teamName)
+    // 맥락은 **판정이 끝난 사실 카드**로 넘긴다. 예전에는 `score: [2,5]`만 줬고, 어느 칸이
+    // 우리 득점인지가 데이터에 없어 모델이 2-5 패배를 "5-2 대승"으로 뒤집었다.
+    // describeMatch가 승패·양 팀 득점·상대 한글명·스코어 표기를 이름 붙은 필드로 못 박는다.
     const context = {
-      teamName,
-      opponentId: record.opponentId,
-      stage: record.stage,
-      score: record.score,
-      shootout: record.shootout ?? null,
-      answers: next,
+      ...describeMatch(record, teamName),
+      감독_답변: next,
     }
-    // narrate는 내부 3s 타임아웃으로 반드시 종결된다. 실패·null이면 템플릿 title 유지.
+    // narrate는 내부 타임아웃으로 반드시 종결된다. 실패·null이면 템플릿 title 유지.
     const ai = await narrate('headline', context).catch(() => null)
-    const title = ai && ai.trim().length > 0 ? ai.trim() : template.title
+    // 3층 방어선 — 프롬프트를 어기고 없는 스코어를 쓴 헤드라인은 버리고 템플릿으로 돌아간다.
+    // (스코어를 아예 언급하지 않은 정상 헤드라인은 이 검사에 걸리지 않는다.)
+    const safe = ai && !contradictsScore(ai, record) ? ai : null
+    const title = safe && safe.trim().length > 0 ? safe.trim() : template.title
     onDone({ ...template, title })
   }
 
-  const opponent = OPPONENT_KO[record.opponentId] ?? record.opponentId
+  const opponent = teamNameKo(record.opponentId)
   const stage = STAGE_KO[record.stage] ?? record.stage
   const shootout = record.shootout ? ` (승부차기 ${record.shootout[0]}-${record.shootout[1]})` : ''
   const desk = PRESS_DESK[idx % PRESS_DESK.length]

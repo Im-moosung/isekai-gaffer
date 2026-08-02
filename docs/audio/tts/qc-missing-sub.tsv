@@ -1,0 +1,20 @@
+# 교체·개입 반응 조각 — live-corpus에 감독 행동을 넣고 새로 드러난 결손분
+# role	cut	freq	text
+caster	plain	42	자, 골문 옆으로 흐릅니다.
+caster	plain	42	아, 골문 옆으로 흐릅니다.
+caster	plain	42	네, 골문 옆으로 흐릅니다.
+caster	plain	42	그런데, 골문 옆으로 흐릅니다.
+caster	plain	42	여기서, 골문 옆으로 흐릅니다.
+caster	head	16	대한민국이
+caster	head	16	남아프리카공화국이
+caster	head	16	스페인이
+caster	tail	15	교체 투입입니다.
+caster	tail	14	그라운드에 들어섭니다.
+caster	tail	13	벤치가 움직입니다.
+caster	tail	12	교체 카드를 씁니다.
+caster	tail	2	이 선수가 챙겨 갑니다!
+caster	tail	1	골입니다! 연속 실점입니다.
+caster	tail	1	골입니다! 순식간에 두 골입니다.
+caster	tail	1	승부에 쐐기를 박는 골입니다. 연속 실점입니다.
+caster	tail	1	쐐기골입니다. 이제 뒤집기는 어려워 보이네요. 또 들어갔습니다. 수비가 흔들리네요.
+caster	tail	1	해트트릭입니다! 연속 실점입니다.

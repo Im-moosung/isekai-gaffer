@@ -2,6 +2,12 @@
 // 중계 발화 ↔ 화면 사건 **동기 실측** — 실제 Chrome(headless:false)을 몰아
 // `speechSynthesis.speak` 호출 시각과 화면에 결과가 나타난 시각의 차를 잰다.
 //
+// ⚠️ 2026-08-02부터 이 도구는 **아무것도 잡지 못한다.** 중계가 미리 구운 mp3 클립으로만
+//    나가고 `speechSynthesis` 폴백이 사라져(근거: src/audio/commentary-tts.ts 헤더),
+//    후킹 대상 호출 자체가 일어나지 않는다. 아래 pitch 기반 화자 구분(ROLE_PITCH)도
+//    같은 이유로 유물이다 — 이제 화자는 클립 자체가 다르다. 다시 쓰려면 후킹 지점을
+//    `commentary-mp3.playLine`으로 옮겨야 한다(계측 규약은 그대로 쓸 수 있다).
+//
 // 왜 headless가 아닌가: 헤드리스/백그라운드 탭은 rAF·타이머가 스로틀되어 캔버스가
 // 얼어붙고 재생 리듬 자체가 달라진다. 실제 창을 띄우고 **연속 프레임 픽셀 diff**로
 // 진행을 먼저 증명한 뒤에 계측한다(tools/entrance-frame/live.mjs와 같은 규약).

@@ -54,7 +54,8 @@ export const effectiveDefense = (z: { defense: number; midfield: number }) =>
 export function createMatch(home: Team, away: Team, opts: { seed: number; homeTactics?: TacticState; awayTactics?: TacticState; firstHalfScript?: { events: MatchEvent[]; score: [number, number] } }): MatchState {
   const mkSide = (team: Team, tactics?: TacticState): SideState => {
     const staminaByPlayer: Record<string, number> = {}, moraleByPlayer: Record<string, number> = {}
-    team.squad.forEach(p => { staminaByPlayer[p.id] = 100; moraleByPlayer[p.id] = 70 })
+    // 사기 초기값은 기준선 그대로 — 감쇠(applyMoraleDecay)가 여기서부터 90분에 걸쳐 하한 50까지 깎아 내린다.
+    team.squad.forEach(p => { staminaByPlayer[p.id] = 100; moraleByPlayer[p.id] = MORALE_BASELINE })
     return { team, tactics: tactics ?? defaultTactics(team), staminaByPlayer, moraleByPlayer, subsUsed: 0, sentOff: [], sustainedPressMinutes: 0 }
   }
   return {
@@ -289,7 +290,9 @@ function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
 
   // 팀 이해도: 킥오프 플랜의 구조(포메이션·멘탈리티)를 유지하면 소폭 보너스.
   // 하프타임에 전부 갈아엎는 것이 항상 최적이면 킥오프 전 설계가 무의미해지므로, 유지에 값을 붙인다.
-  // UI(PlanBadge)가 "플랜 유지 ✅ 팀 이해도 +3%"로 유저에게 약속하는 수치가 이 값이다.
+  // UI가 "팀 이해도 +3%"로 유저에게 약속하는 수치가 이 값이다 — 그 약속이 적힌 곳은
+  // 작전판의 플랜 대비 패널(ui/tactics/TacticsBoard PlanDiff) 하나다. 예전엔 스코어버그
+  // 옆 PlanBadge도 같은 말을 했지만 상시 참이라 정보량이 0이었다(2026-08-02 폐지).
   if (opts.planIntact) {
     const pi = opts.planIntact === 'home' ? 0 : 1
     fx[pi].chanceQuality *= 1.03
@@ -427,6 +430,159 @@ function simulateMinute(st: MatchState, rng: Rng, opts: SimulateOpts = {}) {
       )
     }
   }
+
+  // 5) 사기 감쇠(단조 감소). 체력 감소 **뒤에** 부른다 — 감쇠 속도와 하한이 갱신된 체력을 읽는다.
+  applyMoraleDecay(st)
+}
+
+// ── 사기 정수화 규약 ────────────────────────────────────────────
+// **저장되는 사기는 언제나 0~100의 정수다.** 표시할 때 toFixed로 가리는 방식은 쓰지 않는다 —
+// 그러면 저장값이 소수인 채로 남아 delta(= 이후값 − 이전값)가 4.999999999999로 새고,
+// 그 값이 다시 다음 경기로 이월되며 오차가 눌어붙는다(실제로 화면에 그렇게 나왔다).
+// 값이 갈라지는 지점 전부 — 초기화·경기 간 이월·감쇠·득점 보너스·팀토크·터치라인 외침 —
+// 에서 이 함수 하나만 통과시킨다. 규약이 한 곳에만 적혀 있어야 새 진입점이 생겨도 샌다는 걸
+// 바로 알 수 있다.
+//   · 반올림은 Math.round로 통일한다(절사·올림을 섞으면 이월이 한쪽으로 편향된다).
+//   · 클램프도 같이 한다 — 0~100 밖의 값이 저장되는 경로를 여기서 전부 막는다.
+/** 사기 정수화 + 0~100 클램프. 사기를 저장하는 모든 경로가 반드시 통과한다. */
+export function normalizeMorale(v: number): number {
+  return Math.max(0, Math.min(100, Math.round(v)))
+}
+
+// ── 사기 감쇠 ───────────────────────────────────────────────────
+// 문제(감사 결함 ③): 사기를 **올리는** 경로는 여럿인데(팀토크 최대 +11, 외침 최대 +6,
+// 득점 +3, 도움 +2) **시간이 지난다는 이유만으로 내려가는** 경로가 하나도 없었다.
+// 한 번 오른 값은 경기가 끝날 때까지 그 자리에 박혀 있었고, 당시 🔥 배지 문턱이 75라
+// 초기값 70에서 두어 번만 올려도 필드 위 11명이 전원 🔥인 화면이 모든 경기에서 나왔다.
+// (배지 문턱은 그 뒤 80으로 올라갔다 — 정본은 ui/pitch/mood.ts 하나다.)
+//
+// ★ 처음 처방은 "기준선 70으로의 **회귀**"였다. 그건 틀린 처방이었다. 사용자의 요구는
+//   원문 그대로 이렇다:
+//     "사기가 올리는 활동은 많은데 내리는 활동이 없으니깐 무조건 모든 게임에서 전부 이렇게
+//      불붙어 있어. **사기는 시간 경과에 따라 조금씩 계속 내려가는 시스템으로 디자인해줘.**"
+//   회귀는 양방향이라 **목표보다 낮은 사기가 시간만으로 저절로 회복**된다. 그러면 "내리는
+//   활동이 없다"는 지적의 반대편이 서지 않는다 — 가라앉은 팀은 감독이 아무것도 안 해도
+//   후반에 스스로 살아나고, 팀토크를 아끼는 쪽이 이득이 된다.
+//   그래서 지금은 **단조 감소**다. 시간 경과는 **오직 내리는 방향으로만** 작동하고, 올리는
+//   것은 감독의 레버(팀토크·터치라인 외침)와 경기 사건(득점 +3, 도움 +2)뿐이다.
+//
+// ★ 이산 스텝인 이유: 사기는 정수 계약(위 normalizeMorale)이라 "매 분 −0.22" 같은 설계가
+//   **불가능**하다. 매 분 반올림하면 0.22는 통째로 사라지고(감쇠가 아예 없는 것과 같다)
+//   누적 실수값을 따로 들면 정수 계약이 깨진다. 그래서 **특정 분에 정확히 1**씩 내린다.
+//
+// ★ 총량과 하한은 사용자가 수치로 확정했다(원문):
+//     "하한선을 50까지 두고, 시간이 지나고 아무것도 안 한 선수는 **90분 뒤에 50까지
+//      내려가는 속도**로 계산해줘. 사기 진작은 감독이 운이 좋고 열심히 하면 **80은 갈 수
+//      있어야 해. 아예 불가능하면 안 돼.**"
+//   → 기준선 70에서 90분에 정확히 −20, 하한 50. 그리고 80은 **도달 가능**해야 한다.
+//
+// ★ `minute % N === 0`을 쓰지 않는 이유: 90분에 20스텝이면 간격이 4.5분인데 정수가 아니다.
+//   4분이면 22스텝(과다), 5분이면 18스텝(부족)이라 어느 쪽도 스펙과 다르다. 그래서 간격이
+//   아니라 **누적 스텝을 분의 함수로** 정의한다 — floor(분 × 20 / 90). 이 값이 직전 분보다
+//   커진 분에만 1 내린다. 간격이 4분과 5분 사이에서 저절로 섞이고, 90분에 정확히 20이 된다.
+//   덤으로 이 방식은 **상태가 없다**(누적 카운터를 들지 않는다) — simulateSegment를 몇 조각으로
+//   쪼개 부르든 같은 분에 같은 스텝이 떨어진다. 시뮬레이션 자체를 건너뛰는 경로(firstHalfScript)는
+//   그 분들을 아예 안 돌리므로 감쇠도 안 걸리지만, 그 경로는 App에서 이미 제거됐다(App.tsx 주석).
+export const MORALE_BASELINE = 70
+
+// 이 속도(4~5분에 1)가 감독의 레버에 매기는 값:
+//   · 팀토크 최대 +11(페이버릿×지는중 격노)은 약 50분에 걸쳐 식는다 — 하프타임에 준 한 방이
+//     종료 휘슬까지 온전히 살아 있지 않다. "한 번 지른 뒤 방치"를 막는 길이다.
+//   · 외침 한 번(+4~6)은 18~27분이면 사라진다 — 쿨다운(SHOUT_COOLDOWN)과 맞물려 사기를
+//     높게 유지하려면 계속 개입해야 한다.
+//   · 득점자 +3은 약 14분이면 평상심으로 돌아온다 — 골의 여운으로 적당한 길이다.
+/** 90분 동안 개입이 없을 때 내려가는 사기 총량(체력이 넉넉한 선수 기준). 70 → 50이 되는 값이다.
+ *  체력이 임계 아래로 떨어진 선수는 이보다 빨리, 더 낮게 간다 — 아래 체력 연동 주석 참조. */
+export const MORALE_TOTAL_DECAY = 20
+/** 감쇠 총량을 배분하는 기준 경기 길이(분). */
+const MORALE_DECAY_SPAN = 90
+
+// ★ 하한 50의 근거(수치). 단조 감소에는 반드시 바닥이 필요하다 — 없으면 0까지 내려가고,
+//   사기는 strength.ts에서 팀 전력에 ×(1 + (평균−70)/100 × 0.20)으로 직접 곱해지므로
+//   평균 0은 −14%다. 90분 내내 개입하지 않았다는 이유로 팀이 반쯤 사라지는 건 과하다.
+//     · 하한 50에서의 전력 대가는 1 + (50−70)/100 × 0.20 = **0.96(−4%)**. 양 팀 모두
+//       같은 방향으로 내려가므로 **상대** 전력 차는 거의 변하지 않고, 캘리브레이션 계약
+//       (동급 ±15% · 실팀 ±25%)에 비해서도 작다. 그래도 팀토크로 되돌릴 값어치는 있다.
+//     · 하한 0이면 −14%로 후반 득점이 통째로 눌린다. 50이 "체감되지만 경기를 망가뜨리지는
+//       않는" 폭이다.
+//   ※ 하한은 **아래로만 막는 벽**이다. 이미 하한보다 낮은 선수(캠페인 이월·팀토크 실패)를
+//     하한까지 끌어올리지 않는다 — 그 순간 단조 감소가 깨진다.
+export const MORALE_FLOOR = 50
+
+// ── 체력 연동 ───────────────────────────────────────────────────
+// 사용자 지시(원문): *"지치면 사기가 더 빨리 떨어지고, **체력이 50 미만이면 하한선 밑으로도
+// 떨어질 수 있게** 하는 건? 자세한 규칙과 숫자는 위임."*
+//
+// 그래서 위의 "90분에 −20, 하한 50"은 **체력이 넉넉한 선수의 기준 궤적**으로 읽는다.
+// 지친 선수는 그 뼈대에서 두 가지가 더 나빠진다.
+//
+//  ① **속도**: 체력이 임계(50) 아래면 같은 스텝에 1이 아니라 2를 내린다.
+//     2배로 고른 이유 — 실제 90분 풀타임 주전은 대략 70분대에 체력 50을 지난다. 남은 스텝이
+//     4~5개뿐이라 계수가 1.5면 반올림에 먹혀 차이가 안 보이고, 3이면 마지막 15분에만 −15가
+//     들어가 하한을 어떤 체력에서도 즉시 뚫는다(체감이 아니라 절벽이 된다). 2배는 "막판에
+//     눈에 띄게 더 가라앉지만 무너지지는 않는" 폭이다.
+//     ※ 회귀 시절에는 속도를 못 건드렸다 — 회귀는 양방향이라 속도를 올리면 지친 선수의
+//       사기가 더 빨리 **오르기도** 했다. 단조 감소에는 올라가는 방향이 없어 부작용이 없다.
+//
+//  ② **바닥**: 체력 50 미만이면 하한 자체가 내려간다. 체력 4점마다 −1, 최대 −10.
+//     즉 절대 하한은 **40**(체력 10 이하). 근거는 밸런스 산수다 —
+//       · 전원이 40이면 moraleFactor = 1 + (40−70)/100 × 0.20 = **0.94(−6%)**.
+//         하한 50(−4%)에서 2%p 더 내려가는 정도라 캘리브레이션 계약(동급 ±15% · 실팀 ±25%)
+//         안에 들어간다. 게다가 11명 전원이 체력 10 이하로 끝나는 경기는 사실상 없다 —
+//         실제 팀 평균은 45~48 근처(−4.4~−5%)다.
+//       · 30까지 열면 −8%, 0까지 열면 −14%로 후반 공격이 통째로 눌린다. 40이 "체력 관리를
+//         못 하면 손해가 보이지만 경기가 망가지지는 않는" 선이다.
+//       · 4점당 1인 이유: 체력 50→10의 40점 구간을 10칸으로 나눈 값이다. 한 계단이 사기 1이라
+//         정수 계약과도 맞고, 계단이 촘촘해 특정 체력에서 절벽이 생기지 않는다.
+/** 이 체력 아래면 감쇠가 빨라지고 하한도 내려간다. */
+const MORALE_FATIGUE_THRESHOLD = 50
+/** 지친 선수가 한 스텝에 내려가는 양(기본 1의 2배). */
+const MORALE_FATIGUE_STEP = 2
+/** 하한이 1 내려가는 체력 폭. */
+const MORALE_FATIGUE_FLOOR_STEP = 4
+/** 하한이 기준 하한(50)에서 내려갈 수 있는 최대치 → 절대 하한 40. */
+const MORALE_FATIGUE_FLOOR_MAX = 10
+
+/** 경기 시작(0분)부터 이 분까지 누적된 감쇠 스텝 수. 90분에 정확히 MORALE_TOTAL_DECAY다. */
+export function moraleDecaySteps(minute: number): number {
+  return Math.floor(Math.max(0, minute) * MORALE_TOTAL_DECAY / MORALE_DECAY_SPAN)
+}
+
+/** 한 감쇠 스텝에 내려가는 사기(정수). 체력이 임계(50) 아래면 2, 아니면 1. */
+export function moraleDecayAmount(stamina: number): number {
+  return stamina < MORALE_FATIGUE_THRESHOLD ? MORALE_FATIGUE_STEP : 1
+}
+
+/** 이 체력에서의 사기 하한(정수). 체력 50 이상이면 50, 체력 10 이하면 절대 하한 40이다. */
+export function moraleFloor(stamina: number): number {
+  if (stamina >= MORALE_FATIGUE_THRESHOLD) return MORALE_FLOOR
+  const drop = Math.min(
+    MORALE_FATIGUE_FLOOR_MAX,
+    Math.floor((MORALE_FATIGUE_THRESHOLD - stamina) / MORALE_FATIGUE_FLOOR_STEP),
+  )
+  return MORALE_FLOOR - drop
+}
+
+/** 감쇠 스텝이 발생하는 분마다 **필드 위 선수**의 사기를 내린다. 절대 올리지 않는다(단조 감소).
+ *  · 난수를 쓰지 않는다 — 분 파생 RNG 스트림을 한 톨도 소비하지 않으므로 시드 결정론이 유지된다.
+ *  · 벤치는 건드리지 않는다. 뛰지 않는 선수의 사기가 시간만으로 식을 이유가 없고,
+ *    교체 투입 직후 곧바로 감쇠에 노출되는 것도 이상하다.
+ *  · 이미 자기 하한 이하인 선수는 손대지 않는다 — 하한까지 **끌어올리면** 단조가 깨진다.
+ *  · 90분을 넘는 구간(추가시간·연장)에서도 같은 속도로 계속 내려간다. 하한이 있으므로
+ *    더 깊이 가라앉지 않고, "시간이 지나면 내려간다"는 규칙에 예외를 두지 않는 편이 낫다. */
+function applyMoraleDecay(st: MatchState) {
+  if (moraleDecaySteps(st.minute) === moraleDecaySteps(st.minute - 1)) return
+  for (const side of [st.home, st.away]) {
+    for (const { playerId } of side.tactics.lineup) {
+      if (side.sentOff.includes(playerId)) continue
+      const cur = side.moraleByPlayer[playerId]
+      if (cur == null) continue
+      const stamina = side.staminaByPlayer[playerId] ?? 100
+      const floor = moraleFloor(stamina)
+      if (cur <= floor) continue
+      side.moraleByPlayer[playerId] = normalizeMorale(Math.max(floor, cur - moraleDecayAmount(stamina)))
+    }
+  }
 }
 
 // ── 스코어와 사기 ───────────────────────────────────────────────
@@ -467,11 +623,12 @@ const ASSIST_MORALE = 2
 /** 득점 직후 득점자·도움 개인 사기 갱신. 팀 전체 사기는 건드리지 않는다(위 주석). */
 function applyGoalMorale(st: MatchState, atkIdx: 0 | 1, scorerId?: string, assistId?: string) {
   const atk = atkIdx === 0 ? st.home : st.away
+  // normalizeMorale로 통과시킨다(정수화 규약) — clamp만 하면 이월된 소수값이 그대로 남는다.
   if (scorerId && scorerId in atk.moraleByPlayer) {
-    atk.moraleByPlayer[scorerId] = clamp(atk.moraleByPlayer[scorerId] + SCORER_MORALE, 0, 100)
+    atk.moraleByPlayer[scorerId] = normalizeMorale(atk.moraleByPlayer[scorerId] + SCORER_MORALE)
   }
   if (assistId && assistId in atk.moraleByPlayer) {
-    atk.moraleByPlayer[assistId] = clamp(atk.moraleByPlayer[assistId] + ASSIST_MORALE, 0, 100)
+    atk.moraleByPlayer[assistId] = normalizeMorale(atk.moraleByPlayer[assistId] + ASSIST_MORALE)
   }
 }
 

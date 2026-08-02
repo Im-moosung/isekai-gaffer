@@ -1,3099 +1,2955 @@
 {
  "seeds": 24,
  "ratio": 0.7,
- "totalUtter": 11093,
- "avgSeams": 0.6581628053727576,
+ "totalUtter": 10890,
+ "avgSeams": 0.6253443526170799,
  "coverage": 1,
  "clips": [
   {
    "role": "caster",
    "text": "김승규,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "김민재,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "이한범,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "김태현,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "설영우,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "백승호,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "손흥민,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "이재성,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "이강인,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "오현규,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "황인범,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "조현우,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "송범근,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "박진섭,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "조위제,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "이태석,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "김문환,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "옌스 카스트로프,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "이기혁,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "엄지성,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "배준호,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "양현준,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "황희찬,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "조규성,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "김진규,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "이동경,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "마테이 코바르시,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "다비트 지마,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "로빈 흐라나치,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "라디슬라프 크레이치,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "루카시 프로보트,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "토마시 소우체크,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "미할 사딜레크,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "블라디미르 다리다,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "데니스 비신스키,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "파트리크 시크,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "아담 흘로제크,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "라울 랑헬,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "세사르 몬테스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "요한 바스케스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "헤수스 가야르도,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "호르헤 산체스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "에드손 알바레스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "루이스 로모,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "오베드 바르가스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "알렉시스 베가,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "훌리안 키뇨네스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "라울 히메네스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "로웬 윌리엄스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "은코시나티 시비시,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "음베케젤리 음보카지,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "오브리 모디바,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "쿨리소 무다우,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "스페펠로 시톨레,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "탈렌테 음바타,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "체팡 모레미,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "렐레보힐레 모포켕,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "오스윈 아폴리스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "타펠로 마세코,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "에르난 갈린데스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "피에로 인카피에,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "윌리안 파초,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "페르비스 에스투피냔,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "앙헬로 프레시아도,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "모이세스 카이세도,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "조르디 알시바르,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "닐손 앙굴로,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "켄드리 파에스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "곤살로 플라타,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "에네르 발렌시아,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "데인 세인트클레어,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "데릭 코넬리우스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "모이즈 봄비토,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "알폰소 데이비스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "앨리스테어 존스턴,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "이스마엘 코네,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "스티븐 에우스타키우,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "제이컵 섀펠버그,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "조너선 오소리오,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "타종 뷰캐넌,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "조너선 데이비드,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "조던 픽포드,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "존 스톤스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "마크 게이,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "니코 오라일리,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "리스 제임스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "데클란 라이스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "엘리엇 앤더슨,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "마커스 래시퍼드,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "주드 벨링엄,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "부카요 사카,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "해리 케인,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "외르얀 뉠란,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "크리스토페르 아예르,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "레오 외스티고르,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "다비드 묄레르 볼페,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "율리안 뤼에르손,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "파트리크 베르그,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "안토니오 누사,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "산데르 베르게,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "프레드리크 아우르스네스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "오스카르 보브,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "엘링 홀란,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "에밀리아노 마르티네스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "크리스티안 로메로,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "리산드로 마르티네스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "니콜라스 타글리아피코,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "나우엘 몰리나,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "레안드로 파레데스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "알렉시스 맥 알리스터,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "엔소 페르난데스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "니콜라스 곤살레스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "리오넬 메시,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "훌리안 알바레스,",
    "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "야신 부누,",
-   "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "이사 디오프,",
-   "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "샤디 리아드,",
-   "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "아나스 살라흐에딘,",
-   "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "아슈라프 하키미,",
-   "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "소피안 암라바트,",
-   "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "아제딘 우나히,",
-   "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "네일 엘 아이나위,",
-   "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "아민 스바이,",
-   "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "셈스딘 탈비,",
-   "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "수피안 라히미,",
-   "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "마이크 메냥,",
-   "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "윌리앙 살리바,",
-   "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "다요 우파메카노,",
-   "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "테오 에르난데스,",
-   "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "쥘 쿤데,",
-   "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "오렐리앵 추아메니,",
-   "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "아드리앵 라비오,",
-   "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "바랑 자이르에메리,",
-   "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "브래들리 바르콜라,",
-   "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "우스만 뎀벨레,",
-   "cut": "head",
-   "freq": 3201
-  },
-  {
-   "role": "caster",
-   "text": "킬리안 음바페,",
-   "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "우나이 시몬,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "아이메릭 라포르트,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "파우 쿠바르시,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "마르크 쿠쿠레야,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "마르코스 요렌테,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "로드리,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "마르틴 수비멘디,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "니코 윌리엄스,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "다니 올모,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "라민 야말,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "미켈 오야르사발,",
    "cut": "head",
-   "freq": 3201
+   "freq": 3018
   },
   {
    "role": "caster",
-   "text": "아,",
+   "text": "야신 부누,",
    "cut": "head",
-   "freq": 1462
+   "freq": 3018
+  },
+  {
+   "role": "caster",
+   "text": "이사 디오프,",
+   "cut": "head",
+   "freq": 3018
+  },
+  {
+   "role": "caster",
+   "text": "샤디 리아드,",
+   "cut": "head",
+   "freq": 3018
+  },
+  {
+   "role": "caster",
+   "text": "아나스 살라흐에딘,",
+   "cut": "head",
+   "freq": 3018
+  },
+  {
+   "role": "caster",
+   "text": "아슈라프 하키미,",
+   "cut": "head",
+   "freq": 3018
+  },
+  {
+   "role": "caster",
+   "text": "소피안 암라바트,",
+   "cut": "head",
+   "freq": 3018
+  },
+  {
+   "role": "caster",
+   "text": "아제딘 우나히,",
+   "cut": "head",
+   "freq": 3018
+  },
+  {
+   "role": "caster",
+   "text": "네일 엘 아이나위,",
+   "cut": "head",
+   "freq": 3018
+  },
+  {
+   "role": "caster",
+   "text": "아민 스바이,",
+   "cut": "head",
+   "freq": 3018
+  },
+  {
+   "role": "caster",
+   "text": "셈스딘 탈비,",
+   "cut": "head",
+   "freq": 3018
+  },
+  {
+   "role": "caster",
+   "text": "수피안 라히미,",
+   "cut": "head",
+   "freq": 3018
+  },
+  {
+   "role": "caster",
+   "text": "마이크 메냥,",
+   "cut": "head",
+   "freq": 3018
+  },
+  {
+   "role": "caster",
+   "text": "윌리앙 살리바,",
+   "cut": "head",
+   "freq": 3018
+  },
+  {
+   "role": "caster",
+   "text": "다요 우파메카노,",
+   "cut": "head",
+   "freq": 3018
+  },
+  {
+   "role": "caster",
+   "text": "테오 에르난데스,",
+   "cut": "head",
+   "freq": 3018
+  },
+  {
+   "role": "caster",
+   "text": "쥘 쿤데,",
+   "cut": "head",
+   "freq": 3018
+  },
+  {
+   "role": "caster",
+   "text": "오렐리앵 추아메니,",
+   "cut": "head",
+   "freq": 3018
+  },
+  {
+   "role": "caster",
+   "text": "아드리앵 라비오,",
+   "cut": "head",
+   "freq": 3018
+  },
+  {
+   "role": "caster",
+   "text": "바랑 자이르에메리,",
+   "cut": "head",
+   "freq": 3018
+  },
+  {
+   "role": "caster",
+   "text": "브래들리 바르콜라,",
+   "cut": "head",
+   "freq": 3018
+  },
+  {
+   "role": "caster",
+   "text": "우스만 뎀벨레,",
+   "cut": "head",
+   "freq": 3018
+  },
+  {
+   "role": "caster",
+   "text": "킬리안 음바페,",
+   "cut": "head",
+   "freq": 3018
   },
   {
    "role": "caster",
    "text": "전반 1분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 2분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 3분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 4분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 5분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 6분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 7분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 8분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 9분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 10분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 11분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 12분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 13분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 14분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 15분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 16분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 17분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 18분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 19분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 20분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 21분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 22분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 23분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 24분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 25분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 26분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 27분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 28분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 29분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 30분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 31분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 32분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 33분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 34분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 35분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 36분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 37분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 38분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 39분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 40분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 41분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 42분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 43분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 44분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "전반 45분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 46분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 47분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 48분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 49분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 50분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 51분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 52분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 53분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 54분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 55분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 56분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 57분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 58분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 59분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 60분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 61분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 62분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 63분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 64분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 65분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 66분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 67분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 68분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 69분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 70분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 71분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 72분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 73분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 74분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 75분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 76분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 77분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 78분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 79분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 80분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 81분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 82분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 83분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 84분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 85분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 86분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 87분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 88분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 89분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 90분,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
   },
   {
    "role": "caster",
    "text": "후반 추가시간,",
    "cut": "head",
-   "freq": 1449
+   "freq": 1353
+  },
+  {
+   "role": "caster",
+   "text": "아,",
+   "cut": "head",
+   "freq": 1318
   },
   {
    "role": "caster",
    "text": "자,",
    "cut": "head",
-   "freq": 1438
+   "freq": 1297
   },
   {
    "role": "caster",
    "text": "네,",
    "cut": "head",
-   "freq": 1438
+   "freq": 1297
   },
   {
    "role": "caster",
    "text": "그런데,",
    "cut": "head",
-   "freq": 1438
+   "freq": 1297
   },
   {
    "role": "caster",
    "text": "여기서,",
    "cut": "head",
-   "freq": 1438
+   "freq": 1297
   },
   {
    "role": "caster",
    "text": "상대를 넘어뜨립니다.",
    "cut": "tail",
-   "freq": 368
+   "freq": 343
   },
   {
    "role": "caster",
    "text": "대한민국 진영에서 반칙이 나옵니다.",
    "cut": "plain",
-   "freq": 354
+   "freq": 330
   },
   {
    "role": "caster",
    "text": "체코 진영에서 반칙이 나옵니다.",
    "cut": "plain",
-   "freq": 354
+   "freq": 330
   },
   {
    "role": "caster",
    "text": "멕시코 진영에서 반칙이 나옵니다.",
    "cut": "plain",
-   "freq": 354
+   "freq": 330
   },
   {
    "role": "caster",
    "text": "남아프리카공화국 진영에서 반칙이 나옵니다.",
    "cut": "plain",
-   "freq": 354
+   "freq": 330
   },
   {
    "role": "caster",
    "text": "에콰도르 진영에서 반칙이 나옵니다.",
    "cut": "plain",
-   "freq": 354
+   "freq": 330
   },
   {
    "role": "caster",
    "text": "잉글랜드 진영에서 반칙이 나옵니다.",
    "cut": "plain",
-   "freq": 354
+   "freq": 330
   },
   {
    "role": "caster",
    "text": "노르웨이 진영에서 반칙이 나옵니다.",
    "cut": "plain",
-   "freq": 354
+   "freq": 330
   },
   {
    "role": "caster",
    "text": "아르헨티나 진영에서 반칙이 나옵니다.",
    "cut": "plain",
-   "freq": 354
+   "freq": 330
   },
   {
    "role": "caster",
    "text": "스페인 진영에서 반칙이 나옵니다.",
    "cut": "plain",
-   "freq": 354
+   "freq": 330
   },
   {
    "role": "caster",
    "text": "캐나다 진영에서 반칙이 나옵니다.",
    "cut": "plain",
-   "freq": 354
+   "freq": 330
   },
   {
    "role": "caster",
    "text": "모로코 진영에서 반칙이 나옵니다.",
    "cut": "plain",
-   "freq": 354
+   "freq": 330
   },
   {
    "role": "caster",
    "text": "프랑스 진영에서 반칙이 나옵니다.",
    "cut": "plain",
-   "freq": 354
-  },
-  {
-   "role": "caster",
-   "text": "늦게 들어갔습니다.",
-   "cut": "tail",
-   "freq": 350
+   "freq": 330
   },
   {
    "role": "caster",
    "text": "반칙입니다. 흐름이 끊깁니다.",
    "cut": "tail",
-   "freq": 344
+   "freq": 330
   },
   {
-   "role": "analyst",
-   "text": "이런 게 쌓이면 후회로 남습니다.",
-   "cut": "plain",
-   "freq": 308
-  },
-  {
-   "role": "analyst",
-   "text": "네, 슛 선택은 맞았습니다.",
-   "cut": "plain",
-   "freq": 308
-  },
-  {
-   "role": "analyst",
-   "text": "급했습니다. 한 박자만 참았으면요.",
-   "cut": "plain",
-   "freq": 298
-  },
-  {
-   "role": "analyst",
-   "text": "네, 이런 선방이 승점을 지킵니다.",
-   "cut": "plain",
-   "freq": 298
-  },
-  {
-   "role": "analyst",
-   "text": "조금만 더 눕혀 찼으면 좋았을 텐데요.",
-   "cut": "plain",
-   "freq": 296
-  },
-  {
-   "role": "analyst",
-   "text": "골키퍼, 자리 선정이 좋았습니다.",
-   "cut": "plain",
-   "freq": 288
-  },
-  {
-   "role": "analyst",
-   "text": "각을 좁힌 게 컸어요.",
-   "cut": "plain",
-   "freq": 286
-  },
-  {
-   "role": "analyst",
-   "text": "이런 장면 하나가 수비를 편하게 하죠.",
-   "cut": "plain",
-   "freq": 282
+   "role": "caster",
+   "text": "늦게 들어갔습니다.",
+   "cut": "tail",
+   "freq": 325
   },
   {
    "role": "caster",
    "text": "주심, 휘슬을 붑니다.",
    "cut": "plain",
-   "freq": 270
+   "freq": 251
   },
   {
    "role": "caster",
    "text": "파울입니다.",
    "cut": "plain",
-   "freq": 261
+   "freq": 245
+  },
+  {
+   "role": "analyst",
+   "text": "이런 게 쌓이면 후회로 남습니다.",
+   "cut": "plain",
+   "freq": 218
   },
   {
    "role": "caster",
    "text": "조금 높았죠.",
    "cut": "tail",
-   "freq": 214
+   "freq": 203
   },
   {
-   "role": "caster",
-   "text": "슛이 골문을 벗어납니다.",
-   "cut": "tail",
-   "freq": 210
+   "role": "analyst",
+   "text": "조금만 더 눕혀 찼으면 좋았을 텐데요.",
+   "cut": "plain",
+   "freq": 198
+  },
+  {
+   "role": "analyst",
+   "text": "이런 장면 하나가 수비를 편하게 하죠.",
+   "cut": "plain",
+   "freq": 198
   },
   {
    "role": "caster",
    "text": "고개를 떨굽니다.",
    "cut": "tail",
-   "freq": 208
+   "freq": 194
   },
   {
-   "role": "caster",
-   "text": "반칙이 잦네요.",
-   "cut": "tail",
-   "freq": 205
-  },
-  {
-   "role": "caster",
-   "text": "마무리가 아쉽습니다.",
-   "cut": "tail",
-   "freq": 204
-  },
-  {
-   "role": "caster",
-   "text": "골문 옆으로 흐릅니다.",
+   "role": "analyst",
+   "text": "네, 이런 선방이 승점을 지킵니다.",
    "cut": "plain",
-   "freq": 201
+   "freq": 192
   },
   {
    "role": "caster",
    "text": "오늘 벌써 첫 번째 파울입니다. 카드가 나올 수 있어요.",
    "cut": "tail",
-   "freq": 194
+   "freq": 191
   },
   {
    "role": "caster",
    "text": "오늘 벌써 두 번째 파울입니다. 카드가 나올 수 있어요.",
    "cut": "tail",
-   "freq": 194
+   "freq": 191
   },
   {
    "role": "caster",
    "text": "오늘 벌써 세 번째 파울입니다. 카드가 나올 수 있어요.",
    "cut": "tail",
-   "freq": 194
+   "freq": 191
   },
   {
    "role": "caster",
    "text": "오늘 벌써 네 번째 파울입니다. 카드가 나올 수 있어요.",
    "cut": "tail",
-   "freq": 194
+   "freq": 191
   },
   {
    "role": "caster",
    "text": "오늘 벌써 다섯 번째 파울입니다. 카드가 나올 수 있어요.",
    "cut": "tail",
-   "freq": 194
+   "freq": 191
   },
   {
    "role": "caster",
    "text": "오늘 벌써 여섯 번째 파울입니다. 카드가 나올 수 있어요.",
    "cut": "tail",
-   "freq": 194
+   "freq": 191
   },
   {
    "role": "caster",
    "text": "오늘 벌써 일곱 번째 파울입니다. 카드가 나올 수 있어요.",
    "cut": "tail",
-   "freq": 194
+   "freq": 191
   },
   {
    "role": "caster",
    "text": "오늘 벌써 여덟 번째 파울입니다. 카드가 나올 수 있어요.",
    "cut": "tail",
-   "freq": 194
+   "freq": 191
   },
   {
    "role": "caster",
    "text": "오늘 벌써 아홉 번째 파울입니다. 카드가 나올 수 있어요.",
    "cut": "tail",
-   "freq": 194
+   "freq": 191
   },
   {
    "role": "caster",
    "text": "오늘 벌써 열 번째 파울입니다. 카드가 나올 수 있어요.",
    "cut": "tail",
-   "freq": 194
+   "freq": 191
   },
   {
    "role": "caster",
    "text": "오늘 벌써 여러 번째 파울입니다. 카드가 나올 수 있어요.",
    "cut": "tail",
-   "freq": 194
+   "freq": 191
   },
   {
-   "role": "caster",
-   "text": "오늘 첫 번째 선방입니다.",
-   "cut": "tail",
-   "freq": 168
-  },
-  {
-   "role": "caster",
-   "text": "오늘 두 번째 선방입니다.",
-   "cut": "tail",
-   "freq": 168
-  },
-  {
-   "role": "caster",
-   "text": "오늘 세 번째 선방입니다.",
-   "cut": "tail",
-   "freq": 168
-  },
-  {
-   "role": "caster",
-   "text": "오늘 네 번째 선방입니다.",
-   "cut": "tail",
-   "freq": 168
-  },
-  {
-   "role": "caster",
-   "text": "오늘 다섯 번째 선방입니다.",
-   "cut": "tail",
-   "freq": 168
-  },
-  {
-   "role": "caster",
-   "text": "오늘 여섯 번째 선방입니다.",
-   "cut": "tail",
-   "freq": 168
-  },
-  {
-   "role": "caster",
-   "text": "오늘 일곱 번째 선방입니다.",
-   "cut": "tail",
-   "freq": 168
-  },
-  {
-   "role": "caster",
-   "text": "오늘 여덟 번째 선방입니다.",
-   "cut": "tail",
-   "freq": 168
-  },
-  {
-   "role": "caster",
-   "text": "오늘 아홉 번째 선방입니다.",
-   "cut": "tail",
-   "freq": 168
-  },
-  {
-   "role": "caster",
-   "text": "오늘 열 번째 선방입니다.",
-   "cut": "tail",
-   "freq": 168
-  },
-  {
-   "role": "caster",
-   "text": "오늘 여러 번째 선방입니다.",
-   "cut": "tail",
-   "freq": 168
-  },
-  {
-   "role": "caster",
-   "text": "또 막아냅니다!",
+   "role": "analyst",
+   "text": "각을 좁힌 게 컸어요.",
    "cut": "plain",
-   "freq": 162
+   "freq": 190
+  },
+  {
+   "role": "analyst",
+   "text": "네, 슛 선택은 맞았습니다.",
+   "cut": "plain",
+   "freq": 188
+  },
+  {
+   "role": "caster",
+   "text": "마무리가 아쉽습니다.",
+   "cut": "tail",
+   "freq": 187
   },
   {
    "role": "caster",
    "text": "또",
    "cut": "head",
-   "freq": 162
+   "freq": 184
   },
   {
    "role": "caster",
-   "text": "이번에도 막습니다!",
-   "cut": "plain",
-   "freq": 157
-  },
-  {
-   "role": "caster",
-   "text": "연속 선방!",
-   "cut": "head",
-   "freq": 154
-  },
-  {
-   "role": "caster",
-   "text": "벽입니다!",
+   "text": "반칙이 잦네요.",
    "cut": "tail",
-   "freq": 154
+   "freq": 184
+  },
+  {
+   "role": "caster",
+   "text": "슛이 골문을 벗어납니다.",
+   "cut": "tail",
+   "freq": 181
+  },
+  {
+   "role": "analyst",
+   "text": "급했습니다. 한 박자만 참았으면요.",
+   "cut": "plain",
+   "freq": 180
+  },
+  {
+   "role": "analyst",
+   "text": "골키퍼, 자리 선정이 좋았습니다.",
+   "cut": "plain",
+   "freq": 174
+  },
+  {
+   "role": "caster",
+   "text": "또 막아냅니다!",
+   "cut": "plain",
+   "freq": 148
   },
   {
    "role": "caster",
    "text": "빗나갑니다.",
    "cut": "plain",
-   "freq": 151
+   "freq": 147
+  },
+  {
+   "role": "caster",
+   "text": "오늘 첫 번째 선방입니다.",
+   "cut": "tail",
+   "freq": 145
+  },
+  {
+   "role": "caster",
+   "text": "오늘 두 번째 선방입니다.",
+   "cut": "tail",
+   "freq": 145
+  },
+  {
+   "role": "caster",
+   "text": "오늘 세 번째 선방입니다.",
+   "cut": "tail",
+   "freq": 145
+  },
+  {
+   "role": "caster",
+   "text": "오늘 네 번째 선방입니다.",
+   "cut": "tail",
+   "freq": 145
+  },
+  {
+   "role": "caster",
+   "text": "오늘 다섯 번째 선방입니다.",
+   "cut": "tail",
+   "freq": 145
+  },
+  {
+   "role": "caster",
+   "text": "오늘 여섯 번째 선방입니다.",
+   "cut": "tail",
+   "freq": 145
+  },
+  {
+   "role": "caster",
+   "text": "오늘 일곱 번째 선방입니다.",
+   "cut": "tail",
+   "freq": 145
+  },
+  {
+   "role": "caster",
+   "text": "오늘 여덟 번째 선방입니다.",
+   "cut": "tail",
+   "freq": 145
+  },
+  {
+   "role": "caster",
+   "text": "오늘 아홉 번째 선방입니다.",
+   "cut": "tail",
+   "freq": 145
+  },
+  {
+   "role": "caster",
+   "text": "오늘 열 번째 선방입니다.",
+   "cut": "tail",
+   "freq": 145
+  },
+  {
+   "role": "caster",
+   "text": "오늘 여러 번째 선방입니다.",
+   "cut": "tail",
+   "freq": 145
   },
   {
    "role": "caster",
    "text": "대한민국의 코너킥입니다.",
    "cut": "plain",
-   "freq": 145
+   "freq": 142
   },
   {
    "role": "caster",
    "text": "체코의 코너킥입니다.",
    "cut": "plain",
-   "freq": 145
+   "freq": 142
   },
   {
    "role": "caster",
    "text": "멕시코의 코너킥입니다.",
    "cut": "plain",
-   "freq": 145
+   "freq": 142
   },
   {
    "role": "caster",
    "text": "남아프리카공화국의 코너킥입니다.",
    "cut": "plain",
-   "freq": 145
+   "freq": 142
   },
   {
    "role": "caster",
    "text": "에콰도르의 코너킥입니다.",
    "cut": "plain",
-   "freq": 145
+   "freq": 142
   },
   {
    "role": "caster",
    "text": "잉글랜드의 코너킥입니다.",
    "cut": "plain",
-   "freq": 145
+   "freq": 142
   },
   {
    "role": "caster",
    "text": "노르웨이의 코너킥입니다.",
    "cut": "plain",
-   "freq": 145
+   "freq": 142
   },
   {
    "role": "caster",
    "text": "아르헨티나의 코너킥입니다.",
    "cut": "plain",
-   "freq": 145
+   "freq": 142
   },
   {
    "role": "caster",
    "text": "스페인의 코너킥입니다.",
    "cut": "plain",
-   "freq": 145
+   "freq": 142
   },
   {
    "role": "caster",
    "text": "캐나다의 코너킥입니다.",
    "cut": "plain",
-   "freq": 145
+   "freq": 142
   },
   {
    "role": "caster",
    "text": "모로코의 코너킥입니다.",
    "cut": "plain",
-   "freq": 145
+   "freq": 142
   },
   {
    "role": "caster",
    "text": "프랑스의 코너킥입니다.",
    "cut": "plain",
-   "freq": 145
-  },
-  {
-   "role": "caster",
-   "text": "대한민국, 코너에 공을 올립니다.",
-   "cut": "plain",
    "freq": 142
   },
   {
    "role": "caster",
-   "text": "체코, 코너에 공을 올립니다.",
-   "cut": "plain",
-   "freq": 142
+   "text": "연속 선방!",
+   "cut": "head",
+   "freq": 138
   },
   {
    "role": "caster",
-   "text": "멕시코, 코너에 공을 올립니다.",
-   "cut": "plain",
-   "freq": 142
+   "text": "벽입니다!",
+   "cut": "tail",
+   "freq": 138
   },
   {
    "role": "caster",
-   "text": "남아프리카공화국, 코너에 공을 올립니다.",
+   "text": "이번에도 막습니다!",
    "cut": "plain",
-   "freq": 142
+   "freq": 135
   },
   {
    "role": "caster",
-   "text": "에콰도르, 코너에 공을 올립니다.",
+   "text": "골문 옆으로 흐릅니다.",
    "cut": "plain",
-   "freq": 142
-  },
-  {
-   "role": "caster",
-   "text": "잉글랜드, 코너에 공을 올립니다.",
-   "cut": "plain",
-   "freq": 142
-  },
-  {
-   "role": "caster",
-   "text": "노르웨이, 코너에 공을 올립니다.",
-   "cut": "plain",
-   "freq": 142
-  },
-  {
-   "role": "caster",
-   "text": "아르헨티나, 코너에 공을 올립니다.",
-   "cut": "plain",
-   "freq": 142
-  },
-  {
-   "role": "caster",
-   "text": "스페인, 코너에 공을 올립니다.",
-   "cut": "plain",
-   "freq": 142
-  },
-  {
-   "role": "caster",
-   "text": "캐나다, 코너에 공을 올립니다.",
-   "cut": "plain",
-   "freq": 142
-  },
-  {
-   "role": "caster",
-   "text": "모로코, 코너에 공을 올립니다.",
-   "cut": "plain",
-   "freq": 142
-  },
-  {
-   "role": "caster",
-   "text": "프랑스, 코너에 공을 올립니다.",
-   "cut": "plain",
-   "freq": 142
-  },
-  {
-   "role": "caster",
-   "text": "대한민국, 세트피스 기회를 잡네요.",
-   "cut": "plain",
-   "freq": 141
-  },
-  {
-   "role": "caster",
-   "text": "체코, 세트피스 기회를 잡네요.",
-   "cut": "plain",
-   "freq": 141
-  },
-  {
-   "role": "caster",
-   "text": "멕시코, 세트피스 기회를 잡네요.",
-   "cut": "plain",
-   "freq": 141
-  },
-  {
-   "role": "caster",
-   "text": "남아프리카공화국, 세트피스 기회를 잡네요.",
-   "cut": "plain",
-   "freq": 141
-  },
-  {
-   "role": "caster",
-   "text": "에콰도르, 세트피스 기회를 잡네요.",
-   "cut": "plain",
-   "freq": 141
-  },
-  {
-   "role": "caster",
-   "text": "잉글랜드, 세트피스 기회를 잡네요.",
-   "cut": "plain",
-   "freq": 141
-  },
-  {
-   "role": "caster",
-   "text": "노르웨이, 세트피스 기회를 잡네요.",
-   "cut": "plain",
-   "freq": 141
-  },
-  {
-   "role": "caster",
-   "text": "아르헨티나, 세트피스 기회를 잡네요.",
-   "cut": "plain",
-   "freq": 141
-  },
-  {
-   "role": "caster",
-   "text": "스페인, 세트피스 기회를 잡네요.",
-   "cut": "plain",
-   "freq": 141
-  },
-  {
-   "role": "caster",
-   "text": "캐나다, 세트피스 기회를 잡네요.",
-   "cut": "plain",
-   "freq": 141
-  },
-  {
-   "role": "caster",
-   "text": "모로코, 세트피스 기회를 잡네요.",
-   "cut": "plain",
-   "freq": 141
-  },
-  {
-   "role": "caster",
-   "text": "프랑스, 세트피스 기회를 잡네요.",
-   "cut": "plain",
-   "freq": 141
+   "freq": 135
   },
   {
    "role": "caster",
    "text": "코너킥.",
    "cut": "plain",
-   "freq": 126
+   "freq": 123
+  },
+  {
+   "role": "caster",
+   "text": "대한민국, 세트피스 기회를 잡네요.",
+   "cut": "plain",
+   "freq": 121
+  },
+  {
+   "role": "caster",
+   "text": "체코, 세트피스 기회를 잡네요.",
+   "cut": "plain",
+   "freq": 121
+  },
+  {
+   "role": "caster",
+   "text": "멕시코, 세트피스 기회를 잡네요.",
+   "cut": "plain",
+   "freq": 121
+  },
+  {
+   "role": "caster",
+   "text": "남아프리카공화국, 세트피스 기회를 잡네요.",
+   "cut": "plain",
+   "freq": 121
+  },
+  {
+   "role": "caster",
+   "text": "에콰도르, 세트피스 기회를 잡네요.",
+   "cut": "plain",
+   "freq": 121
+  },
+  {
+   "role": "caster",
+   "text": "잉글랜드, 세트피스 기회를 잡네요.",
+   "cut": "plain",
+   "freq": 121
+  },
+  {
+   "role": "caster",
+   "text": "노르웨이, 세트피스 기회를 잡네요.",
+   "cut": "plain",
+   "freq": 121
+  },
+  {
+   "role": "caster",
+   "text": "아르헨티나, 세트피스 기회를 잡네요.",
+   "cut": "plain",
+   "freq": 121
+  },
+  {
+   "role": "caster",
+   "text": "스페인, 세트피스 기회를 잡네요.",
+   "cut": "plain",
+   "freq": 121
+  },
+  {
+   "role": "caster",
+   "text": "캐나다, 세트피스 기회를 잡네요.",
+   "cut": "plain",
+   "freq": 121
+  },
+  {
+   "role": "caster",
+   "text": "모로코, 세트피스 기회를 잡네요.",
+   "cut": "plain",
+   "freq": 121
+  },
+  {
+   "role": "caster",
+   "text": "프랑스, 세트피스 기회를 잡네요.",
+   "cut": "plain",
+   "freq": 121
+  },
+  {
+   "role": "caster",
+   "text": "대한민국, 코너에 공을 올립니다.",
+   "cut": "plain",
+   "freq": 118
+  },
+  {
+   "role": "caster",
+   "text": "체코, 코너에 공을 올립니다.",
+   "cut": "plain",
+   "freq": 118
+  },
+  {
+   "role": "caster",
+   "text": "멕시코, 코너에 공을 올립니다.",
+   "cut": "plain",
+   "freq": 118
+  },
+  {
+   "role": "caster",
+   "text": "남아프리카공화국, 코너에 공을 올립니다.",
+   "cut": "plain",
+   "freq": 118
+  },
+  {
+   "role": "caster",
+   "text": "에콰도르, 코너에 공을 올립니다.",
+   "cut": "plain",
+   "freq": 118
+  },
+  {
+   "role": "caster",
+   "text": "잉글랜드, 코너에 공을 올립니다.",
+   "cut": "plain",
+   "freq": 118
+  },
+  {
+   "role": "caster",
+   "text": "노르웨이, 코너에 공을 올립니다.",
+   "cut": "plain",
+   "freq": 118
+  },
+  {
+   "role": "caster",
+   "text": "아르헨티나, 코너에 공을 올립니다.",
+   "cut": "plain",
+   "freq": 118
+  },
+  {
+   "role": "caster",
+   "text": "스페인, 코너에 공을 올립니다.",
+   "cut": "plain",
+   "freq": 118
+  },
+  {
+   "role": "caster",
+   "text": "캐나다, 코너에 공을 올립니다.",
+   "cut": "plain",
+   "freq": 118
+  },
+  {
+   "role": "caster",
+   "text": "모로코, 코너에 공을 올립니다.",
+   "cut": "plain",
+   "freq": 118
+  },
+  {
+   "role": "caster",
+   "text": "프랑스, 코너에 공을 올립니다.",
+   "cut": "plain",
+   "freq": 118
   },
   {
    "role": "caster",
    "text": "김승규!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "김민재!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "이한범!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "김태현!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "설영우!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "백승호!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "손흥민!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "이재성!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "이강인!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "오현규!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "황인범!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "조현우!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "송범근!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "박진섭!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "조위제!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "이태석!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "김문환!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "옌스 카스트로프!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "이기혁!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "엄지성!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "배준호!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "양현준!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "황희찬!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "조규성!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "김진규!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "이동경!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "마테이 코바르시!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "다비트 지마!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "로빈 흐라나치!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "라디슬라프 크레이치!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "루카시 프로보트!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "토마시 소우체크!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "미할 사딜레크!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "블라디미르 다리다!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "데니스 비신스키!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "파트리크 시크!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "아담 흘로제크!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "라울 랑헬!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "세사르 몬테스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "요한 바스케스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "헤수스 가야르도!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "호르헤 산체스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "에드손 알바레스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "루이스 로모!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "오베드 바르가스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "알렉시스 베가!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "훌리안 키뇨네스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "라울 히메네스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "로웬 윌리엄스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "은코시나티 시비시!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "음베케젤리 음보카지!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "오브리 모디바!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "쿨리소 무다우!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "스페펠로 시톨레!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "탈렌테 음바타!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "체팡 모레미!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "렐레보힐레 모포켕!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "오스윈 아폴리스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "타펠로 마세코!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "에르난 갈린데스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "피에로 인카피에!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "윌리안 파초!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "페르비스 에스투피냔!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "앙헬로 프레시아도!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "모이세스 카이세도!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "조르디 알시바르!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "닐손 앙굴로!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "켄드리 파에스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "곤살로 플라타!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "에네르 발렌시아!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "데인 세인트클레어!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "데릭 코넬리우스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "모이즈 봄비토!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "알폰소 데이비스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "앨리스테어 존스턴!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "이스마엘 코네!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "스티븐 에우스타키우!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "제이컵 섀펠버그!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "조너선 오소리오!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "타종 뷰캐넌!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "조너선 데이비드!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "조던 픽포드!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "존 스톤스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "마크 게이!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "니코 오라일리!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "리스 제임스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "데클란 라이스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "엘리엇 앤더슨!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "마커스 래시퍼드!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "주드 벨링엄!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "부카요 사카!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "해리 케인!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "외르얀 뉠란!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "크리스토페르 아예르!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "레오 외스티고르!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "다비드 묄레르 볼페!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "율리안 뤼에르손!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "파트리크 베르그!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "안토니오 누사!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "산데르 베르게!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "프레드리크 아우르스네스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "오스카르 보브!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "엘링 홀란!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "에밀리아노 마르티네스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "크리스티안 로메로!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "리산드로 마르티네스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "니콜라스 타글리아피코!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "나우엘 몰리나!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "레안드로 파레데스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "알렉시스 맥 알리스터!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "엔소 페르난데스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "니콜라스 곤살레스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "리오넬 메시!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "훌리안 알바레스!",
    "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "야신 부누!",
-   "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "이사 디오프!",
-   "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "샤디 리아드!",
-   "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "아나스 살라흐에딘!",
-   "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "아슈라프 하키미!",
-   "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "소피안 암라바트!",
-   "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "아제딘 우나히!",
-   "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "네일 엘 아이나위!",
-   "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "아민 스바이!",
-   "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "셈스딘 탈비!",
-   "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "수피안 라히미!",
-   "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "마이크 메냥!",
-   "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "윌리앙 살리바!",
-   "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "다요 우파메카노!",
-   "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "테오 에르난데스!",
-   "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "쥘 쿤데!",
-   "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "오렐리앵 추아메니!",
-   "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "아드리앵 라비오!",
-   "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "바랑 자이르에메리!",
-   "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "브래들리 바르콜라!",
-   "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "우스만 뎀벨레!",
-   "cut": "tail",
-   "freq": 121
-  },
-  {
-   "role": "caster",
-   "text": "킬리안 음바페!",
-   "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "우나이 시몬!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "아이메릭 라포르트!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "파우 쿠바르시!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "마르크 쿠쿠레야!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "마르코스 요렌테!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "로드리!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "마르틴 수비멘디!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "니코 윌리엄스!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "다니 올모!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "라민 야말!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
    "text": "미켈 오야르사발!",
    "cut": "tail",
-   "freq": 121
+   "freq": 116
   },
   {
    "role": "caster",
-   "text": "대한민국이 기회를 살리지 못합니다.",
-   "cut": "plain",
-   "freq": 112
-  },
-  {
-   "role": "caster",
-   "text": "남아프리카공화국이 기회를 살리지 못합니다.",
-   "cut": "plain",
-   "freq": 112
-  },
-  {
-   "role": "caster",
-   "text": "스페인이 기회를 살리지 못합니다.",
-   "cut": "plain",
-   "freq": 112
-  },
-  {
-   "role": "caster",
-   "text": "양 팀 모두 쉽게 내주지 않습니다.",
-   "cut": "plain",
-   "freq": 106
-  },
-  {
-   "role": "caster",
-   "text": "첫 번째 코너킥.",
-   "cut": "head",
-   "freq": 103
-  },
-  {
-   "role": "caster",
-   "text": "두 번째 코너킥.",
-   "cut": "head",
-   "freq": 103
-  },
-  {
-   "role": "caster",
-   "text": "세 번째 코너킥.",
-   "cut": "head",
-   "freq": 103
-  },
-  {
-   "role": "caster",
-   "text": "네 번째 코너킥.",
-   "cut": "head",
-   "freq": 103
-  },
-  {
-   "role": "caster",
-   "text": "다섯 번째 코너킥.",
-   "cut": "head",
-   "freq": 103
-  },
-  {
-   "role": "caster",
-   "text": "여섯 번째 코너킥.",
-   "cut": "head",
-   "freq": 103
-  },
-  {
-   "role": "caster",
-   "text": "일곱 번째 코너킥.",
-   "cut": "head",
-   "freq": 103
-  },
-  {
-   "role": "caster",
-   "text": "여덟 번째 코너킥.",
-   "cut": "head",
-   "freq": 103
-  },
-  {
-   "role": "caster",
-   "text": "아홉 번째 코너킥.",
-   "cut": "head",
-   "freq": 103
-  },
-  {
-   "role": "caster",
-   "text": "열 번째 코너킥.",
-   "cut": "head",
-   "freq": 103
-  },
-  {
-   "role": "caster",
-   "text": "여러 번째 코너킥.",
-   "cut": "head",
-   "freq": 103
-  },
-  {
-   "role": "caster",
-   "text": "대한민국, 완전히 몰아붙이네요.",
+   "text": "야신 부누!",
    "cut": "tail",
-   "freq": 103
+   "freq": 116
   },
   {
    "role": "caster",
-   "text": "체코, 완전히 몰아붙이네요.",
+   "text": "이사 디오프!",
    "cut": "tail",
-   "freq": 103
+   "freq": 116
   },
   {
    "role": "caster",
-   "text": "멕시코, 완전히 몰아붙이네요.",
+   "text": "샤디 리아드!",
    "cut": "tail",
-   "freq": 103
+   "freq": 116
   },
   {
    "role": "caster",
-   "text": "남아프리카공화국, 완전히 몰아붙이네요.",
+   "text": "아나스 살라흐에딘!",
    "cut": "tail",
-   "freq": 103
+   "freq": 116
   },
   {
    "role": "caster",
-   "text": "에콰도르, 완전히 몰아붙이네요.",
+   "text": "아슈라프 하키미!",
    "cut": "tail",
-   "freq": 103
+   "freq": 116
   },
   {
    "role": "caster",
-   "text": "잉글랜드, 완전히 몰아붙이네요.",
+   "text": "소피안 암라바트!",
    "cut": "tail",
-   "freq": 103
+   "freq": 116
   },
   {
    "role": "caster",
-   "text": "노르웨이, 완전히 몰아붙이네요.",
+   "text": "아제딘 우나히!",
    "cut": "tail",
-   "freq": 103
+   "freq": 116
   },
   {
    "role": "caster",
-   "text": "아르헨티나, 완전히 몰아붙이네요.",
+   "text": "네일 엘 아이나위!",
    "cut": "tail",
-   "freq": 103
+   "freq": 116
   },
   {
    "role": "caster",
-   "text": "스페인, 완전히 몰아붙이네요.",
+   "text": "아민 스바이!",
    "cut": "tail",
-   "freq": 103
+   "freq": 116
   },
   {
    "role": "caster",
-   "text": "캐나다, 완전히 몰아붙이네요.",
+   "text": "셈스딘 탈비!",
    "cut": "tail",
-   "freq": 103
+   "freq": 116
   },
   {
    "role": "caster",
-   "text": "모로코, 완전히 몰아붙이네요.",
+   "text": "수피안 라히미!",
    "cut": "tail",
-   "freq": 103
+   "freq": 116
   },
   {
    "role": "caster",
-   "text": "프랑스, 완전히 몰아붙이네요.",
+   "text": "마이크 메냥!",
    "cut": "tail",
-   "freq": 103
+   "freq": 116
+  },
+  {
+   "role": "caster",
+   "text": "윌리앙 살리바!",
+   "cut": "tail",
+   "freq": 116
+  },
+  {
+   "role": "caster",
+   "text": "다요 우파메카노!",
+   "cut": "tail",
+   "freq": 116
+  },
+  {
+   "role": "caster",
+   "text": "테오 에르난데스!",
+   "cut": "tail",
+   "freq": 116
+  },
+  {
+   "role": "caster",
+   "text": "쥘 쿤데!",
+   "cut": "tail",
+   "freq": 116
+  },
+  {
+   "role": "caster",
+   "text": "오렐리앵 추아메니!",
+   "cut": "tail",
+   "freq": 116
+  },
+  {
+   "role": "caster",
+   "text": "아드리앵 라비오!",
+   "cut": "tail",
+   "freq": 116
+  },
+  {
+   "role": "caster",
+   "text": "바랑 자이르에메리!",
+   "cut": "tail",
+   "freq": 116
+  },
+  {
+   "role": "caster",
+   "text": "브래들리 바르콜라!",
+   "cut": "tail",
+   "freq": 116
+  },
+  {
+   "role": "caster",
+   "text": "우스만 뎀벨레!",
+   "cut": "tail",
+   "freq": 116
+  },
+  {
+   "role": "caster",
+   "text": "킬리안 음바페!",
+   "cut": "tail",
+   "freq": 116
   },
   {
    "role": "analyst",
    "text": "경고를 안고 뛰면 발이 안 나갑니다.",
    "cut": "plain",
-   "freq": 102
+   "freq": 116
   },
   {
    "role": "caster",
-   "text": "연속 코너킥입니다.",
+   "text": "대한민국이 기회를 살리지 못합니다.",
    "cut": "plain",
-   "freq": 99
+   "freq": 104
+  },
+  {
+   "role": "caster",
+   "text": "남아프리카공화국이 기회를 살리지 못합니다.",
+   "cut": "plain",
+   "freq": 104
+  },
+  {
+   "role": "caster",
+   "text": "스페인이 기회를 살리지 못합니다.",
+   "cut": "plain",
+   "freq": 104
+  },
+  {
+   "role": "caster",
+   "text": "양 팀 모두 쉽게 내주지 않습니다.",
+   "cut": "plain",
+   "freq": 101
   },
   {
    "role": "caster",
@@ -3108,183 +2964,285 @@
    "freq": 98
   },
   {
+   "role": "analyst",
+   "text": "네, 한 번의 실수가 경기를 가를 분위기입니다.",
+   "cut": "plain",
+   "freq": 93
+  },
+  {
+   "role": "caster",
+   "text": "연속 코너킥입니다.",
+   "cut": "plain",
+   "freq": 92
+  },
+  {
    "role": "caster",
    "text": "계속 두드립니다. 또 코너킥.",
    "cut": "plain",
-   "freq": 94
-  },
-  {
-   "role": "caster",
-   "text": "영 대",
-   "cut": "head",
-   "freq": 90
-  },
-  {
-   "role": "caster",
-   "text": "일 대",
-   "cut": "head",
-   "freq": 90
-  },
-  {
-   "role": "caster",
-   "text": "이 대",
-   "cut": "head",
-   "freq": 90
-  },
-  {
-   "role": "caster",
-   "text": "삼 대",
-   "cut": "head",
-   "freq": 90
-  },
-  {
-   "role": "caster",
-   "text": "사 대",
-   "cut": "head",
-   "freq": 90
-  },
-  {
-   "role": "caster",
-   "text": "오 대",
-   "cut": "head",
-   "freq": 90
-  },
-  {
-   "role": "caster",
-   "text": "육 대",
-   "cut": "head",
-   "freq": 90
-  },
-  {
-   "role": "caster",
-   "text": "칠 대",
-   "cut": "head",
-   "freq": 90
-  },
-  {
-   "role": "caster",
-   "text": "팔 대",
-   "cut": "head",
-   "freq": 90
-  },
-  {
-   "role": "caster",
-   "text": "구 대",
-   "cut": "head",
-   "freq": 90
-  },
-  {
-   "role": "caster",
-   "text": "십 대",
-   "cut": "head",
-   "freq": 90
-  },
-  {
-   "role": "analyst",
-   "text": "벤치가 교체를 고민하게 되죠.",
-   "cut": "plain",
-   "freq": 90
+   "freq": 87
   },
   {
    "role": "caster",
    "text": "자, 파울입니다.",
    "cut": "plain",
-   "freq": 87
+   "freq": 86
   },
   {
    "role": "caster",
    "text": "아, 파울입니다.",
    "cut": "plain",
-   "freq": 87
+   "freq": 86
   },
   {
    "role": "caster",
    "text": "네, 파울입니다.",
    "cut": "plain",
-   "freq": 87
+   "freq": 86
   },
   {
    "role": "caster",
    "text": "그런데, 파울입니다.",
    "cut": "plain",
-   "freq": 87
+   "freq": 86
   },
   {
    "role": "caster",
    "text": "여기서, 파울입니다.",
    "cut": "plain",
-   "freq": 87
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "첫 번째 코너킥.",
+   "cut": "head",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "두 번째 코너킥.",
+   "cut": "head",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "세 번째 코너킥.",
+   "cut": "head",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "네 번째 코너킥.",
+   "cut": "head",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "다섯 번째 코너킥.",
+   "cut": "head",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "여섯 번째 코너킥.",
+   "cut": "head",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "일곱 번째 코너킥.",
+   "cut": "head",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "여덟 번째 코너킥.",
+   "cut": "head",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "아홉 번째 코너킥.",
+   "cut": "head",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "열 번째 코너킥.",
+   "cut": "head",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "여러 번째 코너킥.",
+   "cut": "head",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "대한민국, 완전히 몰아붙이네요.",
+   "cut": "tail",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "체코, 완전히 몰아붙이네요.",
+   "cut": "tail",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "멕시코, 완전히 몰아붙이네요.",
+   "cut": "tail",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "남아프리카공화국, 완전히 몰아붙이네요.",
+   "cut": "tail",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "에콰도르, 완전히 몰아붙이네요.",
+   "cut": "tail",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "잉글랜드, 완전히 몰아붙이네요.",
+   "cut": "tail",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "노르웨이, 완전히 몰아붙이네요.",
+   "cut": "tail",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "아르헨티나, 완전히 몰아붙이네요.",
+   "cut": "tail",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "스페인, 완전히 몰아붙이네요.",
+   "cut": "tail",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "캐나다, 완전히 몰아붙이네요.",
+   "cut": "tail",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "모로코, 완전히 몰아붙이네요.",
+   "cut": "tail",
+   "freq": 86
+  },
+  {
+   "role": "caster",
+   "text": "프랑스, 완전히 몰아붙이네요.",
+   "cut": "tail",
+   "freq": 86
   },
   {
    "role": "analyst",
-   "text": "네, 두 번째 볼 싸움을 봐야죠.",
+   "text": "벤치가 교체를 고민하게 되죠.",
    "cut": "plain",
    "freq": 86
   },
   {
    "role": "caster",
-   "text": "체코가 기회를 살리지 못합니다.",
-   "cut": "plain",
+   "text": "영 대",
+   "cut": "head",
    "freq": 85
   },
   {
    "role": "caster",
-   "text": "멕시코가 기회를 살리지 못합니다.",
-   "cut": "plain",
+   "text": "일 대",
+   "cut": "head",
    "freq": 85
   },
   {
    "role": "caster",
-   "text": "에콰도르가 기회를 살리지 못합니다.",
-   "cut": "plain",
+   "text": "이 대",
+   "cut": "head",
    "freq": 85
   },
   {
    "role": "caster",
-   "text": "잉글랜드가 기회를 살리지 못합니다.",
-   "cut": "plain",
+   "text": "삼 대",
+   "cut": "head",
    "freq": 85
   },
   {
    "role": "caster",
-   "text": "노르웨이가 기회를 살리지 못합니다.",
-   "cut": "plain",
+   "text": "사 대",
+   "cut": "head",
    "freq": 85
   },
   {
    "role": "caster",
-   "text": "아르헨티나가 기회를 살리지 못합니다.",
-   "cut": "plain",
+   "text": "오 대",
+   "cut": "head",
    "freq": 85
   },
   {
    "role": "caster",
-   "text": "캐나다가 기회를 살리지 못합니다.",
-   "cut": "plain",
+   "text": "육 대",
+   "cut": "head",
    "freq": 85
   },
   {
    "role": "caster",
-   "text": "모로코가 기회를 살리지 못합니다.",
-   "cut": "plain",
+   "text": "칠 대",
+   "cut": "head",
    "freq": 85
   },
   {
    "role": "caster",
-   "text": "프랑스가 기회를 살리지 못합니다.",
-   "cut": "plain",
+   "text": "팔 대",
+   "cut": "head",
+   "freq": 85
+  },
+  {
+   "role": "caster",
+   "text": "구 대",
+   "cut": "head",
+   "freq": 85
+  },
+  {
+   "role": "caster",
+   "text": "십 대",
+   "cut": "head",
    "freq": 85
   },
   {
    "role": "analyst",
-   "text": "네, 한 번의 실수가 경기를 가를 분위기입니다.",
+   "text": "라커룸에서 어떤 이야기가 나오느냐가 후반을 가릅니다.",
    "cut": "plain",
-   "freq": 85
+   "freq": 84
   },
   {
    "role": "caster",
-   "text": "여기서 경고를 받습니다.",
-   "cut": "tail",
+   "text": "대한민국이 코너킥을 얻어냅니다.",
+   "cut": "plain",
+   "freq": 82
+  },
+  {
+   "role": "caster",
+   "text": "남아프리카공화국이 코너킥을 얻어냅니다.",
+   "cut": "plain",
+   "freq": 82
+  },
+  {
+   "role": "caster",
+   "text": "스페인이 코너킥을 얻어냅니다.",
+   "cut": "plain",
    "freq": 82
   },
   {
@@ -3295,375 +3253,285 @@
   },
   {
    "role": "caster",
-   "text": "대한민국이 코너킥을 얻어냅니다.",
-   "cut": "plain",
+   "text": "대한민국",
+   "cut": "head",
+   "freq": 80
+  },
+  {
+   "role": "caster",
+   "text": "체코",
+   "cut": "head",
+   "freq": 80
+  },
+  {
+   "role": "caster",
+   "text": "멕시코",
+   "cut": "head",
+   "freq": 80
+  },
+  {
+   "role": "caster",
+   "text": "남아프리카공화국",
+   "cut": "head",
+   "freq": 80
+  },
+  {
+   "role": "caster",
+   "text": "에콰도르",
+   "cut": "head",
+   "freq": 80
+  },
+  {
+   "role": "caster",
+   "text": "잉글랜드",
+   "cut": "head",
+   "freq": 80
+  },
+  {
+   "role": "caster",
+   "text": "노르웨이",
+   "cut": "head",
+   "freq": 80
+  },
+  {
+   "role": "caster",
+   "text": "아르헨티나",
+   "cut": "head",
+   "freq": 80
+  },
+  {
+   "role": "caster",
+   "text": "스페인",
+   "cut": "head",
+   "freq": 80
+  },
+  {
+   "role": "caster",
+   "text": "캐나다",
+   "cut": "head",
+   "freq": 80
+  },
+  {
+   "role": "caster",
+   "text": "모로코",
+   "cut": "head",
+   "freq": 80
+  },
+  {
+   "role": "caster",
+   "text": "프랑스",
+   "cut": "head",
+   "freq": 80
+  },
+  {
+   "role": "caster",
+   "text": "여기서 경고를 받습니다.",
+   "cut": "tail",
    "freq": 79
   },
   {
    "role": "caster",
-   "text": "남아프리카공화국이 코너킥을 얻어냅니다.",
+   "text": "자, 주심, 휘슬을 붑니다.",
    "cut": "plain",
-   "freq": 79
+   "freq": 77
   },
   {
    "role": "caster",
-   "text": "스페인이 코너킥을 얻어냅니다.",
+   "text": "아, 주심, 휘슬을 붑니다.",
    "cut": "plain",
-   "freq": 79
+   "freq": 77
   },
   {
-   "role": "analyst",
-   "text": "세트피스 하나가 경기를 가릅니다.",
+   "role": "caster",
+   "text": "네, 주심, 휘슬을 붑니다.",
    "cut": "plain",
-   "freq": 76
+   "freq": 77
   },
   {
-   "role": "analyst",
-   "text": "네, 후반 십오 분이 분수령이 될 겁니다.",
+   "role": "caster",
+   "text": "그런데, 주심, 휘슬을 붑니다.",
    "cut": "plain",
+   "freq": 77
+  },
+  {
+   "role": "caster",
+   "text": "여기서, 주심, 휘슬을 붑니다.",
+   "cut": "plain",
+   "freq": 77
+  },
+  {
+   "role": "caster",
+   "text": "체코가 기회를 살리지 못합니다.",
+   "cut": "plain",
+   "freq": 77
+  },
+  {
+   "role": "caster",
+   "text": "멕시코가 기회를 살리지 못합니다.",
+   "cut": "plain",
+   "freq": 77
+  },
+  {
+   "role": "caster",
+   "text": "에콰도르가 기회를 살리지 못합니다.",
+   "cut": "plain",
+   "freq": 77
+  },
+  {
+   "role": "caster",
+   "text": "잉글랜드가 기회를 살리지 못합니다.",
+   "cut": "plain",
+   "freq": 77
+  },
+  {
+   "role": "caster",
+   "text": "노르웨이가 기회를 살리지 못합니다.",
+   "cut": "plain",
+   "freq": 77
+  },
+  {
+   "role": "caster",
+   "text": "아르헨티나가 기회를 살리지 못합니다.",
+   "cut": "plain",
+   "freq": 77
+  },
+  {
+   "role": "caster",
+   "text": "캐나다가 기회를 살리지 못합니다.",
+   "cut": "plain",
+   "freq": 77
+  },
+  {
+   "role": "caster",
+   "text": "모로코가 기회를 살리지 못합니다.",
+   "cut": "plain",
+   "freq": 77
+  },
+  {
+   "role": "caster",
+   "text": "프랑스가 기회를 살리지 못합니다.",
+   "cut": "plain",
+   "freq": 77
+  },
+  {
+   "role": "caster",
+   "text": "경고를 피하지 못합니다.",
+   "cut": "tail",
    "freq": 76
   },
   {
    "role": "caster",
    "text": "주심이 경고를 줍니다.",
    "cut": "tail",
-   "freq": 74
-  },
-  {
-   "role": "caster",
-   "text": "경고를 피하지 못합니다.",
-   "cut": "tail",
-   "freq": 74
+   "freq": 75
   },
   {
    "role": "analyst",
    "text": "네, 두 팀 다 준비한 걸 꺼낸 경기였습니다.",
    "cut": "plain",
-   "freq": 74
-  },
-  {
-   "role": "caster",
-   "text": "체코가",
-   "cut": "head",
-   "freq": 73
-  },
-  {
-   "role": "caster",
-   "text": "멕시코가",
-   "cut": "head",
-   "freq": 73
-  },
-  {
-   "role": "caster",
-   "text": "에콰도르가",
-   "cut": "head",
-   "freq": 73
-  },
-  {
-   "role": "caster",
-   "text": "잉글랜드가",
-   "cut": "head",
-   "freq": 73
-  },
-  {
-   "role": "caster",
-   "text": "노르웨이가",
-   "cut": "head",
-   "freq": 73
-  },
-  {
-   "role": "caster",
-   "text": "아르헨티나가",
-   "cut": "head",
-   "freq": 73
-  },
-  {
-   "role": "caster",
-   "text": "캐나다가",
-   "cut": "head",
-   "freq": 73
-  },
-  {
-   "role": "caster",
-   "text": "모로코가",
-   "cut": "head",
-   "freq": 73
-  },
-  {
-   "role": "caster",
-   "text": "프랑스가",
-   "cut": "head",
-   "freq": 73
-  },
-  {
-   "role": "caster",
-   "text": "자, 주심, 휘슬을 붑니다.",
-   "cut": "plain",
-   "freq": 72
-  },
-  {
-   "role": "caster",
-   "text": "아, 주심, 휘슬을 붑니다.",
-   "cut": "plain",
-   "freq": 72
-  },
-  {
-   "role": "caster",
-   "text": "네, 주심, 휘슬을 붑니다.",
-   "cut": "plain",
-   "freq": 72
-  },
-  {
-   "role": "caster",
-   "text": "그런데, 주심, 휘슬을 붑니다.",
-   "cut": "plain",
-   "freq": 72
-  },
-  {
-   "role": "caster",
-   "text": "여기서, 주심, 휘슬을 붑니다.",
-   "cut": "plain",
-   "freq": 72
-  },
-  {
-   "role": "caster",
-   "text": "대한민국",
-   "cut": "head",
-   "freq": 71
-  },
-  {
-   "role": "caster",
-   "text": "체코",
-   "cut": "head",
-   "freq": 71
-  },
-  {
-   "role": "caster",
-   "text": "멕시코",
-   "cut": "head",
-   "freq": 71
-  },
-  {
-   "role": "caster",
-   "text": "남아프리카공화국",
-   "cut": "head",
-   "freq": 71
-  },
-  {
-   "role": "caster",
-   "text": "에콰도르",
-   "cut": "head",
-   "freq": 71
-  },
-  {
-   "role": "caster",
-   "text": "잉글랜드",
-   "cut": "head",
-   "freq": 71
-  },
-  {
-   "role": "caster",
-   "text": "노르웨이",
-   "cut": "head",
-   "freq": 71
-  },
-  {
-   "role": "caster",
-   "text": "아르헨티나",
-   "cut": "head",
-   "freq": 71
-  },
-  {
-   "role": "caster",
-   "text": "스페인",
-   "cut": "head",
-   "freq": 71
-  },
-  {
-   "role": "caster",
-   "text": "캐나다",
-   "cut": "head",
-   "freq": 71
-  },
-  {
-   "role": "caster",
-   "text": "모로코",
-   "cut": "head",
-   "freq": 71
-  },
-  {
-   "role": "caster",
-   "text": "프랑스",
-   "cut": "head",
-   "freq": 71
-  },
-  {
-   "role": "analyst",
-   "text": "이 한 골로 경기 운영이 편해집니다.",
-   "cut": "plain",
    "freq": 70
-  },
-  {
-   "role": "caster",
-   "text": "옐로카드.",
-   "cut": "tail",
-   "freq": 68
   },
   {
    "role": "caster",
    "text": "대한민국,",
    "cut": "head",
-   "freq": 67
+   "freq": 69
   },
   {
    "role": "caster",
    "text": "체코,",
    "cut": "head",
-   "freq": 67
+   "freq": 69
   },
   {
    "role": "caster",
    "text": "멕시코,",
    "cut": "head",
-   "freq": 67
+   "freq": 69
   },
   {
    "role": "caster",
    "text": "남아프리카공화국,",
    "cut": "head",
-   "freq": 67
+   "freq": 69
   },
   {
    "role": "caster",
    "text": "에콰도르,",
    "cut": "head",
-   "freq": 67
+   "freq": 69
   },
   {
    "role": "caster",
    "text": "잉글랜드,",
    "cut": "head",
-   "freq": 67
+   "freq": 69
   },
   {
    "role": "caster",
    "text": "노르웨이,",
    "cut": "head",
-   "freq": 67
+   "freq": 69
   },
   {
    "role": "caster",
    "text": "아르헨티나,",
    "cut": "head",
-   "freq": 67
+   "freq": 69
   },
   {
    "role": "caster",
    "text": "스페인,",
    "cut": "head",
-   "freq": 67
+   "freq": 69
   },
   {
    "role": "caster",
    "text": "캐나다,",
    "cut": "head",
-   "freq": 67
+   "freq": 69
   },
   {
    "role": "caster",
    "text": "모로코,",
    "cut": "head",
-   "freq": 67
+   "freq": 69
   },
   {
    "role": "caster",
    "text": "프랑스,",
    "cut": "head",
-   "freq": 67
+   "freq": 69
   },
   {
    "role": "analyst",
-   "text": "라커룸에서 어떤 이야기가 나오느냐가 후반을 가릅니다.",
+   "text": "스리백으로 바꾼 뒤로 윙백 두 명이 사실상 윙어처럼 올라옵니다.",
    "cut": "plain",
-   "freq": 66
+   "freq": 68
   },
   {
    "role": "analyst",
-   "text": "네, 선제골의 무게가 큽니다. 이제 상대가 나와야 하죠.",
+   "text": "템포를 올린 뒤로 전개가 눈에 띄게 빨라졌습니다.",
    "cut": "plain",
    "freq": 64
   },
   {
-   "role": "caster",
-   "text": "영입니다.",
-   "cut": "tail",
-   "freq": 63
+   "role": "analyst",
+   "text": "라인을 내렸는데도 상대가 계속 두드립니다. 버티는 시간이 길어지네요.",
+   "cut": "plain",
+   "freq": 62
   },
   {
-   "role": "caster",
-   "text": "일입니다.",
-   "cut": "tail",
-   "freq": 63
-  },
-  {
-   "role": "caster",
-   "text": "이입니다.",
-   "cut": "tail",
-   "freq": 63
-  },
-  {
-   "role": "caster",
-   "text": "삼입니다.",
-   "cut": "tail",
-   "freq": 63
-  },
-  {
-   "role": "caster",
-   "text": "사입니다.",
-   "cut": "tail",
-   "freq": 63
-  },
-  {
-   "role": "caster",
-   "text": "오입니다.",
-   "cut": "tail",
-   "freq": 63
-  },
-  {
-   "role": "caster",
-   "text": "육입니다.",
-   "cut": "tail",
-   "freq": 63
-  },
-  {
-   "role": "caster",
-   "text": "칠입니다.",
-   "cut": "tail",
-   "freq": 63
-  },
-  {
-   "role": "caster",
-   "text": "팔입니다.",
-   "cut": "tail",
-   "freq": 63
-  },
-  {
-   "role": "caster",
-   "text": "구입니다.",
-   "cut": "tail",
-   "freq": 63
-  },
-  {
-   "role": "caster",
-   "text": "십입니다.",
-   "cut": "tail",
-   "freq": 63
+   "role": "analyst",
+   "text": "측면에 무게를 실은 만큼 중앙이 비어 있습니다.",
+   "cut": "plain",
+   "freq": 62
   },
   {
    "role": "caster",
    "text": "골!",
    "cut": "head",
-   "freq": 60
+   "freq": 61
   },
   {
    "role": "caster",
@@ -3673,193 +3541,427 @@
   },
   {
    "role": "caster",
-   "text": "코너킥을 얻어냅니다.",
+   "text": "영입니다.",
    "cut": "tail",
-   "freq": 58
+   "freq": 60
   },
   {
-   "role": "analyst",
-   "text": "전반에 아낀 체력을 후반 어디에 쓸지 정해야 합니다.",
-   "cut": "plain",
-   "freq": 58
+   "role": "caster",
+   "text": "일입니다.",
+   "cut": "tail",
+   "freq": 60
+  },
+  {
+   "role": "caster",
+   "text": "이입니다.",
+   "cut": "tail",
+   "freq": 60
+  },
+  {
+   "role": "caster",
+   "text": "삼입니다.",
+   "cut": "tail",
+   "freq": 60
+  },
+  {
+   "role": "caster",
+   "text": "사입니다.",
+   "cut": "tail",
+   "freq": 60
+  },
+  {
+   "role": "caster",
+   "text": "오입니다.",
+   "cut": "tail",
+   "freq": 60
+  },
+  {
+   "role": "caster",
+   "text": "육입니다.",
+   "cut": "tail",
+   "freq": 60
+  },
+  {
+   "role": "caster",
+   "text": "칠입니다.",
+   "cut": "tail",
+   "freq": 60
+  },
+  {
+   "role": "caster",
+   "text": "팔입니다.",
+   "cut": "tail",
+   "freq": 60
+  },
+  {
+   "role": "caster",
+   "text": "구입니다.",
+   "cut": "tail",
+   "freq": 60
+  },
+  {
+   "role": "caster",
+   "text": "십입니다.",
+   "cut": "tail",
+   "freq": 60
+  },
+  {
+   "role": "caster",
+   "text": "옐로카드.",
+   "cut": "tail",
+   "freq": 60
   },
   {
    "role": "caster",
    "text": "이걸 막아내네요.",
    "cut": "plain",
-   "freq": 56
+   "freq": 59
   },
   {
    "role": "caster",
-   "text": "막아냅니다!",
+   "text": "체코가",
+   "cut": "head",
+   "freq": 59
+  },
+  {
+   "role": "caster",
+   "text": "멕시코가",
+   "cut": "head",
+   "freq": 59
+  },
+  {
+   "role": "caster",
+   "text": "에콰도르가",
+   "cut": "head",
+   "freq": 59
+  },
+  {
+   "role": "caster",
+   "text": "잉글랜드가",
+   "cut": "head",
+   "freq": 59
+  },
+  {
+   "role": "caster",
+   "text": "노르웨이가",
+   "cut": "head",
+   "freq": 59
+  },
+  {
+   "role": "caster",
+   "text": "아르헨티나가",
+   "cut": "head",
+   "freq": 59
+  },
+  {
+   "role": "caster",
+   "text": "캐나다가",
+   "cut": "head",
+   "freq": 59
+  },
+  {
+   "role": "caster",
+   "text": "모로코가",
+   "cut": "head",
+   "freq": 59
+  },
+  {
+   "role": "caster",
+   "text": "프랑스가",
+   "cut": "head",
+   "freq": 59
+  },
+  {
+   "role": "analyst",
+   "text": "포메이션을 바꾼 직후라 아직 자리가 덜 잡혔습니다.",
+   "cut": "plain",
+   "freq": 58
+  },
+  {
+   "role": "analyst",
+   "text": "네, 두 번째 볼 싸움을 봐야죠.",
    "cut": "plain",
    "freq": 56
+  },
+  {
+   "role": "analyst",
+   "text": "압박을 낮추고 나서 상대에게 시간을 주고 있습니다.",
+   "cut": "plain",
+   "freq": 56
+  },
+  {
+   "role": "analyst",
+   "text": "속도를 줄인 사이에 상대가 자리를 잡았습니다.",
+   "cut": "plain",
+   "freq": 56
+  },
+  {
+   "role": "analyst",
+   "text": "네, 후반 십오 분이 분수령이 될 겁니다.",
+   "cut": "plain",
+   "freq": 54
+  },
+  {
+   "role": "analyst",
+   "text": "중앙으로 좁힌 뒤로 짧은 패스가 늘었습니다.",
+   "cut": "plain",
+   "freq": 54
+  },
+  {
+   "role": "analyst",
+   "text": "네, 선제골의 무게가 큽니다. 이제 상대가 나와야 하죠.",
+   "cut": "plain",
+   "freq": 54
+  },
+  {
+   "role": "analyst",
+   "text": "세트피스 하나가 경기를 가릅니다.",
+   "cut": "plain",
+   "freq": 54
   },
   {
    "role": "caster",
    "text": "손끝으로 걷어냅니다!",
    "cut": "tail",
-   "freq": 54
+   "freq": 52
   },
   {
    "role": "analyst",
-   "text": "먼저 넣은 쪽이 경기를 끌고 갑니다.",
+   "text": "포백으로 돌아온 뒤로 뒤가 정리됐습니다.",
    "cut": "plain",
-   "freq": 54
-  },
-  {
-   "role": "caster",
-   "text": "세이브!",
-   "cut": "tail",
    "freq": 52
   },
   {
    "role": "caster",
    "text": "골문을 지킵니다.",
    "cut": "tail",
+   "freq": 50
+  },
+  {
+   "role": "analyst",
+   "text": "중앙에 모인 사이 측면이 열려 있습니다.",
+   "cut": "plain",
+   "freq": 50
+  },
+  {
+   "role": "analyst",
+   "text": "전반에 아낀 체력을 후반 어디에 쓸지 정해야 합니다.",
+   "cut": "plain",
+   "freq": 50
+  },
+  {
+   "role": "analyst",
+   "text": "라인을 올린 뒤로 상대 진영에서 경기가 이어집니다.",
+   "cut": "plain",
+   "freq": 50
+  },
+  {
+   "role": "analyst",
+   "text": "라인을 올린 뒤에 나온 뒷공간 장면입니다. 이게 이 선택의 값이죠.",
+   "cut": "plain",
    "freq": 48
-  },
-  {
-   "role": "caster",
-   "text": "골키퍼, 몸을 날립니다!",
-   "cut": "tail",
-   "freq": 46
-  },
-  {
-   "role": "analyst",
-   "text": "제가 보기엔 후반 중반의 십 분이 승부처였습니다.",
-   "cut": "plain",
-   "freq": 44
-  },
-  {
-   "role": "caster",
-   "text": "자, 또",
-   "cut": "head",
-   "freq": 43
-  },
-  {
-   "role": "caster",
-   "text": "아, 또",
-   "cut": "head",
-   "freq": 43
-  },
-  {
-   "role": "caster",
-   "text": "네, 또",
-   "cut": "head",
-   "freq": 43
-  },
-  {
-   "role": "caster",
-   "text": "그런데, 또",
-   "cut": "head",
-   "freq": 43
-  },
-  {
-   "role": "caster",
-   "text": "여기서, 또",
-   "cut": "head",
-   "freq": 43
-  },
-  {
-   "role": "analyst",
-   "text": "이 골 하나로 경기 양상이 또 바뀝니다.",
-   "cut": "plain",
-   "freq": 42
   },
   {
    "role": "caster",
    "text": "자, 빗나갑니다.",
    "cut": "plain",
-   "freq": 39
+   "freq": 47
   },
   {
    "role": "caster",
    "text": "아, 빗나갑니다.",
    "cut": "plain",
-   "freq": 39
+   "freq": 47
   },
   {
    "role": "caster",
    "text": "네, 빗나갑니다.",
    "cut": "plain",
-   "freq": 39
+   "freq": 47
   },
   {
    "role": "caster",
    "text": "그런데, 빗나갑니다.",
    "cut": "plain",
-   "freq": 39
+   "freq": 47
   },
   {
    "role": "caster",
    "text": "여기서, 빗나갑니다.",
    "cut": "plain",
-   "freq": 39
+   "freq": 47
   },
   {
    "role": "caster",
-   "text": "여기서 경기가 끝납니다.",
+   "text": "막아냅니다!",
+   "cut": "plain",
+   "freq": 47
+  },
+  {
+   "role": "caster",
+   "text": "코너킥을 얻어냅니다.",
    "cut": "tail",
+   "freq": 47
+  },
+  {
+   "role": "analyst",
+   "text": "속도를 줄이고 나서 볼을 오래 소유합니다. 시간을 관리하는 거죠.",
+   "cut": "plain",
+   "freq": 46
+  },
+  {
+   "role": "analyst",
+   "text": "이 한 골로 경기 운영이 편해집니다.",
+   "cut": "plain",
+   "freq": 46
+  },
+  {
+   "role": "analyst",
+   "text": "측면으로 붙이기 시작한 뒤로 계속 저쪽에서 장면이 나옵니다.",
+   "cut": "plain",
+   "freq": 46
+  },
+  {
+   "role": "analyst",
+   "text": "교체 직후엔 자리가 한 번 흔들립니다. 지금이 그 시간이죠.",
+   "cut": "plain",
+   "freq": 46
+  },
+  {
+   "role": "caster",
+   "text": "골키퍼, 몸을 날립니다!",
+   "cut": "tail",
+   "freq": 43
+  },
+  {
+   "role": "caster",
+   "text": "자, 골문 옆으로 흐릅니다.",
+   "cut": "plain",
+   "freq": 42
+  },
+  {
+   "role": "caster",
+   "text": "아, 골문 옆으로 흐릅니다.",
+   "cut": "plain",
+   "freq": 42
+  },
+  {
+   "role": "caster",
+   "text": "네, 골문 옆으로 흐릅니다.",
+   "cut": "plain",
+   "freq": 42
+  },
+  {
+   "role": "caster",
+   "text": "그런데, 골문 옆으로 흐릅니다.",
+   "cut": "plain",
+   "freq": 42
+  },
+  {
+   "role": "caster",
+   "text": "여기서, 골문 옆으로 흐릅니다.",
+   "cut": "plain",
+   "freq": 42
+  },
+  {
+   "role": "analyst",
+   "text": "스리백으로 바꾼 뒤 중앙이 넓어져 있습니다.",
+   "cut": "plain",
+   "freq": 42
+  },
+  {
+   "role": "analyst",
+   "text": "포메이션을 바꾼 뒤로 서는 위치가 달라졌습니다.",
+   "cut": "plain",
+   "freq": 42
+  },
+  {
+   "role": "caster",
+   "text": "세이브!",
+   "cut": "tail",
+   "freq": 41
+  },
+  {
+   "role": "analyst",
+   "text": "압박을 낮춘 뒤로 공을 끊고 나가는 거리가 길어졌습니다.",
+   "cut": "plain",
+   "freq": 40
+  },
+  {
+   "role": "analyst",
+   "text": "템포를 올린 뒤로 실수도 같이 나오고 있습니다. 급할 때 나오는 장면이죠.",
+   "cut": "plain",
    "freq": 38
-  },
-  {
-   "role": "caster",
-   "text": "전반이 끝났습니다. 스코어는",
-   "cut": "head",
-   "freq": 36
-  },
-  {
-   "role": "caster",
-   "text": "하프타임을 알리는 휘슬입니다.",
-   "cut": "tail",
-   "freq": 35
   },
   {
    "role": "caster",
    "text": "경기 종료!",
    "cut": "tail",
-   "freq": 35
-  },
-  {
-   "role": "analyst",
-   "text": "네, 마무리가 침착했습니다. 서두르면 안 들어가거든요.",
-   "cut": "plain",
-   "freq": 32
-  },
-  {
-   "role": "analyst",
-   "text": "점수 차가 벌어지면 뒤진 쪽이 라인을 올려야 하죠.",
-   "cut": "plain",
-   "freq": 30
-  },
-  {
-   "role": "analyst",
-   "text": "앞서 있던 팀엔 뼈아프죠. 다시 만들어야 합니다.",
-   "cut": "plain",
-   "freq": 30
+   "freq": 37
   },
   {
    "role": "caster",
    "text": "전반 종료.",
    "cut": "tail",
-   "freq": 29
+   "freq": 36
+  },
+  {
+   "role": "analyst",
+   "text": "먼저 넣은 쪽이 경기를 끌고 갑니다.",
+   "cut": "plain",
+   "freq": 36
+  },
+  {
+   "role": "analyst",
+   "text": "제가 보기엔 후반 중반의 십 분이 승부처였습니다.",
+   "cut": "plain",
+   "freq": 36
+  },
+  {
+   "role": "analyst",
+   "text": "포백으로 돌아왔는데 측면 뒤가 계속 노출됩니다.",
+   "cut": "plain",
+   "freq": 36
+  },
+  {
+   "role": "analyst",
+   "text": "벤치가 흐름을 바꿔 보겠다는 겁니다.",
+   "cut": "plain",
+   "freq": 36
   },
   {
    "role": "caster",
-   "text": "대한민국은",
+   "text": "종료 휘슬. 최종 스코어",
    "cut": "head",
-   "freq": 28
+   "freq": 32
+  },
+  {
+   "role": "analyst",
+   "text": "네, 들어온 선수가 다리가 살아 있으니 확실히 다릅니다.",
+   "cut": "plain",
+   "freq": 32
+  },
+  {
+   "role": "analyst",
+   "text": "네, 압박 강도를 올리고 나서 상대가 후방에서 공을 못 돌리고 있습니다.",
+   "cut": "plain",
+   "freq": 32
+  },
+  {
+   "role": "analyst",
+   "text": "압박을 올린 뒤로 이런 뒷공간 장면이 늘었습니다.",
+   "cut": "plain",
+   "freq": 32
   },
   {
    "role": "caster",
-   "text": "남아프리카공화국은",
-   "cut": "head",
-   "freq": 28
+   "text": "하프타임을 알리는 휘슬입니다.",
+   "cut": "tail",
+   "freq": 30
   },
   {
    "role": "caster",
-   "text": "스페인은",
+   "text": "전반이 끝났습니다. 스코어는",
    "cut": "head",
    "freq": 28
   },
@@ -3871,176 +3973,98 @@
   },
   {
    "role": "analyst",
-   "text": "이건 완전히 새 경기입니다. 따라잡힌 쪽이 흔들리거든요.",
+   "text": "네, 마무리가 침착했습니다. 서두르면 안 들어가거든요.",
    "cut": "plain",
-   "freq": 28
+   "freq": 26
   },
   {
    "role": "caster",
-   "text": "종료 휘슬. 최종 스코어",
-   "cut": "head",
-   "freq": 27
-  },
-  {
-   "role": "caster",
-   "text": "킥오프!",
-   "cut": "head",
+   "text": "여기서 경기가 끝납니다.",
+   "cut": "tail",
    "freq": 25
   },
   {
    "role": "caster",
-   "text": "대",
-   "cut": "head",
-   "freq": 25
-  },
-  {
-   "role": "caster",
-   "text": "90분의 승부가 시작됩니다.",
+   "text": "계속 몰아붙입니다.",
    "cut": "tail",
    "freq": 25
-  },
-  {
-   "role": "analyst",
-   "text": "네, 이 흐름이면 한 골은 시간문제로 보입니다.",
-   "cut": "plain",
-   "freq": 24
-  },
-  {
-   "role": "caster",
-   "text": "선제골!",
-   "cut": "head",
-   "freq": 23
-  },
-  {
-   "role": "caster",
-   "text": "먼저 앞서 나갑니다!",
-   "cut": "tail",
-   "freq": 23
-  },
-  {
-   "role": "caster",
-   "text": "상대 진영에서만 경기를 하고 있습니다.",
-   "cut": "tail",
-   "freq": 23
-  },
-  {
-   "role": "caster",
-   "text": "균형이 깨집니다! 선취점은 대한민국입니다!",
-   "cut": "tail",
-   "freq": 22
-  },
-  {
-   "role": "caster",
-   "text": "균형이 깨집니다! 선취점은 체코입니다!",
-   "cut": "tail",
-   "freq": 22
-  },
-  {
-   "role": "caster",
-   "text": "균형이 깨집니다! 선취점은 멕시코입니다!",
-   "cut": "tail",
-   "freq": 22
-  },
-  {
-   "role": "caster",
-   "text": "균형이 깨집니다! 선취점은 남아프리카공화국입니다!",
-   "cut": "tail",
-   "freq": 22
-  },
-  {
-   "role": "caster",
-   "text": "균형이 깨집니다! 선취점은 에콰도르입니다!",
-   "cut": "tail",
-   "freq": 22
-  },
-  {
-   "role": "caster",
-   "text": "균형이 깨집니다! 선취점은 잉글랜드입니다!",
-   "cut": "tail",
-   "freq": 22
-  },
-  {
-   "role": "caster",
-   "text": "균형이 깨집니다! 선취점은 노르웨이입니다!",
-   "cut": "tail",
-   "freq": 22
-  },
-  {
-   "role": "caster",
-   "text": "균형이 깨집니다! 선취점은 아르헨티나입니다!",
-   "cut": "tail",
-   "freq": 22
-  },
-  {
-   "role": "caster",
-   "text": "균형이 깨집니다! 선취점은 스페인입니다!",
-   "cut": "tail",
-   "freq": 22
-  },
-  {
-   "role": "caster",
-   "text": "균형이 깨집니다! 선취점은 캐나다입니다!",
-   "cut": "tail",
-   "freq": 22
-  },
-  {
-   "role": "caster",
-   "text": "균형이 깨집니다! 선취점은 모로코입니다!",
-   "cut": "tail",
-   "freq": 22
-  },
-  {
-   "role": "caster",
-   "text": "균형이 깨집니다! 선취점은 프랑스입니다!",
-   "cut": "tail",
-   "freq": 22
-  },
-  {
-   "role": "analyst",
-   "text": "네, 이 시점의 동점골은 넣은 쪽에 힘이 확 실립니다.",
-   "cut": "plain",
-   "freq": 22
-  },
-  {
-   "role": "analyst",
-   "text": "이제 벤치는 다음 경기를 생각할 겁니다.",
-   "cut": "plain",
-   "freq": 22
   },
   {
    "role": "caster",
    "text": "귀중한 선제골입니다!",
    "cut": "tail",
-   "freq": 21
+   "freq": 24
   },
   {
    "role": "caster",
-   "text": "주심의 휘슬, 경기 시작입니다.",
-   "cut": "plain",
-   "freq": 21
+   "text": "킥오프!",
+   "cut": "head",
+   "freq": 24
   },
   {
    "role": "caster",
-   "text": "대한민국이 공을 굴립니다. 시작합니다.",
-   "cut": "plain",
-   "freq": 21
+   "text": "대",
+   "cut": "head",
+   "freq": 24
   },
   {
    "role": "caster",
-   "text": "남아프리카공화국이 공을 굴립니다. 시작합니다.",
-   "cut": "plain",
-   "freq": 21
+   "text": "90분의 승부가 시작됩니다.",
+   "cut": "tail",
+   "freq": 24
   },
   {
-   "role": "caster",
-   "text": "스페인이 공을 굴립니다. 시작합니다.",
+   "role": "analyst",
+   "text": "압박을 올린 뒤로 높은 위치에서 공을 끊는 장면이 나옵니다.",
    "cut": "plain",
-   "freq": 21
+   "freq": 24
+  },
+  {
+   "role": "analyst",
+   "text": "네, 내려서서 공간을 벌어 두고 한 번에 나갔습니다.",
+   "cut": "plain",
+   "freq": 24
+  },
+  {
+   "role": "analyst",
+   "text": "앞서 있던 팀엔 뼈아프죠. 다시 만들어야 합니다.",
+   "cut": "plain",
+   "freq": 24
   },
   {
    "role": "analyst",
    "text": "탐색전이 길어지고 있습니다. 먼저 움직이는 쪽이 위험을 안죠.",
    "cut": "plain",
+   "freq": 23
+  },
+  {
+   "role": "analyst",
+   "text": "네, 이 흐름이면 한 골은 시간문제로 보입니다.",
+   "cut": "plain",
+   "freq": 22
+  },
+  {
+   "role": "analyst",
+   "text": "이 골 하나로 경기 양상이 또 바뀝니다.",
+   "cut": "plain",
+   "freq": 22
+  },
+  {
+   "role": "analyst",
+   "text": "교체 카드를 쓰고 나서 곧바로 장면이 나옵니다.",
+   "cut": "plain",
+   "freq": 22
+  },
+  {
+   "role": "analyst",
+   "text": "네, 이 시점의 교체는 늦기 전에 하는 게 맞죠.",
+   "cut": "plain",
+   "freq": 22
+  },
+  {
+   "role": "caster",
+   "text": "상대 진영에서만 경기를 하고 있습니다.",
+   "cut": "tail",
    "freq": 21
   },
   {
@@ -4117,15 +4141,57 @@
   },
   {
    "role": "caster",
-   "text": "양 팀 다 숨을 고르고 있습니다.",
+   "text": "대한민국은",
+   "cut": "head",
+   "freq": 20
+  },
+  {
+   "role": "caster",
+   "text": "남아프리카공화국은",
+   "cut": "head",
+   "freq": 20
+  },
+  {
+   "role": "caster",
+   "text": "스페인은",
+   "cut": "head",
+   "freq": 20
+  },
+  {
+   "role": "analyst",
+   "text": "점수 차가 벌어지면 뒤진 쪽이 라인을 올려야 하죠.",
+   "cut": "plain",
+   "freq": 20
+  },
+  {
+   "role": "analyst",
+   "text": "이건 완전히 새 경기입니다. 따라잡힌 쪽이 흔들리거든요.",
    "cut": "plain",
    "freq": 20
   },
   {
    "role": "caster",
-   "text": "중원에서 공방이 이어집니다.",
+   "text": "양 팀 다 숨을 고르고 있습니다.",
    "cut": "plain",
-   "freq": 20
+   "freq": 19
+  },
+  {
+   "role": "caster",
+   "text": "대한민국이 공을 굴립니다. 시작합니다.",
+   "cut": "plain",
+   "freq": 19
+  },
+  {
+   "role": "caster",
+   "text": "남아프리카공화국이 공을 굴립니다. 시작합니다.",
+   "cut": "plain",
+   "freq": 19
+  },
+  {
+   "role": "caster",
+   "text": "스페인이 공을 굴립니다. 시작합니다.",
+   "cut": "plain",
+   "freq": 19
   },
   {
    "role": "analyst",
@@ -4135,165 +4201,27 @@
   },
   {
    "role": "caster",
-   "text": "멀티골! 오늘 첫 번째 골입니다!",
+   "text": "선제골!",
    "cut": "head",
    "freq": 18
   },
   {
    "role": "caster",
-   "text": "멀티골! 오늘 두 번째 골입니다!",
-   "cut": "head",
+   "text": "먼저 앞서 나갑니다!",
+   "cut": "tail",
    "freq": 18
   },
   {
    "role": "caster",
-   "text": "멀티골! 오늘 세 번째 골입니다!",
-   "cut": "head",
-   "freq": 18
-  },
-  {
-   "role": "caster",
-   "text": "멀티골! 오늘 네 번째 골입니다!",
-   "cut": "head",
-   "freq": 18
-  },
-  {
-   "role": "caster",
-   "text": "멀티골! 오늘 다섯 번째 골입니다!",
-   "cut": "head",
-   "freq": 18
-  },
-  {
-   "role": "caster",
-   "text": "멀티골! 오늘 여섯 번째 골입니다!",
-   "cut": "head",
-   "freq": 18
-  },
-  {
-   "role": "caster",
-   "text": "멀티골! 오늘 일곱 번째 골입니다!",
-   "cut": "head",
-   "freq": 18
-  },
-  {
-   "role": "caster",
-   "text": "멀티골! 오늘 여덟 번째 골입니다!",
-   "cut": "head",
-   "freq": 18
-  },
-  {
-   "role": "caster",
-   "text": "멀티골! 오늘 아홉 번째 골입니다!",
-   "cut": "head",
-   "freq": 18
-  },
-  {
-   "role": "caster",
-   "text": "멀티골! 오늘 열 번째 골입니다!",
-   "cut": "head",
-   "freq": 18
-  },
-  {
-   "role": "caster",
-   "text": "멀티골! 오늘 여러 번째 골입니다!",
-   "cut": "head",
+   "text": "주심의 휘슬, 경기 시작입니다.",
+   "cut": "plain",
    "freq": 18
   },
   {
    "role": "analyst",
-   "text": "네, 아직 시간이 있습니다. 다음 십 분이 중요해요.",
+   "text": "라인을 내린 뒤에 나온 역습입니다. 이걸 노린 거죠.",
    "cut": "plain",
    "freq": 18
-  },
-  {
-   "role": "caster",
-   "text": "영.",
-   "cut": "head",
-   "freq": 17
-  },
-  {
-   "role": "caster",
-   "text": "일.",
-   "cut": "head",
-   "freq": 17
-  },
-  {
-   "role": "caster",
-   "text": "이.",
-   "cut": "head",
-   "freq": 17
-  },
-  {
-   "role": "caster",
-   "text": "삼.",
-   "cut": "head",
-   "freq": 17
-  },
-  {
-   "role": "caster",
-   "text": "사.",
-   "cut": "head",
-   "freq": 17
-  },
-  {
-   "role": "caster",
-   "text": "오.",
-   "cut": "head",
-   "freq": 17
-  },
-  {
-   "role": "caster",
-   "text": "육.",
-   "cut": "head",
-   "freq": 17
-  },
-  {
-   "role": "caster",
-   "text": "칠.",
-   "cut": "head",
-   "freq": 17
-  },
-  {
-   "role": "caster",
-   "text": "팔.",
-   "cut": "head",
-   "freq": 17
-  },
-  {
-   "role": "caster",
-   "text": "구.",
-   "cut": "head",
-   "freq": 17
-  },
-  {
-   "role": "caster",
-   "text": "십.",
-   "cut": "head",
-   "freq": 17
-  },
-  {
-   "role": "caster",
-   "text": "대한민국이 계속 몰아붙입니다.",
-   "cut": "plain",
-   "freq": 17
-  },
-  {
-   "role": "caster",
-   "text": "남아프리카공화국이 계속 몰아붙입니다.",
-   "cut": "plain",
-   "freq": 17
-  },
-  {
-   "role": "caster",
-   "text": "스페인이 계속 몰아붙입니다.",
-   "cut": "plain",
-   "freq": 17
-  },
-  {
-   "role": "caster",
-   "text": "완전히 난타전입니다.",
-   "cut": "plain",
-   "freq": 17
   },
   {
    "role": "caster",
@@ -4303,115 +4231,253 @@
   },
   {
    "role": "caster",
-   "text": "열 명이 다 자기 진영에 서 있습니다.",
-   "cut": "plain",
+   "text": "균형이 깨집니다! 선취점은 대한민국입니다!",
+   "cut": "tail",
    "freq": 16
   },
   {
    "role": "caster",
-   "text": "특별한 장면 없이 시간이 흐릅니다.",
-   "cut": "plain",
+   "text": "균형이 깨집니다! 선취점은 체코입니다!",
+   "cut": "tail",
    "freq": 16
   },
   {
-   "role": "analyst",
-   "text": "한 골 차가 되면 지키는 쪽이 훨씬 불편해집니다.",
-   "cut": "plain",
+   "role": "caster",
+   "text": "균형이 깨집니다! 선취점은 멕시코입니다!",
+   "cut": "tail",
+   "freq": 16
+  },
+  {
+   "role": "caster",
+   "text": "균형이 깨집니다! 선취점은 남아프리카공화국입니다!",
+   "cut": "tail",
+   "freq": 16
+  },
+  {
+   "role": "caster",
+   "text": "균형이 깨집니다! 선취점은 에콰도르입니다!",
+   "cut": "tail",
+   "freq": 16
+  },
+  {
+   "role": "caster",
+   "text": "균형이 깨집니다! 선취점은 잉글랜드입니다!",
+   "cut": "tail",
+   "freq": 16
+  },
+  {
+   "role": "caster",
+   "text": "균형이 깨집니다! 선취점은 노르웨이입니다!",
+   "cut": "tail",
+   "freq": 16
+  },
+  {
+   "role": "caster",
+   "text": "균형이 깨집니다! 선취점은 아르헨티나입니다!",
+   "cut": "tail",
+   "freq": 16
+  },
+  {
+   "role": "caster",
+   "text": "균형이 깨집니다! 선취점은 스페인입니다!",
+   "cut": "tail",
+   "freq": 16
+  },
+  {
+   "role": "caster",
+   "text": "균형이 깨집니다! 선취점은 캐나다입니다!",
+   "cut": "tail",
+   "freq": 16
+  },
+  {
+   "role": "caster",
+   "text": "균형이 깨집니다! 선취점은 모로코입니다!",
+   "cut": "tail",
+   "freq": 16
+  },
+  {
+   "role": "caster",
+   "text": "균형이 깨집니다! 선취점은 프랑스입니다!",
+   "cut": "tail",
    "freq": 16
   },
   {
    "role": "caster",
    "text": "경기가 다소 잠잠해졌습니다.",
    "cut": "plain",
-   "freq": 15
+   "freq": 16
+  },
+  {
+   "role": "caster",
+   "text": "대한민국이",
+   "cut": "head",
+   "freq": 16
+  },
+  {
+   "role": "caster",
+   "text": "남아프리카공화국이",
+   "cut": "head",
+   "freq": 16
+  },
+  {
+   "role": "caster",
+   "text": "스페인이",
+   "cut": "head",
+   "freq": 16
+  },
+  {
+   "role": "caster",
+   "text": "중원에서 공방이 이어집니다.",
+   "cut": "plain",
+   "freq": 16
   },
   {
    "role": "analyst",
    "text": "체코는 숨 쉴 틈을 안 주고 있습니다.",
    "cut": "plain",
-   "freq": 15
+   "freq": 16
   },
   {
    "role": "analyst",
    "text": "멕시코는 숨 쉴 틈을 안 주고 있습니다.",
    "cut": "plain",
-   "freq": 15
+   "freq": 16
   },
   {
    "role": "analyst",
    "text": "에콰도르는 숨 쉴 틈을 안 주고 있습니다.",
    "cut": "plain",
-   "freq": 15
+   "freq": 16
   },
   {
    "role": "analyst",
    "text": "잉글랜드는 숨 쉴 틈을 안 주고 있습니다.",
    "cut": "plain",
-   "freq": 15
+   "freq": 16
   },
   {
    "role": "analyst",
    "text": "노르웨이는 숨 쉴 틈을 안 주고 있습니다.",
    "cut": "plain",
-   "freq": 15
+   "freq": 16
   },
   {
    "role": "analyst",
    "text": "아르헨티나는 숨 쉴 틈을 안 주고 있습니다.",
    "cut": "plain",
-   "freq": 15
+   "freq": 16
   },
   {
    "role": "analyst",
    "text": "캐나다는 숨 쉴 틈을 안 주고 있습니다.",
    "cut": "plain",
-   "freq": 15
+   "freq": 16
   },
   {
    "role": "analyst",
    "text": "모로코는 숨 쉴 틈을 안 주고 있습니다.",
    "cut": "plain",
-   "freq": 15
+   "freq": 16
   },
   {
    "role": "analyst",
    "text": "프랑스는 숨 쉴 틈을 안 주고 있습니다.",
    "cut": "plain",
+   "freq": 16
+  },
+  {
+   "role": "analyst",
+   "text": "네, 아직 시간이 있습니다. 다음 십 분이 중요해요.",
+   "cut": "plain",
+   "freq": 16
+  },
+  {
+   "role": "caster",
+   "text": "영.",
+   "cut": "head",
    "freq": 15
   },
   {
    "role": "caster",
-   "text": "잠시 소강 상태입니다.",
-   "cut": "plain",
-   "freq": 14
+   "text": "일.",
+   "cut": "head",
+   "freq": 15
   },
   {
    "role": "caster",
-   "text": "골입니다!",
+   "text": "이.",
+   "cut": "head",
+   "freq": 15
+  },
+  {
+   "role": "caster",
+   "text": "삼.",
+   "cut": "head",
+   "freq": 15
+  },
+  {
+   "role": "caster",
+   "text": "사.",
+   "cut": "head",
+   "freq": 15
+  },
+  {
+   "role": "caster",
+   "text": "오.",
+   "cut": "head",
+   "freq": 15
+  },
+  {
+   "role": "caster",
+   "text": "육.",
+   "cut": "head",
+   "freq": 15
+  },
+  {
+   "role": "caster",
+   "text": "칠.",
+   "cut": "head",
+   "freq": 15
+  },
+  {
+   "role": "caster",
+   "text": "팔.",
+   "cut": "head",
+   "freq": 15
+  },
+  {
+   "role": "caster",
+   "text": "구.",
+   "cut": "head",
+   "freq": 15
+  },
+  {
+   "role": "caster",
+   "text": "십.",
+   "cut": "head",
+   "freq": 15
+  },
+  {
+   "role": "caster",
+   "text": "교체 투입입니다.",
+   "cut": "tail",
+   "freq": 15
+  },
+  {
+   "role": "caster",
+   "text": "그라운드에 들어섭니다.",
    "cut": "tail",
    "freq": 14
   },
   {
-   "role": "caster",
-   "text": "완전히 내려섰습니다.",
-   "cut": "tail",
-   "freq": 14
-  },
-  {
    "role": "analyst",
-   "text": "네, 사실상 여기서 갈렸다고 봅니다.",
+   "text": "압박을 올린 만큼 뒷공간이 비어 있습니다. 위험 부담은 감수하겠다는 거죠.",
    "cut": "plain",
    "freq": 14
   },
   {
    "role": "analyst",
-   "text": "남은 시간을 생각하면 뒤집기가 쉽지 않습니다.",
-   "cut": "plain",
-   "freq": 14
-  },
-  {
-   "role": "analyst",
-   "text": "이거 몇 골이 날지 모르겠는데요.",
+   "text": "네, 이 시점의 동점골은 넣은 쪽에 힘이 확 실립니다.",
    "cut": "plain",
    "freq": 14
   },
@@ -4423,7 +4489,7 @@
   },
   {
    "role": "caster",
-   "text": "계속 몰아붙입니다.",
+   "text": "벤치가 움직입니다.",
    "cut": "tail",
    "freq": 13
   },
@@ -4431,17 +4497,173 @@
    "role": "analyst",
    "text": "대한민국은 숨 쉴 틈을 안 주고 있습니다.",
    "cut": "plain",
-   "freq": 12
+   "freq": 13
   },
   {
    "role": "analyst",
    "text": "남아프리카공화국은 숨 쉴 틈을 안 주고 있습니다.",
    "cut": "plain",
-   "freq": 12
+   "freq": 13
   },
   {
    "role": "analyst",
    "text": "스페인은 숨 쉴 틈을 안 주고 있습니다.",
+   "cut": "plain",
+   "freq": 13
+  },
+  {
+   "role": "caster",
+   "text": "잠시 소강 상태입니다.",
+   "cut": "plain",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "골입니다!",
+   "cut": "tail",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "추가골!",
+   "cut": "head",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "교체 카드를 씁니다.",
+   "cut": "tail",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "체코는",
+   "cut": "head",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "멕시코는",
+   "cut": "head",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "에콰도르는",
+   "cut": "head",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "잉글랜드는",
+   "cut": "head",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "노르웨이는",
+   "cut": "head",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "아르헨티나는",
+   "cut": "head",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "캐나다는",
+   "cut": "head",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "모로코는",
+   "cut": "head",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "프랑스는",
+   "cut": "head",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "특별한 장면 없이 시간이 흐릅니다.",
+   "cut": "plain",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "멀티골! 오늘 첫 번째 골입니다!",
+   "cut": "head",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "멀티골! 오늘 두 번째 골입니다!",
+   "cut": "head",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "멀티골! 오늘 세 번째 골입니다!",
+   "cut": "head",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "멀티골! 오늘 네 번째 골입니다!",
+   "cut": "head",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "멀티골! 오늘 다섯 번째 골입니다!",
+   "cut": "head",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "멀티골! 오늘 여섯 번째 골입니다!",
+   "cut": "head",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "멀티골! 오늘 일곱 번째 골입니다!",
+   "cut": "head",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "멀티골! 오늘 여덟 번째 골입니다!",
+   "cut": "head",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "멀티골! 오늘 아홉 번째 골입니다!",
+   "cut": "head",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "멀티골! 오늘 열 번째 골입니다!",
+   "cut": "head",
+   "freq": 12
+  },
+  {
+   "role": "caster",
+   "text": "멀티골! 오늘 여러 번째 골입니다!",
+   "cut": "head",
+   "freq": 12
+  },
+  {
+   "role": "analyst",
+   "text": "다리가 무거워진 자리를 먼저 정리합니다.",
    "cut": "plain",
    "freq": 12
   },
@@ -4453,9 +4675,21 @@
   },
   {
    "role": "caster",
-   "text": "또 한 골! 오늘 두 골째입니다!",
+   "text": "완전히 내려섰습니다.",
    "cut": "tail",
-   "freq": 10
+   "freq": 11
+  },
+  {
+   "role": "caster",
+   "text": "완전히 난타전입니다.",
+   "cut": "plain",
+   "freq": 11
+  },
+  {
+   "role": "analyst",
+   "text": "이거 몇 골이 날지 모르겠는데요.",
+   "cut": "plain",
+   "freq": 11
   },
   {
    "role": "caster",
@@ -4531,331 +4765,229 @@
   },
   {
    "role": "caster",
-   "text": "체코는",
-   "cut": "head",
-   "freq": 9
-  },
-  {
-   "role": "caster",
-   "text": "멕시코는",
-   "cut": "head",
-   "freq": 9
-  },
-  {
-   "role": "caster",
-   "text": "에콰도르는",
-   "cut": "head",
-   "freq": 9
-  },
-  {
-   "role": "caster",
-   "text": "잉글랜드는",
-   "cut": "head",
-   "freq": 9
-  },
-  {
-   "role": "caster",
-   "text": "노르웨이는",
-   "cut": "head",
-   "freq": 9
-  },
-  {
-   "role": "caster",
-   "text": "아르헨티나는",
-   "cut": "head",
-   "freq": 9
-  },
-  {
-   "role": "caster",
-   "text": "캐나다는",
-   "cut": "head",
-   "freq": 9
-  },
-  {
-   "role": "caster",
-   "text": "모로코는",
-   "cut": "head",
-   "freq": 9
-  },
-  {
-   "role": "caster",
-   "text": "프랑스는",
-   "cut": "head",
-   "freq": 9
-  },
-  {
-   "role": "caster",
    "text": "순식간에 두 골입니다.",
    "cut": "tail",
+   "freq": 10
+  },
+  {
+   "role": "caster",
+   "text": "동점골! 원점입니다!",
+   "cut": "head",
+   "freq": 10
+  },
+  {
+   "role": "analyst",
+   "text": "남은 시간을 생각하면 뒤집기가 쉽지 않습니다.",
+   "cut": "plain",
+   "freq": 10
+  },
+  {
+   "role": "analyst",
+   "text": "네, 사실상 여기서 갈렸다고 봅니다.",
+   "cut": "plain",
+   "freq": 10
+  },
+  {
+   "role": "analyst",
+   "text": "이제 벤치는 다음 경기를 생각할 겁니다.",
+   "cut": "plain",
+   "freq": 10
+  },
+  {
+   "role": "analyst",
+   "text": "대한민국, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "cut": "plain",
+   "freq": 10
+  },
+  {
+   "role": "analyst",
+   "text": "체코, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "cut": "plain",
+   "freq": 10
+  },
+  {
+   "role": "analyst",
+   "text": "멕시코, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "cut": "plain",
+   "freq": 10
+  },
+  {
+   "role": "analyst",
+   "text": "남아프리카공화국, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "cut": "plain",
+   "freq": 10
+  },
+  {
+   "role": "analyst",
+   "text": "에콰도르, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "cut": "plain",
+   "freq": 10
+  },
+  {
+   "role": "analyst",
+   "text": "잉글랜드, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "cut": "plain",
+   "freq": 10
+  },
+  {
+   "role": "analyst",
+   "text": "노르웨이, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "cut": "plain",
+   "freq": 10
+  },
+  {
+   "role": "analyst",
+   "text": "아르헨티나, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "cut": "plain",
+   "freq": 10
+  },
+  {
+   "role": "analyst",
+   "text": "스페인, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "cut": "plain",
+   "freq": 10
+  },
+  {
+   "role": "analyst",
+   "text": "캐나다, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "cut": "plain",
+   "freq": 10
+  },
+  {
+   "role": "analyst",
+   "text": "모로코, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "cut": "plain",
+   "freq": 10
+  },
+  {
+   "role": "analyst",
+   "text": "프랑스, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
+   "cut": "plain",
+   "freq": 10
+  },
+  {
+   "role": "analyst",
+   "text": "네, 경기 계획을 통째로 다시 짜야 하는 상황입니다.",
+   "cut": "plain",
+   "freq": 10
+  },
+  {
+   "role": "caster",
+   "text": "또 한 골! 오늘 두 골째입니다!",
+   "cut": "tail",
+   "freq": 9
+  },
+  {
+   "role": "caster",
+   "text": "경기를 다시 원점으로 돌립니다!",
+   "cut": "head",
+   "freq": 8
+  },
+  {
+   "role": "analyst",
+   "text": "한 골 차가 되면 지키는 쪽이 훨씬 불편해집니다.",
+   "cut": "plain",
    "freq": 8
   },
   {
    "role": "caster",
    "text": "한 골 따라붙습니다! 희망이 생깁니다!",
    "cut": "tail",
-   "freq": 8
-  },
-  {
-   "role": "caster",
-   "text": "동점골! 원점입니다!",
-   "cut": "head",
-   "freq": 8
-  },
-  {
-   "role": "caster",
-   "text": "추가골!",
-   "cut": "head",
-   "freq": 8
-  },
-  {
-   "role": "analyst",
-   "text": "대한민국은 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
-   "cut": "plain",
-   "freq": 8
-  },
-  {
-   "role": "analyst",
-   "text": "남아프리카공화국은 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
-   "cut": "plain",
-   "freq": 8
-  },
-  {
-   "role": "analyst",
-   "text": "스페인은 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
-   "cut": "plain",
-   "freq": 8
-  },
-  {
-   "role": "analyst",
-   "text": "네, 경기 계획을 통째로 다시 짜야 하는 상황입니다.",
-   "cut": "plain",
-   "freq": 8
-  },
-  {
-   "role": "analyst",
-   "text": "대한민국, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
-   "cut": "plain",
-   "freq": 8
-  },
-  {
-   "role": "analyst",
-   "text": "체코, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
-   "cut": "plain",
-   "freq": 8
-  },
-  {
-   "role": "analyst",
-   "text": "멕시코, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
-   "cut": "plain",
-   "freq": 8
-  },
-  {
-   "role": "analyst",
-   "text": "남아프리카공화국, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
-   "cut": "plain",
-   "freq": 8
-  },
-  {
-   "role": "analyst",
-   "text": "에콰도르, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
-   "cut": "plain",
-   "freq": 8
-  },
-  {
-   "role": "analyst",
-   "text": "잉글랜드, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
-   "cut": "plain",
-   "freq": 8
-  },
-  {
-   "role": "analyst",
-   "text": "노르웨이, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
-   "cut": "plain",
-   "freq": 8
-  },
-  {
-   "role": "analyst",
-   "text": "아르헨티나, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
-   "cut": "plain",
-   "freq": 8
-  },
-  {
-   "role": "analyst",
-   "text": "스페인, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
-   "cut": "plain",
-   "freq": 8
-  },
-  {
-   "role": "analyst",
-   "text": "캐나다, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
-   "cut": "plain",
-   "freq": 8
-  },
-  {
-   "role": "analyst",
-   "text": "모로코, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
-   "cut": "plain",
-   "freq": 8
-  },
-  {
-   "role": "analyst",
-   "text": "프랑스, 이제 나올 수밖에 없습니다. 공간이 생기죠.",
-   "cut": "plain",
-   "freq": 8
-  },
-  {
-   "role": "caster",
-   "text": "경기를 다시 원점으로 돌립니다!",
-   "cut": "head",
    "freq": 7
   },
   {
    "role": "caster",
-   "text": "다시 앞서 나갑니다!",
-   "cut": "tail",
-   "freq": 6
-  },
-  {
-   "role": "analyst",
-   "text": "역전은 다릅니다. 앞섰던 팀 라인이 내려가거든요.",
+   "text": "열 명이 다 자기 진영에 서 있습니다.",
    "cut": "plain",
-   "freq": 6
-  },
-  {
-   "role": "analyst",
-   "text": "대한민국, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
-   "cut": "plain",
-   "freq": 6
-  },
-  {
-   "role": "analyst",
-   "text": "체코, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
-   "cut": "plain",
-   "freq": 6
-  },
-  {
-   "role": "analyst",
-   "text": "멕시코, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
-   "cut": "plain",
-   "freq": 6
-  },
-  {
-   "role": "analyst",
-   "text": "남아프리카공화국, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
-   "cut": "plain",
-   "freq": 6
-  },
-  {
-   "role": "analyst",
-   "text": "에콰도르, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
-   "cut": "plain",
-   "freq": 6
-  },
-  {
-   "role": "analyst",
-   "text": "잉글랜드, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
-   "cut": "plain",
-   "freq": 6
-  },
-  {
-   "role": "analyst",
-   "text": "노르웨이, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
-   "cut": "plain",
-   "freq": 6
-  },
-  {
-   "role": "analyst",
-   "text": "아르헨티나, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
-   "cut": "plain",
-   "freq": 6
-  },
-  {
-   "role": "analyst",
-   "text": "스페인, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
-   "cut": "plain",
-   "freq": 6
-  },
-  {
-   "role": "analyst",
-   "text": "캐나다, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
-   "cut": "plain",
-   "freq": 6
-  },
-  {
-   "role": "analyst",
-   "text": "모로코, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
-   "cut": "plain",
-   "freq": 6
-  },
-  {
-   "role": "analyst",
-   "text": "프랑스, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
-   "cut": "plain",
-   "freq": 6
+   "freq": 7
   },
   {
    "role": "caster",
    "text": "골로 간격을 좁힙니다.",
    "cut": "tail",
-   "freq": 5
-  },
-  {
-   "role": "caster",
-   "text": "쐐기를 박습니다!",
-   "cut": "head",
-   "freq": 5
+   "freq": 7
   },
   {
    "role": "analyst",
    "text": "체코는 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
    "cut": "plain",
-   "freq": 5
+   "freq": 7
   },
   {
    "role": "analyst",
    "text": "멕시코는 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
    "cut": "plain",
-   "freq": 5
+   "freq": 7
   },
   {
    "role": "analyst",
    "text": "에콰도르는 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
    "cut": "plain",
-   "freq": 5
+   "freq": 7
   },
   {
    "role": "analyst",
    "text": "잉글랜드는 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
    "cut": "plain",
-   "freq": 5
+   "freq": 7
   },
   {
    "role": "analyst",
    "text": "노르웨이는 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
    "cut": "plain",
-   "freq": 5
+   "freq": 7
   },
   {
    "role": "analyst",
    "text": "아르헨티나는 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
    "cut": "plain",
-   "freq": 5
+   "freq": 7
   },
   {
    "role": "analyst",
    "text": "캐나다는 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
    "cut": "plain",
-   "freq": 5
+   "freq": 7
   },
   {
    "role": "analyst",
    "text": "모로코는 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
    "cut": "plain",
-   "freq": 5
+   "freq": 7
   },
   {
    "role": "analyst",
    "text": "프랑스는 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
+   "cut": "plain",
+   "freq": 7
+  },
+  {
+   "role": "analyst",
+   "text": "네, 이 골 하나로 두 팀의 계획이 통째로 바뀝니다.",
+   "cut": "plain",
+   "freq": 6
+  },
+  {
+   "role": "caster",
+   "text": "골입니다. 이걸로 사실상 승부는 결정됐습니다.",
+   "cut": "tail",
+   "freq": 5
+  },
+  {
+   "role": "analyst",
+   "text": "대한민국은 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
+   "cut": "plain",
+   "freq": 5
+  },
+  {
+   "role": "analyst",
+   "text": "남아프리카공화국은 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
+   "cut": "plain",
+   "freq": 5
+  },
+  {
+   "role": "analyst",
+   "text": "스페인은 잠그고 역습을 노리는 겁니다. 뚫기가 쉽지 않아요.",
    "cut": "plain",
    "freq": 5
   },
@@ -4867,73 +4999,43 @@
   },
   {
    "role": "caster",
-   "text": "승부에 쐐기를 박는 골입니다.",
-   "cut": "tail",
-   "freq": 4
-  },
-  {
-   "role": "caster",
-   "text": "퇴장!",
-   "cut": "head",
-   "freq": 4
-  },
-  {
-   "role": "caster",
-   "text": "수적 열세에 놓입니다.",
-   "cut": "tail",
-   "freq": 4
-  },
-  {
-   "role": "caster",
-   "text": "점수가 벌어집니다.",
-   "cut": "tail",
-   "freq": 4
-  },
-  {
-   "role": "analyst",
-   "text": "수적 열세는 체력에서 먼저 옵니다.",
-   "cut": "plain",
-   "freq": 4
-  },
-  {
-   "role": "analyst",
-   "text": "네, 이 골 하나로 두 팀의 계획이 통째로 바뀝니다.",
-   "cut": "plain",
-   "freq": 4
-  },
-  {
-   "role": "caster",
-   "text": "연속 실점입니다.",
-   "cut": "tail",
-   "freq": 3
-  },
-  {
-   "role": "caster",
    "text": "리드를 되찾습니다!",
    "cut": "tail",
+   "freq": 4
+  },
+  {
+   "role": "caster",
+   "text": "쐐기를 박습니다!",
+   "cut": "head",
+   "freq": 4
+  },
+  {
+   "role": "analyst",
+   "text": "역전은 다릅니다. 앞섰던 팀 라인이 내려가거든요.",
+   "cut": "plain",
+   "freq": 4
+  },
+  {
+   "role": "caster",
+   "text": "다시 앞서 나갑니다!",
+   "cut": "tail",
    "freq": 3
   },
   {
    "role": "caster",
-   "text": "추격골입니다! 아직 끝나지 않았습니다!",
+   "text": "균형을 깨는 골입니다!",
    "cut": "head",
    "freq": 3
   },
   {
    "role": "caster",
-   "text": "끌려가던",
+   "text": "뒤집었습니다!",
    "cut": "head",
    "freq": 3
   },
   {
    "role": "caster",
-   "text": "드디어 앞서 나갑니다!",
-   "cut": "head",
-   "freq": 3
-  },
-  {
-   "role": "caster",
-   "text": "또 들어갔습니다. 수비가 흔들리네요.",
+   "text": "경기를 뒤집습니다!",
    "cut": "tail",
    "freq": 3
   },
@@ -4945,20 +5047,26 @@
   },
   {
    "role": "caster",
-   "text": "점수가 벌어집니다. 또 들어갔습니다. 수비가 흔들리네요.",
-   "cut": "tail",
-   "freq": 2
+   "text": "역전! 역전골입니다!",
+   "cut": "head",
+   "freq": 3
   },
   {
    "role": "caster",
-   "text": "쐐기골입니다. 이제 뒤집기는 어려워 보이네요.",
+   "text": "여기서 그라운드를 떠납니다.",
    "cut": "tail",
-   "freq": 2
+   "freq": 3
   },
   {
    "role": "caster",
    "text": "또 한 골! 오늘 두 골째입니다! 또 들어갔습니다. 수비가 흔들리네요.",
    "cut": "tail",
+   "freq": 2
+  },
+  {
+   "role": "caster",
+   "text": "추격골입니다! 아직 끝나지 않았습니다!",
+   "cut": "head",
    "freq": 2
   },
   {
@@ -4969,32 +5077,128 @@
   },
   {
    "role": "caster",
-   "text": "골입니다. 이걸로 사실상 승부는 결정됐습니다.",
-   "cut": "tail",
-   "freq": 2
-  },
-  {
-   "role": "caster",
-   "text": "여기서 그라운드를 떠납니다.",
-   "cut": "tail",
-   "freq": 2
-  },
-  {
-   "role": "caster",
-   "text": "뒤집었습니다!",
+   "text": "끌려가던",
    "cut": "head",
    "freq": 2
   },
   {
    "role": "caster",
-   "text": "경기를 뒤집습니다!",
+   "text": "드디어 앞서 나갑니다!",
+   "cut": "head",
+   "freq": 2
+  },
+  {
+   "role": "caster",
+   "text": "또 들어갔습니다. 수비가 흔들리네요.",
    "cut": "tail",
    "freq": 2
   },
   {
    "role": "caster",
-   "text": "균형을 깨는 골입니다!",
+   "text": "해트트릭! 오늘 경기 공은",
    "cut": "head",
+   "freq": 2
+  },
+  {
+   "role": "caster",
+   "text": "이 선수가 챙겨 갑니다!",
+   "cut": "tail",
+   "freq": 2
+  },
+  {
+   "role": "caster",
+   "text": "점수가 벌어집니다. 연속 실점입니다.",
+   "cut": "tail",
+   "freq": 2
+  },
+  {
+   "role": "caster",
+   "text": "점수가 벌어집니다.",
+   "cut": "tail",
+   "freq": 2
+  },
+  {
+   "role": "caster",
+   "text": "승부에 쐐기를 박는 골입니다.",
+   "cut": "tail",
+   "freq": 2
+  },
+  {
+   "role": "analyst",
+   "text": "대한민국, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "cut": "plain",
+   "freq": 2
+  },
+  {
+   "role": "analyst",
+   "text": "체코, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "cut": "plain",
+   "freq": 2
+  },
+  {
+   "role": "analyst",
+   "text": "멕시코, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "cut": "plain",
+   "freq": 2
+  },
+  {
+   "role": "analyst",
+   "text": "남아프리카공화국, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "cut": "plain",
+   "freq": 2
+  },
+  {
+   "role": "analyst",
+   "text": "에콰도르, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "cut": "plain",
+   "freq": 2
+  },
+  {
+   "role": "analyst",
+   "text": "잉글랜드, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "cut": "plain",
+   "freq": 2
+  },
+  {
+   "role": "analyst",
+   "text": "노르웨이, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "cut": "plain",
+   "freq": 2
+  },
+  {
+   "role": "analyst",
+   "text": "아르헨티나, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "cut": "plain",
+   "freq": 2
+  },
+  {
+   "role": "analyst",
+   "text": "스페인, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "cut": "plain",
+   "freq": 2
+  },
+  {
+   "role": "analyst",
+   "text": "캐나다, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "cut": "plain",
+   "freq": 2
+  },
+  {
+   "role": "analyst",
+   "text": "모로코, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "cut": "plain",
+   "freq": 2
+  },
+  {
+   "role": "analyst",
+   "text": "프랑스, 이제 한 명을 빼고 수비 숫자를 맞춰야 합니다.",
+   "cut": "plain",
+   "freq": 2
+  },
+  {
+   "role": "analyst",
+   "text": "수적 열세는 체력에서 먼저 옵니다.",
+   "cut": "plain",
    "freq": 2
   },
   {
@@ -5005,37 +5209,31 @@
   },
   {
    "role": "caster",
+   "text": "골입니다! 연속 실점입니다.",
+   "cut": "tail",
+   "freq": 1
+  },
+  {
+   "role": "caster",
+   "text": "골입니다! 순식간에 두 골입니다.",
+   "cut": "tail",
+   "freq": 1
+  },
+  {
+   "role": "caster",
    "text": "승부에 쐐기를 박는 골입니다. 또 들어갔습니다. 수비가 흔들리네요.",
    "cut": "tail",
    "freq": 1
   },
   {
    "role": "caster",
-   "text": "쐐기골입니다. 이제 뒤집기는 어려워 보이네요. 연속 실점입니다.",
+   "text": "쐐기골입니다. 이제 뒤집기는 어려워 보이네요.",
    "cut": "tail",
    "freq": 1
   },
   {
    "role": "caster",
-   "text": "쐐기골입니다. 이제 뒤집기는 어려워 보이네요. 순식간에 두 골입니다.",
-   "cut": "tail",
-   "freq": 1
-  },
-  {
-   "role": "caster",
-   "text": "또 한 골! 오늘 두 골째입니다! 순식간에 두 골입니다.",
-   "cut": "tail",
-   "freq": 1
-  },
-  {
-   "role": "caster",
-   "text": "해트트릭!",
-   "cut": "head",
-   "freq": 1
-  },
-  {
-   "role": "caster",
-   "text": "해트트릭입니다!",
+   "text": "승부에 쐐기를 박는 골입니다. 연속 실점입니다.",
    "cut": "tail",
    "freq": 1
   },
@@ -5047,19 +5245,25 @@
   },
   {
    "role": "caster",
-   "text": "골! 극장골입니다!",
-   "cut": "head",
+   "text": "연속 실점입니다.",
+   "cut": "tail",
    "freq": 1
   },
   {
    "role": "caster",
-   "text": "역전! 역전골입니다!",
-   "cut": "head",
+   "text": "쐐기골입니다. 이제 뒤집기는 어려워 보이네요. 또 들어갔습니다. 수비가 흔들리네요.",
+   "cut": "tail",
    "freq": 1
   },
   {
    "role": "caster",
    "text": "이거 큽니다. 완전히 새 경기가 됐습니다! 연속 실점입니다.",
+   "cut": "tail",
+   "freq": 1
+  },
+  {
+   "role": "caster",
+   "text": "쐐기골입니다. 이제 뒤집기는 어려워 보이네요. 연속 실점입니다.",
    "cut": "tail",
    "freq": 1
   },
@@ -5071,13 +5275,25 @@
   },
   {
    "role": "caster",
-   "text": "해트트릭! 오늘 경기 공은",
+   "text": "퇴장!",
    "cut": "head",
    "freq": 1
   },
   {
    "role": "caster",
-   "text": "이 선수가 챙겨 갑니다! 또 들어갔습니다. 수비가 흔들리네요.",
+   "text": "수적 열세에 놓입니다.",
+   "cut": "tail",
+   "freq": 1
+  },
+  {
+   "role": "caster",
+   "text": "해트트릭!",
+   "cut": "head",
+   "freq": 1
+  },
+  {
+   "role": "caster",
+   "text": "해트트릭입니다! 연속 실점입니다.",
    "cut": "tail",
    "freq": 1
   },
@@ -5090,12 +5306,6 @@
   {
    "role": "caster",
    "text": "골입니다.",
-   "cut": "tail",
-   "freq": 1
-  },
-  {
-   "role": "caster",
-   "text": "점수가 벌어집니다. 연속 실점입니다.",
    "cut": "tail",
    "freq": 1
   }

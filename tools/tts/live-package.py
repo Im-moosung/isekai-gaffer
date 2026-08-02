@@ -32,7 +32,12 @@ import re
 import subprocess
 import sys
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# ★ 이 파일은 tools/tts/ 아래에 있다. 저장소 루트는 **세 번** 올라가야 나온다
+#   (live-package.py → tts → tools → repo). 두 번만 올라가면 ROOT가 `tools`가 되고,
+#   os.chdir(ROOT) 뒤의 상대 경로가 전부 어긋난다(실측: mp3는 구워지는데
+#   `public/tts/index.json`에서 FileNotFoundError). 다른 tools 스크립트는 대부분
+#   루트에서 실행돼 이 계산이 드러나지 않았다.
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 JOBS = "docs/audio/tts/qwen-jobs-live.json"
 PLAN = "docs/audio/tts/live-plan.json"
 PUB = "public/tts"
@@ -65,6 +70,7 @@ def duration(path: str) -> float:
 
 
 def loudness(path: str) -> float | None:
+    """EBU R128 integrated loudness. **0.4초 미만 클립에는 쓸 수 없다** — 아래 참조."""
     r = subprocess.run(
         ["ffmpeg", "-hide_banner", "-nostats", "-i", path,
          "-af", "ebur128=framelog=quiet", "-f", "null", "-"],
@@ -72,6 +78,32 @@ def loudness(path: str) -> float | None:
     )
     m = re.findall(r"I:\s*(-?[0-9.]+) LUFS", r.stderr)
     return float(m[-1]) if m else None
+
+
+def peak_db(path: str) -> float | None:
+    """최대 진폭(dBFS). 길이와 무관하게 유효하므로 **무음 판정은 이 값으로 한다**.
+
+    ★ 2026-08-02: 원래 이 스크립트는 무음도 loudness()로 판정했다. 그 결과
+      "무음 25건"이라는 오진이 나왔고 코덱스에게 멀쩡한 클립 25개를 재생성시켰다.
+      원인은 EBU R128의 **400ms 게이팅 블록**이다 — 0.4초 미만 파일은 게이트를
+      통과하는 블록이 하나도 없어 측정 자체가 성립하지 않고 −70(무한소)이 나온다.
+      그것은 "소리가 없다"가 아니라 "잴 수 없다"는 뜻이다.
+
+      오진을 알아챈 단서는 경계가 지나치게 깨끗했다는 점이었다 — '복구됨' 6개가
+      전부 0.40초 이상, '여전히 무음' 19개가 전부 0.39초 이하였다. 실제 오디오
+      결함이 0.4초에서 칼같이 갈릴 리 없다. volumedetect로 다시 재니 25개 모두
+      peak −3~−15dB로 멀쩡했다.
+
+      경기 중계 클립은 `일.` `골!` 처럼 0.2초짜리가 흔하다. 이 경로에서 R128을
+      무음 판정에 쓰는 것은 구조적으로 틀렸다.
+    """
+    r = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-nostats", "-i", path,
+         "-af", "volumedetect", "-f", "null", "-"],
+        capture_output=True, text=True, check=False,
+    )
+    m = re.search(r"max_volume:\s*(-?[0-9.]+) dB", r.stderr)
+    return float(m.group(1)) if m else None
 
 
 def find_raw(raw_dir: str, key: str) -> str | None:
@@ -174,19 +206,42 @@ def write_index(jobs: list[dict], plan: dict) -> None:
           f" · warm {len(warm)}개 · 총 {total / 1024 / 1024:.2f} MB")
 
 
+#: R128 integrated loudness가 성립하는 최소 길이. 게이팅 블록이 400ms다 —
+#  이보다 짧으면 유효 블록이 0개라 측정값이 −70으로 떨어진다(peak_db 주석 참조).
+R128_MIN_SEC = 0.45
+
+
 def audit(jobs: list[dict]) -> None:
-    """라우드니스가 −16 LUFS에서 ±2 LU 밖인 클립을 보고한다. 이음매에서 음량이
-    뛰면 조각이 다른 사람처럼 들린다 — 화자 고정의 마지막 축이다."""
-    out = []
+    """두 가지를 따로 본다. **무음은 길이와 무관한 peak로, 라우드니스는 R128로.**
+    한 잣대로 뭉뚱그리면 짧은 클립이 전부 무음으로 오진된다(peak_db 주석 참조).
+
+    라우드니스를 보는 이유는 이음매다 — 조각마다 음량이 뛰면 같은 사람이 아닌
+    것처럼 들린다. 화자 고정의 마지막 축이다.
+    """
+    silent, loud_off, unmeasurable = [], [], 0
     for job in jobs:
         p = os.path.join(PUB, f"{job['key']}.mp3")
         if not os.path.exists(p):
             continue
+        # ① 무음 — 이것만이 진짜 결함이다. 재생성해야 한다.
+        pk = peak_db(p)
+        if pk is None or pk < -50.0:
+            silent.append((job["key"], job["text"], pk))
+            continue
+        # ② 라우드니스 — 길이가 되는 클립만. 짧으면 판정을 포기한다(오진보다 낫다).
+        if duration(p) < R128_MIN_SEC:
+            unmeasurable += 1
+            continue
         lu = loudness(p)
         if lu is not None and abs(lu + 16.0) > 2.0:
-            out.append((job["key"], job["text"], lu))
-    print(f"\n라우드니스 감사: 이탈 {len(out)}건")
-    for k, t, lu in sorted(out, key=lambda x: x[2])[:20]:
+            loud_off.append((job["key"], job["text"], lu))
+
+    print(f"\n무음 감사(peak < −50dB): {len(silent)}건")
+    for k, t, pk in silent:
+        print(f"   peak {pk if pk is not None else float('nan'):6.1f} dB  {k}  {t!r}")
+    print(f"라우드니스 감사(−16±2 LUFS): 이탈 {len(loud_off)}건"
+          f" · 너무 짧아 판정 보류 {unmeasurable}건")
+    for k, t, lu in sorted(loud_off, key=lambda x: x[2])[:20]:
         print(f"   {lu:6.1f} LUFS  {k}  {t!r}")
 
 

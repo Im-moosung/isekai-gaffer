@@ -65,6 +65,8 @@ def main():
     ap.add_argument("--batch", type=int, default=16, help="한 요청에 넣을 문장 수")
     ap.add_argument("--role", default=None, help="이 역할만 생성(caster|analyst)")
     ap.add_argument("--resume", action="store_true", help="이미 있는 wav는 건너뛴다")
+    ap.add_argument("--limit", type=int, default=None,
+                    help="앞에서부터 이 개수만 생성(파일럿용)")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
 
@@ -75,6 +77,8 @@ def main():
     jobs = json.load(open(a.jobs, encoding="utf-8"))["jobs"]
     if a.role:
         jobs = [j for j in jobs if j["role"] == a.role]
+    if a.limit is not None:
+        jobs = jobs[:a.limit]
     if a.resume:
         jobs = [j for j in jobs
                 if not os.path.exists(f"{a.out}/{j['key'].replace('/', '__')}.wav")]

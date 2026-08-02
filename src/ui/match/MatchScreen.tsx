@@ -313,12 +313,13 @@ export function MatchScreen({
    *
    * ★ 킥오프에서 읽으면 늦는다 — `ctts.initVoice()`가 부르는 `loadClipIndex()`는
    *   비동기 fetch인데 `beginScript`는 바로 다음 줄에서 **동기로** 판정한다. 조회표가
-   *   아직 null이라 `canSpeakAll`이 항상 false를 내고, 클립이 다 있어도 브라우저
-   *   음성으로 폴백했다(실측: `/tts/` 요청이 index.json 하나뿐이고 발화는 speechSynthesis).
+   *   아직 null이라 `canSpeakAll`이 항상 false를 내고, 클립이 다 있어도 소리를 잃었다
+   *   (실측: `/tts/` 요청이 index.json 하나뿐이었다).
    *
-   *   조회표는 12KB 정적 JSON이라 오디오 컨텍스트도 유저 제스처도 필요 없다.
+   *   조회표는 60KB 정적 JSON이라 오디오 컨텍스트도 유저 제스처도 필요 없다.
    *   여기서 미리 읽어 두면 킥오프 시점에는 이미 준비돼 있다.
-   *   ★ 보이스 탐색(`initVoice`)은 여전히 킥오프에서 한다 — 그쪽은 제스처가 필요하다.
+   *   ★ 킥오프의 `ctts.initVoice()`는 이제 이 호출의 예비책일 뿐이다 — 예전엔 거기서
+   *     ko-KR **보이스**를 탐색했지만, speechSynthesis 폴백이 사라져 할 일이 없어졌다.
    */
   useEffect(() => { mp3.loadClipIndex() }, [])
 
@@ -663,15 +664,18 @@ export function MatchScreen({
   }
 
   /**
-   * 입장 소개 대본을 mp3 경로로 넘긴다 — 덮이지 않으면 조용히 브라우저 음성으로 남는다.
+   * 입장 소개 대본을 mp3 경로로 넘긴다 — 덮이지 않으면 대본이 통째로 무음이 된다.
    *
    * ★ **전부 아니면 전무**가 계약이다(ctts.beginScript). 대본 한 줄이라도 클립이 없으면
-   *   대본 전체를 speechSynthesis로 낸다 — 반쯤 mp3인 라인업 소개는 줄마다 목소리가
-   *   바뀌어 통째로 브라우저 음성인 것보다 나쁘다.
+   *   대본 전체가 조용하다 — 스물 몇 줄 중 몇 줄만 소리가 나면 명단에서 몇 명을 빠뜨린
+   *   것처럼 들린다. (2026-08-02 이전엔 그 자리가 브라우저 기본 음성이었다. 폴백을
+   *   걷어낸 근거는 audio/commentary-tts.ts 헤더에 있다.)
+   *
+   * 자막·소개 카드·행진 연출은 이 판정과 무관하게 그대로 흐른다 — 정보는 잃지 않는다.
    *
    * 지금 클립은 12개국 전부를 덮지만(public/tts/index.json), 팀 데이터나 XI 선정이
    * 바뀌면 이름이 어긋나 false로 떨어질 수 있다 — 실제로 `9992bca`(squad 배열 재정렬)가
-   * 선발을 바꿔 14명이 누락된 적이 있다. 그때도 화면은 조용히 폴백할 뿐 깨지지 않는다.
+   * 선발을 바꿔 14명이 누락된 적이 있다. 그때도 화면은 조용해질 뿐 깨지지 않는다.
    */
   function beginEntranceScript(scr: EntranceScript) {
     ctts.beginScript(scr.beats.map(b => b.speech))

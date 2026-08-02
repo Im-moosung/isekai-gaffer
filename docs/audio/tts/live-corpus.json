@@ -1,6 +1,6 @@
 {
  "seeds": 24,
- "totalUtter": 11093,
+ "totalUtter": 10890,
  "domain": {
   "NAME": 147,
   "TEAM": 12,
@@ -13,21 +13,21 @@
  "designs": [
   {
    "label": "① 재작성 전(이름 조사 9형태) · 합치기 없음",
-   "clips": 736,
-   "seams": 9656,
-   "avgSeams": 0.870458847922113
+   "clips": 771,
+   "seams": 8969,
+   "avgSeams": 0.8235996326905418
   },
   {
    "label": "② 재작성 후(이름 2형태) · 합치기 없음",
-   "clips": 736,
-   "seams": 9656,
-   "avgSeams": 0.870458847922113
+   "clips": 771,
+   "seams": 8969,
+   "avgSeams": 0.8235996326905418
   },
   {
    "label": "③ 재작성 후 + 탐욕 합치기(비≥0.7) — **채택**",
-   "clips": 851,
-   "seams": 7301,
-   "avgSeams": 0.6581628053727576
+   "clips": 886,
+   "seams": 6810,
+   "avgSeams": 0.6253443526170799
   }
  ],
  "merges": [
@@ -35,8 +35,8 @@
    "pattern": "균형이 깨집니다! 선취점은 {TEAM:입니다!}",
    "ratio": null,
    "dClips": -1,
-   "dSeams": 22,
-   "freq": 22
+   "dSeams": 16,
+   "freq": 16
   },
   {
    "pattern": "{SCOREB:!} ",
@@ -47,73 +47,73 @@
   },
   {
    "pattern": "{TEAM:이} 기회를 살리지 못합니다.",
-   "ratio": 3.3654857417590667,
+   "ratio": 3.1833486378940923,
    "dClips": 3,
-   "dSeams": 112,
-   "freq": 112
+   "dSeams": 104,
+   "freq": 104
   },
   {
    "pattern": "{TEAM:} 진영에서 반칙이 나옵니다.",
-   "ratio": 2.9010924170033516,
+   "ratio": 2.7548209366391188,
    "dClips": 11,
-   "dSeams": 354,
-   "freq": 354
+   "dSeams": 330,
+   "freq": 330
   },
   {
    "pattern": "{TEAM:이} 코너킥을 얻어냅니다.",
-   "ratio": 2.3738694071336277,
+   "ratio": 2.5099479644934193,
    "dClips": 3,
-   "dSeams": 79,
-   "freq": 79
+   "dSeams": 82,
+   "freq": 82
   },
   {
    "pattern": " 오늘 벌써 {ORD:}",
-   "ratio": 1.7488506265212298,
+   "ratio": 1.753902662993572,
    "dClips": 10,
-   "dSeams": 194,
-   "freq": 194
+   "dSeams": 191,
+   "freq": 191
   },
   {
    "pattern": " 오늘 벌써 {ORD:} 파울입니다. 카드가 나올 수 있어요.",
    "ratio": null,
    "dClips": -1,
-   "dSeams": 194,
-   "freq": 194
+   "dSeams": 191,
+   "freq": 191
   },
   {
    "pattern": "{FILLER:}파울입니다.",
-   "ratio": 1.5685567474984223,
+   "ratio": 1.5794306703397614,
    "dClips": 5,
-   "dSeams": 87,
-   "freq": 87
+   "dSeams": 86,
+   "freq": 86
+  },
+  {
+   "pattern": "{FILLER:}주심, 휘슬을 붑니다.",
+   "ratio": 1.4141414141414141,
+   "dClips": 5,
+   "dSeams": 77,
+   "freq": 77
   },
   {
    "pattern": " 오늘 {ORD:}",
-   "ratio": 1.5144685837915801,
+   "ratio": 1.3314967860422406,
    "dClips": 10,
-   "dSeams": 168,
-   "freq": 168
+   "dSeams": 145,
+   "freq": 145
   },
   {
    "pattern": " 오늘 {ORD:} 선방입니다.",
    "ratio": null,
    "dClips": -1,
-   "dSeams": 168,
-   "freq": 168
-  },
-  {
-   "pattern": "{FILLER:}주심, 휘슬을 붑니다.",
-   "ratio": 1.2981159289642117,
-   "dClips": 5,
-   "dSeams": 72,
-   "freq": 72
+   "dSeams": 145,
+   "freq": 145
   },
   {
    "pattern": "{TEAM:의} 코너킥입니다.",
-   "ratio": 1.1883005662866837,
+   "ratio": 1.185407796978045,
    "dClips": 11,
-   "dSeams": 145,
-   "freq": 145
+   "dSeams": 142,
+   "freq": 142
   },
   {
    "pattern": "{TEAM:의} 킥오프, 경기가 열립니다.",
@@ -123,87 +123,80 @@
    "freq": 20
   },
   {
-   "pattern": "{TEAM:,} 코너에 공을 올립니다.",
-   "ratio": 1.1637150373290281,
+   "pattern": "{TEAM:,} 세트피스 기회를 잡네요.",
+   "ratio": 1.0101010101010102,
    "dClips": 11,
-   "dSeams": 142,
-   "freq": 142
+   "dSeams": 121,
+   "freq": 121
   },
   {
-   "pattern": "{TEAM:,} 세트피스 기회를 잡네요.",
-   "ratio": 1.1555198610098094,
+   "pattern": "{TEAM:,} 코너에 공을 올립니다.",
+   "ratio": 0.9850571834042909,
    "dClips": 11,
-   "dSeams": 141,
-   "freq": 141
+   "dSeams": 118,
+   "freq": 118
   },
   {
    "pattern": "{TEAM:가} 기회를 살리지 못합니다.",
-   "ratio": 0.9578112323086632,
+   "ratio": 0.8838383838383839,
    "dClips": 8,
-   "dSeams": 85,
-   "freq": 85
+   "dSeams": 77,
+   "freq": 77
   },
   {
    "pattern": "{TEAM:이} 공을 굴립니다. 시작합니다.",
-   "ratio": 0.9465428648697376,
+   "ratio": 0.8723599632690542,
    "dClips": 2,
-   "dSeams": 21,
-   "freq": 21
+   "dSeams": 19,
+   "freq": 19
   },
   {
-   "pattern": "{TEAM:이} 계속 몰아붙입니다.",
-   "ratio": null,
-   "dClips": 0,
-   "dSeams": 17,
-   "freq": 17
+   "pattern": "{FILLER:}빗나갑니다.",
+   "ratio": 0.8631772268135904,
+   "dClips": 5,
+   "dSeams": 47,
+   "freq": 47
   },
   {
    "pattern": "{ORD:} 코너킥. ",
-   "ratio": 0.9285134769674569,
+   "ratio": 0.7897153351698807,
    "dClips": 10,
-   "dSeams": 103,
-   "freq": 103
+   "dSeams": 86,
+   "freq": 86
   },
   {
    "pattern": "멀티골! 오늘 {ORD:}",
    "ratio": null,
    "dClips": -1,
-   "dSeams": 18,
-   "freq": 18
+   "dSeams": 12,
+   "freq": 12
   },
   {
    "pattern": "멀티골! 오늘 {ORD:} 골입니다! ",
    "ratio": null,
    "dClips": -1,
-   "dSeams": 18,
-   "freq": 18
+   "dSeams": 12,
+   "freq": 12
+  },
+  {
+   "pattern": "{FILLER:}골문 옆으로 흐릅니다.",
+   "ratio": 0.7713498622589532,
+   "dClips": 5,
+   "dSeams": 42,
+   "freq": 42
   },
   {
    "pattern": "{TEAM:,} 완전히 몰아붙이네요.",
-   "ratio": 0.8441031608795062,
+   "ratio": 0.7179230319726188,
    "dClips": 11,
-   "dSeams": 103,
-   "freq": 103
-  },
-  {
-   "pattern": "{FILLER:}또 ",
-   "ratio": 0.7752636797980709,
-   "dClips": 5,
-   "dSeams": 43,
-   "freq": 43
-  },
-  {
-   "pattern": "{FILLER:}빗나갑니다.",
-   "ratio": 0.703146128188948,
-   "dClips": 5,
-   "dSeams": 39,
-   "freq": 39
+   "dSeams": 86,
+   "freq": 86
   }
  ],
  "finalBySlot": {
   "team": 198,
   "filler": 25,
-  "body": 155,
+  "body": 190,
   "name": 294,
   "minute": 91,
   "num": 88

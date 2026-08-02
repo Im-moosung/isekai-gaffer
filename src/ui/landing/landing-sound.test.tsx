@@ -57,31 +57,31 @@ const noop = (): void => {}
 
 describe('랜딩 소리 안내', () => {
   it('오디오 컨텍스트가 없으면 이유와 함께 안내가 뜬다', () => {
-    render(<LandingScreen onCampaign={noop} onDemo={noop} />)
+    render(<LandingScreen onCampaign={noop} onLeaderboard={noop} />)
     const btn = screen.getByRole('button', { name: /음악 켜기/ })
     expect(btn.textContent).toContain('브라우저 정책상')
   })
 
   it('안내를 누르면 sfx.init()이 불린다 — 정책이 요구하는 제스처 경로 그대로다', () => {
-    render(<LandingScreen onCampaign={noop} onDemo={noop} />)
+    render(<LandingScreen onCampaign={noop} onLeaderboard={noop} />)
     fireEvent.click(screen.getByRole('button', { name: /음악 켜기/ }))
     expect(state.initCalls).toBe(1)
   })
 
   it('음소거를 골라 둔 유저에게는 뜨지 않는다', () => {
     state.muted = true
-    render(<LandingScreen onCampaign={noop} onDemo={noop} />)
+    render(<LandingScreen onCampaign={noop} onLeaderboard={noop} />)
     expect(screen.queryByRole('button', { name: /음악 켜기/ })).toBeNull()
   })
 
   it('이미 컨텍스트가 열려 있으면(캠페인 후 복귀) 뜨지 않는다', () => {
     state.bus = { ctx: {}, master: {} }
-    render(<LandingScreen onCampaign={noop} onDemo={noop} />)
+    render(<LandingScreen onCampaign={noop} onLeaderboard={noop} />)
     expect(screen.queryByRole('button', { name: /음악 켜기/ })).toBeNull()
   })
 
   it('안내가 아닌 곳의 제스처로 열려도 확인을 주고, 스스로 사라진다(토글이 아니다)', () => {
-    render(<LandingScreen onCampaign={noop} onDemo={noop} />)
+    render(<LandingScreen onCampaign={noop} onLeaderboard={noop} />)
     unlockAudio()
     expect(screen.getByRole('status').textContent).toContain('테마가 재생됩니다')
     // 확인 문구는 남지 않는다 — 남으면 그 자리가 두 번째 오디오 컨트롤이 된다.

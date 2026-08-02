@@ -1,6 +1,6 @@
 // src/game/matchStore.ts
 import { create } from 'zustand'
-import { createMatch, simulateSegment, applyCommand, type MatchCommand, type SimulateOpts } from '../engine/simulate'
+import { createMatch, simulateSegment, applyCommand, normalizeMorale, type MatchCommand, type SimulateOpts } from '../engine/simulate'
 import type {
   AttackPattern, BoxLoad, DecisionEntry, GroupIntensity, Instructions, MatchEvent, MatchState,
   Mentality, SetPieceMarking, SetPieceRoute, TacticState, Team,
@@ -668,14 +668,73 @@ function homeStaminaFloor(engine: MatchState): number {
  */
 export const MOMENT_PROMPT_TTL = 6
 
+/**
+ * 순간 감지에서 배너 노출까지의 **게임 분** 지연.
+ *
+ * 왜 필요한가(사용자 신고 2026-08-02): *"'득점 직후 — 감독 타임을 쓰시겠습니까?'가 골보다
+ * 먼저 나와."* advanceMinute은 그 분을 시뮬레이션한 **직후** 같은 틱에 제안을 세우는데,
+ * 골 장면과 중계는 재생 dwell + reveal 게이트(MatchScreen)로 6~7초 뒤에야 그물을 흔든다.
+ * 그래서 화면이 결과를 보여주기 전에 문장이 결과를 말해 버린다 — 스포일러이자 연출 역전이다.
+ * MatchScreen에도 `revealed` 게이트가 있지만 그것은 **같은 분 안에서** 순서를 맞출 뿐이라,
+ * 배너와 골이 여전히 같은 분에 붙어 있다. 사용자가 요구한 것은 "굳이 바로 나올 필요가 없다" —
+ * **분을 하나 띄우는 것**이고, 그건 store에서만 할 수 있다.
+ *
+ * 왜 실제 시간이 아니라 분인가: 배속(1x·2x·4x)이 바뀌어도 같은 간격이어야 한다. 타이머로
+ * 재면 4x에서는 사실상 즉시가 되고 1x에서는 과하게 길어진다. advanceMinute이 분마다 불리므로
+ * 상태(pendingMoment)로 들고 있다가 다음 분에 승격한다 — 결정론이 유지된다.
+ *
+ * 왜 1분인가: 골 dwell 하나(최대 9.6 s)를 통째로 비켜 주기에 충분하고, 그 이상 미루면
+ * "직후"라는 말 자체가 낡는다(2분 전 골을 두고 '득점 직후'라고 하지 않는다).
+ *
+ * 왜 5유형 **전부**에 거는가: 스포일러가 되는 건 스코어 기반 둘(scored·conceded)뿐이지만,
+ * 나머지 셋도 같은 규칙을 쓴다. 근거는 두 가지다.
+ *  · momentum-lost는 "최근 10분 상대 슛 3회"로 잡히는데, 그 세 번째 슛이 **바로 그 분의
+ *    세이브·유효슈팅**인 경우가 많다. 즉 이것도 그 분의 장면보다 먼저 뜨는 문제가 있다.
+ *    clutch·fatigue만 예외로 두면 "어떤 유형은 즉시, 어떤 유형은 한 박자 뒤"가 되어
+ *    배너 슬롯의 리듬이 유형마다 달라진다 — 유저는 그 규칙을 배울 수 없다.
+ *  · 예외를 두면 지연 큐와 즉시 경로가 **둘 다** 존재하게 되고, 소비 규칙(firedMoments)과
+ *    만료 규칙을 두 경로에 각각 맞춰야 한다. 한 경로가 단순하고 안전하다.
+ */
+export const MOMENT_PROMPT_DELAY = 1
+
+/** 감지됐지만 아직 띄우지 않은 순간. 승격 예정 분과 감지 시점 스코어를 함께 든다. */
+export interface PendingMoment {
+  moment: DecisionMoment
+  /** 감지된 분의 스코어 스냅샷. 승격 시점에 달라져 있으면 문장이 낡은 것이므로 버린다. */
+  score: [number, number]
+}
+
+/** 지연 큐에 든 순간을 이 분에 어떻게 할 것인가.
+ *  - `wait`    아직 승격 분이 아니다(그대로 둔다).
+ *  - `drop`    버린다 — 기다리는 사이 스코어가 바뀌어 제안 문장이 거짓이 됐다.
+ *  - `promote` 띄운다.
+ *  순수 함수라 테스트가 직접 부른다. */
+export function pendingMomentVerdict(
+  pending: PendingMoment | null, minute: number, score: readonly [number, number],
+): 'wait' | 'drop' | 'promote' {
+  if (!pending) return 'wait'
+  // 스코어 변화는 승격 분을 기다리지 않고 **즉시** 버린다 — momentPromptAlive와 같은 원칙이다.
+  // 1분 기다리는 사이에 또 골이 들어가면 "득점 직후"는 이미 낡은 말이고, 이때 띄우면
+  // 고쳐 놓은 스포일러 대신 **거짓말**이 남는다.
+  if (pending.score[0] !== score[0] || pending.score[1] !== score[1]) return 'drop'
+  if (minute < pending.moment.minute + MOMENT_PROMPT_DELAY) return 'wait'
+  return 'promote'
+}
+
 /** 이 분에 순간 제안을 그대로 유지해도 되는가. 스코어가 스냅샷과 다르거나
- *  유효 기간이 지났으면 false(= 소거). 순수 함수라 테스트가 직접 부른다. */
+ *  유효 기간이 지났으면 false(= 소거). 순수 함수라 테스트가 직접 부른다.
+ *
+ *  ★ 유효 기간은 **배너가 실제로 뜬 분**(= 감지 분 + MOMENT_PROMPT_DELAY)부터 센다.
+ *    DecisionMoment.minute은 여전히 **사건이 일어난 분**이다(문장이 가리키는 장면이 그 분이고,
+ *    MatchScreen의 노출 게이트도 그 분과 displayMinute을 비교한다). 지연분을 빼지 않으면
+ *    유저가 반응할 창이 지연만큼 줄어드는데, MOMENT_PROMPT_TTL 주석이 논증한 그 창은
+ *    "배너가 보이는 시간"에 대한 것이라 감지 분에서 재면 계약이 조용히 깎인다. */
 export function momentPromptAlive(
   prompt: DecisionMoment | null, promptScore: readonly [number, number] | null,
   minute: number, score: readonly [number, number],
 ): boolean {
   if (!prompt) return false
-  if (minute - prompt.minute > MOMENT_PROMPT_TTL) return false
+  if (minute - (prompt.minute + MOMENT_PROMPT_DELAY) > MOMENT_PROMPT_TTL) return false
   // 스냅샷이 없는 경우(구 상태 호환)는 스코어 판정을 건너뛴다.
   if (promptScore && (promptScore[0] !== score[0] || promptScore[1] !== score[1])) return false
   return true
@@ -723,6 +782,11 @@ export interface MatchUIState {
   pauseReason: PauseReason | null
   /** 재생 중 감지된 동적 순간 제안(수락 전). null이면 제안 없음. */
   momentPrompt: DecisionMoment | null
+  /** 감지됐지만 아직 띄우지 않은 순간(지연 큐, 한 칸). 감지 분 + MOMENT_PROMPT_DELAY에
+   *  momentPrompt로 승격한다. 골 장면보다 배너가 먼저 뜨는 것을 막는 장치이고,
+   *  큐가 차 있는 동안에는 새 감지를 하지 않는다(momentPrompt가 떠 있을 때와 같은 규칙 —
+   *  배너 슬롯은 하나이므로 대기 중인 제안이 있으면 그것이 다음 차례다). */
+  pendingMoment: PendingMoment | null
   /** 이미 발동한 동적 순간 유형(유형당 1회 제한). */
   firedMoments: DecisionMoment['kind'][]
     /** momentPrompt를 세팅한 분의 스코어 스냅샷. 스코어가 바뀌면 제안 문장이 거짓이 되므로
@@ -803,6 +867,7 @@ const initial = {
   pauseReason: null as PauseReason | null,
   momentPrompt: null as DecisionMoment | null,
   momentPromptScore: null as [number, number] | null,
+  pendingMoment: null as PendingMoment | null,
   firedMoments: [] as DecisionMoment['kind'][],
   boostUntil: 0,
   talked: false,
@@ -834,9 +899,11 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
       }
     }
     // 사기 이월: createMatch는 전원 70으로 초기화한다. 같은 규약으로 지정 선수만 덮어쓴다.
+    // normalizeMorale은 방어선이다 — 이월값은 campaignStore.startingMorale이 이미 정수화하지만,
+    // 이 진입점은 테스트·시나리오에서 임의 값으로도 불린다. 저장 경로는 예외 없이 정수만 받는다.
     if (opts?.moraleOverride) {
       for (const [id, v] of Object.entries(opts.moraleOverride)) {
-        if (id in engine.home.moraleByPlayer) engine.home.moraleByPlayer[id] = v
+        if (id in engine.home.moraleByPlayer) engine.home.moraleByPlayer[id] = normalizeMorale(v)
       }
     }
     set({ ...initial, engine, schedule: breakSchedule(seed), discipline: opts?.discipline ?? NO_DISCIPLINE })
@@ -852,7 +919,7 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
   advanceMinute: () => {
     const {
       engine, phase, schedule, firedMoments, momentPrompt: prevPrompt, momentPromptScore: prevPromptScore,
-      boostUntil, oppFired, oppNotices, matchPlan, adaptUntil,
+      pendingMoment, boostUntil, oppFired, oppNotices, matchPlan, adaptUntil,
       // 순간 제안이 **제안으로 성립하는지**를 같은 분에 판정하기 위해 자원 상태도 읽는다.
       freeInterventionsUsed, lastInterventionMinute,
     } = get()
@@ -899,20 +966,31 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     const momentPrompt = alive ? prevPrompt : null
     const expiry = alive ? {} : { momentPrompt: null, momentPromptScore: null }
 
+    // ★ 경계에서는 지연 큐를 **버린다**(하프타임·하이드레이션·경기 종료).
+    //   44'에 감지된 제안이 45'(하프타임)에 승격하면, 화면은 이미 작전판을 열고 팀토크를
+    //   묻고 있는데 방송 배너가 "지금 감독 타임을 쓰시겠습니까?"라고 겹쳐 묻는다 —
+    //   그 개입은 이미 브레이크로 주어졌고, 게다가 브레이크 개입은 자원을 쓰지 않는다.
+    //   재개(confirmTactics) 이후로 미루는 선택지도 있지만, 브레이크를 하나 건넌 제안은
+    //   "직후"가 아니다(하프타임은 15분이다). 남은 것보다 버리는 쪽이 정직하다.
+    //   경기 종료는 말할 것도 없다 — 띄울 화면 자체가 없다.
+    const dropPending = { pendingMoment: null }
     if (minute >= 90) {
-      set({ engine: next, phase: 'fulltime', pauseReason: null, momentPrompt: null, momentPromptScore: null, ...opp })
+      set({
+        engine: next, phase: 'fulltime', pauseReason: null,
+        momentPrompt: null, momentPromptScore: null, ...dropPending, ...opp,
+      })
       return
     }
     if (minute === 45) {
-      set({ engine: next, phase: 'halftime', pauseReason: { kind: 'halftime' }, ...expiry, ...opp })
+      set({ engine: next, phase: 'halftime', pauseReason: { kind: 'halftime' }, ...expiry, ...dropPending, ...opp })
       return
     }
     if (schedule && minute === schedule.firstHydration) {
-      set({ engine: next, phase: 'paused-break', pauseReason: { kind: 'hydration1' }, ...expiry, ...opp })
+      set({ engine: next, phase: 'paused-break', pauseReason: { kind: 'hydration1' }, ...expiry, ...dropPending, ...opp })
       return
     }
     if (schedule && minute === schedule.secondHydration) {
-      set({ engine: next, phase: 'paused-break', pauseReason: { kind: 'hydration2' }, ...expiry, ...opp })
+      set({ engine: next, phase: 'paused-break', pauseReason: { kind: 'hydration2' }, ...expiry, ...dropPending, ...opp })
       return
     }
 
@@ -940,17 +1018,55 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     //      그 유형이 경기 내내 영영 사라진다(사용자가 지적한 "손해가 겹친다").
     //   같은 유형이 두 번 뜰 수 있지만, 두 번째는 **다른 사건**(다른 실점·다른 구간)이고
     //   그때는 실제로 쓸 수 있다. 살아 있는 제안은 새 감지를 막으므로 연달아 겹치지 않는다.
+    //
+    // ★ 2026-08-02 재판정(사용자 신고): 감지와 노출 사이에 **게임 분 1분**을 둔다.
+    //   감지된 순간은 곧장 momentPrompt가 되지 않고 pendingMoment(지연 큐)에 들어가,
+    //   다음 분에 승격한다. 근거는 MOMENT_PROMPT_DELAY 주석 전체다.
+    //
+    //   **소비 판정은 감지 시점이 아니라 승격 시점**에 한다. 이유는 위 소비 규칙과 같은
+    //   것이다 — 기준은 "이 제안이 **제안으로 성립했는가**"이고, 제안은 배너가 떠야
+    //   성립한다. 감지 시점에 재면 두 가지가 어긋난다:
+    //    · 감지 분에 쿨다운이었다가 승격 분에 풀리는 경우가 실제로 생긴다(쿨다운은 분마다
+    //      줄어든다). 그때는 진짜 제안으로 떴으니 소비해야 하는데, 감지 시점 판정은 살려 둔다.
+    //    · 반대로 감지 분에 쓸 수 있었는데 승격 전에 버려지는 경우(스코어 변화·경계)에는
+    //      배너가 **한 번도 뜨지 않았는데** 유형이 사라진다. 이건 사용자가 지적한
+    //      "손해가 겹친다"의 정확히 같은 형태다.
+    //   그래서 큐에 넣을 때는 아무것도 소비하지 않고, 승격하는 그 자리에서만 판정한다.
     const fi = freeInterventionState(freeInterventionsUsed, lastInterventionMinute, minute)
+    if (pendingMoment) {
+      const verdict = pendingMomentVerdict(pendingMoment, minute, next.score)
+      if (verdict === 'wait') {
+        set({ engine: next, ...expiry, ...opp })
+        return
+      }
+      if (verdict === 'drop') {
+        set({ engine: next, ...expiry, ...dropPending, ...opp })
+        return
+      }
+      const moment = pendingMoment.moment
+      // 큐에 있는 동안 같은 유형이 다른 경로로 소비됐다면(방어선) 그냥 버린다.
+      if (firedMoments.includes(moment.kind)) {
+        set({ engine: next, ...expiry, ...dropPending, ...opp })
+        return
+      }
+      const consume = fi.canPause || fi.left === 0
+      set({
+        engine: next, ...dropPending,
+        momentPrompt: moment, momentPromptScore: [next.score[0], next.score[1]],
+        firedMoments: consume ? [...firedMoments, moment.kind] : firedMoments, ...opp,
+      })
+      return
+    }
     if (!momentPrompt) {
       const moment = detectMoment(
         next.events, minute, next.score, prevScore, homeStaminaFloor(next),
         { homeId: next.home.team.id, awayId: next.away.team.id },
       )
       if (moment && !firedMoments.includes(moment.kind)) {
-        const consume = fi.canPause || fi.left === 0
+        // 큐에 넣기만 한다 — 소비도, 노출도 다음 분의 승격이 한다.
         set({
-          engine: next, momentPrompt: moment, momentPromptScore: [next.score[0], next.score[1]],
-          firedMoments: consume ? [...firedMoments, moment.kind] : firedMoments, ...opp,
+          engine: next, ...expiry,
+          pendingMoment: { moment, score: [next.score[0], next.score[1]] }, ...opp,
         })
         return
       }
@@ -1010,8 +1126,11 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     // 경기 중에 지시를 바꿀 수 있다는 것 자체가 그 5회의 값이다. 순간 제안도 이제 5회에서
     // 세므로 같은 규칙을 적용한다(예전엔 무료라 부스트를 줬다).
     const scheduled = pauseReason?.kind !== 'user' && pauseReason?.kind !== 'moment'
+    // 재개할 때는 지연 큐도 비운다 — 개입이 **방금 일어났으므로**(감독 타임이든 브레이크든)
+    // 그 직전에 감지된 순간을 다시 "지금 개입하시겠습니까?"로 물을 이유가 없다. 경계 분기의
+    // dropPending과 같은 판정을, 유저 개입으로 생긴 정지에도 적용하는 것이다.
     set({
-      phase: 'playing', pauseReason: null, momentPrompt: null, momentPromptScore: null,
+      phase: 'playing', pauseReason: null, momentPrompt: null, momentPromptScore: null, pendingMoment: null,
       ...(scheduled ? { boostUntil: engine.minute + BOOST_MINUTES } : {}),
     })
   },
@@ -1037,7 +1156,10 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     })
     return null
   },
-  dismissMoment: () => set({ momentPrompt: null, momentPromptScore: null }),
+  // 흘려보내기는 **지연 큐도 함께 비운다.** 큐와 배너는 원래 동시에 차지 않지만(큐가 차 있으면
+  // 감지를 하지 않는다), 유저가 "지금은 됐다"고 말한 순간에 1분 뒤 다른 제안이 튀어나오는 경로를
+  // 남기지 않는다 — 배너 슬롯은 하나이고, 그 하나에 대한 유저의 답이 여기다.
+  dismissMoment: () => set({ momentPrompt: null, momentPromptScore: null, pendingMoment: null }),
   submitCommand: (side, cmd) => {
     const { engine, phase, pauseReason, schedule, decisionLog, matchPlan, planDeviation, touchlineWindow } = get()
     if (!engine) throw new Error('경기 미시작')
@@ -1160,7 +1282,7 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     const sideState = next[side]
     const morale = sideState.moraleByPlayer
     for (const id of Object.keys(morale)) {
-      morale[id] = Math.max(0, Math.min(100, morale[id] + delta))
+      morale[id] = normalizeMorale(morale[id] + delta)
     }
     // 선수별 반응 2~3명: keyPlayers(주장 역할) 우선, 부족분은 선발 라인업에서 채운다(결정론).
     const keyIds = sideState.team.profile.keyPlayers.map(k => k.playerId)
@@ -1191,7 +1313,7 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     const next = structuredClone(engine)
     const m = next.home.moraleByPlayer
     const beforeMorale = { ...m }
-    for (const id of Object.keys(m)) m[id] = Math.max(0, Math.min(100, m[id] + morale))
+    for (const id of Object.keys(m)) m[id] = normalizeMorale(m[id] + morale)
     if (stamina !== 0) {
       const s = next.home.staminaByPlayer
       for (const id of Object.keys(s)) s[id] = Math.max(0, Math.min(100, s[id] + stamina))
@@ -1205,7 +1327,7 @@ export const useMatchStore = create<MatchUIState>((set, get) => ({
     // 추가분의 부호는 팀 delta를 따른다 — 역효과라면 특히 세게 반응한 쪽이 더 상한다.
     const sign = morale >= 0 ? 1 : -1
     const targets: ShoutTarget[] = picks.map(id => {
-      m[id] = Math.max(0, Math.min(100, m[id] + sign * rng.int(2, 5)))
+      m[id] = normalizeMorale(m[id] + sign * rng.int(2, 5))
       return {
         playerId: id,
         name: next.home.team.squad.find(p => p.id === id)?.name.ko ?? id,

@@ -90,7 +90,7 @@ describe('PitchView', () => {
     expect(container.querySelector('.pv-marker')).toBeNull()
   })
 
-  it('바디랭귀지 배지 — 사기 75+ 도트에 🔥, 35- 도트에 😰', () => {
+  it('바디랭귀지 배지 — 사기 80+ 도트에 🔥, 35- 도트에 😰', () => {
     const home = makeTestTeam('kor', 82)
     const away = makeTestTeam('esp', 84)
     const state = createMatch(home, away, { seed: 42 })
@@ -104,5 +104,23 @@ describe('PitchView', () => {
     const moods = [...container.querySelectorAll('.pv-mood')].map(e => e.textContent)
     expect(moods).toContain('🔥')
     expect(moods).toContain('😰')
+  })
+
+  // 문턱을 75에서 80으로 올린 요구("불꽃 아이콘은 사기 80 이상 일때만")의 경계 판정.
+  // 감쇠가 90분에 걸쳐 70 → 50으로 내리므로, 80은 감독이 실제로 밀어 올려야만 닿는 값이다.
+  it('🔥 문턱은 80 — 79는 붙지 않고 80은 붙는다', () => {
+    const state = createMatch(makeTestTeam('kor', 82), makeTestTeam('esp', 84), { seed: 42 })
+    const at = (v: number) => {
+      const id = state.home.tactics.lineup[0].playerId
+      const zeroed: Record<string, number> = {}
+      // 나머지 전원은 배지가 없는 구간(70)으로 눕혀 두고 한 명만 움직인다.
+      for (const k of Object.keys(state.home.moraleByPlayer)) zeroed[k] = 70
+      zeroed[id] = v
+      const s2 = { ...state, home: { ...state.home, moraleByPlayer: zeroed } }
+      const { container } = render(<PitchView state={s2} />)
+      return [...container.querySelectorAll('.pv-mood')].map(e => e.textContent)
+    }
+    expect(at(79)).not.toContain('🔥')
+    expect(at(80)).toContain('🔥')
   })
 })

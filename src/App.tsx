@@ -8,6 +8,7 @@ import { MatchScreen, type MatchEndExtra } from './ui/match/MatchScreen'
 import { LandingScreen } from './ui/landing/LandingScreen'
 import { HubScreen } from './ui/campaign/HubScreen'
 import { EndingScreen } from './ui/campaign/EndingScreen'
+import { LeaderboardScreen } from './ui/leaderboard/LeaderboardScreen'
 import { PressConference } from './ui/press/PressConference'
 import { NewspaperCard } from './ui/press/NewspaperCard'
 import { useCampaignStore } from './game/campaignStore'
@@ -25,13 +26,37 @@ import './App.css'
 // 같은 시드**였다. 실측하면 전술 9종 중 8종이 "1' 우리 슛 빗나감 → 2' 체코 골"로 시작했다
 // (최종 스코어는 3-2/2-2/3-1로 갈리니 전술은 먹히고 있었다 — 갈리지 않은 건 초반 대본이다).
 // 첫 경험이 전원 동일한 실점으로 고정돼 있었던 것이고, 그건 밸런스가 아니라 첫인상 문제다.
-// 주소에 ?seed=123456이 있으면 그 판을 그대로 다시 연다(엔딩 화면의 [링크 복사]가 만드는 주소).
+// 주소에 ?seed=123456이 있으면 그 판을 그대로 다시 연다.
+//
+// [2026-08-02] 엔딩 화면의 시드 카드·[링크 복사]는 제거됐다(시드 공유를 제품 기능으로
+// 넣지 않기로 한 사용자 판단). 그래도 이 파라미터 처리는 **남긴다** — 화면에 컨트롤이 0개라
+// 유저에게 보이지 않으면서, 버그 재현·밸런스 검증에는 그대로 쓸모가 있기 때문이다.
+// 지우면 "이 판만 이상하다"는 제보를 다시 재현할 방법이 사라진다.
 const pickCampaignSeed = () => seedFromLocation() ?? newCampaignSeed()
 
-type Mode = 'landing' | 'demo' | 'campaign'
+type Mode = 'landing' | 'demo' | 'campaign' | 'leaderboard'
+
+/**
+ * 데모(한 경기 체험) 진입 여부. **랜딩 버튼은 제거됐다**(2026-08-02 사용자 지시:
+ * 기획안에 없는 기능이고 첫 화면의 결정 지점은 [캠페인 시작] 하나면 된다).
+ *
+ * 코드를 지우지 않고 주소 `?demo=1` 뒤로 옮긴 이유는 tools/*.mjs의 플레이 감사 하니스
+ * 십여 개가 "한 경기를 빨리 띄우는 입구"로 이 경로를 쓰기 때문이다. 캠페인 8경기를 거쳐야
+ * 경기 화면에 닿는다면 그 하니스들이 전부 못 쓰게 된다. 유저에게는 보이지 않고,
+ * 개발 도구에는 남는 자리 — ?seed=와 같은 처리다.
+ */
+function demoFromLocation(): boolean {
+  const loc = (globalThis as { location?: { search?: string } }).location
+  if (typeof loc?.search !== 'string' || !loc.search) return false
+  try {
+    return new URLSearchParams(loc.search).get('demo') === '1'
+  } catch {
+    return false
+  }
+}
 
 function App() {
-  const [mode, setMode] = useState<Mode>('landing')
+  const [mode, setMode] = useState<Mode>(() => (demoFromLocation() ? 'demo' : 'landing'))
   const startCampaign = useCampaignStore(s => s.startCampaign)
   const resetCampaign = useCampaignStore(s => s.reset)
 
@@ -39,20 +64,30 @@ function App() {
     return <DemoFlow onExit={() => setMode('landing')} />
   }
 
+  if (mode === 'leaderboard') {
+    return <LeaderboardScreen onBackToTitle={() => { resetCampaign(); setMode('landing') }} />
+  }
+
   if (mode === 'campaign') {
-    return <CampaignFlow onExit={() => { resetCampaign(); setMode('landing') }} />
+    return (
+      <CampaignFlow
+        onExit={() => { resetCampaign(); setMode('landing') }}
+        onLeaderboard={() => setMode('leaderboard')}
+      />
+    )
   }
 
   return (
     <LandingScreen
       onCampaign={() => { resetCampaign(); startCampaign(pickCampaignSeed()); setMode('campaign') }}
-      onDemo={() => setMode('demo')}
+      onLeaderboard={() => setMode('leaderboard')}
     />
   )
 }
 
-/** 데모 플로우: 실팀(kor vs esp, 고정 시드) 한 경기 → 기자회견 → 신문 → 랜딩 복귀.
- *  캠페인 기록·리더보드에는 반영하지 않는다("리더보드 미반영" 표기). */
+/** 데모 플로우: 실팀(kor vs esp, 새 시드) 한 경기 → 기자회견 → 신문 → 랜딩 복귀.
+ *  캠페인 기록·리더보드에는 반영하지 않는다("리더보드 미반영" 표기).
+ *  진입은 `?demo=1`뿐이다 — 위 demoFromLocation 주석 참조. */
 function DemoFlow({ onExit }: { onExit(): void }) {
   const teams = useMemo(() => ({ home: loadTeam('kor'), away: loadTeam('esp') }), [])
   // 데모도 유저는 대한민국(kor)을 지휘한다.
@@ -60,8 +95,8 @@ function DemoFlow({ onExit }: { onExit(): void }) {
   // 킥오프 전 설계는 MatchScreen의 'pre' 전술 센터가 담당한다(라인업 단독 화면 폐지).
   // useMemo로 참조를 고정해야 MatchScreen의 초기화 effect가 매 렌더 재실행되지 않는다.
   const initial = useMemo(() => pickBestXI(teams.home), [teams.home])
-  // 데모도 매 진입마다 시드를 새로 뽑는다 — [바로 지휘하기]는 심사자가 가장 먼저 누르는 버튼이라
-  // 두 번 눌렀을 때 같은 90분이 재생되면 "시뮬이 아니라 녹화"로 읽힌다.
+  // 데모도 매 진입마다 시드를 새로 뽑는다 — 두 번 들어갔을 때 같은 90분이 재생되면
+  // "시뮬이 아니라 녹화"로 읽힌다(감사 하니스도 매번 다른 경기를 봐야 의미가 있다).
   // 마운트당 한 번만 뽑아야 MatchScreen의 초기화 effect가 매 렌더 재실행되지 않는다.
   const demoSeed = useMemo(() => newCampaignSeed(), [])
 
@@ -129,7 +164,10 @@ type CampaignStep = 'hub' | 'match'
 
 /** 캠페인 플로우 조립: hub → match(킥오프 전 전술 센터 포함) →(자동 recordResult)→ hub … → ending.
  *  라인업 단독 화면은 전술 센터에 흡수됐다 — 허브에서 곧장 경기로 들어간다. */
-function CampaignFlow({ onExit }: { onExit(): void }) {
+function CampaignFlow({ onExit, onLeaderboard }: {
+  onExit(): void
+  onLeaderboard(): void
+}) {
   const stage = useCampaignStore(s => s.stage)
   const ending = useCampaignStore(s => s.ending)
   const [step, setStep] = useState<CampaignStep>('hub')
@@ -151,7 +189,7 @@ function CampaignFlow({ onExit }: { onExit(): void }) {
 
   // 종료 → 엔딩(부모 store가 stage/ending을 갱신하면 여기로 수렴).
   if (stage === 'ended' || ending) {
-    return <EndingScreen onRestart={onExit} />
+    return <EndingScreen onRestart={onExit} onLeaderboard={onLeaderboard} />
   }
 
   if (step === 'hub') {

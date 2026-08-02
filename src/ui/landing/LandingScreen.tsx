@@ -66,9 +66,10 @@ type SoundCue = 'ask' | 'on' | 'gone'
 /** 켜졌다는 안내를 남겨 두는 시간(ms). landing.css의 페이드아웃 길이와 같은 값이다. */
 const CUE_HOLD_MS = 2600
 
-export function LandingScreen({ onCampaign, onDemo }: {
+export function LandingScreen({ onCampaign, onLeaderboard }: {
   onCampaign(): void
-  onDemo(): void
+  /** 리더보드 페이지로. 주 CTA 아래 작은 링크 버튼 — 첫 화면의 결정은 [캠페인 시작] 하나다. */
+  onLeaderboard(): void
 }) {
   const [show3d, setShow3d] = useState(false)
 
@@ -149,15 +150,20 @@ export function LandingScreen({ onCampaign, onDemo }: {
           당신에게 <span className="landing__nowrap">90분</span>과{' '}
           <span className="landing__nowrap">다섯 번의 개입</span>이 주어진다.
         </p>
-        {/* 주 CTA는 --brand 파랑. 라임은 --live("지금 진행 중") 전용으로 강등됐다. */}
+        {/* 주 CTA는 --brand 파랑. 라임은 --live("지금 진행 중") 전용으로 강등됐다.
+            [2026-08-02] 고스트 CTA [바로 지휘하기]를 제거했다 — 기획안에 없는 기능이고
+            (docs/proposal/ 전수 검색 0건), 첫 화면의 결정 지점은 하나여야 한다.
+            데모 경로 자체는 ?demo=1로 남아 있다(App.tsx 주석 참조). */}
         <div className="landing__actions">
           <button type="button" className="btn btn--primary btn--lg" onClick={onCampaign}>
             캠페인 시작 <span aria-hidden="true">→</span>
           </button>
-          <button type="button" className="btn btn--ghost btn--lg" onClick={onDemo}>
-            바로 지휘하기
-          </button>
         </div>
+        {/* 리더보드 입구는 **작게**. 크기를 CTA와 맞추면 첫 화면의 결정이 다시 둘로 늘어난다 —
+            방금 [바로 지휘하기]를 뺀 이유를 스스로 무르는 셈이다. 텍스트 링크 톤으로 둔다. */}
+        <button type="button" className="btn btn--ghost btn--sm landing__board" onClick={onLeaderboard}>
+          리더보드 보기
+        </button>
         {/* 소리 안내 — CTA 바로 아래. 새 토글이 아니라 **한 번 쓰고 사라지는 안내**다.
             헤더의 기존 음소거 토글과 겹치지 않는다: 여기서는 끄지 못하고, 음소거 상태에서는
             뜨지도 않는다(= 유저가 명시적으로 고른 무음을 랜딩이 뒤집지 않는다). */}

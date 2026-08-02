@@ -87,6 +87,42 @@ describe('PressConference', () => {
     expect(first.mock.calls[0][0]).toBeTruthy()
   })
 
+  // 3층 방어선 — 모델이 프롬프트를 어기고 결과를 뒤집은 실제 사례(2-5 패배 → "5-2 대승")를
+  // 재현한다. 스코어가 틀린 헤드라인은 화면에 닿기 전에 템플릿으로 되돌아가야 한다.
+  it('AI 헤드라인의 스코어가 실제와 다르면 템플릿으로 폴백한다', async () => {
+    const loss: MatchRecord = { stage: 'group2', opponentId: 'mex', score: [2, 5], decisions: [] }
+    narrateMock.mockResolvedValue('대한민국, 멕시코에 2-0에서 5-2로 대승')
+    const onDone = vi.fn()
+    const { container } = render(
+      <PressConference record={loss} log={[]} teamName="대한민국" onDone={onDone} />,
+    )
+    for (let i = 0; i < 3; i++) {
+      fireEvent.click(container.querySelectorAll<HTMLButtonElement>('.pc-answer')[0])
+    }
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    const headline = onDone.mock.calls[0][0] as Headline
+    expect(headline.title).not.toContain('대승')
+    expect(headline.title).not.toContain('5-2')
+  })
+
+  // AI 맥락에 승패가 낱말로 박혀 나가는지 — 뒤집힘의 근본 원인이 여기였다.
+  it('narrate 맥락에 승패·양 팀 득점이 이름 붙은 필드로 들어간다', async () => {
+    const loss: MatchRecord = { stage: 'group2', opponentId: 'mex', score: [2, 5], decisions: [] }
+    const onDone = vi.fn()
+    const { container } = render(
+      <PressConference record={loss} log={[]} teamName="대한민국" onDone={onDone} />,
+    )
+    for (let i = 0; i < 3; i++) {
+      fireEvent.click(container.querySelectorAll<HTMLButtonElement>('.pc-answer')[0])
+    }
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    const ctx = narrateMock.mock.calls[0][1] as Record<string, unknown>
+    expect(ctx.최종_결과).toBe('패배')
+    expect(ctx.우리_팀_득점).toBe(2)
+    expect(ctx.상대_팀).toBe('멕시코')
+    expect(ctx.score).toBeUndefined()
+  })
+
   it('narrate 가 텍스트를 반환하면 그 텍스트가 title 을 대체한다', async () => {
     narrateMock.mockResolvedValue('AI가 쓴 헤드라인')
     const onDone = vi.fn()

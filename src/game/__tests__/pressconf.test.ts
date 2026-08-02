@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildQuestions, buildHeadline, buildEpilogue } from '../pressconf'
+import { buildQuestions, buildHeadline, buildEpilogue, describeMatch, describeCampaign, contradictsScore, ANSWER_POOLS } from '../pressconf'
 import { DEROGATORY_WORDS } from '../../ai/safeguard'
 import type { MatchRecord, CampaignStage } from '../campaignStore'
 import type { DecisionEntry } from '../../engine/types'
@@ -456,5 +456,197 @@ describe('detail 없는 옛 로그 폴백', () => {
     const log: DecisionEntry[] = [{ minute: 58, kind: 'teamtalk', summary: "58' 외침: 독려" }]
     const qs = buildQuestions(rec('r16', 'eng', [2, 1], { decisions: log }), log)
     expect(qs.some(q => q.text.includes('더 밀어붙이라고 외치셨습니다'))).toBe(true)
+  })
+})
+
+// AI에 넘기는 사실 카드 — 배열 인덱스가 아니라 이름 붙은 필드로 승패를 못 박는다.
+// (2026-08-02 결함: 2-5 패배 경기의 헤드라인이 "5-2 대승"으로 뒤집혀 나왔다.)
+describe('describeMatch', () => {
+  it('패배 경기는 어느 필드를 읽어도 패배로 읽힌다', () => {
+    const f = describeMatch(rec('group2', 'mex', [2, 5]), '대한민국')
+    expect(f.우리_팀).toBe('대한민국')
+    expect(f.우리_팀_득점).toBe(2)
+    expect(f.상대_팀).toBe('멕시코')
+    expect(f.상대_팀_득점).toBe(5)
+    expect(f.정규시간_결과).toBe('패배')
+    expect(f.최종_결과).toBe('패배')
+    expect(f.점수차).toBe(3)
+    expect(f.최종_스코어).toBe('대한민국 2-5 멕시코')
+    expect(f.한줄_사실).toContain('졌다')
+  })
+  it('승부차기는 정규시간과 분리해 최종 결과를 따로 못 박는다', () => {
+    const win = describeMatch(rec('sf', 'esp', [1, 1], { shootout: [4, 3] }))
+    expect(win.정규시간_결과).toBe('무승부')
+    expect(win.최종_결과).toBe('승부차기 승리')
+    const lose = describeMatch(rec('sf', 'esp', [1, 1], { shootout: [3, 4] }))
+    expect(lose.최종_결과).toBe('승부차기 패배')
+    expect(lose.한줄_사실).toContain('졌다')
+  })
+})
+
+describe('describeCampaign', () => {
+  it('경기별 승패를 판정하고 통산 전적·도달 단계를 명시한다', () => {
+    const c = describeCampaign(
+      [rec('group1', 'cze', [3, 0]), rec('group2', 'mex', [2, 5]), rec('r16', 'esp', [1, 1], { shootout: [3, 4] })],
+      { reached: 'r16', champion: false },
+    )
+    expect(c.통산_전적).toBe('1승 0무 2패') // 승부차기 패배는 패로 센다(진출 기준)
+    expect(c.총_득점).toBe(6)
+    expect(c.총_실점).toBe(6)
+    expect(c.우승_여부).toBe(false)
+    expect(c.도달_단계).toBe('16강')
+    expect(String(c.한줄_사실)).toContain('우승하지 못했다')
+    expect((c.경기별_결과 as unknown[]).length).toBe(3)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════
+// 답변이 결과를 아는가 (2026-08-02 실플레이 결함의 회귀선)
+// ═══════════════════════════════════════════════════════════
+// 사고: 2-5 대패 회견에 "이 정도는 예상했던 그림입니다."가 떴다. 답변 풀이 톤 3종 × 4문장
+// 하나뿐이었고 셋을 같은 인덱스로 뽑아, 실질 4종이 승패와 무관하게 돌았기 때문이다.
+describe('답변 풀은 경기 결과를 안다', () => {
+  /** 결과 칸별 대표 레코드. outcomeOf의 여섯 분기를 전부 덮는다. */
+  const BY_OUTCOME: [string, MatchRecord][] = [
+    ['bigwin', rec('group1', 'cze', [4, 0])],
+    ['win', rec('group2', 'mex', [2, 0])],
+    ['narrow', rec('group3', 'rsa', [2, 1])],
+    ['shootoutWin', rec('final', 'esp', [1, 1], { shootout: [4, 3] })],
+    ['draw', rec('r32', 'ecu', [1, 1])],
+    ['loss', rec('r16', 'eng', [0, 3])],
+    ['loss(승부차기)', rec('sf', 'arg', [0, 0], { shootout: [2, 4] })],
+  ]
+
+  /** 여러 시드로 같은 결과의 회견을 돌려, 그 결과 칸에서 나올 수 있는 답변을 모은다.
+   *  (시드는 상대·단계·로그 수로 갈리므로 상대를 바꿔 회전시킨다.) */
+  function answersOf(make: (opp: string, stage: CampaignStage) => MatchRecord): Set<string> {
+    const out = new Set<string>()
+    const opps = ['cze', 'mex', 'rsa', 'ecu', 'eng', 'nor', 'arg', 'esp', 'can', 'mar', 'fra']
+    const stages: CampaignStage[] = ['group1', 'group2', 'group3', 'r32', 'r16', 'qf', 'sf', 'final']
+    for (const o of opps) for (const s of stages) {
+      for (const q of buildQuestions(make(o, s), [])) for (const a of q.options) out.add(a)
+    }
+    return out
+  }
+
+  it.each(BY_OUTCOME)('%s: 모든 질문이 비어 있지 않은 답변 3개를 가진다', (_name, r) => {
+    const qs = buildQuestions(r, r.decisions)
+    expect(qs).toHaveLength(3)
+    for (const q of qs) {
+      expect(q.options).toHaveLength(3)
+      expect(new Set(q.options).size).toBe(3)
+      for (const o of q.options) {
+        expect(o.trim().length).toBeGreaterThan(8)
+        expect(o.endsWith('.')).toBe(true)
+      }
+    }
+  })
+
+  // ★ 이번 사고의 핵심 회귀 테스트 — 진 경기의 답변에 이긴 사람의 어휘가 있으면 안 된다.
+  it('패배 회견의 답변 어디에도 승리 어휘가 없다', () => {
+    const WIN_WORDS = [
+      '대승', '완승', '완파', '제압', '증명', '무너뜨', '꺾', '눌렀',
+      '이겼습니다', '승리', '통했습니다', '발 뻗고', '예상했던 그림', '두렵지 않',
+    ]
+    const pools = [
+      answersOf((o, s) => rec(s, o, [0, 3])),
+      answersOf((o, s) => rec(s, o, [1, 2])),
+      answersOf((o, s) => rec(s, o, [0, 0], { shootout: [2, 4] })),
+    ]
+    for (const pool of pools) {
+      expect(pool.size).toBeGreaterThanOrEqual(12) // 회전이 실제로 도는지(칸당 톤 4문장 × 3톤)
+      for (const a of pool) for (const w of WIN_WORDS) expect(a).not.toContain(w)
+    }
+  })
+
+  it('무승부 회견의 답변도 승리를 주장하지 않는다', () => {
+    const pool = answersOf((o, s) => rec(s, o, [1, 1]))
+    for (const a of pool) for (const w of ['대승', '완승', '완파', '제압', '이겼습니다']) {
+      expect(a).not.toContain(w)
+    }
+  })
+
+  it('결과가 다르면 답변 풀도 다르다(같은 세트를 돌려쓰지 않는다)', () => {
+    const win = answersOf((o, s) => rec(s, o, [4, 0]))
+    const loss = answersOf((o, s) => rec(s, o, [0, 3]))
+    for (const a of loss) expect(win.has(a)).toBe(false)
+  })
+
+  it('결정론: 같은 입력 두 번 → 같은 답변', () => {
+    for (const [, r] of BY_OUTCOME) {
+      expect(buildQuestions(r, r.decisions).map(q => q.options))
+        .toEqual(buildQuestions(r, r.decisions).map(q => q.options))
+    }
+  })
+
+  it('답변 세트의 종류가 결과별로 충분히 갈린다(예전에는 전체 4종이었다)', () => {
+    const sets = new Set<string>()
+    const scores: [number, number][] = [[4, 0], [3, 1], [2, 0], [2, 1], [1, 1], [0, 3], [1, 2]]
+    const stages: CampaignStage[] = ['group1', 'group2', 'group3', 'r32', 'r16', 'qf', 'sf']
+    for (const o of ['cze', 'mex', 'rsa', 'ecu', 'eng', 'nor', 'arg', 'esp', 'can', 'mar']) {
+      for (const s of stages) for (const sc of scores) for (const dev of [undefined, 0, 5]) {
+        for (const q of buildQuestions(rec(s, o, sc), [], dev)) sets.add(q.options.join('|'))
+      }
+    }
+    expect(sets.size).toBeGreaterThan(40)
+  })
+})
+
+// 헤드라인 톤은 **마지막 답변의 톤**으로 정해진다(answerTone). 새 문안이 톤 풀에 등록되지
+// 않으면 해시 폴백으로 떨어져 헤드라인이 답변과 반대로 나간다 — 그걸 밖에서 관측한다:
+// 같은 톤의 문장은 같은 레코드에서 반드시 같은 제목을 낳아야 한다.
+describe('답변 톤 역분류(headline과의 계약)', () => {
+  const REFS: MatchRecord[] = [
+    rec('group1', 'cze', [4, 0]), rec('group2', 'mex', [2, 1]), rec('group3', 'rsa', [1, 1]),
+    rec('r16', 'eng', [0, 3]), rec('final', 'esp', [1, 1], { shootout: [4, 3] }),
+  ]
+  const GROUPS: [string, readonly string[]][] = [
+    ['공격적', ANSWER_POOLS.aggressive], ['겸손', ANSWER_POOLS.humble], ['유머', ANSWER_POOLS.humor],
+  ]
+
+  it.each(GROUPS)('%s 풀의 모든 문안이 같은 톤으로 분류된다(해시 폴백 없음)', (_n, pool) => {
+    for (const r of REFS) {
+      const titles = new Set(pool.map(a => buildHeadline(r, [a], '대한민국').title))
+      expect(titles.size).toBe(1)
+    }
+  })
+
+  it('세 톤은 서로 다른 제목으로 갈린다(톤 순서가 살아 있다)', () => {
+    for (const r of REFS) {
+      const t = GROUPS.map(([, pool]) => buildHeadline(r, [pool[0]], '대한민국').title)
+      expect(new Set(t).size).toBe(3)
+    }
+  })
+
+  it('한 문안이 두 톤에 동시에 들어 있지 않다', () => {
+    const [a, h, j] = GROUPS.map(([, p]) => new Set(p))
+    for (const s of a) { expect(h.has(s)).toBe(false); expect(j.has(s)).toBe(false) }
+    for (const s of h) expect(j.has(s)).toBe(false)
+  })
+
+  it('전 결과 × 전 답변에 금지어·라틴 문자·내부 수치가 없다', () => {
+    for (const [, pool] of GROUPS) for (const a of pool) {
+      for (const w of DEROGATORY_WORDS) expect(a).not.toContain(w)
+      expect(a).not.toMatch(/[A-Za-z0-9]/)
+      expect(a).not.toMatch(/[→…]|\.\.\./)
+    }
+  })
+})
+
+describe('contradictsScore(3층 방어선)', () => {
+  const r = rec('group2', 'mex', [2, 5])
+  it('없는 스코어를 지어낸 헤드라인을 걸러낸다', () => {
+    expect(contradictsScore("대한민국, 멕시코에 2-0에서 5-2로 대승", r)).toBe(true)
+    expect(contradictsScore('대한민국, 멕시코 5-2로 제압', r)).toBe(true) // 뒤집힌 표기
+  })
+  it('정상 헤드라인은 통과시킨다', () => {
+    expect(contradictsScore('대한민국, 멕시코전 아쉬운 패배', r)).toBe(false) // 스코어 미언급
+    expect(contradictsScore('2-5 완패... 대한민국, 숙제를 안고 돌아서다', r)).toBe(false)
+    expect(contradictsScore('4-2-3-1로 맞선 대한민국, 멕시코에 무릎 꿇다', r)).toBe(false) // 포메이션
+  })
+  it('승부차기 스코어도 허용값이다', () => {
+    const pk = rec('sf', 'esp', [1, 1], { shootout: [4, 3] })
+    expect(contradictsScore('승부차기 4-3, 1-1 혈투 끝에 웃은 대한민국', pk)).toBe(false)
+    expect(contradictsScore('승부차기 5-4로 웃은 대한민국', pk)).toBe(true)
   })
 })

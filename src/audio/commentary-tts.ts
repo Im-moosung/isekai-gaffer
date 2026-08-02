@@ -1,24 +1,31 @@
 // src/audio/commentary-tts.ts
-// 한국어 TTS 실시간 중계 — Web Speech API(speechSynthesis)로 해설 문장을 소리로 낸다.
+// 한국어 중계 음성 — **미리 구운 Qwen TTS mp3 클립만** 낸다.
 // 발화 텍스트는 commentary.commentate() 산출을 그대로 쓴다(스펙 §7.1 세이프가드 통과 문장).
 //
+// ## 왜 `speechSynthesis` 폴백을 전부 걷어냈나 (2026-08-02, 사용자 판정)
+// 이 게임의 중계는 남성 캐스터·해설위원 클립 1,024개로 나간다. 예전에는 클립이 없는
+// 문장만 브라우저 기본 TTS로 떨어뜨렸는데, 그러면 **그 한 문장만 macOS 기본 한국어
+// 음성(여성 '유나')으로 튀어나온다.** 남성 캐스터가 말하다 갑자기 여성 목소리가
+// 끼어드는 것은 "다양한 화자"가 아니라 **결함**으로 읽힌다 — 실제 플레이에서 사용자가
+// 듣고 곧바로 완성도가 깎였다고 말했다.
+//
+// 폴백이 지키려던 것은 "정보를 잃지 않는다"였다. 그런데 **자막은 폴백과 무관하게 언제나
+// 나온다**(MatchScreen이 문장을 화면에 띄운다). 즉 폴백이 없어도 잃는 정보는 없고,
+// 잃는 것은 잘못된 목소리뿐이다. 그래서 **클립이 없으면 소리를 내지 않는다.**
+// 커버리지 테스트(`__tests__/tts-coverage.test.ts`)는 17경기만 도므로 드문 조합은
+// 언제든 샐 수 있다 — 폴백을 남겨 두면 같은 사고가 반복된다. 구조로 막는다.
+//
 // 핵심 원칙(불변):
-//  1) 미지원 브라우저·ko-KR 보이스 없음 = 조용한 no-op. 절대 throw하지 않는다(TTS 실패가 경기를 멈추지 않는다).
-//  2) speechSynthesis 자동재생 요건은 관대하지만, 안전하게 킥오프(유저 제스처) 이후에만 발화한다.
+//  1) 클립이 없으면 **침묵**. 절대 throw하지 않는다(오디오 실패가 경기를 멈추지 않는다).
+//  2) AudioContext는 유저 제스처 뒤에만 열리므로, 킥오프 전에는 어차피 조용하다.
 //  3) [🎙 해설] 토글은 음소거(rematch-muted)와 별개로 localStorage('rematch-tts')에 기억한다. 기본값 ON.
-//  4) 큐 정책: 발화 중이면 일반 라인은 스킵(드롭), important(골·세이브 등)는 현재 발화를 cancel 후 즉시.
+//  4) 큐 정책: 발화 중이면 일반 라인은 스킵(드롭), important(골·세이브 등)는 현재 발화를 끊고 즉시.
 //  5) pause·모드 전환 시 stopAll()로 진행 중 발화를 취소한다(작전 지시 중 해설이 새지 않게).
-
-//  6) 화자 2인(§5.7) — 캐스터와 해설위원은 **pitch로** 가른다. ko-KR 보이스는 대개
-//     한 개뿐이라(macOS '유나') 보이스 교체로는 구분이 불가능하다. pitch를 벌리면
-//     같은 보이스도 두 사람처럼 들린다 — 투입 대비 효과가 가장 큰 한 줄이다.
-
-//  7) **mp3 우선, speechSynthesis 폴백**(2026-08-01). 빌드 타임에 구운 Gemini TTS
-//     클립이 있으면 그걸 내고, 없으면 아래 speechSynthesis 경로가 그대로 받는다.
-//     한 줄도 지우지 않았다 — 클립은 일부 팀만 덮으므로 폴백이 정상 경로다.
-//     · 판정은 `mp3.playLine()`이 돌려주는 boolean 하나다(동기).
-//     · 음소거·재생 속도·순서 보존 계약은 두 경로가 똑같이 지킨다.
-//     · 클립 소스: `tools/tts/*` + `docs/audio/tts/README.md`.
+//  6) 화자 2인(§5.7)은 **클립 자체**가 가른다 — 캐스터와 해설위원을 다른 목소리로 구웠다.
+//     (예전에는 보이스가 하나뿐이라 pitch를 벌려 흉내 냈다. 그 상수 ROLE_PITCH는
+//      speechSynthesis와 함께 사라졌다 — 이제 흉내 낼 대상이 없다.)
+//  7) 재생·음소거·순서 보존은 전부 `commentary-mp3.ts`가 맡는다. 판정은 그 모듈의
+//     `playLine()`이 돌려주는 boolean 하나다(동기). 클립 소스: `tools/tts/*`.
 import * as mp3 from './commentary-mp3'
 
 const TTS_KEY = 'rematch-tts'
@@ -27,9 +34,12 @@ const TTS_KEY = 'rematch-tts'
 /**
  * 발화 역할. 캐스터 3단(일반/중요/피크) + 해설위원 1단.
  *
- * ★ 예전엔 important를 `rate 1.15 / pitch 1.15`로 처리했다. 그런데 **한국어 중계의
- *   흥분은 "빠름"이 아니라 "높고 길게"** 다. rate를 올리면 골 순간의 가장 중요한 정보인
- *   선수 이름이 뭉개진다. 그래서 중요·피크는 rate를 오히려 **낮추고** pitch를 올린다.
+ * ★ 예전엔 important를 `rate 1.15`로 처리했다. 그런데 **한국어 중계의 흥분은 "빠름"이
+ *   아니라 "높고 길게"** 다. rate를 올리면 골 순간의 가장 중요한 정보인 선수 이름이
+ *   뭉개진다. 그래서 중요·피크는 rate를 오히려 **낮춘다**(높이는 클립이 이미 담고 있다).
+ *
+ * ★ 폴백 제거(2026-08-02) 이후 이 값들은 **발화 길이 추정**({@link estimateSpeechMs})의
+ *   기준으로 남는다 — 재생 루프가 분당 체류 시간을 잡을 때 쓰는 그 값이다.
  */
 export type SpeechRole = 'normal' | 'important' | 'peak' | 'analyst'
 
@@ -38,22 +48,16 @@ export const ROLE_RATE: Record<SpeechRole, number> = {
   normal: 1.05, important: 1.0, peak: 0.95, analyst: 1.0,
 }
 
-/**
- * 역할별 pitch. 캐스터(1.0~1.35)와 해설위원(0.75)을 크게 벌린다.
- * 근거: 리서치 권고는 해설 0.95였지만, 보이스가 하나뿐인 환경에서 1.0 대 0.95는
- * 사실상 같은 목소리로 들린다(브라우저 실청 확인). 0.75까지 내려야 "다른 사람"이 된다.
- * Web Speech pitch 범위는 0~2이고 0.5 미만은 보이스가 뭉개지므로 0.75가 하한 근처다.
- */
-export const ROLE_PITCH: Record<SpeechRole, number> = {
-  normal: 1.0, important: 1.3, peak: 1.35, analyst: 0.75,
-}
+// ★ ROLE_PITCH(역할별 pitch)는 여기 있었고 2026-08-02에 지웠다. 보이스가 하나뿐인
+//   speechSynthesis에서 캐스터와 해설위원을 갈라 놓으려고 pitch를 벌렸던 상수인데,
+//   이제 화자는 클립 자체가 다르다 — 흉내 낼 이유가 없어졌다.
 
 // 하위호환 별칭(예전 상수명을 쓰는 호출부·문서용).
 export const RATE_IMPORTANT = ROLE_RATE.important
 export const RATE_NORMAL = ROLE_RATE.normal
 
 /** rate 상한. ★ 재생 속도 토글에 rate를 연동하되(아래 utteranceRate) 여기서 끊는다.
- *  근거(실측): '유나' 보이스는 rate 2.1에서 실효 7.1 음절/초로, 한국어 뉴스 앵커의
+ *  근거(실측, speechSynthesis 시절): rate 2.1에서 실효 7.1 음절/초로, 한국어 뉴스 앵커의
  *  자연 발화 상단(6~7 음절/초)과 같은 수준이다 — 빠르지만 사람이 내는 속도다.
  *  그 이상은 알아듣기 어려워지고, 애초에 rate를 올려도 길이가 더 줄지 않는다
  *  (rate 1.8→2.1 구간에서 실효 음절/초가 7.17→7.07로 포화). */
@@ -78,114 +82,70 @@ export function casterRole(important: boolean, intensity = 0): SpeechRole {
 }
 
 // ── 모듈 상태 ─────────────────────────────────────────────────
-// available = speechSynthesis 존재 + ko-KR 보이스 발견(둘 다여야 실제 발화). 아니면 조용한 no-op.
-let available = false
-let voice: SpeechSynthesisVoice | null = null
-let voiceInitStarted = false
-// ttsOn = 유저 토글(localStorage 진실원). available과 독립 — 켜져 있어도 미지원이면 no-op.
+// ttsOn = 유저 토글(localStorage 진실원). 클립 준비 여부와 독립 — 켜져 있어도 클립이 없으면 침묵.
 let ttsOn = readStoredTts()
 /** 지금 진행 중인 대본(입장 소개)을 mp3로 낼 수 있는가. {@link beginScript}가 정한다. */
 let scriptMp3 = false
+/** 조회표를 이미 읽었는가. {@link initVoice}를 여러 번 불러도 한 번만 돌게 한다. */
+let initStarted = false
 
-// ── speechSynthesis 접근(미지원이면 null) ─────────────────────
-function getSynth(): SpeechSynthesis | null {
-  try {
-    return (globalThis as { speechSynthesis?: SpeechSynthesis }).speechSynthesis ?? null
-  } catch {
-    return null
-  }
-}
-
-/** ko-KR 보이스로 발화 utterance를 만든다. 역할이 rate·pitch를 정한다(§5.7). */
-function makeUtterance(line: string, role: SpeechRole, speed: number): SpeechSynthesisUtterance | null {
-  try {
-    const U = (globalThis as { SpeechSynthesisUtterance?: typeof SpeechSynthesisUtterance })
-      .SpeechSynthesisUtterance
-    if (!U) return null
-    const u = new U(line)
-    if (voice) u.voice = voice
-    u.lang = 'ko-KR'
-    // 재생 속도 배율을 rate에 곱한다(빨리감기 중계는 실제로도 빨라져야 한다).
-    // pitch는 화자 정체성이므로 재생 속도와 무관하게 고정한다.
-    u.rate = utteranceRate(role, speed)
-    u.pitch = ROLE_PITCH[role]
-    return u
-  } catch {
-    return null
-  }
-}
-
-// ── 보이스 초기화 ─────────────────────────────────────────────
+// ── 초기화 ────────────────────────────────────────────────────
 /**
- * ko-KR 보이스를 탐색한다(1회). 보이스 목록이 비동기 로드되는 브라우저를 위해
- * voiceschanged 이벤트에도 재탐색한다. 끝까지 ko 보이스가 없으면 available=false로 남아 no-op.
- * 미지원(speechSynthesis 부재)이면 즉시 no-op.
+ * 중계 음성 준비 — **클립 조회표를 읽는다**(1회).
+ *
+ * ★ 이름이 `initVoice`인 것은 유물이다. 예전에는 여기서 ko-KR **보이스**를 탐색했고
+ *   (`speechSynthesis.getVoices()` + voiceschanged 재시도), 못 찾으면 조용한 no-op으로
+ *   남았다. 폴백을 걷어낸 2026-08-02부터 탐색할 보이스가 없다 — 남은 일은 조회표뿐이다.
+ *   호출부(MatchScreen 킥오프)가 여럿이라 이름은 그대로 둔다.
+ *
+ * 조회표는 보통 마운트에서 미리 읽힌다(MatchScreen). 여기 남겨 둔 호출은 그 경로가
+ * 실패했을 때의 마지막 기회이고, `loadClipIndex()`는 스스로 중복을 막는다.
  */
 export function initVoice(): void {
-  if (voiceInitStarted) return
-  voiceInitStarted = true
-  // mp3 조회표도 여기서 한 번 읽는다. 없으면(=아직 안 구웠다) 조용히 폴백으로 남는다.
+  if (initStarted) return
+  initStarted = true
   mp3.loadClipIndex()
-  const synth = getSynth()
-  if (!synth) {
-    available = false
-    return
-  }
-  const pick = (): void => {
-    try {
-      const voices = synth.getVoices?.() ?? []
-      const ko = voices.find(v => (v.lang || '').toLowerCase().startsWith('ko'))
-      if (ko) {
-        voice = ko
-        available = true
-      }
-    } catch {
-      /* no-op — 탐색 실패는 available=false 유지 */
-    }
-  }
-  pick()
-  // 아직 못 찾았으면 보이스 목록 로드(voiceschanged) 후 재탐색.
-  try {
-    if (!available && typeof synth.addEventListener === 'function') {
-      synth.addEventListener('voiceschanged', pick)
-    }
-  } catch {
-    /* no-op */
-  }
+}
+
+// ── 점유 판정 ─────────────────────────────────────────────────
+/**
+ * **지금 누군가 말하고 있는가.**
+ *
+ * ★ 예전에는 이 함수가 mp3와 speechSynthesis를 **함께** 봤다. 두 경로가 큐를 공유하지
+ *   않아, 각자 자기 쪽만 보면 캐스터(mp3)와 해설(브라우저 음성)이 **동시에** 말하는
+ *   사고가 났기 때문이다(2026-08-02 실사고). 폴백이 사라진 지금은 경로가 하나뿐이라
+ *   겹칠 대상 자체가 없다 — 그 사고는 원인 쪽에서 소멸했다.
+ */
+function anySpeaking(): boolean {
+  return mp3.clipsSpeaking()
+}
+
+/** 진행 중인 발화를 끊는다(important 선점 전용). */
+function preempt(): void {
+  mp3.stopAllClips()
 }
 
 // ── 발화 ──────────────────────────────────────────────────────
 /**
- * 한 줄을 음성 중계한다. 미지원·보이스 없음·토글 OFF·빈 문자열이면 조용한 no-op.
- * 큐 정책: 발화 중이면 일반 라인은 드롭, important는 현재 발화를 cancel 후 즉시 발화한다.
+ * 한 줄을 음성 중계한다. 토글 OFF·빈 문자열·**클립 없음**이면 조용한 no-op.
+ * 큐 정책: 발화 중이면 일반 라인은 드롭, important는 현재 발화를 끊고 즉시 발화한다.
+ *
+ * ★ 클립이 없으면 **아무 소리도 내지 않는다**(파일 헤더 참조). 자막은 그대로 나가므로
+ *   정보는 잃지 않는다 — 잃는 것은 잘못된 목소리뿐이다.
+ *
+ * `role`·`intensity`는 이제 소리를 바꾸지 않는다(억양은 클립에 구워져 있다). 호출부가
+ * 이미 넘기고 있고 체류 시간 추정과 짝을 이루는 값이라 시그니처만 남긴다.
  */
 export function speak(
   line: string, opts: { important?: boolean; speed?: number; role?: SpeechRole; intensity?: number } = {},
 ): void {
   if (!ttsOn || !line) return
-  // mp3가 있으면 mp3. 선점(important) 규칙은 두 경로에 함께 적용한다.
-  if (mp3.hasClips(line)) {
-    if (mp3.clipsSpeaking()) {
-      if (!opts.important) return
-      mp3.stopAllClips()
-    }
-    if (mp3.playLine(line, { speed: opts.speed ?? 1, live: true })) return
+  const important = !!opts.important
+  if (anySpeaking()) {
+    if (!important) return // 발화 중 일반 라인은 스킵(드롭) — 과밀 방지
+    preempt() // important는 선점: 진행 중 발화를 끊고 즉시
   }
-  if (!available) return
-  const synth = getSynth()
-  if (!synth) return
-  try {
-    const important = !!opts.important
-    if (synth.speaking) {
-      if (!important) return // 발화 중 일반 라인은 스킵(드롭) — 과밀 방지
-      synth.cancel() // important는 선점: 현재 발화 취소 후 즉시
-    }
-    const role = opts.role ?? casterRole(important, opts.intensity ?? 0)
-    const u = makeUtterance(line, role, opts.speed ?? 1)
-    if (u) synth.speak(u)
-  } catch {
-    /* no-op — TTS 실패가 경기를 멈추지 않는다 */
-  }
+  mp3.playLine(line, { speed: opts.speed ?? 1, live: true })
 }
 
 /**
@@ -193,28 +153,21 @@ export function speak(
  *
  * 큐 정책이 `speak()`와 정반대다:
  *  - 선점하지 않는다. 캐스터 문장을 잘라먹으면 안 된다(해설은 받아서 말하는 사람이다).
- *  - 드롭하지도 않는다. `speechSynthesis`는 큐이므로 그대로 `speak`하면 앞 발화가
- *    끝난 **뒤에** 이어서 나온다 — 이게 §5.6이 말하는 유터런스 체이닝이고,
- *    캐스터 → 해설의 자연스러운 턴 전환이 공짜로 만들어진다.
- *  - 다만 이미 두 줄 이상 밀려 있으면(=따라가지 못하는 중) 붙이지 않는다.
+ *  - 드롭하지도 않는다. mp3 큐 꼬리(`queued`)에 붙이면 앞 발화가 끝난 **뒤에** 이어서
+ *    나온다 — 이게 §5.6이 말하는 체이닝이고, 캐스터 → 해설의 자연스러운 턴 전환이
+ *    공짜로 만들어진다.
+ *
+ * ★ 예전에는 여기에 "경로가 엇갈리면 버린다"는 가드가 있었다. mp3와 speechSynthesis가
+ *   큐를 공유하지 않아, 캐스터가 mp3로 말하는 중에 이 함수가 브라우저 음성으로 떨어지면
+ *   이어 붙는 게 아니라 **겹쳐서** 났기 때문이다. 경로가 하나가 된 지금은 큐가 하나뿐이라
+ *   그 가드가 필요 없다 — 클립이 없으면 그냥 침묵한다.
  */
 export function speakAside(
   line: string, opts: { speed?: number; role?: SpeechRole } = {},
 ): void {
   if (!ttsOn || !line) return
-  // 곁들임도 mp3 우선. 선점하지 않고 큐 꼬리에 붙인다(캐스터 문장을 자르지 않는다).
-  if (mp3.hasClips(line) && mp3.playLine(line, { speed: opts.speed ?? 1, queued: true, live: true })) return
-  if (!available) return
-  const synth = getSynth()
-  if (!synth) return
-  try {
-    // pending = 아직 시작도 못 한 발화가 큐에 남아 있다 → 이미 밀렸다. 더 얹지 않는다.
-    if (synth.pending) return
-    const u = makeUtterance(line, opts.role ?? 'analyst', opts.speed ?? 1)
-    if (u) synth.speak(u)
-  } catch {
-    /* no-op */
-  }
+  // 선점하지 않고 mp3 큐 꼬리에 붙인다(캐스터 문장을 자르지 않는다).
+  mp3.playLine(line, { speed: opts.speed ?? 1, queued: true, live: true })
 }
 
 /**
@@ -225,9 +178,9 @@ export function speakAside(
  *    소리가 어긋난 채로 남은 스무 명이 계속 흘러간다 — 회복 불가능한 어긋남이다.
  *  - `speak()`처럼 선점(cancel)하지도 않는다. 앞 이름을 자르면서 다음 이름을 부르면
  *    명단이 아니라 소음이 된다.
- *  - `speakAside()`와 달리 `pending`이어도 붙인다. 대본이 이미 발화 길이(estimateSpeechMs)로
- *    비트 간격을 잡아 두었으므로 큐가 밀리는 것은 추정 오차뿐이고, 큐에 이어 붙이면
- *    **순서는 언제나 보존**된다(순서 보존 > 지연 없음).
+ *  - 큐가 얼마나 밀렸든 붙인다. 대본이 이미 발화 길이(estimateSpeechMs)로 비트 간격을
+ *    잡아 두었으므로 밀리는 것은 추정 오차뿐이고, 큐에 이어 붙이면 **순서는 언제나
+ *    보존**된다(순서 보존 > 지연 없음).
  *
  * 취소는 호출부가 {@link stopAll}로 한다(건너뛰기·언마운트).
  */
@@ -237,27 +190,21 @@ export function speakScripted(
   if (!ttsOn || !line) return
   // 대본은 큐 꼬리에 이어 붙인다 — mp3 실길이가 추정과 달라도 **순서는 보존**된다.
   // ★ scriptMp3는 {@link beginScript}가 **대본 전체**를 덮는다고 확인했을 때만 켜진다.
-  //   스물 몇 줄 중 몇 줄만 mp3로 나오면 한 사람이 줄마다 목소리를 바꾸는 소리가 난다.
-  if (scriptMp3 && mp3.playLine(line, { speed: opts.speed ?? 1, queued: true })) return
-  if (!available) return
-  const synth = getSynth()
-  if (!synth) return
-  try {
-    const u = makeUtterance(line, opts.role ?? 'normal', opts.speed ?? 1)
-    if (u) synth.speak(u)
-  } catch {
-    /* no-op — TTS 실패가 연출을 멈추지 않는다 */
-  }
+  //   덮이지 않으면 대본 전체가 침묵이다(아래 beginScript의 "전부 아니면 전무").
+  if (!scriptMp3) return
+  mp3.playLine(line, { speed: opts.speed ?? 1, queued: true })
 }
 
 /**
  * **대본 시작 선언**(입장 소개). 대본 전체가 mp3로 덮이는지 한 번에 판정하고,
  * 덮이면 클립을 미리 받아 둔다(시작 시각이 정해진 발화는 네트워크를 기다릴 수 없다).
  *
- * ★ 전부 아니면 전무다. 한 줄이라도 클립이 없으면 대본 전체를 speechSynthesis로
- *   낸다 — 반쯤 mp3인 라인업 소개는 목소리가 줄마다 바뀌는 소리가 난다.
+ * ★ **전부 아니면 전무**다. 한 줄이라도 클립이 없으면 대본 전체를 침묵으로 낸다 —
+ *   반쯤만 소리가 나는 라인업 소개는 "몇 명은 빠뜨린" 것처럼 들린다.
+ *   (폴백이 있던 시절엔 "통째로 브라우저 음성"이었다. 폴백이 사라져 그 자리가
+ *    침묵이 됐을 뿐, 계약의 목적 — 한 대본 안에서 목소리가 갈리지 않는다 — 은 같다.)
  *
- * @returns mp3로 낼 것인가(호출부 로깅·테스트용).
+ * @returns mp3로 낼 것인가(호출부 로깅·테스트용). false면 이번 대본은 무음이다.
  */
 export function beginScript(speeches: readonly string[]): boolean {
   scriptMp3 = mp3.canSpeakAll(speeches)
@@ -273,7 +220,7 @@ export function beginScript(speeches: readonly string[]): boolean {
  * 대본 종료. 다음 {@link beginScript}까지 **대본** mp3는 꺼진다.
  *
  * ★ 경기 중 중계에는 영향이 없다. `scriptMp3`는 {@link speakScripted} 한 곳만 보고,
- *   {@link speak}·{@link speakAside}는 언제나 `mp3.hasClips`로 스스로 판정한다.
+ *   {@link speak}·{@link speakAside}는 줄마다 `mp3.playLine`이 스스로 판정한다.
  *   (2026-08-02: "경기 중은 mp3가 없으니 여기서 꺼야 한다"던 MatchScreen 주석은
  *    이제 사실이 아니다 — 조각이 생겼고, 끄는 것도 아니었다.)
  */
@@ -281,58 +228,45 @@ export function endScript(): void {
   scriptMp3 = false
 }
 
-/** 지금 speak()가 실제로 소리를 낼 수 있는 상태인가(보이스 확보 + 토글 ON).
- *  재생 체류 시간을 발화 길이만큼 늘릴지 판정하는 데 쓴다 — 해설이 꺼져 있으면
- *  늘릴 이유가 없다(무음인데 화면만 느려지면 안 된다). */
+/**
+ * 지금 speak()가 실제로 소리를 낼 수 있는 상태인가(조회표 준비 + 토글 ON).
+ * 재생 체류 시간을 발화 길이만큼 늘릴지 판정하는 데 쓴다 — 해설이 꺼져 있으면
+ * 늘릴 이유가 없다(무음인데 화면만 느려지면 안 된다).
+ *
+ * ★ 폴백이 사라진 뒤로 **답은 mp3 가능 여부 하나**다. 예전엔 `available`(ko-KR 보이스)을
+ *   OR로 함께 봤는데, 그 항을 남겨 두면 클립이 하나도 없는 환경에서 "소리가 난다"고
+ *   답해 **무음인 채 화면만 느려진다**. 소비자는 MatchScreen의 `minuteDwellWithSpeech`다.
+ *
+ * ★ 자막·연출은 이 값과 무관하게 흐른다(reveal gate는 자기 타이머로 돈다).
+ *   여기서 false가 나와도 정보가 사라지지 않는 이유다.
+ */
 export function willSpeak(): boolean {
-  // mp3 경로가 살아 있으면 보이스가 없어도(ko-KR 미탑재 브라우저) 소리는 난다.
-  return ttsOn && (available || mp3.clipsReady())
+  return ttsOn && mp3.clipsReady()
 }
 
-/** 진행 중인 모든 발화를 취소한다(pause·모드 전환·언마운트). 미지원이면 no-op. */
+/** 진행 중인 모든 발화를 취소한다(pause·모드 전환·언마운트). */
 export function stopAll(): void {
   mp3.stopAllClips()
-  const synth = getSynth()
-  if (!synth) return
-  try {
-    synth.cancel()
-  } catch {
-    /* no-op */
-  }
 }
 
 /**
- * 발화를 **문장 중간에서 얼려 둔다**(일시정지). cancel과 다르다 —
- * 재개하면 끊긴 자리에서 이어 말한다.
+ * 일시정지 훅. **지금은 no-op이다** — 시그니처만 남긴다(MatchScreen이 frozen 토글에서 부른다).
  *
- * 왜 cancel이 아닌가: 일시정지는 "지금 이 순간을 붙잡아 본다"는 조작이지 해설을
- * 버리는 조작이 아니다. cancel하면 재개할 때 그 분의 해설이 통째로 사라지고
- * (분당 1회 발화라 다시 부르지 않는다) 화면과 소리가 어긋난다.
- * 작전판 진입(감독 타임)은 반대로 {@link stopAll}이 맞다 — 그때는 관전을 떠난다.
+ * 예전에는 `speechSynthesis.pause()`로 발화를 문장 중간에서 얼렸다. 폴백이 사라진 지금
+ * 남은 경로는 mp3뿐인데, **mp3에는 애초에 걸지 않았다**: Web Audio의
+ * `AudioBufferSourceNode`는 한 번 멈추면 이어 재생할 수 없고(끊으면 그 문장은 사라진다),
+ * mp3 조각은 0.5~2초라 일시정지 버튼을 누른 뒤 그만큼만 더 들리고 끝난다 —
+ * 얼리지 않아도 화면과 어긋나지 않는다.
  *
- * ★ mp3 경로에는 걸지 않는다. Web Audio의 `AudioBufferSourceNode`는 한 번 멈추면
- *   이어 재생할 수 없고(끊으면 그 문장은 사라진다), mp3 조각은 0.5~2초라 일시정지
- *   버튼을 누른 뒤 그만큼만 더 들리고 끝난다 — 얼리지 않아도 어긋나지 않는다.
+ * 관전을 **떠나는** 조작(작전판 진입)은 여전히 {@link stopAll}이 맞다.
  */
 export function pauseSpeech(): void {
-  const synth = getSynth()
-  if (!synth) return
-  try {
-    synth.pause()
-  } catch {
-    /* no-op */
-  }
+  /* no-op — 위 주석 참조 */
 }
 
-/** {@link pauseSpeech}로 얼린 발화를 이어서 재생한다. 미지원이면 no-op. */
+/** {@link pauseSpeech}의 짝. 얼린 발화가 없으므로 마찬가지로 no-op이다. */
 export function resumeSpeech(): void {
-  const synth = getSynth()
-  if (!synth) return
-  try {
-    synth.resume()
-  } catch {
-    /* no-op */
-  }
+  /* no-op — pauseSpeech 참조 */
 }
 
 // ── 토글(localStorage 기억) ───────────────────────────────────

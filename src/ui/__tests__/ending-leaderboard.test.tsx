@@ -35,31 +35,10 @@ function playChampion() {
   for (let i = 0; i < 5; i++) win()
 }
 
-// 시드가 판마다 달라졌으므로(2026-08-01) 엔딩 화면이 시드를 유저에게 돌려줘야 한다.
-// 이게 없으면 "매번 다른 랜덤"일 뿐이고, 결정론 엔진을 만든 의미가 사라진다.
-describe('EndingScreen 시드 표시', () => {
-  it('이 판의 시드를 숫자와 ?seed= 안내로 보여준다', () => {
-    store().startCampaign(246810)
-    win(); win(); win()
-    for (let i = 0; i < 5; i++) win()
-    const { container } = render(<EndingScreen onRestart={() => {}} />)
-    const seedCard = container.querySelector('.end-seed')!
-    expect(seedCard).toBeTruthy()
-    expect(seedCard.querySelector('.end-seed__val')!.textContent).toBe('246810')
-    expect(seedCard.textContent).toContain('?seed=246810')
-  })
-
-  it('클립보드가 없는 환경에서는 [링크 복사]를 그리지 않는다(눌러도 안 되는 버튼 금지)', () => {
-    store().startCampaign(246810)
-    win(); win(); win()
-    for (let i = 0; i < 5; i++) win()
-    // jsdom 기본에는 navigator.clipboard가 없다 — 비보안 컨텍스트와 같은 조건.
-    const { container } = render(<EndingScreen onRestart={() => {}} />)
-    if (!navigator.clipboard) {
-      expect(container.querySelector('.end-seed__copy')).toBeNull()
-    }
-  })
-})
+// [2026-08-02] "EndingScreen 시드 표시" describe 2건을 제거했다.
+// 시드 카드(숫자 · ?seed= 안내 · [링크 복사])를 UI에서 걷어냈기 때문이다 — 사용자 판단.
+// 엔진의 시드는 그대로이므로 결정론 계약 테스트(src/game/__tests__/seed.test.ts,
+// 밸런스 테스트 전체)는 손대지 않았다. 사라진 것은 화면 표시뿐이다.
 
 describe('EndingScreen 리더보드 등록 플로우', () => {
   it('점수 브레이크다운 표와 합계를 렌더한다', () => {
@@ -88,11 +67,12 @@ describe('EndingScreen 리더보드 등록 플로우', () => {
     expect(submitMock).toHaveBeenCalledTimes(1)
     expect(submitMock.mock.calls[0][0]).toBe('나야나')
 
-    // 순위 목록 렌더
-    await waitFor(() => expect(container.querySelector('.end-board')).toBeTruthy())
+    // 순위 목록 렌더 — 공용 컴포넌트(.lb-list)가 그린다.
+    await waitFor(() => expect(container.querySelector('.lb-list')).toBeTruthy())
+    expect(container.querySelector('.end-board')).toBeTruthy()
     expect(getByText('나야나')).toBeTruthy()
-    // local 모드 뱃지
-    expect(getByText('이 기기 기록')).toBeTruthy()
+    // local 모드 뱃지는 조회가 끝난 뒤에만 나온다(로딩 중에 "이 기기 기록"이라 단정하지 않는다).
+    await waitFor(() => expect(getByText('이 기기 기록')).toBeTruthy())
   })
 
   it('빈 닉네임은 익명 감독으로 정제되어 제출된다', async () => {
@@ -113,7 +93,9 @@ describe('EndingScreen 리더보드 등록 플로우', () => {
     const { getByRole, queryByText } = render(<EndingScreen onRestart={() => {}} />)
     fireEvent.click(getByRole('button', { name: '기록 등록' }))
     await waitFor(() => expect(topMock).toHaveBeenCalled())
-    await waitFor(() => expect(queryByText('리더보드 TOP 10')).toBeTruthy())
+    expect(queryByText('리더보드 TOP 10')).toBeTruthy()
+    // 조회가 끝나 행이 그려진 뒤에 판정해야 "아직 로딩 중이라 없었다"로 통과하지 않는다.
+    await waitFor(() => expect(queryByText('온라인')).toBeTruthy())
     expect(queryByText('이 기기 기록')).toBeNull()
   })
 })

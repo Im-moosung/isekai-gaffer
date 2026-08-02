@@ -3,7 +3,8 @@
 // 화면이 실제 상황과 정반대를 말하는 것이 문제의 본질이라, 스코어 변화는 즉시 소거하고
 // 그 외에는 유효 기간(MOMENT_PROMPT_TTL)으로 끊는다.
 import { describe, it, expect, beforeEach } from 'vitest'
-import { useMatchStore, momentPromptAlive, MOMENT_PROMPT_TTL } from '../matchStore'
+// 노출 지연(MOMENT_PROMPT_DELAY) 자체의 계약은 moment-delay.test.ts가 맡는다.
+import { useMatchStore, momentPromptAlive, MOMENT_PROMPT_TTL, MOMENT_PROMPT_DELAY } from '../matchStore'
 import type { DecisionMoment } from '../matchSession'
 import { makeTestTeam } from '../../engine/fixtures/testTeams'
 
@@ -24,7 +25,12 @@ describe('momentPromptAlive — 순수 판정', () => {
   })
 
   it('유효 기간을 1분이라도 넘기면 죽는다', () => {
-    expect(momentPromptAlive(prompt(2), [0, 1], 2 + MOMENT_PROMPT_TTL + 1, [0, 1])).toBe(false)
+    // ★ 2026-08-02: 기준점이 **감지 분 + MOMENT_PROMPT_DELAY**(= 배너가 실제로 뜬 분)로 바뀌었다.
+    //   순간 제안이 감지 분에 즉시 뜨지 않고 1분 뒤에 승격하기 때문이다(스포일러 방지 —
+    //   MOMENT_PROMPT_DELAY 주석). 감지 분에서 재면 유저가 반응할 창이 지연만큼 조용히 깎인다.
+    expect(momentPromptAlive(prompt(2), [0, 1], 2 + MOMENT_PROMPT_DELAY + MOMENT_PROMPT_TTL + 1, [0, 1])).toBe(false)
+    // 그 직전 분까지는 살아 있다.
+    expect(momentPromptAlive(prompt(2), [0, 1], 2 + MOMENT_PROMPT_DELAY + MOMENT_PROMPT_TTL, [0, 1])).toBe(true)
   })
 
   it('스코어가 바뀌면 기간과 무관하게 즉시 죽는다 — 문장이 거짓이 되기 때문', () => {
@@ -82,8 +88,9 @@ describe('advanceMinute — 실주행 소거', () => {
       if (store().phase !== 'playing') useMatchStore.setState({ phase: 'playing' })
       store().advanceMinute()
     }
-    // 10'에 뜬 제안은 늦어도 10+TTL+1분에는 없어진다(감사의 12분 지속과 대비).
-    expect(store().engine!.minute).toBeLessThanOrEqual(10 + MOMENT_PROMPT_TTL + 1)
+    // 10'에 뜬 제안은 늦어도 10+DELAY+TTL+1분에는 없어진다(감사의 12분 지속과 대비).
+    // ★ 2026-08-02: 노출 지연(MOMENT_PROMPT_DELAY)만큼 기준점이 밀렸다 — 위 순수 판정 테스트 참조.
+    expect(store().engine!.minute).toBeLessThanOrEqual(10 + MOMENT_PROMPT_DELAY + MOMENT_PROMPT_TTL + 1)
     expect(store().momentPrompt?.minute).not.toBe(10)
   })
 
@@ -107,7 +114,7 @@ describe('advanceMinute — 실주행 소거', () => {
       store().advanceMinute()
       const p = store().momentPrompt
       if (p && p.minute > 10) return // 새 제안이 떴다 — 통과
-      if (store().engine!.minute > 10 + MOMENT_PROMPT_TTL) {
+      if (store().engine!.minute > 10 + MOMENT_PROMPT_DELAY + MOMENT_PROMPT_TTL) {
         // 최소한 낡은 제안은 사라져 있어야 한다.
         expect(store().momentPrompt?.minute).not.toBe(10)
       }

@@ -4,6 +4,7 @@
 // 순수 함수 · 결정론(Math.random/Date 금지, 해시로 변형 선택) · 사실 서술 · 비하 금지.
 import type { MatchRecord, CampaignStage } from './campaignStore'
 import type { DecisionEntry } from '../engine/types'
+import { teamNameKo, type TeamId } from '../data/loader'
 
 // ── 공개 타입 ──────────────────────────────────────────────
 /** 기자 질문 1건. 답변은 3택 [공격적, 겸손, 유머] 톤 순서 고정. */
@@ -27,13 +28,13 @@ function recordSeed(r: MatchRecord): number {
 }
 
 // ── 상수 테이블 ────────────────────────────────────────────
-/** 캠페인 상대 한글 표기(외부 로더 비의존 — 계층 격리). 미등록 id는 코드 그대로. */
-const OPPONENT_KO: Record<string, string> = {
-  cze: '체코', mex: '멕시코', rsa: '남아공',
-  ecu: '에콰도르', eng: '잉글랜드', nor: '노르웨이', arg: '아르헨티나', esp: '스페인',
-  can: '캐나다', mar: '모로코', fra: '프랑스',
-}
-function oppName(id: string): string { return OPPONENT_KO[id] ?? id }
+/**
+ * 캠페인 상대 한글 표기. 정본은 팀 JSON의 `name.ko` 하나뿐이다(src/data/loader.ts).
+ * 예전에는 이 모듈이 자기 표를 복사해 들고 있었고 미등록 id는 코드값('rsa')을 그대로
+ * 뱉었다 — 그 값이 화면·신문·**AI 헤드라인 프롬프트**까지 흘러갔다. 이제 로더가
+ * 이름 없는 팀에 대해 던지므로 조용히 새어 나가는 경로가 없다.
+ */
+function oppName(id: TeamId): string { return teamNameKo(id) }
 
 const STAGE_LABEL: Record<CampaignStage, string> = {
   group1: '조별리그 1차전', group2: '조별리그 2차전', group3: '조별리그 3차전',
@@ -71,33 +72,172 @@ function outcomeOf(r: MatchRecord): Outcome {
 // ═══════════════════════════════════════════════════════════
 // buildQuestions
 // ═══════════════════════════════════════════════════════════
-// 답변 톤 풀 — index 0=공격적, 1=겸손, 2=유머. 톤 정렬 유지(헤드라인이 답변 톤을 역분류).
-const AGGRESSIVE = [
-  '우리 준비가 옳았습니다. 결과가 증명하죠.',
-  '누구와 붙어도 두렵지 않습니다.',
-  '이 정도는 예상했던 그림입니다.',
-  '다음 상대도 우리를 경계해야 할 겁니다.',
-]
-const HUMBLE = [
-  '선수들이 모든 걸 쏟아부은 덕분입니다.',
-  '팬들의 응원이 큰 힘이 됐습니다.',
-  '아직 갈 길이 멉니다. 겸손히 준비하겠습니다.',
-  '제 몫보다 선수들의 헌신이 컸습니다.',
-]
-const HUMOR = [
-  '심장이 열 개라도 모자란 경기였네요.',
-  '오늘 밤은 발 뻗고 자겠습니다.',
-  '해설진 목소리가 저보다 더 컸을 겁니다.',
-  '커피를 몇 잔 마셨는지 세지도 못했네요.',
-]
-/** 답변 톤 풀 export (헤드라인 역분류·UI 프리뷰용). */
-export const ANSWER_POOLS: { aggressive: readonly string[]; humble: readonly string[]; humor: readonly string[] } = {
-  aggressive: AGGRESSIVE, humble: HUMBLE, humor: HUMOR,
+// ── 답변 풀 — 결과 × 톤 ─────────────────────────────────────
+// 왜 결과별로 가르는가(2026-08-02, 실플레이 결함):
+//   예전 풀은 톤 3종 × 4문장이 전부였고, 셋을 **같은 인덱스**로 함께 뽑았다. 그래서
+//   실제로 나올 수 있는 답변 세트가 네 가지뿐이었고, 무엇보다 **경기 결과를 몰랐다.**
+//   2-5로 진 경기의 회견에 "이 정도는 예상했던 그림입니다."가 떴다 — 대패한 감독의 말이
+//   아니고, 그 톤을 AI 헤드라인이 받아 "대승"으로 뒤집는 경로까지 열어 줬다.
+//   질문은 이미 결과를 안다(resultQuestions가 승/무/패로 갈린다). 답변만 몰랐던 것이
+//   결함의 자리였으므로, 답변도 outcomeOf가 판정한 결과 칸에서만 뽑는다.
+//
+// 문안 규약(전 칸 공통):
+//   · 배열 순서 [aggressive, humble, humor]는 **계약**이다. answerTone이 이 풀로 톤을
+//     역분류해 헤드라인 톤을 정하므로, 칸을 옮기면 헤드라인이 답변과 반대로 나간다.
+//   · 공격적 톤은 **결과를 부정하지 않는다.** 진 날의 공격적 답변은 "우리가 이겼다"가
+//     아니라 "결과는 받아들이되 방향은 바꾸지 않는다"다.
+//   · 유머도 결과를 안다. 진 날의 유머는 자조여야 한다 — 대패 회견의 "발 뻗고 자겠습니다"는
+//     조롱으로 읽힌다.
+//   · 한 문장·존댓말·비하 금지. 라틴 문자와 숫자는 쓰지 않는다(§5.2 speech 규약: ko-KR
+//     보이스가 철자로 읽고, 내부 수치는 사람이 하는 말이 아니다).
+type ToneTrio = { aggressive: readonly string[]; humble: readonly string[]; humor: readonly string[] }
+
+const OUTCOME_ANSWERS: Record<Outcome, ToneTrio> = {
+  bigwin: {
+    aggressive: [
+      '우리 준비가 옳았습니다. 결과가 증명하죠.',
+      '오늘 같은 경기력이면 누구와 붙어도 두렵지 않습니다.',
+      '이 점수 차는 우연이 아니라 준비의 값입니다.',
+      '다음 상대도 오늘 우리를 보고 계산이 복잡해졌을 겁니다.',
+    ],
+    humble: [
+      '선수들이 모든 걸 쏟아부은 덕분입니다.',
+      '점수 차만큼 쉬운 경기는 아니었습니다.',
+      '오늘 잘 풀렸다고 다음도 그러리라 믿지는 않습니다.',
+      '제 몫보다 선수들의 헌신이 컸습니다.',
+    ],
+    humor: [
+      '오늘 밤은 발 뻗고 자겠습니다.',
+      '후반에는 제가 할 일이 없어 물만 마셨습니다.',
+      '해설진 목소리가 저보다 더 컸을 겁니다.',
+      '이런 날은 벤치가 세상에서 제일 편한 자리입니다.',
+    ],
+  },
+  win: {
+    aggressive: [
+      '준비한 대로 눌렀고, 그래서 이겼습니다.',
+      '이 경기력을 유지하면 누구와 붙어도 두렵지 않습니다.',
+      '운이 아니라 우리가 만들어 벌린 점수 차였습니다.',
+      '다음 상대도 우리를 경계해야 할 겁니다.',
+    ],
+    humble: [
+      '선수들이 모든 걸 쏟아부은 덕분입니다.',
+      '팬들의 응원이 큰 힘이 됐습니다.',
+      '이겼지만 보완해야 할 장면이 여럿 보였습니다.',
+      '아직 갈 길이 멉니다. 겸손히 준비하겠습니다.',
+    ],
+    humor: [
+      '커피를 몇 잔 마셨는지 세지도 못했네요.',
+      '오늘은 넥타이를 풀고 저녁을 먹겠습니다.',
+      '해설진 목소리가 저보다 더 컸을 겁니다.',
+      '벤치에 앉았다 일어났다 하느라 다리가 다 저리네요.',
+    ],
+  },
+  narrow: {
+    aggressive: [
+      '한 골 차라도 이긴 건 이긴 겁니다. 우리 방식이 통했습니다.',
+      '버텨야 할 때 버텼습니다. 그게 우리 힘입니다.',
+      '아슬아슬해 보여도 계산 안에 있던 경기였습니다.',
+      '이런 경기를 이기는 팀이 결국 멀리 갑니다.',
+    ],
+    humble: [
+      '선수들이 마지막까지 집중해 준 덕분입니다.',
+      '한 골 차 승부는 언제든 뒤집힐 수 있었습니다.',
+      '팬들의 응원이 큰 힘이 됐습니다.',
+      '이긴 것에 안도하고, 내용은 다시 들여다보겠습니다.',
+    ],
+    humor: [
+      '심장이 열 개라도 모자란 경기였네요.',
+      '막판에는 시계만 열 번은 본 것 같습니다.',
+      '커피를 몇 잔 마셨는지 세지도 못했네요.',
+      '오늘 제 수명이 조금 줄어든 것 같습니다.',
+    ],
+  },
+  shootoutWin: {
+    aggressive: [
+      '승부차기까지 갈 준비도 우리는 해 뒀습니다.',
+      '키커 순서까지 준비한 대로였습니다. 우연이 아닙니다.',
+      '이런 승부를 넘어 본 팀은 다음에도 넘습니다.',
+      '끝까지 흔들리지 않은 쪽이 우리였습니다.',
+    ],
+    humble: [
+      '골키퍼와 키커들이 감당해 준 결과입니다.',
+      '승부차기는 누가 웃어도 이상하지 않은 자리였습니다.',
+      '끝까지 맞선 상대에게도 박수를 보내고 싶습니다.',
+      '선수들의 담대함에 제가 기댔습니다.',
+    ],
+    humor: [
+      '심장이 열 개라도 모자란 경기였네요.',
+      '승부차기 내내 저는 하늘만 보고 있었습니다.',
+      '오늘 밤은 발 뻗고 자겠습니다.',
+      '페널티 마크가 그렇게 멀어 보인 건 처음입니다.',
+    ],
+  },
+  draw: {
+    aggressive: [
+      '승점을 나눴을 뿐, 우리 방향은 바꾸지 않습니다.',
+      '내용에서 밀린 경기였다고는 보지 않습니다.',
+      '오늘의 승점 하나가 나중에 값을 할 겁니다.',
+      '같은 상대를 다시 만나면 결과는 다를 겁니다.',
+    ],
+    humble: [
+      '아쉬운 결과지만 선수들은 최선을 다했습니다.',
+      '마무리를 준비시키지 못한 건 제 몫이 부족했던 탓입니다.',
+      '승점 하나도 소중히 받아들이겠습니다.',
+      '팬들께는 이기는 경기를 보여 드리고 싶었습니다.',
+    ],
+    humor: [
+      '오늘은 골대가 우리 편이 아니었던 것 같습니다.',
+      '슛 하나만 더 들어갔으면 지금 웃고 있었을 텐데요.',
+      '집에 가서 그 장면만 몇 번이고 돌려 볼 것 같습니다.',
+      '오늘 밤은 잠이 조금 늦게 올 것 같습니다.',
+    ],
+  },
+  loss: {
+    // 공격적 톤이 결과를 부정하지 않게 — "우리가 이겼다"가 아니라 "방향은 안 바꾼다"다.
+    aggressive: [
+      '결과는 받아들이지만 방향을 바꿀 생각은 없습니다.',
+      '오늘 진 것이 우리 축구가 틀렸다는 뜻은 아닙니다.',
+      '고개를 숙이지는 않겠습니다. 다음 경기에서 답하겠습니다.',
+      '오늘 일은 오늘로 끝내고 다음 준비에 들어가겠습니다.',
+    ],
+    humble: [
+      '준비를 충분히 시키지 못한 제 책임입니다.',
+      '선수들은 뛰었습니다. 부족했던 건 제 쪽입니다.',
+      '기대하고 기다려 주신 팬들께 죄송할 뿐입니다.',
+      '오늘은 상대가 우리보다 나았습니다. 인정하겠습니다.',
+    ],
+    // 진 날의 유머는 자조다 — 상대나 선수를 향하면 조롱이 된다.
+    humor: [
+      '오늘 밤은 잠이 쉽게 오지 않을 것 같습니다.',
+      '제 머리가 하얗게 세는 소리를 들은 것 같습니다.',
+      '집으로 가는 길이 오늘따라 유난히 멀겠네요.',
+      '경기 영상을 몇 번이나 돌려 볼지 저도 모르겠습니다.',
+    ],
+  },
 }
 
-function optionsFor(pick: number): [string, string, string] {
-  const i = pick % AGGRESSIVE.length
-  return [AGGRESSIVE[i], HUMBLE[i], HUMOR[i]]
+/** 톤별 전체 문안(결과 칸을 가로질러 합친 것). 헤드라인 역분류·UI 프리뷰용 계약 형태 유지. */
+export const ANSWER_POOLS: ToneTrio = {
+  aggressive: Object.values(OUTCOME_ANSWERS).flatMap(t => t.aggressive),
+  humble: Object.values(OUTCOME_ANSWERS).flatMap(t => t.humble),
+  humor: Object.values(OUTCOME_ANSWERS).flatMap(t => t.humor),
+}
+// 역분류는 매 답변마다 도는 경로라 Set으로 굳혀 둔다(문안 중복은 테스트가 막는다).
+const TONE_SETS: readonly Set<string>[] = [
+  new Set(ANSWER_POOLS.aggressive), new Set(ANSWER_POOLS.humble), new Set(ANSWER_POOLS.humor),
+]
+
+/** 결과 칸에서 [공격적, 겸손, 유머] 한 세트를 뽑는다.
+ *  톤마다 pick의 **다른 비트**를 읽는 이유: 셋을 같은 인덱스로 묶으면 조합 수가 풀 길이(넷)로
+ *  주저앉는다 — 그게 예전 결함의 절반이었다. 비트만 나눠 써도 결정론은 그대로다. */
+function optionsFor(pick: number, outcome: Outcome): [string, string, string] {
+  const p = OUTCOME_ANSWERS[outcome]
+  return [
+    p.aggressive[pick % p.aggressive.length],
+    p.humble[(pick >>> 3) % p.humble.length],
+    p.humor[(pick >>> 6) % p.humor.length],
+  ]
 }
 
 // ── 기자의 입 — 내부 로그를 사람의 말로 옮긴다 ──────────────────
@@ -392,6 +532,7 @@ function planQuestion(planDeviation: number, won: boolean): { text: string; bran
  */
 export function buildQuestions(record: MatchRecord, log: DecisionEntry[], planDeviation?: number): PressQuestion[] {
   const seed = recordSeed(record)
+  const outcome = outcomeOf(record)
   // 로그 우선순위 정렬(안정): kind 우선순위 → 원래 등장 순서.
   const KIND_ORDER: Record<DecisionEntry['kind'], number> = {
     teamtalk: 0, sub: 1, instructions: 2, 'shootout-setup': 3,
@@ -410,8 +551,7 @@ export function buildQuestions(record: MatchRecord, log: DecisionEntry[], planDe
   }
 
   if (planDeviation !== undefined) {
-    const out = outcomeOf(record)
-    const pq = planQuestion(planDeviation, out !== 'draw' && out !== 'loss')
+    const pq = planQuestion(planDeviation, outcome !== 'draw' && outcome !== 'loss')
     if (pq) push(pq.text, PLAN_ANSWERS[pq.branch])
   }
   for (const { e } of ordered) {
@@ -423,7 +563,7 @@ export function buildQuestions(record: MatchRecord, log: DecisionEntry[], planDe
   return items.slice(0, 3).map((q, i) => ({
     id: `pq${i + 1}`,
     text: q.text,
-    options: q.options ?? optionsFor(seed + i * 2654435761),
+    options: q.options ?? optionsFor(seed + i * 2654435761, outcome),
   }))
 }
 
@@ -431,12 +571,11 @@ export function buildQuestions(record: MatchRecord, log: DecisionEntry[], planDe
 // buildHeadline
 // ═══════════════════════════════════════════════════════════
 /** 답변 텍스트의 톤을 역분류(0=공격적/1=겸손/2=유머). 풀 밖이면 해시 폴백.
+ *  결과별로 갈린 풀도 톤 축으로 합쳐 두었으므로(TONE_SETS) 어느 결과의 문안이든 여기서 잡힌다.
  *  플랜 추궁의 전용 답변도 같은 [공격적, 겸손, 유머] 순서로 놓여 있으므로 인덱스로 분류한다
  *  — 등록하지 않으면 해시 폴백으로 떨어져 헤드라인 톤이 답변과 어긋난다. */
 function answerTone(text: string): 0 | 1 | 2 {
-  if (AGGRESSIVE.includes(text)) return 0
-  if (HUMBLE.includes(text)) return 1
-  if (HUMOR.includes(text)) return 2
+  for (let i = 0; i < TONE_SETS.length; i++) if (TONE_SETS[i].has(text)) return i as 0 | 1 | 2
   for (const trio of Object.values(PLAN_ANSWERS)) {
     const i = trio.indexOf(text)
     if (i >= 0) return i as 0 | 1 | 2
@@ -512,6 +651,131 @@ export function buildHeadline(record: MatchRecord, answers: string[], teamName: 
   const quote = `"${quoted}" — ${teamName} 감독`
 
   return { title, sub, quote }
+}
+
+// ═══════════════════════════════════════════════════════════
+// AI 컨텍스트 — 사실 카드
+// ═══════════════════════════════════════════════════════════
+// 왜 여기에 있는가(2026-08-02, 실플레이 결함):
+//   기자회견이 AI에 넘기던 맥락은 `{ teamName, opponentId, stage, score: [2,5] }` 였다.
+//   **배열의 어느 칸이 우리 득점인지가 그 데이터 안에 적혀 있지 않다.** opponentId는 코드값
+//   ('mex')이고 teamName은 한국어라 둘을 짝지을 단서도 없다. 그 결과 모델은 2-5 **패배**를
+//   "2-0에서 5-2로 대승"이라고 뒤집어 썼다(존재하지 않는 전개까지 창작).
+//   교훈: **모델에게 판정을 시키지 않는다.** 승패는 우리가 계산해서 한국어 낱말로 못 박고,
+//   양 팀의 득점은 인덱스가 아니라 이름 붙은 필드로 준다.
+//
+// 이 모듈에 두는 이유: 상대 한글 표기·단계 라벨·승패 판정(outcomeOf)이 전부 여기 있다.
+// UI가 자기 사본을 들고 계산하면 화면과 프롬프트가 따로 놀 수 있다.
+// 반환 타입을 Record<string, unknown>으로 두는 것은 aiClient.narrate의 계약에 맞추기 위함이다.
+
+/** 우리 팀 기본 표기 — 캠페인에서 유저는 언제나 kor을 지휘한다(App.tsx). */
+const OUR_TEAM_DEFAULT = '대한민국'
+
+/** 승/무/패를 한국어 낱말로. 승부차기는 별도 필드로 분리해 정규시간과 섞지 않는다. */
+function resultWord(kor: number, opp: number): '승리' | '무승부' | '패배' {
+  return kor > opp ? '승리' : kor < opp ? '패배' : '무승부'
+}
+
+/**
+ * 경기 1건 → AI에 넘길 **모호함 없는** 사실 카드.
+ * 키를 한국어로 두는 이유: 모델이 읽는 유일한 라벨이므로, `score[0]`처럼 해석이 필요한
+ * 이름을 남기지 않는다. 스코어 표기는 '최종_스코어' 하나로 정본화해 모델이 직접
+ * 숫자를 조합하다 뒤집는 경로를 없앤다.
+ */
+export function describeMatch(record: MatchRecord, teamName: string = OUR_TEAM_DEFAULT): Record<string, unknown> {
+  const [kor, opp] = record.score
+  const oppKo = oppName(record.opponentId)
+  const regulation = resultWord(kor, opp)
+  const so = record.shootout
+  // 최종 결과 = 정규시간 결과, 단 승부차기가 있었으면 그쪽이 승부를 가른다.
+  const final = so ? (so[0] > so[1] ? '승부차기 승리' : '승부차기 패배') : regulation
+  // 조사는 josa()로 맞춘다 — 이 문장은 모델이 가장 먼저 읽는 한 줄이라 "은(는)" 같은
+  // 기계 표기를 남기면 그 어색함이 그대로 헤드라인 문체로 새어 나온다.
+  const we = josa(teamName, '은', '는')
+  const summary = so
+    ? `${we} ${josa(oppKo, '과', '와')} ${kor}-${opp} 스코어로 비긴 뒤 승부차기 ${so[0]}-${so[1]}로 ${so[0] > so[1] ? '이겼다' : '졌다'}.`
+    : regulation === '무승부'
+      ? `${we} ${josa(oppKo, '과', '와')} ${kor}-${opp} 스코어로 비겼다.`
+      : `${we} ${oppKo}에 ${kor}-${opp} 스코어로 ${regulation === '승리' ? '이겼다' : '졌다'}.`
+  return {
+    대회_단계: STAGE_LABEL[record.stage] ?? record.stage,
+    우리_팀: teamName,
+    우리_팀_득점: kor,
+    상대_팀: oppKo,
+    상대_팀_득점: opp,
+    정규시간_결과: regulation,
+    점수차: Math.abs(kor - opp),
+    승부차기: so ? { 우리_팀: so[0], 상대_팀: so[1] } : null,
+    최종_결과: final,
+    최종_스코어: `${teamName} ${kor}-${opp} ${oppKo}`,
+    한줄_사실: summary,
+  }
+}
+
+/**
+ * 캠페인 전체 → 사실 카드. 에필로그가 뒤집히면 여정 전체가 거짓이 되므로
+ * 경기별 결과를 **한 줄씩 판정해서** 넘긴다(모델이 배열을 세게 두지 않는다).
+ */
+export function describeCampaign(
+  records: MatchRecord[],
+  ending: { reached: CampaignStage; champion: boolean },
+  teamName: string = OUR_TEAM_DEFAULT,
+): Record<string, unknown> {
+  let w = 0, d = 0, l = 0, gf = 0, ga = 0
+  const matches = records
+    .filter(r => r.stage !== 'ended')
+    .map(r => {
+      const [kor, opp] = r.score
+      gf += kor; ga += opp
+      // 승부차기가 있으면 그 승패가 진출을 가른다 — 전적도 그 기준으로 센다.
+      const outcome = r.shootout
+        ? (r.shootout[0] > r.shootout[1] ? '승리' : '패배')
+        : resultWord(kor, opp)
+      if (outcome === '승리') w++
+      else if (outcome === '패배') l++
+      else d++
+      return describeMatch(r, teamName)
+    })
+  const reached = STAGE_LABEL[ending.reached] ?? ending.reached
+  return {
+    우리_팀: teamName,
+    도달_단계: reached,
+    우승_여부: ending.champion,
+    통산_전적: `${w}승 ${d}무 ${l}패`,
+    총_득점: gf,
+    총_실점: ga,
+    경기별_결과: matches,
+    한줄_사실: ending.champion
+      ? `${josa(teamName, '은', '는')} ${w}승 ${d}무 ${l}패로 우승했다.`
+      : `${josa(teamName, '은', '는')} ${w}승 ${d}무 ${l}패를 기록했고, ${reached}에서 여정이 끝났다(우승하지 못했다).`,
+  }
+}
+
+/**
+ * 3층 방어선 — AI가 돌려준 문장에 **이 경기에 존재하지 않는 스코어 표기**가 있는가.
+ *
+ * 프롬프트 제약은 강제력이 아니라 부탁이다. 실제 결함 문장("2-0에서 5-2로 대승")도
+ * 없는 스코어 두 개를 지어낸 것이었으므로, 값싼 문자열 검사만으로 그 부류를 잡는다.
+ *
+ * 과잉 방어를 피하려고 판정 범위를 좁게 잡았다:
+ *  - 검사 대상은 `숫자-숫자` **두 토막**뿐이다. `4-2-3-1` 같은 세 토막 이상은 포메이션이라
+ *    스코어로 읽지 않는다.
+ *  - 허용값은 실제 스코어와 승부차기 스코어. 그 외 숫자 쌍이 하나라도 있으면 위반이다.
+ *  - 스코어를 아예 쓰지 않은 헤드라인(대부분의 정상 출력)은 매치가 0건이라 통과한다.
+ * 즉 "숫자를 말했는데 그 숫자가 틀린 경우"만 버린다. 뒤집힌 표기(2-5를 5-2로)도 여기서 걸린다
+ * — 상대를 주어로 놓은 진실한 문장까지 버리게 되지만, 그 손해는 템플릿 헤드라인 한 줄이고
+ * 반대쪽 손해는 결과 왜곡이다.
+ */
+export function contradictsScore(text: string, record: MatchRecord): boolean {
+  const allowed = new Set<string>([`${record.score[0]}-${record.score[1]}`])
+  if (record.shootout) allowed.add(`${record.shootout[0]}-${record.shootout[1]}`)
+  const tokens = text.match(/\d+(?:\s*[-–:]\s*\d+)+/g) ?? []
+  for (const tok of tokens) {
+    const parts = tok.split(/[-–:]/).map(s => s.trim())
+    if (parts.length !== 2) continue // 포메이션 표기 — 판정하지 않는다
+    if (!allowed.has(parts.join('-'))) return true
+  }
+  return false
 }
 
 // ═══════════════════════════════════════════════════════════

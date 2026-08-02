@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { createMatch, simulateSegment, applyCommand, scoreMoraleShift } from '../simulate'
+import {
+  createMatch, simulateSegment, applyCommand, scoreMoraleShift,
+  normalizeMorale, moraleDecaySteps, moraleDecayAmount, moraleFloor,
+  MORALE_BASELINE, MORALE_FLOOR, MORALE_TOTAL_DECAY,
+} from '../simulate'
 import { makeTestTeam, pickBestXI } from '../fixtures/testTeams'
 import { loadTeam } from '../../data/loader'
 
@@ -325,6 +329,8 @@ describe('scoreMoraleShift — 라커룸 표시 사기는 스코어를 안다', 
   })
   // ★ 전력 경로(zoneStrength)에는 태우지 않는다 — momentum이 이미 같은 일을 한다.
   //   태웠더니 esp-arg 슛이 +27%가 되어 실팀 캘리브레이션(±25%)이 깨졌다.
+  // 감쇠(applyMoraleDecay) 도입 후: 득점에 관여하지 않은 선수의 사기는 **하한 50까지 내려간다**.
+  // 90분 풀타임이면 감쇠 총량이 정확히 20이라 70 → 50이다.
   it('득점자·도움만 개인 사기가 오르고 팀 전체 사기는 스코어로 움직이지 않는다', () => {
     const kor = loadTeam('kor')
     const st = simulateSegment(createMatch(kor, loadTeam('rsa'), { seed: 909 }), 90)
@@ -333,7 +339,135 @@ describe('scoreMoraleShift — 라커룸 표시 사기는 스코어를 안다', 
     )
     for (const l of st.home.tactics.lineup) {
       if (scorers.has(l.playerId)) continue
-      expect(st.home.moraleByPlayer[l.playerId]).toBe(70)
+      const m = st.home.moraleByPlayer[l.playerId]
+      expect(m).toBeLessThanOrEqual(70)
+      expect(m).toBeGreaterThanOrEqual(moraleFloor(st.home.staminaByPlayer[l.playerId]))
+    }
+  })
+})
+
+// ── 감사 결함 ③④: 사기가 올라가기만 하고, 소수로 샜다 ─────────────
+describe('사기 감쇠 — 단조 감소', () => {
+  it('개입이 없으면 올랐던 사기가 90분에 걸쳐 식는다', () => {
+    const kor = loadTeam('kor')
+    const base = createMatch(kor, loadTeam('rsa'), { seed: 4242 })
+    // 팀토크로 전원 +10을 준 직후 상태를 흉내낸다(하프타임 최대치 근처).
+    for (const id of Object.keys(base.home.moraleByPlayer)) base.home.moraleByPlayer[id] = 80
+    const st = simulateSegment(base, 90)
+    const on = st.home.tactics.lineup.map(l => st.home.moraleByPlayer[l.playerId])
+    // 90분 감쇠 총량이 20(체력이 남은 선수 기준)이므로 80은 60 이하로 내려간다. 득점·도움
+    // (+3/+2)이 붙은 선수만 조금 높게 끝나므로 상한은 63으로 둔다(80에서 반드시 내려왔다는 판정).
+    for (const m of on) expect(m).toBeLessThanOrEqual(63)
+    // 🔥 문턱(80)에 걸린 채로 끝나는 선수가 없다 — 결함 ③의 판정 기준.
+    expect(on.filter(m => m >= 80)).toHaveLength(0)
+  })
+
+  // ★ 계약이 뒤집힌 자리다. 예전 제목은 "가라앉은 사기는 시간이 약이다(회귀는 양방향)"였고,
+  //   목표(70)보다 낮은 사기가 시간만으로 **올라가는** 것을 검증했다. 사용자의 요구가
+  //   "사기는 시간 경과에 따라 조금씩 계속 내려가는 시스템"이므로 그 회복 경로는 사라졌다.
+  //   테스트를 지우지 않고 반대 방향으로 고쳐 둔다 — 언젠가 회귀를 다시 넣고 싶어지면
+  //   여기가 먼저 빨개져서 "그건 이미 한 번 되돌린 결정"이라는 걸 알려 준다.
+  it('가라앉은 사기는 시간이 지나도 저절로 회복되지 않는다', () => {
+    const kor = loadTeam('kor')
+    const base = createMatch(kor, loadTeam('rsa'), { seed: 4242 })
+    for (const id of Object.keys(base.home.moraleByPlayer)) base.home.moraleByPlayer[id] = 40
+    const st = simulateSegment(base, 90)
+    const scorers = new Set(
+      st.events.filter(e => e.type === 'goal' && e.teamId === kor.id).flatMap(e => [e.playerId, e.assistId]),
+    )
+    for (const l of st.home.tactics.lineup) {
+      if (scorers.has(l.playerId)) continue // 득점·도움은 감독의 레버가 아닌 경기 사건이라 올려도 된다
+      // 하한(50)보다 낮게 시작한 선수는 하한까지 **끌어올려지지도** 않는다.
+      expect(st.home.moraleByPlayer[l.playerId]).toBe(40)
+    }
+  })
+
+  // 새 회귀 테스트: 시간 경과는 **오직 내리는 방향으로만** 작동한다.
+  it('시간만으로는 어느 선수의 사기도 시작값을 넘지 않는다', () => {
+    const kor = loadTeam('kor')
+    const base = createMatch(kor, loadTeam('rsa'), { seed: 909 })
+    const before = { ...base.home.moraleByPlayer }
+    const st = simulateSegment(base, 90)
+    const scorers = new Set(
+      st.events.filter(e => e.type === 'goal' && e.teamId === kor.id).flatMap(e => [e.playerId, e.assistId]),
+    )
+    for (const l of st.home.tactics.lineup) {
+      if (scorers.has(l.playerId)) continue
+      expect(st.home.moraleByPlayer[l.playerId]).toBeLessThanOrEqual(before[l.playerId])
+    }
+  })
+
+  it('개입이 없으면 90분에 정확히 20 내려간다 — 70에서 출발해 하한 50에 닿는다', () => {
+    expect(moraleDecaySteps(0)).toBe(0)
+    expect(moraleDecaySteps(45)).toBe(MORALE_TOTAL_DECAY / 2)
+    expect(moraleDecaySteps(90)).toBe(MORALE_TOTAL_DECAY)
+    expect(MORALE_BASELINE - MORALE_TOTAL_DECAY).toBe(MORALE_FLOOR)
+    // 누적 스텝은 단조 증가하고 한 분에 2 이상 뛰지 않는다(정수 계약을 유지하는 근거).
+    for (let m = 1; m <= 120; m++) {
+      const d = moraleDecaySteps(m) - moraleDecaySteps(m - 1)
+      expect(d === 0 || d === 1).toBe(true)
+    }
+  })
+
+  // 사용자 지시: "지치면 사기가 더 빨리 떨어지고, 체력이 50 미만이면 하한선 밑으로도
+  // 떨어질 수 있게". 하한 50은 **체력이 남은 선수의** 하한이다.
+  it('체력이 임계 아래면 감쇠가 2배로 빨라진다', () => {
+    expect(moraleDecayAmount(100)).toBe(1)
+    expect(moraleDecayAmount(50)).toBe(1)
+    expect(moraleDecayAmount(49)).toBe(2)
+    expect(moraleDecayAmount(0)).toBe(2)
+  })
+
+  it('체력 50 미만이면 하한이 50 밑으로 내려간다 — 절대 하한은 40', () => {
+    expect(moraleFloor(100)).toBe(MORALE_FLOOR)
+    expect(moraleFloor(50)).toBe(MORALE_FLOOR)
+    expect(moraleFloor(46)).toBe(MORALE_FLOOR - 1)
+    expect(moraleFloor(30)).toBe(MORALE_FLOOR - 5)
+    expect(moraleFloor(10)).toBe(MORALE_FLOOR - 10)
+    expect(moraleFloor(0)).toBe(MORALE_FLOOR - 10) // 40에서 멈춘다(밸런스 근거는 주석)
+  })
+
+  it('어떤 선수도 자기 체력이 정한 하한 아래로는 내려가지 않는다', () => {
+    const kor = loadTeam('kor')
+    const base = createMatch(kor, loadTeam('rsa'), { seed: 4242 })
+    for (const id of Object.keys(base.home.moraleByPlayer)) base.home.moraleByPlayer[id] = 55
+    const st = simulateSegment(base, 90)
+    for (const l of st.home.tactics.lineup) {
+      const m = st.home.moraleByPlayer[l.playerId]
+      expect(m).toBeGreaterThanOrEqual(moraleFloor(st.home.staminaByPlayer[l.playerId]))
+      expect(m).toBeGreaterThanOrEqual(MORALE_FLOOR - 10) // 절대 하한 40
+    }
+  })
+
+  it('벤치는 감쇠하지 않는다 — 뛰지 않은 선수가 시간만으로 식을 이유가 없다', () => {
+    const kor = loadTeam('kor')
+    const base = createMatch(kor, loadTeam('rsa'), { seed: 4242 })
+    const onIds = new Set(base.home.tactics.lineup.map(l => l.playerId))
+    for (const id of Object.keys(base.home.moraleByPlayer)) base.home.moraleByPlayer[id] = 85
+    const st = simulateSegment(base, 90)
+    for (const id of Object.keys(st.home.moraleByPlayer)) {
+      if (onIds.has(id)) continue
+      expect(st.home.moraleByPlayer[id]).toBe(85)
+    }
+  })
+
+  // ★ 뒤집힌 계약: 예전엔 "체력이 바닥나면 **회귀 목표**가 기준선 아래로 내려간다"(moraleTarget)였다.
+  //   회귀가 사라지면서 목표라는 개념도 사라졌고, 체력은 이제 감쇠의 **속도와 하한**을 움직인다
+  //   (바로 위 두 테스트). 같은 의도("지치면 가라앉는다")를 단조 감소 위에서 다시 표현한 것이다.
+})
+
+describe('사기 정수화 규약', () => {
+  it('normalizeMorale은 정수로 자르고 0~100으로 가둔다', () => {
+    expect(normalizeMorale(74.999999999999)).toBe(75)
+    expect(normalizeMorale(70.3)).toBe(70)
+    expect(normalizeMorale(-5)).toBe(0)
+    expect(normalizeMorale(140)).toBe(100)
+  })
+
+  it('90분 시뮬 후 저장된 사기가 전부 정수다 — 소수로 새는 경로가 없다', () => {
+    const st = simulateSegment(createMatch(loadTeam('kor'), loadTeam('rsa'), { seed: 909 }), 90)
+    for (const side of [st.home, st.away]) {
+      for (const v of Object.values(side.moraleByPlayer)) expect(Number.isInteger(v)).toBe(true)
     }
   })
 })

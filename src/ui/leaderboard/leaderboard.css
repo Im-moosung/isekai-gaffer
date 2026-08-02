@@ -1,0 +1,131 @@
+/* ============================================================================
+   리더보드 — 공용 표(.lb-list)와 독립 페이지(.lb-root)
+   ----------------------------------------------------------------------------
+   토큰(tokens.css)만 쓴다. 하드코딩 hex 금지 — 단 1~3위의 은/동은 토큰에 없는
+   색이라 여기서 정의한다(--gold는 대회 상태 색으로 이미 있다).
+   ========================================================================== */
+
+.lb-root .lb-hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding-bottom: var(--sp-4);
+}
+.lb-headline {
+  font-size: var(--fs-display);
+  font-weight: 800;
+  line-height: 1.05;
+  color: var(--t-hi);
+}
+.lb-lede {
+  font-size: var(--fs-md);
+  line-height: var(--lh-loose);
+  color: var(--t-mid);
+}
+
+/* 표 — 열 격자를 헤더(.lb-head)와 행(.lb-row)이 공유해야 눈금이 맞는다.
+   두 곳에 같은 값을 쓰므로 바꿀 때 반드시 함께 바꾼다. */
+.lb-head,
+.lb-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto 72px;
+  gap: var(--sp-2);
+  align-items: center;
+  padding: var(--sp-2) var(--sp-1);
+}
+.lb-head {
+  border-bottom: 1px solid var(--s-line);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  letter-spacing: var(--ls-caps);
+  color: var(--t-low);
+}
+.lb-head .lb-row__pts,
+.lb-head .lb-row__rank {
+  text-align: right;
+}
+.lb-head .lb-row__rank {
+  text-align: left;
+}
+
+.lb-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lb-row {
+  border-bottom: 1px solid var(--s-line);
+  font-size: var(--fs-sm);
+}
+.lb-row__rank {
+  font-weight: 700;
+  color: var(--t-low);
+}
+.lb-row__nick {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--t-hi);
+}
+.lb-row__reached {
+  font-size: var(--fs-xs);
+  color: var(--t-mid);
+}
+.lb-row__pts {
+  text-align: right;
+  font-weight: 800;
+  color: var(--t-hi);
+}
+
+/* 1~3위 — 왼쪽 굵은 띠 + 순위 숫자 색. 배경을 통째로 칠하지 않는 이유는
+   "내 기록"(--me, 파랑 배경)과 겹쳐도 둘 다 읽혀야 하기 때문이다.
+   1위를 겸하면 왼쪽 띠는 금색, 배경은 파랑으로 두 사실이 동시에 보인다. */
+.lb-row--gold,
+.lb-row--silver,
+.lb-row--bronze {
+  border-left: 3px solid transparent;
+  padding-left: calc(var(--sp-1) + var(--sp-2));
+}
+.lb-row--gold {
+  border-left-color: var(--gold);
+}
+.lb-row--gold .lb-row__rank {
+  color: var(--gold);
+  font-size: var(--fs-md);
+  font-weight: 800;
+}
+.lb-row--silver {
+  border-left-color: #c8cdd6;
+}
+.lb-row--silver .lb-row__rank {
+  color: #c8cdd6;
+  font-weight: 800;
+}
+.lb-row--bronze {
+  border-left-color: #c08457;
+}
+.lb-row--bronze .lb-row__rank {
+  color: #c08457;
+  font-weight: 800;
+}
+.lb-row--me {
+  border-radius: var(--r-sm);
+  background: var(--brand-weak);
+  font-weight: 800;
+}
+
+/* 로딩·비어있음·실패 — 세 경우 모두 **문장이 남는다**. 빈 <ol>만 남기면
+   화면이 고장 난 것처럼 보이고, 그게 "Supabase가 죽으면 하얀 화면" 사고의 형태였다. */
+.lb-note {
+  padding: var(--sp-5) var(--sp-2);
+  text-align: center;
+  font-size: var(--fs-sm);
+  line-height: var(--lh-loose);
+  color: var(--t-low);
+}
+.lb-note--error {
+  color: var(--t-mid);
+}
+.lb-retry {
+  margin-top: var(--sp-3);
+}

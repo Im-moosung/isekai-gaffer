@@ -1,9 +1,13 @@
 // src/game/campaignStore.ts
 // 캠페인 상태 머신: 조별 3경기(cze→mex→rsa)→순위 산정→토너먼트 경로 분기→엔딩.
-// 순수 상태 로직(엔진 import 없음). TeamId는 데이터 로더에서 가져온다.
+// 순수 상태 로직. TeamId는 데이터 로더에서 가져온다.
+// 엔진에서 값을 가져오는 것은 사기 관련 둘(MORALE_BASELINE·normalizeMorale)뿐이다 —
+// 사기 기준선과 정수화 규약은 엔진과 캠페인이 **같은 정의**를 써야 한다. 여기서 복제하면
+// 이월값만 소수로 새거나 기준선이 어긋나도 아무도 모른다(실제로 그렇게 샜다).
 import { create } from 'zustand'
 import type { TeamId } from '../data/loader'
 import type { DecisionEntry } from '../engine/types'
+import { MORALE_BASELINE, normalizeMorale } from '../engine/simulate'
 import type { TeamTalkTone } from './matchStore'
 
 export type CampaignStage =
@@ -36,8 +40,9 @@ export const RED_SUSPENSION = 1
  *  the quarter-finals"). 2025년 5월판 규정 PDF 원문(Art. 10.3)만 보면 8강 1회로 잘못 읽는다.
  *  출처·대응표는 docs/research/2026-discipline-rules.md. */
 export const CAUTION_WIPE_AFTER: readonly CampaignStage[] = ['group3', 'qf']
-/** 사기 기준선. 엔진(simulate/strength)이 초기값으로 쓰는 70과 같아야 한다. */
-export const MORALE_BASELINE = 70
+/** 사기 기준선. 정의는 엔진(simulate.MORALE_BASELINE) 한 곳뿐이고 여기선 재수출만 한다 —
+ *  기존 import 경로(테스트 포함)를 깨지 않으면서 정의를 하나로 유지하기 위해서다. */
+export { MORALE_BASELINE }
 
 /**
  * 경기 사이에 **남는** 피로의 비율. 다음 경기 시작 체력 = 100 − (100 − 종료체력) × RESIDUAL_LOAD.
@@ -336,10 +341,16 @@ export const useCampaignStore = create<CampaignState>((set, get) => ({
 
   // 다음 경기 시작 사기: 기준선 70으로 70% 회귀. 체력은 100(만점)으로 회복하지만 사기는
   // 만점이 목표가 아니다 — 대승 뒤의 고양도, 대패 뒤의 침체도 한 경기 지나면 대부분 옅어진다.
+  //
+  // ★ 정수화(감사 결함 ④의 진원지): ×0.3이 여기서 소수를 만들었고, 그 값이 그대로
+  //   moraleByPlayer에 저장돼 다음 경기 내내 따라다녔다. 그래서 외침이 실제로 +5를 줬는데도
+  //   화면에는 "사기가 4.999999999999 올랐습니다"가 나왔다(delta = 이후값 − 이전값이라
+  //   양쪽 소수의 뺄셈 오차가 그대로 노출된다). normalizeMorale로 잘라 **저장되는 값 자체를**
+  //   정수로 만든다 — 표시부에서 toFixed로 가리면 이월 때마다 오차가 다시 쌓인다.
   startingMorale: (playerId) => {
     const carry = get().moraleCarry[String(playerId)]
     if (carry === undefined) return MORALE_BASELINE
-    return MORALE_BASELINE + (carry - MORALE_BASELINE) * 0.3
+    return normalizeMorale(MORALE_BASELINE + (carry - MORALE_BASELINE) * 0.3)
   },
 
   isSuspended: (playerId) => (get().bans[String(playerId)] ?? 0) > 0,

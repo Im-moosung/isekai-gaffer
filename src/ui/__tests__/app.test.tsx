@@ -52,10 +52,20 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('App 랜딩 스모크', () => {
-  it('랜딩에 [캠페인 시작]과 [바로 지휘하기] 버튼이 있다', () => {
-    const { getByRole } = render(<App />)
+  // [2026-08-02] [바로 지휘하기]가 랜딩에서 사라졌다 — 기획안에 없는 기능이고,
+  // 첫 화면의 결정 지점은 [캠페인 시작] 하나여야 한다는 사용자 지시다.
+  // 데모 경로 자체는 ?demo=1로 남아 있다(감사 하니스용, 아래 describe 참조).
+  it('랜딩의 주 CTA는 [캠페인 시작] 하나이고, [바로 지휘하기]는 없다', () => {
+    const { getByRole, queryByRole } = render(<App />)
     expect(getByRole('button', { name: '캠페인 시작' })).toBeTruthy()
-    expect(getByRole('button', { name: '바로 지휘하기' })).toBeTruthy()
+    expect(queryByRole('button', { name: '바로 지휘하기' })).toBeNull()
+  })
+
+  it('랜딩에 [리더보드 보기]가 있고, 누르면 리더보드 페이지로 간다', async () => {
+    const { getByRole, container } = render(<App />)
+    fireEvent.click(getByRole('button', { name: '리더보드 보기' }))
+    await waitFor(() => expect(container.querySelector('.lb-root')).toBeTruthy())
+    expect(getByRole('button', { name: '타이틀로 돌아가기' })).toBeTruthy()
   })
 
   // 첫인상 화면의 훅 문안. 심사 1차가 이 화면으로 갈리므로 개발 빌드 흔적이 되살아나면 실패시킨다.
@@ -125,20 +135,23 @@ describe('App 캠페인 시드 발급', () => {
   })
 })
 
-describe('App 데모 플로우 스모크', () => {
-  it('[바로 지휘하기] → 곧바로 경기 진입 + "리더보드 미반영" 표기', () => {
-    const { getByRole, queryByRole, container } = render(<App />)
-    fireEvent.click(getByRole('button', { name: '바로 지휘하기' }))
+// 데모는 이제 주소 ?demo=1로만 들어간다(랜딩 버튼 제거). tools/*.mjs의 플레이 감사
+// 하니스 십여 개가 "한 경기를 빨리 띄우는 입구"로 이 경로를 쓰므로 코드는 살아 있다.
+describe('App 데모 플로우 스모크(?demo=1)', () => {
+  beforeEach(() => window.history.replaceState({}, '', '/?demo=1'))
+  afterEach(() => window.history.replaceState({}, '', '/'))
+
+  it('?demo=1 → 곧바로 경기 진입 + "리더보드 미반영" 표기', () => {
+    const { queryByRole, container } = render(<App />)
     // 데모도 라인업 단독 화면을 거치지 않는다(캠페인과 동일).
     expect(queryByRole('button', { name: '라인업 확정' })).toBeNull()
     expect(container.textContent).toContain('리더보드 미반영')
     // 목 MatchScreen이 onMatchEnd를 받아 경기 종료 버튼을 노출(데모도 조립됨)
-    expect(getByRole('button', { name: '경기 종료(목)' })).toBeTruthy()
+    expect(container.querySelector('.ms-mock')).toBeTruthy()
   })
 
   it('데모: 경기 종료 → 기자회견 3답변 → 신문(FICTION) → [다음] → 랜딩 복귀', async () => {
     const { getByRole, container } = render(<App />)
-    fireEvent.click(getByRole('button', { name: '바로 지휘하기' }))
     fireEvent.click(getByRole('button', { name: '경기 종료(목)' }))
 
     // 기자회견 렌더(질문 존재)
@@ -153,7 +166,7 @@ describe('App 데모 플로우 스모크', () => {
 
     // [다음] → 랜딩 복귀
     fireEvent.click(getByRole('button', { name: '다음' }))
-    await waitFor(() => expect(getByRole('button', { name: '바로 지휘하기' })).toBeTruthy())
+    await waitFor(() => expect(getByRole('button', { name: '캠페인 시작' })).toBeTruthy())
   })
 })
 

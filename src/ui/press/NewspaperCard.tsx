@@ -7,6 +7,7 @@
 import { useCallback, useState } from 'react'
 import type { Headline } from '../../game/pressconf'
 import type { MatchRecord } from '../../game/campaignStore'
+import { teamNameShortKo } from '../../data/loader'
 import '../shell/shell.css'
 import './press.css'
 
@@ -18,13 +19,11 @@ const FAKE_DATE = '2026년 여름'
 const MASTHEAD = '일간 축구'
 const WATERMARK = '대체역사 FICTION'
 
-// 상대 한글 표기(계층 격리: 외부 로더 비의존). 미등록 id는 코드 그대로.
-const OPPONENT_KO: Record<string, string> = {
-  cze: '체코', mex: '멕시코', rsa: '남아공',
-  ecu: '에콰도르', eng: '잉글랜드', nor: '노르웨이', arg: '아르헨티나', esp: '스페인',
-  can: '캐나다', mar: '모로코', fra: '프랑스',
-}
-function oppName(id: string): string { return OPPONENT_KO[id] ?? id }
+// 상대 표기 — 스코어박스는 **폭이 고정된 칸**이라 짧은 표기를 쓴다(teamNameShortKo).
+// 헤드라인·부제 본문은 pressconf가 정본(teamNameKo)으로 이미 지어 넣었으므로,
+// 한 카드 안에서 본문은 '남아프리카공화국', 스코어박스는 '남아공'이 된다 —
+// 실제 스포츠 지면의 관행(본문 정식명 · 스코어보드 약칭)과 같고, 의도된 차이다.
+// 두 표기의 정본은 둘 다 src/data/loader.ts 한 곳에 있다.
 
 interface Props {
   headline: Headline
@@ -44,7 +43,7 @@ export function NewspaperCard({ headline, record, teamName, onNext }: Props) {
     setAdvancing(true)
     onNext?.()
   }, [advancing, onNext])
-  const opp = oppName(record.opponentId)
+  const opp = teamNameShortKo(record.opponentId)
   const [kor, og] = record.score
   const so = record.shootout ? `승부차기 ${record.shootout[0]}-${record.shootout[1]}` : null
 
@@ -131,7 +130,7 @@ export function renderNewspaperPng(
   const ctx = canvas.getContext('2d')
   if (!ctx) return Promise.resolve(null) // jsdom 등 미지원 환경
 
-  const opp = oppName(record.opponentId)
+  const opp = teamNameShortKo(record.opponentId)
   const [kor, og] = record.score
   const so = record.shootout ? `승부차기 ${record.shootout[0]}-${record.shootout[1]}` : null
   // 화면과 같은 명조 스택. 신문으로 읽히게 하는 것이 이 카드의 핵심이라

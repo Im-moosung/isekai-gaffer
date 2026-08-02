@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 // 중계 mp3 배선 테스트 — **오디오 파일 없이** 돈다.
 //  (1) 미지원 환경(AudioContext 부재): 모든 함수가 조용한 no-op이고 throw하지 않는다.
-//      → commentary-tts가 speechSynthesis로 떨어진다(폴백이 정상 경로다).
+//      → 2026-08-02부터 그 자리는 **침묵**이다. speechSynthesis 폴백을 걷어냈다
+//        (근거는 commentary-tts.ts 헤더 — 남성 캐스터 사이에 여성 기본 음성이 끼어드는
+//         것이 결함으로 읽혔다). 자막은 그대로 나가므로 정보는 잃지 않는다.
 //  (2) 가짜 AudioContext + 가짜 fetch: 조회 규칙·이음매 스케줄·음소거 공유·순서 보존을
 //      실제 그래프 조작으로 검증한다.
 // bgm.test.ts와 같은 방식이다 — jsdom에는 Web Audio도 HTMLAudioElement도 온전치 않아
@@ -257,14 +259,14 @@ describe('재생 — 오디오 버스 공유', () => {
   })
 })
 
-describe('commentary-tts 통합 — mp3 우선, speechSynthesis 폴백', () => {
-  it('대본은 beginScript가 전부 덮인다고 할 때만 mp3로 간다', async () => {
+describe('commentary-tts 통합 — mp3만, 없으면 침묵', () => {
+  it('대본은 beginScript가 전부 덮인다고 할 때만 소리가 난다', async () => {
     const { sfx, mp3, tts, ctx } = await setup()
     sfx.init()
     mp3.loadClipIndex()
     await flush()
 
-    // 한 줄이 빠진 대본 → 통째로 폴백(mp3 소스가 하나도 안 생긴다).
+    // 한 줄이 빠진 대본 → 통째로 침묵(mp3 소스가 하나도 안 생긴다).
     expect(tts.beginScript(['김민재,', '손흥민,'])).toBe(false)
     ctx.sources.length = 0
     tts.speakScripted('김민재,')
@@ -311,13 +313,43 @@ describe('commentary-tts 통합 — mp3 우선, speechSynthesis 폴백', () => {
     expect(ctx.sources[0].stopped).toBe(true)
   })
 
-  it('클립이 없으면 speak()는 예전 경로 그대로다(회귀 없음)', async () => {
+  it('조회표가 없으면 speak()는 조용한 no-op이다(throw 금지)', async () => {
     const { mp3, tts } = await setup({ index: null })
     mp3.loadClipIndex()
     await flush()
-    // speechSynthesis도 없는 jsdom — 조용한 no-op이어야 한다.
     expect(() => tts.speak('전반 12분, 파울입니다.')).not.toThrow()
     expect(() => tts.speakAside('네, 위험한 위치는 아닙니다.')).not.toThrow()
+  })
+
+  // ★ 이 작업의 핵심 계약(2026-08-02). 클립 없는 문장은 **아무 소리도 내지 않는다** —
+  //   특히 브라우저 기본 TTS를 부르지 않는다. 여기서는 진짜 speechSynthesis 스텁을
+  //   심어 두고 "한 번도 호출되지 않았다"를 본다(commentary-tts.test.ts에도 짝이 있다).
+  it('클립이 없는 문장은 speechSynthesis를 부르지 않는다 — 침묵한다', async () => {
+    const spoken: string[] = []
+    const { sfx, mp3, tts, ctx } = await setup()
+    vi.stubGlobal('speechSynthesis', {
+      speaking: false, pending: false,
+      getVoices: () => [{ lang: 'ko-KR', name: 'Yuna' }],
+      speak: (u: { text: string }) => { spoken.push(u.text) },
+      cancel: () => {}, pause: () => {}, resume: () => {},
+      addEventListener: () => {},
+    })
+    vi.stubGlobal('SpeechSynthesisUtterance', class {
+      text: string
+      constructor(text: string) { this.text = text }
+    })
+    sfx.init()
+    mp3.loadClipIndex()
+    tts.initVoice()
+    await flush()
+    ctx.sources.length = 0
+    tts.speak('조회표에 없는 문장입니다.')
+    tts.speakAside('이것도 없는 문장입니다.')
+    tts.beginScript(['이것도 없는 대본입니다.'])
+    tts.speakScripted('이것도 없는 대본입니다.')
+    await flush()
+    expect(spoken).toEqual([]) // 여성 기본 음성이 끼어들지 않는다
+    expect(ctx.sources).toHaveLength(0) // mp3도 나가지 않는다 = 침묵
   })
 })
 
@@ -412,8 +444,11 @@ describe('문장 안 이음매 — 무음과 재생 속도', () => {
   })
 })
 
-describe('미리 받기 — 조각의 첫 등장이 폴백이 되지 않게', () => {
-  it('warm 목록을 빈도 순으로 받아 두고, 두 번 부르지 않는다', async () => {
+// ★ 2026-08-02 계약 변경: 예전엔 `warm` 목록**만** 받았다. 이제 조회표의 **모든** 클립을
+//   받는다(빈도 순 warm이 먼저, 나머지가 뒤). 폴백이 사라져 "안 받은 클립 = 그 문장 무음"이
+//   됐고, 실제로 조회표 1,024개 중 140개가 warm에서 빠져 있었기 때문이다(warmLive 주석).
+describe('미리 받기 — 조각의 첫 등장이 무음이 되지 않게', () => {
+  it('warm 목록을 빈도 순으로 먼저 받고, 두 번 부르지 않는다', async () => {
     const { sfx, mp3 } = await setup({ index: LIVE_INDEX })
     sfx.init()
     mp3.loadClipIndex()
@@ -423,14 +458,54 @@ describe('미리 받기 — 조각의 첫 등장이 폴백이 되지 않게', ()
     mp3.warmLive()
     await flush()
     const got = fetchMock.mock.calls.map(c => String(c[0])).filter(u => u.includes('/tts/l/'))
-    expect(got).toHaveLength(LIVE_INDEX.warm.length)
     for (const k of LIVE_INDEX.warm) expect(got.some(u => u.includes(k))).toBe(true)
+    // warm이 앞선다 — 동시성 6이라 첫 6개 안에 네 개가 모두 들어온다.
+    for (const k of LIVE_INDEX.warm) {
+      expect(got.slice(0, LIVE_INDEX.warm.length).some(u => u.includes(k))).toBe(true)
+    }
 
     // 두 번째 호출은 아무것도 더 받지 않는다.
     fetchMock.mockClear()
     mp3.warmLive()
     await flush()
     expect(fetchMock.mock.calls).toHaveLength(0)
+  })
+
+  // ★ 실사고 회귀(2026-08-02): 사용자가 "여기서, 또 김태현, 반칙이 잦네요."를 브라우저
+  //   여성 음성으로 들었다. 조회표에는 세 조각이 다 있었지만 첫 조각 `여기서, 또`가
+  //   `warm`에 없었다 — 굽기 도구가 warm을 그날의 코퍼스 계획으로만 만들기 때문이다.
+  //   미리 안 받으면 playLine이 동기 판정에서 false를 내고(첫 등장), 그런 문장은 한
+  //   경기에 한 번뿐이라 **언제나** 폴백했다. 폴백이 사라진 지금은 언제나 무음이 된다.
+  it('warm에 없는 클립도 받아 둔다 — 조회표가 진실원이다', async () => {
+    const { sfx, mp3 } = await setup({ index: LIVE_INDEX })
+    sfx.init()
+    mp3.loadClipIndex()
+    await flush()
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>
+    fetchMock.mockClear()
+    mp3.warmLive()
+    await flush()
+    const got = fetchMock.mock.calls.map(c => String(c[0]))
+    const all = [...new Set(Object.values(LIVE_INDEX.clips))]
+    const missing = all.filter(k => !LIVE_INDEX.warm.includes(k))
+    expect(missing.length).toBeGreaterThan(0) // 표본 자체가 구멍을 담고 있어야 의미가 있다
+    for (const k of all) expect(got.some(u => u.includes(k))).toBe(true)
+    // 같은 클립을 두 번 받지 않는다(warm과 나머지가 겹친다).
+    expect(got).toHaveLength(all.length)
+  })
+
+  it('warm 목록이 아예 없는 조회표도 전부 받는다(옛 매니페스트 호환)', async () => {
+    const { warm: _warm, ...noWarm } = LIVE_INDEX
+    const { sfx, mp3 } = await setup({ index: noWarm })
+    sfx.init()
+    mp3.loadClipIndex()
+    await flush()
+    const fetchMock = globalThis.fetch as unknown as ReturnType<typeof vi.fn>
+    fetchMock.mockClear()
+    mp3.warmLive()
+    await flush()
+    const got = fetchMock.mock.calls.map(c => String(c[0]))
+    expect(got).toHaveLength([...new Set(Object.values(LIVE_INDEX.clips))].length)
   })
 
   it('유저 제스처 전(오디오 버스 없음)에는 아무 일도 하지 않는다 — 다음에 다시 시도한다', async () => {

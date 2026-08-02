@@ -5255,6 +5255,372 @@
    "role": "caster",
    "kind": "frag",
    "cut": "tail"
+  },
+  {
+   "key": "l/37b8764b3a",
+   "text": "교체 직후엔 자리가 한 번 흔들립니다. 지금이 그 시간이죠.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/6fbffe9439",
+   "text": "교체 카드를 쓰고 나서 곧바로 장면이 나옵니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/77e8d0f537",
+   "text": "네, 내려서서 공간을 벌어 두고 한 번에 나갔습니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/96e724be22",
+   "text": "네, 들어온 선수가 다리가 살아 있으니 확실히 다릅니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/5c1e58b80a",
+   "text": "네, 슛을 아끼지 않는 게 좋죠.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/793049a82a",
+   "text": "네, 압박 강도를 올리고 나서 상대가 후방에서 공을 못 돌리고 있습니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/e2e76150a2",
+   "text": "네, 위험한 위치는 아닙니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/b3eef96b28",
+   "text": "네, 이 시점의 교체는 늦기 전에 하는 게 맞죠.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/151bf9d774",
+   "text": "늦었지만 다음 경기 분위기를 만드는 골입니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/f7a91d04cb",
+   "text": "다리가 무거워진 자리를 먼저 정리합니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/c0ee090eae",
+   "text": "다섯을 뒤에 세웠습니다. 역습을 노리는 배치죠.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/de21088fce",
+   "text": "라인을 내렸는데도 상대가 계속 두드립니다. 버티는 시간이 길어지네요.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/3b7511ac2a",
+   "text": "라인을 내린 뒤에 나온 역습입니다. 이걸 노린 거죠.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/0b6303e734",
+   "text": "라인을 올린 뒤로 상대 진영에서 경기가 이어집니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/3d4fd42b3f",
+   "text": "라인을 올린 뒤에 나온 뒷공간 장면입니다. 이게 이 선택의 값이죠.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/463f375031",
+   "text": "만회골입니다. 조금 늦었지만 의미는 있습니다.",
+   "role": "caster",
+   "cut": "직접"
+  },
+  {
+   "key": "l/8b025acb31",
+   "text": "백 파이브로 폭을 넓게 지킵니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/1c279d723b",
+   "text": "벤치가 흐름을 바꿔 보겠다는 겁니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/f363345876",
+   "text": "속도를 줄이고 나서 볼을 오래 소유합니다. 시간을 관리하는 거죠.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/69a7e081eb",
+   "text": "속도를 줄인 사이에 상대가 자리를 잡았습니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/1628c5dca5",
+   "text": "스리백으로 뒤를 두껍게 세웠습니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/31651e92b1",
+   "text": "스리백으로 바꾼 뒤 중앙이 넓어져 있습니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/79bcd7e8a4",
+   "text": "스리백으로 바꾼 뒤로 윙백 두 명이 사실상 윙어처럼 올라옵니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/11e023198f",
+   "text": "압박을 낮추고 나서 상대에게 시간을 주고 있습니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/084e5b179a",
+   "text": "압박을 낮춘 뒤로 공을 끊고 나가는 거리가 길어졌습니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/925535fb5b",
+   "text": "압박을 올린 뒤로 높은 위치에서 공을 끊는 장면이 나옵니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/ef78c8d52d",
+   "text": "압박을 올린 뒤로 이런 뒷공간 장면이 늘었습니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/aefb2a4ef3",
+   "text": "압박을 올린 만큼 뒷공간이 비어 있습니다. 위험 부담은 감수하겠다는 거죠.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/8aab1a0bef",
+   "text": "이렇게 두드리다 보면 하나는 들어갑니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/e624e9efac",
+   "text": "익숙하지 않은 배치입니다. 첫 십 분을 보면 답이 나옵니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/e60a4ce9d7",
+   "text": "중앙에 모인 사이 측면이 열려 있습니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/674a3034c6",
+   "text": "중앙으로 좁힌 뒤로 짧은 패스가 늘었습니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/5d9e5c8b74",
+   "text": "측면에 무게를 실은 만큼 중앙이 비어 있습니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/5ae203d560",
+   "text": "측면으로 붙이기 시작한 뒤로 계속 저쪽에서 장면이 나옵니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/08a437f6cb",
+   "text": "템포를 올린 뒤로 실수도 같이 나오고 있습니다. 급할 때 나오는 장면이죠.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/ec6f888d50",
+   "text": "템포를 올린 뒤로 전개가 눈에 띄게 빨라졌습니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/a1d16c1794",
+   "text": "포메이션을 바꾼 뒤로 서는 위치가 달라졌습니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/b79c6107d7",
+   "text": "포메이션을 바꾼 직후라 아직 자리가 덜 잡혔습니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/cfc1209c55",
+   "text": "포백으로 돌아온 뒤로 뒤가 정리됐습니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/48f2cda168",
+   "text": "포백으로 돌아왔는데 측면 뒤가 계속 노출됩니다.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/7e07f1babc",
+   "text": "흐름을 끊는 것도 경기 운영이죠.",
+   "role": "analyst",
+   "cut": "직접"
+  },
+  {
+   "key": "l/cb28e053f8",
+   "text": "자, 골문 옆으로 흐릅니다.",
+   "role": "caster",
+   "cut": "plain"
+  },
+  {
+   "key": "l/96e928e587",
+   "text": "아, 골문 옆으로 흐릅니다.",
+   "role": "caster",
+   "cut": "plain"
+  },
+  {
+   "key": "l/0789c30865",
+   "text": "네, 골문 옆으로 흐릅니다.",
+   "role": "caster",
+   "cut": "plain"
+  },
+  {
+   "key": "l/81bde9b8d0",
+   "text": "그런데, 골문 옆으로 흐릅니다.",
+   "role": "caster",
+   "cut": "plain"
+  },
+  {
+   "key": "l/1c9f4d52b5",
+   "text": "여기서, 골문 옆으로 흐릅니다.",
+   "role": "caster",
+   "cut": "plain"
+  },
+  {
+   "key": "l/5f680286c9",
+   "text": "대한민국이",
+   "role": "caster",
+   "cut": "head"
+  },
+  {
+   "key": "l/6cf147e2b6",
+   "text": "남아프리카공화국이",
+   "role": "caster",
+   "cut": "head"
+  },
+  {
+   "key": "l/46425a159f",
+   "text": "스페인이",
+   "role": "caster",
+   "cut": "head"
+  },
+  {
+   "key": "l/5fe16840be",
+   "text": "교체 투입입니다.",
+   "role": "caster",
+   "cut": "tail"
+  },
+  {
+   "key": "l/11d175b59e",
+   "text": "그라운드에 들어섭니다.",
+   "role": "caster",
+   "cut": "tail"
+  },
+  {
+   "key": "l/8e30e8eeed",
+   "text": "벤치가 움직입니다.",
+   "role": "caster",
+   "cut": "tail"
+  },
+  {
+   "key": "l/a22f52e38b",
+   "text": "교체 카드를 씁니다.",
+   "role": "caster",
+   "cut": "tail"
+  },
+  {
+   "key": "l/b063558cc7",
+   "text": "이 선수가 챙겨 갑니다!",
+   "role": "caster",
+   "cut": "tail"
+  },
+  {
+   "key": "l/946a3fb84a",
+   "text": "골입니다! 연속 실점입니다.",
+   "role": "caster",
+   "cut": "tail"
+  },
+  {
+   "key": "l/2fcd11176e",
+   "text": "골입니다! 순식간에 두 골입니다.",
+   "role": "caster",
+   "cut": "tail"
+  },
+  {
+   "key": "l/b6d21204d5",
+   "text": "승부에 쐐기를 박는 골입니다. 연속 실점입니다.",
+   "role": "caster",
+   "cut": "tail"
+  },
+  {
+   "key": "l/7e699d0b3f",
+   "text": "쐐기골입니다. 이제 뒤집기는 어려워 보이네요. 또 들어갔습니다. 수비가 흔들리네요.",
+   "role": "caster",
+   "cut": "tail"
+  },
+  {
+   "key": "l/eb14f63700",
+   "text": "해트트릭입니다! 연속 실점입니다.",
+   "role": "caster",
+   "cut": "tail"
+  },
+  {
+   "key": "l/13b09640a0",
+   "text": "다 끝난 경기를 되돌립니다!",
+   "role": "caster",
+   "cut": "head"
+  },
+  {
+   "key": "l/1584a9bef4",
+   "text": "극장골입니다!",
+   "role": "caster",
+   "cut": "tail"
   }
  ]
 }

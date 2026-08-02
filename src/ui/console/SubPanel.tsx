@@ -93,10 +93,29 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
   // 붙어 있어도 목록 전체가 잠긴 상태는 따로 말해야 한다 — 하나씩 눌러 보게 두지 않는다.
   const eligibleBench = bench.filter(p => !suspended.has(p.id) && !subbedOff.has(p.id))
 
-  // 패널 전체를 막는 사유 전부. 하나만 보여주면 하나를 풀어도 여전히 막히는 이유를
-  // 알 수 없다(인원과 기회는 동시에 소진될 수 있다) — 그래서 열거한다.
+  // 개입 창이 닫힌 상태(!open)는 **배너로 자발적으로 뜨지 않는다**(2026-08-02).
+  //
+  // 실플레이 신고: "전술 확정을 누르면 빨간 경고창이 뜨면서 넘어간다."
+  // 원인은 확인됐다 — SubPanel이 사는 곳은 작전판 오버레이뿐이고, 작전판은 정지 국면
+  // (halftime·paused-*)에서만 열리므로 정상 조작 중에는 !open이 성립할 수 없다.
+  // 그런데 [전술 확정]은 phase를 즉시 'playing'으로 바꾸는 반면(matchStore.confirmTactics),
+  // 오버레이는 역연출을 위해 MODE_TRANSITION_MS 동안 **마운트된 채로 남는다**
+  // (MatchScreen tacticsExiting). 그 사이 리렌더가 한 번 돌면서 이 사유가 배너에 들어가
+  // role="alert" 빨간 박스가 번쩍이고, 화면 전환과 겹쳐 "경고를 띄우며 넘어간다"로 읽혔다.
+  //
+  // 차단 배너는 **유저가 무언가를 시도했을 때** 이유를 알려주는 장치다. 닫히는 중인
+  // 패널이 스스로 경고를 띄울 이유는 없다. 그래서 이 사유는 배너 목록에서 빼되 판정
+  // (gateReason)에는 남긴다 — 그 찰나에 카드나 [교체 확정]을 눌렀다면 답은 해야 하고,
+  // 그때는 조용한 안내 슬롯(.cs-error)에 적는다. 상태 자체는 푸터의 '다음 브레이크까지
+  // 잠김'(cs-lock)이 색 없이 계속 말하고 있다.
+  const closedReason = open
+    ? null
+    : '지금은 개입할 수 없는 시점입니다. 하프타임이나 하이드레이션 브레이크에서 교체할 수 있습니다.'
+
+  // 패널 전체를 막는 **상시** 사유 전부(자원 소진·벤치 부적격). 하나만 보여주면 하나를
+  // 풀어도 여전히 막히는 이유를 알 수 없다(인원과 기회는 동시에 소진될 수 있다) —
+  // 그래서 열거한다. 이쪽은 시간이 지나도 저절로 풀리지 않으므로 배너로 상주하는 게 맞다.
   const blocks: string[] = []
-  if (!open) blocks.push('지금은 개입할 수 없는 시점입니다. 하프타임이나 하이드레이션 브레이크에서 교체할 수 있습니다.')
   if (noQuota) blocks.push(`교체 인원 ${MAX_SUBS}명을 모두 사용했습니다. 이번 경기에서는 더 이상 선수를 바꿀 수 없습니다.`)
   if (noWindow) {
     blocks.push(beforeHalftime
@@ -108,19 +127,23 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
       ? '벤치에 남은 선수가 없습니다. 투입할 수 있는 선수가 없어 교체할 수 없습니다.'
       : '투입할 수 있는 벤치 선수가 없습니다 — 남은 벤치 전원이 출장정지이거나 이미 교체로 나갔습니다.')
   }
-  const blocked = blocks.length > 0
+  // 배너에 뜨는 사유(상시)와 조작을 막는 사유(gateReason)는 이제 다르다.
+  // gateReason이 null이 아니면 어떤 선택·확정도 성립하지 않는다. 창이 닫힌 사유를 먼저
+  // 내세우는 이유: 그게 지금 당장 유저가 할 수 있는 일을 정하는 조건이기 때문이다.
+  const banner = blocks.length > 0
   const blockText = blocks.join(' ')
+  const gateReason: string | null = closedReason ?? (banner ? blockText : null)
 
-  /** 막힌 컨트롤을 눌렀을 때의 응답. 패널 전체 사유면 배너를 흔들고(문장 중복 방지),
-   *  카드 개인 사유면 에러 슬롯에 적는다. */
+  /** 막힌 컨트롤을 눌렀을 때의 응답. 배너가 이미 띄우고 있는 문장이면 배너를 흔들고
+   *  (문장 중복 방지), 그 밖의 사유(창 닫힘·카드 개인 사유)는 에러 슬롯에 적는다. */
   const reportBlocked = (reason: string) => {
-    if (reason === blockText) { setError(null); setNudge(n => n + 1) }
+    if (banner && reason === blockText) { setError(null); setNudge(n => n + 1) }
     else setError(reason)
   }
 
   const swap = () => {
     setError(null)
-    if (blocked) { reportBlocked(blockText); return }
+    if (gateReason) { reportBlocked(gateReason); return }
     if (!out || !inSel) { setError('아웃/인 선수를 선택하세요'); return }
     if (sentOff.has(out)) { setError(SENT_OFF_REASON); return }
     if (subbedOff.has(inSel)) { setError('교체로 나간 선수는 다시 투입할 수 없습니다 (IFAB 제3조)'); return }
@@ -135,7 +158,7 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
   }
 
   // [교체 확정]도 죽이지 않는다 — 눌렀을 때 이유가 나오는 것이 목적이다(swap 참조).
-  const ready = !blocked && !!out && !!inSel && !sentOff.has(out)
+  const ready = !gateReason && !!out && !!inSel && !sentOff.has(out)
 
   return (
     <section className="cs-panel cs-sub" aria-label="교체">
@@ -153,7 +176,7 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
       {/* 차단 배너 — 모달을 띄우지 않는 이유: 작전판은 이미 전체 화면 오버레이라 그 위에
           모달을 얹으면 레이어가 3층이 되고 닫기 조작이 강요된다. 대신 사유가 카운터 바로
           아래, 목록보다 위에 상주하고 role="alert"로 즉시 읽힌다. */}
-      {blocked && (
+      {banner && (
         <div
           key={nudge}
           className={`cs-sub__locked${nudge > 0 ? ' cs-sub__locked--nudge' : ''}`}
@@ -180,7 +203,7 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
 
       {/* 막혀 있을 때 "1단계 · 나갈 선수를 고르세요"를 함께 띄우면 배너와 정면으로
           모순된다 — 화면이 두 말을 하면 사용자는 자기가 뭘 잘못했다고 읽는다. */}
-      {!blocked && (
+      {!gateReason && (
         <p className="cs-sub__hint">
           {/* 원문자(①②③)는 폰트에 따라 빠지거나 크기가 튄다 — 평문 단계 표기로 쓴다. */}
           {!out ? '1단계 · 나갈 선수를 고르세요(보드 발광)' : !inSel ? '2단계 · 들어올 벤치 선수를 고르세요' : '3단계 · [교체 확정]'}
@@ -199,7 +222,7 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
             stats={events ? playerMatchStats(events, player.id) : null}
             sentOff={sentOff.has(player.id)}
             selected={out === player.id}
-            blockReason={blocked ? blockText : sentOff.has(player.id) ? SENT_OFF_REASON : null}
+            blockReason={gateReason ?? (sentOff.has(player.id) ? SENT_OFF_REASON : null)}
             onSelect={() => pickOut(player.id)}
             onBlocked={reportBlocked}
           />
@@ -221,7 +244,7 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
             stats={events ? playerMatchStats(events, player.id) : null}
             selected={inSel === player.id}
             blockReason={
-              blocked ? blockText
+              gateReason ? gateReason
                 : subbedOff.has(player.id) ? '교체로 나간 선수는 다시 투입할 수 없습니다 (IFAB 제3조)'
                 : suspended.has(player.id) ? '출장정지 선수는 이번 경기에 투입할 수 없습니다. 다음 경기부터 다시 쓸 수 있습니다.'
                 : !out ? '먼저 나갈 선수를 고르세요 — 라인업에서 한 명을 고르면 벤치를 선택할 수 있습니다.'
@@ -246,6 +269,9 @@ export function SubPanel({ side, outId, inId, onSelectOut, onSelectIn, onConfirm
         >
           교체 확정
         </button>
+        {/* 창이 닫힌 상태를 말하는 **조용한** 채널. 빨간 배너를 여기서 떼어 낸 뒤에도
+            이건 남긴다 — 색도 role="alert"도 없는 회색 각주라 확정 후 사라지는 패널에
+            잠깐 남아도 경고로 읽히지 않고, 버튼이 왜 안 먹는지는 여전히 말해야 한다. */}
         {!open && <span className="cs-lock">다음 브레이크까지 잠김</span>}
       </div>
     </section>

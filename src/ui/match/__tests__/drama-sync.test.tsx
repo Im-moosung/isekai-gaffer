@@ -296,10 +296,23 @@ describe('MatchScreen — 음성과 안무가 같은 이벤트를 쓴다(Phase B
         expect(shown.since, `${m}분: 배너가 노출 ${revealMs}ms보다 먼저 나타났다`).toBeGreaterThanOrEqual(revealMs)
       }
     }
-    // 계약에 의미가 있으려면 골 분에 태어난 제안(실점·득점)이 실제로 있어야 하고,
-    // 그중 노출 전 구간의 표본이 실제로 잡혀야 한다.
-    expect(checkedMinutes).toBeGreaterThan(0)
-    expect(gatedSamples).toBeGreaterThan(0)
+    // ★ 2026-08-02 재판정(사용자 신고: *"골보다 또 빨리 나와"*) — 계약이 store로 올라갔다.
+    //
+    // 예전에는 여기서 `checkedMinutes > 0` · `gatedSamples > 0`을 요구했다. 즉 "제안이
+    // **그 분에 태어나되** 노출 전에는 그려지지 않는다"를 확인했다. 지금은 matchStore가
+    // 제안을 지연 큐(pendingMoment)에 넣어 **게임 분 1분 뒤**에 승격시키므로(MOMENT_PROMPT_DELAY),
+    // 제안이 자기 감지 분에 떠 있는 표본 자체가 존재하지 않는다 — born은 정의상 빈다.
+    // 그래서 표본 수를 요구하는 대신 **더 강한 사실**을 그대로 검사한다:
+    // 배너가 그려진 모든 표본에서 제안의 분은 현재 분보다 앞선다(= 최소 1분 지연).
+    // 위 루프는 남겨 둔다 — store 계약이 언젠가 되돌아가도 렌더 게이트가 여전히 방지선이다.
+    expect(gatedSamples).toBeGreaterThanOrEqual(0)
+    expect(checkedMinutes).toBeGreaterThanOrEqual(0)
+    expect(born).toHaveLength(0)
+    const withBanner = samples.filter(s => s.moment !== null && s.promptMinute !== null)
+    expect(withBanner.length).toBeGreaterThan(0) // 경기 중 배너가 실제로 떴다
+    for (const s of withBanner) {
+      expect(s.promptMinute!, `${s.minute}분: 제안이 감지 분과 같은 분에 그려졌다`).toBeLessThan(s.minute)
+    }
   })
 
   // 같은 누설의 숫자판 — 좌하단 HUD의 "슛 8-9"가 슛 장면보다 먼저 올라가면 안 된다.

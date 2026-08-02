@@ -36,6 +36,13 @@ CARRIER = {
 }
 
 
+def output_path(base, key):
+    """키의 슬래시 구조를 보존해 ``base/<key>.wav``로 저장한다."""
+    path = os.path.join(base, *key.split("/")) + ".wav"
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    return path
+
+
 def cut_of(job):
     c = job.get("cut")
     return c if c in CARRIER else ("head" if job["text"].endswith(",") else "tail")
@@ -65,12 +72,20 @@ def main():
     ap.add_argument("--jobs", default=f"{ROOT}/docs/audio/tts/qwen-jobs-live.json")
     ap.add_argument("--raw", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--limit", type=int, default=None,
+                    help="앞에서부터 이 개수만 처리(파일럿용)")
+    ap.add_argument("--resume", action="store_true",
+                    help="이미 최종 wav가 있는 작업은 건너뛴다")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
     work = os.path.join(a.out, ".work")
     os.makedirs(work, exist_ok=True)
 
     jobs = json.load(open(a.jobs, encoding="utf-8"))["jobs"]
+    if a.limit is not None:
+        jobs = jobs[:a.limit]
+    if a.resume:
+        jobs = [j for j in jobs if not os.path.exists(output_path(a.out, j["key"]))]
     entries, failures = [], []
     for job in jobs:
         safe = job["key"].replace("/", "__")
@@ -108,7 +123,7 @@ def main():
             pad = int(0.012 * sr)
             seg = seg[max(0, int(nz[0]) - pad):min(len(seg), int(nz[-1]) + pad + 1)]
             wpath = os.path.join(work, f"{safe}.wav")
-            opath = os.path.join(a.out, f"{safe}.wav")
+            opath = output_path(a.out, job["key"])
             sf.write(wpath, seg, sr, subtype="PCM_16")
             tempo = SPEED[job["role"]]
             subprocess.run(

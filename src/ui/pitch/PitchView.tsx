@@ -8,6 +8,7 @@ import { AnalysisLayer, analysisLabels, TAG_FS, type AnalysisGeom, type Analysis
 import { DOT_BLOCK_R, layoutLabels, textWidth, type Box, type LabelReq, type PlacedLabel } from './labels'
 import { PITCH_W, PITCH_H, CENTER_CIRCLE_R, PENALTY_BOX_D, GOAL_AREA_D } from './geometry'
 import { displayCoord, endsSwapped } from './ends'
+import { moodBadge } from './mood'
 import './pitch.css'
 
 // 피치 실측 비율(m) — viewBox 0 0 105 68. 치수 정본은 ./geometry(3개 렌더러 공용).
@@ -667,14 +668,6 @@ function SideDots({ side, which, coords, on, highlightId, onDotClick }: {
       })}
     </g>
   )
-}
-
-/** 바디랭귀지 미니 배지 — 사기 75+ 자신감(🔥) / 35- 위축(😰). 결정론(사기값만 참조). */
-function moodBadge(morale: number | undefined): string | null {
-  if (morale == null) return null
-  if (morale >= 75) return '🔥'
-  if (morale <= 35) return '😰'
-  return null
 }
 
 /** 이벤트 타입별 근사 존 좌표(0~100) — 득점/슈팅 팀의 공격 방향 기준. */
