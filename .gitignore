@@ -21,3 +21,20 @@ __pycache__/
 docs/audio/tts/qwen-out/*.wav
 docs/audio/tts/qwen-out/*/*.wav
 docs/audio/tts-samples/qwen3tts-voice-options/*.wav
+
+# 시연영상 내레이션 음성 — 서비스 실행과 무관하고 41MB다. 로컬에만 둔다.
+docs/video/vo/
+docs/video/vo-final/
+
+# 스크립트가 잘못된 작업 디렉터리에서 돌며 만든 public 복제본
+tools/public/
+
+# 핸드폰 확인용 임시 게시본
+public/_preview/
+
+# 에이전트 플러그인이 만든 내부 구현 계획서
+docs/superpowers/
+docs/video/pending-edits.md
+
+# 에이전트 작업 지침 — 저장소에 올리지 않는다(로컬 전용)
+CLAUDE.md
